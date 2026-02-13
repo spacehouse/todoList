@@ -1,0 +1,38 @@
+{
+  "key.todolist.open": "Open Todo List",
+  "category.todolist": "Todo List",
+
+  "gui.todolist.title": "Todo List",
+  "gui.todolist.add": "Add",
+  "gui.todolist.edit": "Edit",
+  "gui.todolist.delete": "Delete",
+  "gui.todolist.complete": "Complete",
+  "gui.todolist.uncomplete": "Uncomplete",
+  "gui.todolist.all": "All",
+  "gui.todolist.active": "Active",
+  "gui.todolist.completed": "Completed",
+  "gui.todolist.priority.low": "Low",
+  "gui.todolist.priority.medium": "Medium",
+  "gui.todolist.priority.high": "High",
+
+  "gui.todolist.input.title": "Task title",
+  "gui.todolist.input.title.placeholder": "Enter task title...",
+  "gui.todolist.input.description": "Description",
+  "gui.todolist.input.description.placeholder": "Description (optional)...",
+
+  "message.todolist.added": "Task added: %s",
+  "message.todolist.updated": "Task updated: %s",
+  "message.todolist.deleted": "Task deleted: %s",
+  "message.todolist.completed": "Task completed: %s",
+  "message.todolist.uncompleted": "Task uncompleted: %s",
+
+  "config.todolist.enable_hud": "Enable HUD",
+  "config.todolist.enable_task_book": "Enable Task Book",
+  "config.todolist.enable_sound_effects": "Enable Sound Effects",
+  "config.todolist.max_tasks": "Max Tasks per Player",
+  "config.todolist.auto_save": "Auto Save",
+  "config.todolist.auto_save_interval": "Auto Save Interval (minutes)",
+  "config.todolist.default_priority": "Default Priority",
+  "config.todolist.gui.dark_theme": "Dark Theme",
+  "config.todolist.gui.hud_position": "HUD Position"
+}

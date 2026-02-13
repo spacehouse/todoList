@@ -1,0 +1,38 @@
+{
+  "key.todolist.open": "打开待办事项",
+  "category.todolist": "待办事项",
+
+  "gui.todolist.title": "待办事项列表",
+  "gui.todolist.add": "添加",
+  "gui.todolist.edit": "编辑",
+  "gui.todolist.delete": "删除",
+  "gui.todolist.complete": "完成",
+  "gui.todolist.uncomplete": "未完成",
+  "gui.todolist.all": "全部",
+  "gui.todolist.active": "进行中",
+  "gui.todolist.completed": "已完成",
+  "gui.todolist.priority.low": "低",
+  "gui.todolist.priority.medium": "中",
+  "gui.todolist.priority.high": "高",
+
+  "gui.todolist.input.title": "任务标题",
+  "gui.todolist.input.title.placeholder": "输入任务标题...",
+  "gui.todolist.input.description": "描述",
+  "gui.todolist.input.description.placeholder": "描述（可选）...",
+
+  "message.todolist.added": "任务已添加: %s",
+  "message.todolist.updated": "任务已更新: %s",
+  "message.todolist.deleted": "任务已删除: %s",
+  "message.todolist.completed": "任务已完成: %s",
+  "message.todolist.uncompleted": "任务标记为未完成: %s",
+
+  "config.todolist.enable_hud": "启用HUD显示",
+  "config.todolist.enable_task_book": "启用任务书",
+  "config.todolist.enable_sound_effects": "启用音效",
+  "config.todolist.max_tasks": "每玩家最大任务数",
+  "config.todolist.auto_save": "自动保存",
+  "config.todolist.auto_save_interval": "自动保存间隔(分钟)",
+  "config.todolist.default_priority": "默认优先级",
+  "config.todolist.gui.dark_theme": "深色主题",
+  "config.todolist.gui.hud_position": "HUD位置"
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "todolist",
+  "version": "${version}",
+  "name": "Todo List Mod",
+  "description": "A simple and powerful todo list mod for Minecraft",
+  "authors": [
+    "TodoList Team"
+  ],
+  "contact": {
+    "homepage": "https://github.com/todolist-mod",
+    "sources": "https://github.com/todolist-mod/todolist-fabric",
+    "issues": "https://github.com/todolist-mod/todolist-fabric/issues"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.todolist.TodoListMod"
+    ],
+    "client": [
+      "com.todolist.client.TodoClient"
+    ]
+  },
+  "mixins": [
+    "todolist.mixins.json"
+  ],
+  "accessWidener": "todolist.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.14.21",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": ">=0.87.0"
+  },
+  "suggests": {
+    "modmenu": ">=7.0.0"
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.discord": "https://discord.gg/todolist"
+      }
+    }
+  }
+}
