@@ -42,6 +42,11 @@ bin/
 # Windows
 Thumbs.db
 
+# Local temp files
+nul
+temp/
+测试.bat
+
 # Minecraft
 run/
 !run/config/
@@ -53,3 +58,4 @@ run/
 
 # Local configuration
 local.properties
+.claude/
