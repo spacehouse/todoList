@@ -26,6 +26,7 @@ public class TaskStorage {
     private static final String DATA_FOLDER = "todo";
     private static final String DATA_FILE = "moddata.dat";
     private static final String PLAYERS_FOLDER = "players";
+    private static final String TEAM_FILE = "team_tasks.dat";
 
     private final Path dataDir;
 
@@ -94,6 +95,12 @@ public class TaskStorage {
         TodoListMod.LOGGER.info("Saved {} tasks for player {}", tasks.size(), playerUuid);
     }
 
+    public void saveTeamTasks(List<Task> tasks) throws IOException {
+        Path teamFile = dataDir.resolve(TEAM_FILE);
+        saveTasksToFile(tasks, teamFile);
+        TodoListMod.LOGGER.info("Saved {} team tasks to {}", tasks.size(), teamFile);
+    }
+
     /**
      * Save tasks to a specific file
      */
@@ -135,6 +142,15 @@ public class TaskStorage {
             return new ArrayList<>();
         }
         return loadTasksFromFile(playerFile);
+    }
+
+    public List<Task> loadTeamTasks() throws IOException {
+        Path teamFile = dataDir.resolve(TEAM_FILE);
+        if (!Files.exists(teamFile)) {
+            TodoListMod.LOGGER.info("No existing team task data");
+            return new ArrayList<>();
+        }
+        return loadTasksFromFile(teamFile);
     }
 
     /**

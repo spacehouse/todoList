@@ -1,5 +1,6 @@
 {
   "key.todolist.open": "打开待办事项",
+  "key.todolist.togglehud": "展开/收起HUD",
   "category.todolist": "待办事项",
 
   "gui.todolist.title": "待办事项列表",
@@ -19,12 +20,45 @@
   "gui.todolist.input.title.placeholder": "输入任务标题...",
   "gui.todolist.input.description": "描述",
   "gui.todolist.input.description.placeholder": "描述（可选）...",
+  "gui.todolist.input.tags.placeholder": "标签（用逗号分隔，可选）...",
+
+  "gui.todolist.label.title": "标题:",
+  "gui.todolist.label.description": "描述:",
+  "gui.todolist.label.tags": "标签:",
+  "gui.todolist.label.search": "搜索:",
+  "gui.todolist.label.priority": "优先级:",
+
+  "gui.todolist.save": "保存",
+  "gui.todolist.cancel": "取消",
+
+  "gui.todolist.filter.priority_high": "高优先",
+  "gui.todolist.filter.priority_medium": "中优先",
+  "gui.todolist.filter.priority_low": "低优先",
+
+  "gui.todolist.view.personal": "个人",
+  "gui.todolist.view.team_all": "团队 · 全部",
+  "gui.todolist.view.team_assigned": "团队 · 分配给我",
+
+  "gui.todolist.config.title": "配置",
+  "gui.todolist.config.save_apply": "保存并应用",
+  "gui.todolist.config.hud_width": "HUD宽度:",
+  "gui.todolist.config.hud_max_height": "HUD最大高度:",
+  "gui.todolist.config.hud_todo_limit": "待办显示数量:",
+  "gui.todolist.config.hud_done_limit": "已办显示数量:",
+  "gui.todolist.config.hud_default_expanded": "默认展开:",
+  "gui.todolist.config.hud_custom_x": "自定义X坐标:",
+  "gui.todolist.config.hud_custom_y": "自定义Y坐标:",
+  "gui.todolist.config.hud_show_when_empty": "无任务时仍显示HUD:",
+  "gui.todolist.config.hud_preview.title": "HUD预览",
+  "gui.todolist.config.hud_preview.hint": "拖动调整待办列表位置",
 
   "message.todolist.added": "任务已添加: %s",
   "message.todolist.updated": "任务已更新: %s",
   "message.todolist.deleted": "任务已删除: %s",
   "message.todolist.completed": "任务已完成: %s",
   "message.todolist.uncompleted": "任务标记为未完成: %s",
+  "message.todolist.saved": "已保存待办事项",
+  "message.todolist.save_failed": "保存失败",
 
   "config.todolist.enable_hud": "启用HUD显示",
   "config.todolist.enable_task_book": "启用任务书",
@@ -34,5 +68,14 @@
   "config.todolist.auto_save_interval": "自动保存间隔(分钟)",
   "config.todolist.default_priority": "默认优先级",
   "config.todolist.gui.dark_theme": "深色主题",
-  "config.todolist.gui.hud_position": "HUD位置"
+  "config.todolist.gui.hud_position": "HUD位置",
+
+  "hud.todolist.header": "待办列表 (按 H 展开/收起)",
+  "hud.todolist.separator.completed": "--- 已完成 ---",
+  "hud.todolist.more_tasks": "... 还有 %s 项",
+  "hud.todolist.summary": "待办: %s",
+  "hud.todolist.summary.with_completed": "待办: %s | 已完成: %s",
+  "hud.todolist.priority.high.icon": "[高]",
+  "hud.todolist.priority.medium.icon": "[中]",
+  "hud.todolist.priority.low.icon": "[低]"
 }

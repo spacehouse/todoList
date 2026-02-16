@@ -39,7 +39,7 @@ public class ModConfig {
     public static class GuiConfig {
         // Main window size
         private int guiWidth = 400;
-        private int guiHeight = 280;
+        private int guiHeight = 400;
 
         // Task list
         private int taskListHeight = 140;
@@ -73,6 +73,15 @@ public class ModConfig {
         private boolean showCompletedTasks = true;
         private boolean sortByPriority = false;
         private String hudPosition = "TOP_RIGHT";
+        private int hudWidth = 200;
+        private int hudMaxHeight = 120;
+        private int hudTodoLimit = 5;
+        private int hudDoneLimit = 5;
+        private boolean hudDefaultExpanded = true;
+        private boolean hudUseCustomPosition = false;
+        private int hudCustomX = 10;
+        private int hudCustomY = 10;
+        private boolean hudShowWhenEmpty = false;
     }
 
     /**
@@ -83,6 +92,10 @@ public class ModConfig {
             try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
                 instance = GSON.fromJson(reader, ModConfig.class);
                 TodoListMod.LOGGER.info("Loaded configuration from {}", CONFIG_PATH);
+                if (instance.gui.guiHeight < 400) {
+                    instance.gui.guiHeight = 400;
+                    save();
+                }
             } catch (IOException e) {
                 TodoListMod.LOGGER.error("Failed to load configuration, using defaults", e);
                 instance = new ModConfig();
@@ -307,6 +320,60 @@ public class ModConfig {
     public boolean isSortByPriority() { return gui.sortByPriority; }
     public void setSortByPriority(boolean sort) {
         gui.sortByPriority = sort;
+        save();
+    }
+
+    public int getHudWidth() { return gui.hudWidth; }
+    public void setHudWidth(int width) {
+        gui.hudWidth = width;
+        save();
+    }
+
+    public int getHudMaxHeight() { return gui.hudMaxHeight; }
+    public void setHudMaxHeight(int height) {
+        gui.hudMaxHeight = height;
+        save();
+    }
+
+    public int getHudTodoLimit() { return gui.hudTodoLimit; }
+    public void setHudTodoLimit(int limit) {
+        gui.hudTodoLimit = limit;
+        save();
+    }
+
+    public int getHudDoneLimit() { return gui.hudDoneLimit; }
+    public void setHudDoneLimit(int limit) {
+        gui.hudDoneLimit = limit;
+        save();
+    }
+
+    public boolean isHudDefaultExpanded() { return gui.hudDefaultExpanded; }
+    public void setHudDefaultExpanded(boolean expanded) {
+        gui.hudDefaultExpanded = expanded;
+        save();
+    }
+
+    public boolean isHudUseCustomPosition() { return gui.hudUseCustomPosition; }
+    public void setHudUseCustomPosition(boolean useCustom) {
+        gui.hudUseCustomPosition = useCustom;
+        save();
+    }
+
+    public int getHudCustomX() { return gui.hudCustomX; }
+    public void setHudCustomX(int x) {
+        gui.hudCustomX = x;
+        save();
+    }
+
+    public int getHudCustomY() { return gui.hudCustomY; }
+    public void setHudCustomY(int y) {
+        gui.hudCustomY = y;
+        save();
+    }
+
+    public boolean isHudShowWhenEmpty() { return gui.hudShowWhenEmpty; }
+    public void setHudShowWhenEmpty(boolean show) {
+        gui.hudShowWhenEmpty = show;
         save();
     }
 }

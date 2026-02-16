@@ -1,17 +1,17 @@
 package com.todolist.gui;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.todolist.TodoListMod;
+import com.todolist.client.TodoClient;
+import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
+import com.todolist.client.ClientTaskPackets;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,35 +26,48 @@ import java.util.List;
  * - Filter by priority/status
  */
 public class TodoScreen extends Screen {
-    private static final Text TITLE = Text.of("待办事项列表");
+    private static final Text TITLE = Text.translatable("gui.todolist.title");
     private static final int BG_COLOR = 0xFF000000;
 
     private final Screen parent;
     private TaskManager taskManager;
+    private TaskManager personalTaskManager;
+    private TaskManager teamTaskManager;
     private TaskListWidget taskListWidget;
+    private final List<Notification> notifications = new ArrayList<>();
 
     // Input fields
+    private TextFieldWidget searchField;
     private TextFieldWidget titleField;
     private TextFieldWidget descField;
-    private TextFieldWidget prioritySelector;
+    private TextFieldWidget tagField;
 
     // Buttons
     private ButtonWidget addButton;
-    private ButtonWidget editButton;
     private ButtonWidget deleteButton;
+    private ButtonWidget[] priorityButtons;
 
     // Selected priority for new/edited tasks
     private Task.Priority selectedPriority = Task.Priority.MEDIUM;
 
     // Filter buttons
-    private ButtonWidget filterAllButton;
     private ButtonWidget filterActiveButton;
     private ButtonWidget filterCompletedButton;
+    private ButtonWidget filterHighButton;
+    private ButtonWidget filterMediumButton;
+    private ButtonWidget filterLowButton;
     private ButtonWidget configButton;
+    private ButtonWidget personalViewButton;
+    private ButtonWidget teamAllViewButton;
+    private ButtonWidget teamAssignedViewButton;
 
     private Task selectedTask;
     private List<Task> filteredTasks = new ArrayList<>();
-    private final List<ClickableWidget> drawableButtons = new ArrayList<>();
+    private List<Task> baseFilteredTasks = new ArrayList<>();
+    private String currentFilter = "all";
+    private String searchQuery = "";
+
+    private ViewMode viewMode = ViewMode.PERSONAL;
 
     public TodoScreen(Screen parent) {
         super(TITLE);
@@ -66,12 +79,12 @@ public class TodoScreen extends Screen {
         super.init();
 
         // Initialize task manager and load tasks from storage
-        if (taskManager == null) {
-            taskManager = new TaskManager();
+        if (personalTaskManager == null) {
+            personalTaskManager = new TaskManager();
             try {
                 List<Task> loadedTasks = TodoListMod.getTaskStorage().loadTasks();
                 for (Task task : loadedTasks) {
-                    taskManager.addTask(task);
+                    personalTaskManager.addTask(task);
                 }
                 TodoListMod.LOGGER.info("Loaded {} tasks from storage", loadedTasks.size());
             } catch (Exception e) {
@@ -79,301 +92,468 @@ public class TodoScreen extends Screen {
             }
         }
 
-        // Rebuild UI with current configuration
+        teamTaskManager = TodoClient.getTeamTaskManager();
+        taskManager = viewMode == ViewMode.PERSONAL ? personalTaskManager : teamTaskManager;
+
+        // Rebuild UI
         rebuildUI();
     }
 
     private void rebuildUI() {
-        filteredTasks = taskManager.getAllTasks();
-        drawableButtons.clear();
+        currentFilter = "active";
+        searchQuery = "";
+        baseFilteredTasks = taskManager.getIncompleteTasks();
+        baseFilteredTasks = applyAssignedFilterIfNeeded(baseFilteredTasks);
+        filteredTasks = new ArrayList<>(baseFilteredTasks);
+        this.clearChildren();
 
         // Get configuration
         ModConfig config = ModConfig.getInstance();
 
         // Calculate layout
-        int x = (width - config.getGuiWidth()) / 2;
-        int y = (height - config.getGuiHeight()) / 2;
         int guiWidth = config.getGuiWidth();
         int guiHeight = config.getGuiHeight();
+        int x = (this.width - guiWidth) / 2;
+        int y = (this.height - guiHeight) / 2;
         int padding = config.getPadding();
+        int configuredListHeight = config.getTaskListHeight();
+        int headerOffset = 60;
+        int e = config.getElementSpacing();
+        int paddingV = 10;
+        int inputRows = 3; // title, desc, tag
+        int rowHeight = 20;
+        int fieldsBlock = inputRows * rowHeight + (inputRows - 1) * e;
+        int priorityRow = rowHeight + e;
+        int actionRow = rowHeight + e;
+        int saveRow = rowHeight;
+        int bottomReserved = paddingV + fieldsBlock + priorityRow + actionRow + saveRow + paddingV;
+        int maxListHeight = Math.max(rowHeight * 2, guiHeight - headerOffset - bottomReserved);
+        int defaultVisible = 5;
+        int preferredByItems = config.getTaskItemHeight() * defaultVisible;
+        int desiredHeight = configuredListHeight > 0 ? configuredListHeight : preferredByItems;
+        int listHeight = Math.min(desiredHeight, maxListHeight);
 
-        // Calculate available height for task list
-        int listHeight = config.getTaskListHeight();
-        int availableHeight = guiHeight - 165;
-        if (listHeight > availableHeight) {
-            listHeight = availableHeight;
-        }
-
-        // Task list widget
-        taskListWidget = new TaskListWidget(this.client, x + padding, y + config.getTaskListY(), guiWidth - padding * 2, listHeight);
+        int contentX = x + padding;
+        int contentWidth = guiWidth - padding * 2;
+        int listTop = y + headerOffset;
+        taskListWidget = new TaskListWidget(this.client, contentX, listTop, contentWidth, listHeight);
         taskListWidget.setTasks(filteredTasks);
         taskListWidget.setOnTaskToggleCompletion(task -> {
-            // Toggle task completion when checkbox is clicked
-            taskManager.toggleTaskCompletion(task.getId());
+            if (task.isCompleted()) {
+                return;
+            }
+            boolean wasCompleted = task.isCompleted();
+            toggleTaskCompletion(task);
+            if (!wasCompleted && task.isCompleted()) {
+                addNotification(Text.translatable("message.todolist.completed", task.getTitle()).getString());
+            }
             refreshTaskList();
         });
 
-        // Calculate Y positions for input fields and buttons
-        int currentY = y + config.getTaskListY() + listHeight + config.getElementSpacing() + 4;
+        int labelWidth = 40;
 
-        // Row 1: Title input field
-        int titleWidth = guiWidth - padding * 2;
-        titleField = new TextFieldWidget(textRenderer, x + padding, currentY, titleWidth, config.getButtonHeight(), Text.of("任务标题"));
-        titleField.setPlaceholder(Text.of("输入任务标题..."));
+        int currentY = y + headerOffset + listHeight + e;
+
+        int fieldX = x + padding + labelWidth;
+        int fieldWidth = guiWidth - padding * 2 - labelWidth;
+
+        titleField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
+        titleField.setText("");
         titleField.setMaxLength(100);
-        addDrawableChild(titleField);
-        currentY += config.getButtonHeight() + config.getElementSpacing();
+        this.addDrawableChild(titleField);
+        currentY += 24;
 
-        // Row 2: Description input field
-        int descWidth = guiWidth - padding * 2;
-        descField = new TextFieldWidget(textRenderer, x + padding, currentY, descWidth, config.getButtonHeight(), Text.of("描述"));
-        descField.setPlaceholder(Text.of("描述（可选）..."));
+        descField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
+        descField.setText("");
         descField.setMaxLength(255);
-        addDrawableChild(descField);
-        currentY += config.getButtonHeight() + config.getElementSpacing();
+        this.addDrawableChild(descField);
+        currentY += 24;
 
-        // Row 3: Priority buttons (LOW, MEDIUM, HIGH)
-        int priorityButtonWidth = 70;
-        int totalPriorityWidth = priorityButtonWidth * 3 + 8; // 3 buttons + 2 gaps of 4px each
-        int priorityStartX = x + (guiWidth - totalPriorityWidth) / 2; // Center the buttons
+        tagField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
+        tagField.setText("");
+        tagField.setMaxLength(100);
+        this.addDrawableChild(tagField);
+        currentY += 24;
 
-        ButtonWidget lowPriorityButton = ButtonWidget.builder(Text.of("低"), button -> {
-            setSelectedPriority(Task.Priority.LOW);
-        }).dimensions(priorityStartX, currentY, priorityButtonWidth, config.getButtonHeight()).build();
-        addDrawableChild(lowPriorityButton);
-        drawableButtons.add(lowPriorityButton);
+        int priorityButtonWidth = 50;
+        int priorityStartX = fieldX;
 
-        ButtonWidget mediumPriorityButton = ButtonWidget.builder(Text.of("中"), button -> {
-            setSelectedPriority(Task.Priority.MEDIUM);
-        }).dimensions(priorityStartX + priorityButtonWidth + 4, currentY, priorityButtonWidth, config.getButtonHeight()).build();
-        addDrawableChild(mediumPriorityButton);
-        drawableButtons.add(mediumPriorityButton);
+        priorityButtons = new ButtonWidget[3];
+        for (int i = 0; i < 3; i++) {
+            Task.Priority priority = Task.Priority.values()[2 - i];
+            String base;
+            switch (priority) {
+                case HIGH:
+                    base = Text.translatable("gui.todolist.priority.high").getString();
+                    break;
+                case MEDIUM:
+                    base = Text.translatable("gui.todolist.priority.medium").getString();
+                    break;
+                case LOW:
+                default:
+                    base = Text.translatable("gui.todolist.priority.low").getString();
+                    break;
+            }
+            String buttonText = (priority == Task.Priority.HIGH ? "§c[" :
+                                priority == Task.Priority.MEDIUM ? "§e[" : "§a[") + base + "]";
+            Text buttonLabel = Text.of(buttonText);
+            int index = i;
+            priorityButtons[i] = ButtonWidget.builder(buttonLabel, button -> {
+                setSelectedPriority(priority);
+                if (selectedTask != null) {
+                    selectedTask.setPriority(priority);
+                    refreshTaskList();
+                    ClientTaskPackets.sendUpdateTask(selectedTask);
+                }
+                updatePrioritySelection();
+            }).dimensions(priorityStartX + index * (priorityButtonWidth + 4), currentY, priorityButtonWidth, 20).build();
+            this.addDrawableChild(priorityButtons[i]);
+        }
 
-        ButtonWidget highPriorityButton = ButtonWidget.builder(Text.of("高"), button -> {
-            setSelectedPriority(Task.Priority.HIGH);
-        }).dimensions(priorityStartX + priorityButtonWidth * 2 + 8, currentY, priorityButtonWidth, config.getButtonHeight()).build();
-        addDrawableChild(highPriorityButton);
-        drawableButtons.add(highPriorityButton);
-        currentY += config.getButtonHeight() + config.getElementSpacing();
-
-        // Row 4: Action buttons (Add, Edit, Delete)
-        int actionButtonWidth = 70;
+        int actionButtonWidth = 60;
         int actionButtonGap = 5;
-        int totalActionWidth = actionButtonWidth * 3 + actionButtonGap * 2;
-        int actionButtonX = x + (guiWidth - totalActionWidth) / 2; // Center the buttons
+        int actionButtonsWidth = actionButtonWidth * 2 + actionButtonGap;
+        int actionButtonX = x + guiWidth - padding - actionButtonsWidth;
 
-        addButton = ButtonWidget.builder(Text.of("添加"), button -> {
+        addButton = ButtonWidget.builder(Text.translatable("gui.todolist.add"), button -> {
             onAddTask();
-        }).dimensions(actionButtonX, currentY, actionButtonWidth, config.getButtonHeight()).build();
-        addDrawableChild(addButton);
-        drawableButtons.add(addButton);
+        }).dimensions(actionButtonX, currentY, actionButtonWidth, 20).build();
+        this.addDrawableChild(addButton);
 
-        editButton = ButtonWidget.builder(Text.of("编辑"), button -> {
-            onEditTask();
-        }).dimensions(actionButtonX + actionButtonWidth + actionButtonGap, currentY, actionButtonWidth, config.getButtonHeight()).build();
-        editButton.active = false;
-        addDrawableChild(editButton);
-        drawableButtons.add(editButton);
-
-        deleteButton = ButtonWidget.builder(Text.of("删除"), button -> {
+        deleteButton = ButtonWidget.builder(Text.translatable("gui.todolist.delete"), button -> {
             onDeleteTask();
-        }).dimensions(actionButtonX + actionButtonWidth * 2 + actionButtonGap * 2, currentY, actionButtonWidth, config.getButtonHeight()).build();
+        }).dimensions(actionButtonX + actionButtonWidth + actionButtonGap, currentY, actionButtonWidth, 20).build();
         deleteButton.active = false;
-        addDrawableChild(deleteButton);
-        drawableButtons.add(deleteButton);
-        currentY += config.getButtonHeight() + config.getElementSpacing() * 2;
+        this.addDrawableChild(deleteButton);
+
+        currentY += 24 + 25;
 
         // Save and Cancel buttons at bottom
         int saveCancelWidth = 90;
         int saveCancelGap = 5;
         int totalSaveCancelWidth = saveCancelWidth * 2 + saveCancelGap;
-        int saveCancelX = x + (guiWidth - totalSaveCancelWidth) / 2; // Center the buttons
+        int saveCancelX = x + (guiWidth - totalSaveCancelWidth) / 2;
 
-        ButtonWidget saveButton = ButtonWidget.builder(Text.of("保存"), button -> {
+        ButtonWidget saveButton = ButtonWidget.builder(Text.translatable("gui.todolist.save"), button -> {
             onSaveTasks();
-        }).dimensions(saveCancelX, currentY, saveCancelWidth, config.getButtonHeight()).build();
-        addDrawableChild(saveButton);
-        drawableButtons.add(saveButton);
+        }).dimensions(saveCancelX, currentY, saveCancelWidth, 20).build();
+        this.addDrawableChild(saveButton);
 
-        ButtonWidget cancelButton = ButtonWidget.builder(Text.of("取消"), button -> {
-            onCancel();
-        }).dimensions(saveCancelX + saveCancelWidth + saveCancelGap, currentY, saveCancelWidth, config.getButtonHeight()).build();
-        addDrawableChild(cancelButton);
-        drawableButtons.add(cancelButton);
+        ButtonWidget cancelButton = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), button -> {
+            close();
+        }).dimensions(saveCancelX + saveCancelWidth + saveCancelGap, currentY, saveCancelWidth, 20).build();
+        this.addDrawableChild(cancelButton);
 
-        // Filter buttons
-        filterAllButton = ButtonWidget.builder(Text.of("全部"), button -> {
-            filterTasks("all");
-        }).dimensions(x + 100, y + 10, 60, 20).build();
-        addDrawableChild(filterAllButton);
-        drawableButtons.add(filterAllButton);
+        int modeButtonWidth = 80;
+        int modeButtonGap = 4;
+        int modesX = x + padding;
+        int modesY = y + 10;
 
-        filterActiveButton = ButtonWidget.builder(Text.of("进行中"), button -> {
+        personalViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.personal"), b -> {
+            switchView(ViewMode.PERSONAL);
+        }).dimensions(modesX, modesY, modeButtonWidth, 20).build();
+        this.addDrawableChild(personalViewButton);
+
+        teamAllViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_all"), b -> {
+            switchView(ViewMode.TEAM_ALL);
+        }).dimensions(modesX + (modeButtonWidth + modeButtonGap), modesY, modeButtonWidth, 20).build();
+        this.addDrawableChild(teamAllViewButton);
+
+        teamAssignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_assigned"), b -> {
+            switchView(ViewMode.TEAM_ASSIGNED);
+        }).dimensions(modesX + (modeButtonWidth + modeButtonGap) * 2, modesY, modeButtonWidth, 20).build();
+        this.addDrawableChild(teamAssignedViewButton);
+
+        updateViewButtonsState();
+
+        int filterButtonWidth = 60;
+        int filterGap = 4;
+        int filterCount = 5;
+        int totalFilterWidth = filterButtonWidth * filterCount + filterGap * (filterCount - 1);
+        int filtersX = x + padding;
+        int filtersY = modesY + 24;
+
+        filterActiveButton = ButtonWidget.builder(Text.translatable("gui.todolist.active"), button -> {
             filterTasks("active");
-        }).dimensions(x + 165, y + 10, 60, 20).build();
-        addDrawableChild(filterActiveButton);
-        drawableButtons.add(filterActiveButton);
+        }).dimensions(filtersX, filtersY, filterButtonWidth, 20).build();
+        this.addDrawableChild(filterActiveButton);
 
-        filterCompletedButton = ButtonWidget.builder(Text.of("已完成"), button -> {
+        filterCompletedButton = ButtonWidget.builder(Text.translatable("gui.todolist.completed"), button -> {
             filterTasks("completed");
-        }).dimensions(x + 230, y + 10, 60, 20).build();
-        addDrawableChild(filterCompletedButton);
-        drawableButtons.add(filterCompletedButton);
+        }).dimensions(filtersX + (filterButtonWidth + filterGap), filtersY, filterButtonWidth, 20).build();
+        this.addDrawableChild(filterCompletedButton);
 
-        // Config button - opens settings screen
-        configButton = ButtonWidget.builder(Text.of("⚙"), button -> {
-            onOpenConfig();
-        }).dimensions(x + 295, y + 10, 30, 20).build();
-        addDrawableChild(configButton);
-        drawableButtons.add(configButton);
+        filterHighButton = ButtonWidget.builder(Text.of("§c" + Text.translatable("gui.todolist.filter.priority_high").getString()), button -> {
+            filterTasks("priority_high");
+        }).dimensions(filtersX + (filterButtonWidth + filterGap) * 2, filtersY, filterButtonWidth, 20).build();
+        this.addDrawableChild(filterHighButton);
 
-        // Set initial focus
-        setInitialFocus(titleField);
+        filterMediumButton = ButtonWidget.builder(Text.of("§e" + Text.translatable("gui.todolist.filter.priority_medium").getString()), button -> {
+            filterTasks("priority_medium");
+        }).dimensions(filtersX + (filterButtonWidth + filterGap) * 3, filtersY, filterButtonWidth, 20).build();
+        this.addDrawableChild(filterMediumButton);
+
+        filterLowButton = ButtonWidget.builder(Text.of("§a" + Text.translatable("gui.todolist.filter.priority_low").getString()), button -> {
+            filterTasks("priority_low");
+        }).dimensions(filtersX + (filterButtonWidth + filterGap) * 4, filtersY, filterButtonWidth, 20).build();
+        this.addDrawableChild(filterLowButton);
+
+        int searchWidth = fieldWidth;
+        int searchX = x + padding + labelWidth;
+        int searchY = filtersY + 24;
+        searchField = new TextFieldWidget(this.textRenderer, searchX, searchY, searchWidth, 20, Text.empty());
+        searchField.setText("");
+        this.addDrawableChild(searchField);
+
+        int configBtnW = 50;
+        int configBtnX = x + guiWidth - padding - configBtnW;
+        configButton = ButtonWidget.builder(Text.translatable("gui.todolist.config.title"), b -> {
+            this.client.setScreen(new ConfigScreen(this));
+        }).dimensions(configBtnX, y + 10, configBtnW, 20).build();
+        this.addDrawableChild(configButton);
+
+        titleField.setChangedListener(text -> {
+            if (selectedTask != null && !selectedTask.isCompleted()) {
+                selectedTask.setTitle(text);
+            }
+        });
+
+        descField.setChangedListener(text -> {
+            if (selectedTask != null && !selectedTask.isCompleted()) {
+                selectedTask.setDescription(text);
+            }
+        });
+
+        tagField.setChangedListener(text -> {
+            if (selectedTask != null && !selectedTask.isCompleted()) {
+                String value = getFieldValue(tagField, "");
+                if (value.isEmpty()) {
+                    selectedTask.clearTags();
+                } else {
+                    List<String> tags = new ArrayList<>();
+                    String[] parts = value.split(",");
+                    for (String part : parts) {
+                        String trimmed = part.trim();
+                        if (!trimmed.isEmpty()) {
+                            tags.add(trimmed);
+                        }
+                    }
+                    selectedTask.setTags(tags);
+                }
+            }
+        });
+
+        searchField.setChangedListener(text -> {
+            searchQuery = text == null ? "" : text.trim().toLowerCase();
+            applySearchFilter();
+        });
+
+        this.setFocused(titleField);
+    }
+
+    private void toggleTaskCompletion(Task task) {
+        taskManager.toggleTaskCompletion(task.getId());
+        if (viewMode == ViewMode.PERSONAL) {
+            return;
+        }
+        ClientTaskPackets.sendToggleTeamTask(task.getId());
+        refreshTaskList();
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Draw background
-        renderBackground(context);
+        context.fill(0, 0, this.width, this.height, BG_COLOR);
 
-        // Draw title - moved up to avoid overlap with filter buttons
-        int titleY = (height - ModConfig.getInstance().getGuiHeight()) / 2 - 5;
-        context.drawText(textRenderer, TITLE,
-                (width - textRenderer.getWidth(TITLE)) / 2,
-                titleY,
-                0xFFFFFFFF, true);
+        context.drawText(this.textRenderer, TITLE, (this.width - this.textRenderer.getWidth(TITLE)) / 2, 10, 0xFFFFFFFF, false);
 
-        // Draw task list widget manually
         taskListWidget.render(context, mouseX, mouseY, delta);
 
-        // Draw input fields
-        titleField.render(context, mouseX, mouseY, delta);
-        descField.render(context, mouseX, mouseY, delta);
+        super.render(context, mouseX, mouseY, delta);
 
-        // Draw buttons
-        for (ClickableWidget button : drawableButtons) {
-            button.render(context, mouseX, mouseY, delta);
+        ModConfig config = ModConfig.getInstance();
+        int guiWidth = config.getGuiWidth();
+        int guiHeight = config.getGuiHeight();
+        int x = (this.width - guiWidth) / 2;
+        int y = (this.height - guiHeight) / 2;
+        int padding = config.getPadding();
+        int labelX = x + padding;
+        int color = 0xFFFFFFFF;
+        int textH = this.textRenderer.fontHeight;
+
+        if (titleField != null) {
+            int ty = titleField.getY() + (titleField.getHeight() - textH) / 2;
+            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.title"), labelX, ty, color, false);
+        }
+        if (descField != null) {
+            int dy = descField.getY() + (descField.getHeight() - textH) / 2;
+            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.description"), labelX, dy, color, false);
+        }
+        if (tagField != null) {
+            int zy = tagField.getY() + (tagField.getHeight() - textH) / 2;
+            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.tags"), labelX, zy, color, false);
+        }
+        if (searchField != null) {
+            int sy = searchField.getY() + (searchField.getHeight() - textH) / 2;
+            int searchLabelX = labelX;
+            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
+        }
+        if (priorityButtons != null && priorityButtons.length > 0 && priorityButtons[0] != null) {
+            int py = priorityButtons[0].getY() + (priorityButtons[0].getHeight() - textH) / 2;
+            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.priority"), labelX, py, color, false);
         }
 
-        super.render(context, mouseX, mouseY, delta);
+        renderNotifications(context);
     }
 
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Enter key to add task
-        if (keyCode == GLFW.GLFW_KEY_ENTER) {
-            if (titleField.isFocused()) {
-                onAddTask();
-                return true;
+    private void renderNotifications(DrawContext context) {
+        if (notifications.isEmpty()) return;
+        long now = System.currentTimeMillis();
+
+        ModConfig config = ModConfig.getInstance();
+        int guiWidth = config.getGuiWidth();
+        int guiHeight = config.getGuiHeight();
+        int x = (this.width - guiWidth) / 2;
+        int y = (this.height - guiHeight) / 2;
+        int padding = config.getPadding();
+
+        int boxWidth = 220;
+        int boxHeight = 20;
+        int startX = x + guiWidth - padding - boxWidth;
+        int startY = y + 35;
+        int gap = 4;
+
+        List<Notification> active = new ArrayList<>();
+        for (Notification n : notifications) {
+            if (n.expireAt > now) active.add(n);
+        }
+        notifications.clear();
+        notifications.addAll(active);
+
+        int dy = 0;
+        for (Notification n : notifications) {
+            int bx1 = startX;
+            int by1 = startY + dy;
+            int bx2 = bx1 + boxWidth;
+            int by2 = by1 + boxHeight;
+            context.fill(bx1, by1, bx2, by2, 0xCC000000);
+            context.drawBorder(bx1, by1, boxWidth, boxHeight, 0xFFFFFFFF);
+            int tx = bx1 + 6;
+            int ty = by1 + (boxHeight - this.textRenderer.fontHeight) / 2;
+            context.drawText(this.textRenderer, Text.of(n.text), tx, ty, 0xFFFFFF00, false);
+            dy += boxHeight + gap;
+        }
+    }
+
+    private void onSaveTasks() {
+        try {
+            if (viewMode == ViewMode.PERSONAL) {
+                TodoListMod.getTaskStorage().saveTasks(taskManager.getAllTasks());
+                TodoListMod.LOGGER.info("Tasks saved");
+                ClientTaskPackets.sendReplaceAllTasks(taskManager.getAllTasks());
+                TodoHudRenderer renderer = TodoClient.getHudRenderer();
+                if (renderer != null) {
+                    renderer.forceRefreshTasks();
+                }
+            } else {
+                ClientTaskPackets.sendReplaceTeamTasks(taskManager.getAllTasks());
+                TodoListMod.LOGGER.info("Team tasks saved");
+            }
+            if (this.client != null && this.client.player != null) {
+                this.client.player.sendMessage(Text.translatable("message.todolist.saved"), false);
+            }
+        } catch (Exception e) {
+            TodoListMod.LOGGER.error("Failed to save tasks", e);
+            if (this.client != null && this.client.player != null) {
+                this.client.player.sendMessage(Text.translatable("message.todolist.save_failed"), false);
             }
         }
+        close();
+    }
 
-        // Escape key to close
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            this.close();
-            return true;
-        }
-
-        return super.keyPressed(keyCode, scanCode, modifiers);
+    private void updatePrioritySelection() {
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Handle task list selection
-        taskListWidget.mouseClicked(mouseX, mouseY, button);
-        Task clicked = taskListWidget.getTaskAt((int)mouseX, (int)mouseY);
-        if (clicked != null) {
-            selectTask(clicked);
+        if (taskListWidget.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+
+        // Handle task list clicks
+        Task clickedTask = taskListWidget.getTaskAt((int)mouseX, (int)mouseY);
+        if (clickedTask != null) {
+            selectTask(clickedTask);
             return true;
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        // Handle task list scrolling
-        return taskListWidget.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
-    }
-
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        // Handle scrollbar dragging
-        if (taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
-            return true;
-        }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return taskListWidget.mouseScrolled(mouseX, mouseY, 0, amount);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        // Handle scrollbar release
+        // Handle task list mouse release
         taskListWidget.mouseReleased(mouseX, mouseY, button);
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
-
-    @Override
-    public void tick() {
-        titleField.tick();
-        descField.tick();
+        return false;
     }
 
     @Override
     public void close() {
-        // Auto-save tasks before closing
-        try {
-            TodoListMod.getTaskStorage().saveTasks(taskManager.getAllTasks());
-            TodoListMod.LOGGER.info("Tasks auto-saved on close");
-        } catch (Exception e) {
-            TodoListMod.LOGGER.error("Failed to auto-save tasks on close", e);
-        }
         this.client.setScreen(parent);
     }
 
     // Event handlers
 
     private void onAddTask() {
-        String title = titleField.getText().trim();
-        String desc = descField.getText().trim();
+        String title = getFieldValue(titleField, "");
+        String desc = getFieldValue(descField, "");
+        String tagsStr = getFieldValue(tagField, "");
 
         if (!title.isEmpty()) {
             Task task = taskManager.addTask(title, desc);
             task.setPriority(selectedPriority);
 
-            taskManager.addListener((type, t) -> {
-                // Handle task changes (network sync later)
-            });
+            if (viewMode != ViewMode.PERSONAL) {
+                if (this.client != null && this.client.player != null) {
+                    String uuid = this.client.player.getUuid().toString();
+                    task.setScope(Task.Scope.TEAM);
+                    task.setCreatorUuid(uuid);
+                    if (viewMode == ViewMode.TEAM_ASSIGNED) {
+                        task.setAssigneeUuid(uuid);
+                    }
+                } else {
+                    task.setScope(Task.Scope.TEAM);
+                }
+            }
 
-            // Clear input fields
+            // Parse and add tags (comma-separated)
+            if (!tagsStr.isEmpty()) {
+                String[] tags = tagsStr.split(",");
+                for (String tag : tags) {
+                    String trimmedTag = tag.trim();
+                    if (!trimmedTag.isEmpty()) {
+                        task.addTag(trimmedTag);
+                    }
+                }
+            }
+
             titleField.setText("");
             descField.setText("");
-            selectedPriority = Task.Priority.MEDIUM; // Reset to default
+            tagField.setText("");
+            selectedPriority = Task.Priority.MEDIUM;
 
-            // Refresh task list
             refreshTaskList();
-        }
-    }
-
-    private void onEditTask() {
-        if (selectedTask != null) {
-            String newTitle = titleField.getText().trim();
-            String newDesc = descField.getText().trim();
-
-            if (!newTitle.isEmpty()) {
-                selectedTask.setTitle(newTitle);
-                selectedTask.setDescription(newDesc);
-                selectedTask.setPriority(selectedPriority);
-
-                taskManager.updateTask(selectedTask);
-
-                // Refresh task list
-                refreshTaskList();
-            }
         }
     }
 
     private void onDeleteTask() {
         if (selectedTask != null) {
-            taskManager.deleteTask(selectedTask.getId());
+            String id = selectedTask.getId();
+            taskManager.deleteTask(id);
             selectedTask = null;
             updateButtonStates();
             refreshTaskList();
@@ -385,14 +565,38 @@ public class TodoScreen extends Screen {
         selectedPriority = task.getPriority();
         titleField.setText(task.getTitle());
         descField.setText(task.getDescription());
+
+        // Display tags as comma-separated string
+        if (task.getTags() != null && !task.getTags().isEmpty()) {
+            String tagsStr = String.join(",", task.getTags());
+            tagField.setText(tagsStr);
+        } else {
+            tagField.setText("");
+        }
+
         taskListWidget.setSelectedTask(task);
         updateButtonStates();
+        boolean editable = !task.isCompleted();
+        titleField.setEditable(editable);
+        descField.setEditable(editable);
+        tagField.setEditable(editable);
     }
 
     private void updateButtonStates() {
         boolean hasSelection = selectedTask != null;
-        editButton.active = hasSelection;
         deleteButton.active = hasSelection;
+        boolean isCompleted = hasSelection && selectedTask.isCompleted();
+        boolean priorityEnabled = !isCompleted;
+        if (priorityButtons != null) {
+            for (ButtonWidget button : priorityButtons) {
+                if (button != null) {
+                    button.active = priorityEnabled;
+                }
+            }
+        }
+        if (addButton != null) {
+            addButton.active = !isCompleted;
+        }
     }
 
     private void setSelectedPriority(Task.Priority priority) {
@@ -400,47 +604,129 @@ public class TodoScreen extends Screen {
     }
 
     private void filterTasks(String filter) {
+        currentFilter = filter;
+        List<Task> result = new ArrayList<>();
         switch (filter) {
             case "all":
-                filteredTasks = taskManager.getAllTasks();
+                result = taskManager.getAllTasks();
                 break;
             case "active":
-                filteredTasks = taskManager.getIncompleteTasks();
+                result = taskManager.getIncompleteTasks();
                 break;
             case "completed":
-                filteredTasks = taskManager.getCompletedTasks();
+                result = taskManager.getCompletedTasks();
+                break;
+            case "priority_high":
+                result = taskManager.getTasksByPriority(Task.Priority.HIGH);
+                break;
+            case "priority_medium":
+                result = taskManager.getTasksByPriority(Task.Priority.MEDIUM);
+                break;
+            case "priority_low":
+                result = taskManager.getTasksByPriority(Task.Priority.LOW);
                 break;
         }
-        taskListWidget.clearSelection();
-        taskListWidget.setTasks(filteredTasks);
+        baseFilteredTasks = applyAssignedFilterIfNeeded(result);
+        applySearchFilter();
     }
 
     private void refreshTaskList() {
-        filterTasks("all"); // Refresh with current filter
+        filterTasks(currentFilter);
     }
 
-    private void onSaveTasks() {
-        try {
-            TodoListMod.getTaskStorage().saveTasks(taskManager.getAllTasks());
-            // Show save confirmation message
-            if (client.player != null) {
-                client.player.sendMessage(Text.of("§a任务列表已保存！"), true);
+    private void applySearchFilter() {
+        if (baseFilteredTasks == null) {
+            baseFilteredTasks = new ArrayList<>();
+        }
+        if (searchQuery == null || searchQuery.isEmpty()) {
+            filteredTasks = new ArrayList<>(baseFilteredTasks);
+        } else {
+            String q = searchQuery;
+            List<Task> result = new ArrayList<>();
+            for (Task task : baseFilteredTasks) {
+                String title = task.getTitle() == null ? "" : task.getTitle().toLowerCase();
+                String desc = task.getDescription() == null ? "" : task.getDescription().toLowerCase();
+                boolean matchText = title.contains(q) || desc.contains(q);
+                boolean matchTag = false;
+                for (String tag : task.getTags()) {
+                    if (tag != null && tag.toLowerCase().contains(q)) {
+                        matchTag = true;
+                        break;
+                    }
+                }
+                if (matchText || matchTag) {
+                    result.add(task);
+                }
             }
-            // Close UI after saving
-            close();
-        } catch (Exception e) {
-            if (client.player != null) {
-                client.player.sendMessage(Text.of("§c保存失败: " + e.getMessage()), true);
+            filteredTasks = result;
+        }
+        taskListWidget.setTasks(filteredTasks);
+    }
+
+    private List<Task> applyAssignedFilterIfNeeded(List<Task> source) {
+        if (viewMode != ViewMode.TEAM_ASSIGNED) {
+            return source;
+        }
+        if (this.client == null || this.client.player == null) {
+            return source;
+        }
+        String uuid = this.client.player.getUuid().toString();
+        List<Task> result = new ArrayList<>();
+        for (Task task : source) {
+            String assignee = task.getAssigneeUuid();
+            if (assignee != null && assignee.equals(uuid)) {
+                result.add(task);
             }
-            TodoListMod.LOGGER.error("Failed to save tasks", e);
+        }
+        return result;
+    }
+
+    private void switchView(ViewMode mode) {
+        if (this.viewMode == mode) {
+            return;
+        }
+        this.viewMode = mode;
+        taskManager = viewMode == ViewMode.PERSONAL ? personalTaskManager : teamTaskManager;
+        rebuildUI();
+    }
+
+    private void updateViewButtonsState() {
+        if (personalViewButton != null) {
+            personalViewButton.active = viewMode != ViewMode.PERSONAL;
+        }
+        if (teamAllViewButton != null) {
+            teamAllViewButton.active = viewMode != ViewMode.TEAM_ALL;
+        }
+        if (teamAssignedViewButton != null) {
+            teamAssignedViewButton.active = viewMode != ViewMode.TEAM_ASSIGNED;
         }
     }
 
-    private void onCancel() {
-        close();
+    private enum ViewMode {
+        PERSONAL,
+        TEAM_ALL,
+        TEAM_ASSIGNED
     }
 
-    private void onOpenConfig() {
-        client.setScreen(new ConfigScreen(this, this));
+    private String getFieldValue(TextFieldWidget field, String hint) {
+        String raw = field.getText() == null ? "" : field.getText().trim();
+        if (raw.isEmpty()) return "";
+        if (!hint.isEmpty() && raw.equals(hint)) return "";
+        return raw;
+    }
+
+    private void addNotification(String text) {
+        long now = System.currentTimeMillis();
+        notifications.add(new Notification(text, now + 2000));
+    }
+
+    private static class Notification {
+        final String text;
+        final long expireAt;
+
+        Notification(String text, long expireAt) {
+            this.text = text;
+            this.expireAt = expireAt;
+        }
     }
 }

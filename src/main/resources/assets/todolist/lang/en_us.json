@@ -1,5 +1,6 @@
 {
   "key.todolist.open": "Open Todo List",
+  "key.todolist.togglehud": "Toggle HUD",
   "category.todolist": "Todo List",
 
   "gui.todolist.title": "Todo List",
@@ -19,12 +20,45 @@
   "gui.todolist.input.title.placeholder": "Enter task title...",
   "gui.todolist.input.description": "Description",
   "gui.todolist.input.description.placeholder": "Description (optional)...",
+  "gui.todolist.input.tags.placeholder": "Tags (comma-separated, optional)...",
+
+  "gui.todolist.label.title": "Title:",
+  "gui.todolist.label.description": "Desc:",
+  "gui.todolist.label.tags": "Tags:",
+  "gui.todolist.label.search": "Search:",
+  "gui.todolist.label.priority": "Priority:",
+
+  "gui.todolist.save": "Save",
+  "gui.todolist.cancel": "Cancel",
+
+  "gui.todolist.filter.priority_high": "High",
+  "gui.todolist.filter.priority_medium": "Medium",
+  "gui.todolist.filter.priority_low": "Low",
+
+  "gui.todolist.view.personal": "Personal",
+  "gui.todolist.view.team_all": "Team (All)",
+  "gui.todolist.view.team_assigned": "Team (Assigned to Me)",
+
+  "gui.todolist.config.title": "Config",
+  "gui.todolist.config.save_apply": "Save & Apply",
+  "gui.todolist.config.hud_width": "HUD Width:",
+  "gui.todolist.config.hud_max_height": "HUD Max Height:",
+  "gui.todolist.config.hud_todo_limit": "Todo Display Count:",
+  "gui.todolist.config.hud_done_limit": "Done Display Count:",
+  "gui.todolist.config.hud_default_expanded": "Default Expanded:",
+  "gui.todolist.config.hud_custom_x": "Custom X:",
+  "gui.todolist.config.hud_custom_y": "Custom Y:",
+  "gui.todolist.config.hud_show_when_empty": "Show HUD when empty:",
+  "gui.todolist.config.hud_preview.title": "HUD Preview",
+  "gui.todolist.config.hud_preview.hint": "Drag to adjust todo list position",
 
   "message.todolist.added": "Task added: %s",
   "message.todolist.updated": "Task updated: %s",
   "message.todolist.deleted": "Task deleted: %s",
   "message.todolist.completed": "Task completed: %s",
   "message.todolist.uncompleted": "Task uncompleted: %s",
+  "message.todolist.saved": "Todo list saved",
+  "message.todolist.save_failed": "Save failed",
 
   "config.todolist.enable_hud": "Enable HUD",
   "config.todolist.enable_task_book": "Enable Task Book",
@@ -34,5 +68,14 @@
   "config.todolist.auto_save_interval": "Auto Save Interval (minutes)",
   "config.todolist.default_priority": "Default Priority",
   "config.todolist.gui.dark_theme": "Dark Theme",
-  "config.todolist.gui.hud_position": "HUD Position"
+  "config.todolist.gui.hud_position": "HUD Position",
+
+  "hud.todolist.header": "Todo List (press H to toggle)",
+  "hud.todolist.separator.completed": "--- Completed ---",
+  "hud.todolist.more_tasks": "... %s more tasks",
+  "hud.todolist.summary": "Todo: %s",
+  "hud.todolist.summary.with_completed": "Todo: %s | Done: %s",
+  "hud.todolist.priority.high.icon": "[H]",
+  "hud.todolist.priority.medium.icon": "[M]",
+  "hud.todolist.priority.low.icon": "[L]"
 }

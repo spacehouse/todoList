@@ -3,6 +3,8 @@ package com.todolist.client;
 import com.todolist.TodoListMod;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreen;
+import com.todolist.task.Task;
+import com.todolist.task.TaskManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -23,7 +25,10 @@ import org.lwjgl.glfw.GLFW;
  */
 public class TodoClient implements ClientModInitializer {
     private static KeyBinding openTodoKeyBinding;
+    private static KeyBinding toggleHudKeyBinding;
     private static MinecraftClient client;
+    private static TodoHudRenderer hudRenderer;
+    private static final TaskManager teamTaskManager = new TaskManager();
 
     @Override
     public void onInitializeClient() {
@@ -43,6 +48,8 @@ public class TodoClient implements ClientModInitializer {
             TodoListMod.LOGGER.warn("Failed to initialize HUD renderer", e);
         }
 
+        ClientTaskPackets.registerClientPackets();
+
         // Register join event
         registerJoinEvent();
 
@@ -58,22 +65,34 @@ public class TodoClient implements ClientModInitializer {
                 "category.todolist"
         ));
 
+        // Key: H key to toggle HUD expanded state
+        toggleHudKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.todolist.togglehud",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
+                "category.todolist"
+        ));
+
         // Register key press handler
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openTodoKeyBinding.wasPressed()) {
                 openTodoScreen();
             }
+            while (toggleHudKeyBinding.wasPressed()) {
+                toggleHud();
+            }
         });
 
-        TodoListMod.LOGGER.info("Registered key binding: K key");
+        TodoListMod.LOGGER.info("Registered key bindings: K key (open), H key (toggle HUD)");
     }
 
     private void registerHudRenderer() {
-        // TODO: Implement HUD rendering in Phase 2
+        // Initialize HUD renderer
+        hudRenderer = new TodoHudRenderer(client);
+
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
             if (ModConfig.getInstance().isEnableHud() && client.player != null) {
-                // Render task HUD in Phase 2
-                // For now, just a placeholder
+                hudRenderer.render(drawContext, tickDelta);
             }
         });
 
@@ -93,7 +112,28 @@ public class TodoClient implements ClientModInitializer {
         }
     }
 
+    private void toggleHud() {
+        if (hudRenderer != null) {
+            hudRenderer.toggleExpanded();
+        }
+    }
+
+    public static TaskManager getTeamTaskManager() {
+        return teamTaskManager;
+    }
+
+    public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
+        teamTaskManager.clearAll();
+        for (Task task : tasks) {
+            teamTaskManager.addTask(task);
+        }
+    }
+
     public static KeyBinding getOpenTodoKeyBinding() {
         return openTodoKeyBinding;
+    }
+
+    public static TodoHudRenderer getHudRenderer() {
+        return hudRenderer;
     }
 }

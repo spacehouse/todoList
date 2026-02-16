@@ -45,11 +45,10 @@ public class TaskManager {
         return tasks.get(id);
     }
 
-    /**
-     * Get all tasks
-     */
     public List<Task> getAllTasks() {
-        return new ArrayList<>(tasks.values());
+        List<Task> list = new ArrayList<>(tasks.values());
+        list.sort((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal());
+        return list;
     }
 
     /**
@@ -91,6 +90,7 @@ public class TaskManager {
     public List<Task> getCompletedTasks() {
         return tasks.values().stream()
                 .filter(Task::isCompleted)
+                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
                 .collect(Collectors.toList());
     }
 
@@ -100,6 +100,7 @@ public class TaskManager {
     public List<Task> getIncompleteTasks() {
         return tasks.values().stream()
                 .filter(t -> !t.isCompleted())
+                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
                 .collect(Collectors.toList());
     }
 
@@ -107,9 +108,15 @@ public class TaskManager {
      * Get tasks by priority
      */
     public List<Task> getTasksByPriority(Task.Priority priority) {
-        return tasks.values().stream()
+        List<Task> list = tasks.values().stream()
                 .filter(t -> t.getPriority() == priority)
                 .collect(Collectors.toList());
+        list.sort((a, b) -> {
+            if (a.isCompleted() && !b.isCompleted()) return 1;
+            if (!a.isCompleted() && b.isCompleted()) return -1;
+            return 0;
+        });
+        return list;
     }
 
     /**

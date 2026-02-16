@@ -20,6 +20,9 @@
     ],
     "client": [
       "com.todolist.client.TodoClient"
+    ],
+    "modmenu": [
+      "com.todolist.client.ModMenuIntegration"
     ]
   },
   "mixins": [

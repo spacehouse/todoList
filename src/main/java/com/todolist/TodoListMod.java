@@ -5,7 +5,6 @@ import com.todolist.network.TaskPackets;
 import com.todolist.task.TaskStorage;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +37,8 @@ public class TodoListMod implements ModInitializer {
         // Initialize task storage
         taskStorage = new TaskStorage();
 
-        // Register network packets
-        TaskPackets.register();
+        // Register server-side network packets
+        TaskPackets.registerServerPackets();
 
         // Register server lifecycle events
         ServerLifecycleEvents.SERVER_STARTING.register(this::onServerStarting);
