@@ -45,6 +45,9 @@ public class TodoScreen extends Screen {
     // Buttons
     private ButtonWidget addButton;
     private ButtonWidget deleteButton;
+    private ButtonWidget claimButton;
+    private ButtonWidget abandonButton;
+    private ButtonWidget assignOthersButton;
     private ButtonWidget[] priorityButtons;
 
     // Selected priority for new/edited tasks
@@ -59,6 +62,7 @@ public class TodoScreen extends Screen {
     private ButtonWidget configButton;
     private ButtonWidget personalViewButton;
     private ButtonWidget teamAllViewButton;
+    private ButtonWidget teamUnassignedViewButton;
     private ButtonWidget teamAssignedViewButton;
 
     private Task selectedTask;
@@ -66,6 +70,9 @@ public class TodoScreen extends Screen {
     private List<Task> baseFilteredTasks = new ArrayList<>();
     private String currentFilter = "all";
     private String searchQuery = "";
+    private boolean hasUnsavedChanges = false;
+    private static boolean personalHasUnsavedChanges = false;
+    private static boolean teamHasUnsavedChanges = false;
 
     private ViewMode viewMode = ViewMode.PERSONAL;
 
@@ -94,6 +101,7 @@ public class TodoScreen extends Screen {
 
         teamTaskManager = TodoClient.getTeamTaskManager();
         taskManager = viewMode == ViewMode.PERSONAL ? personalTaskManager : teamTaskManager;
+        hasUnsavedChanges = viewMode == ViewMode.PERSONAL ? personalHasUnsavedChanges : teamHasUnsavedChanges;
 
         // Rebuild UI
         rebuildUI();
@@ -133,10 +141,14 @@ public class TodoScreen extends Screen {
         int desiredHeight = configuredListHeight > 0 ? configuredListHeight : preferredByItems;
         int listHeight = Math.min(desiredHeight, maxListHeight);
 
+        int labelWidth = 40;
         int contentX = x + padding;
         int contentWidth = guiWidth - padding * 2;
         int listTop = y + headerOffset;
         taskListWidget = new TaskListWidget(this.client, contentX, listTop, contentWidth, listHeight);
+        boolean nonOpClient = !isAdminClient();
+        boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
+        taskListWidget.setTeamAllViewForNonOp(nonOpClient && teamAllView);
         taskListWidget.setTasks(filteredTasks);
         taskListWidget.setOnTaskToggleCompletion(task -> {
             if (task.isCompleted()) {
@@ -150,10 +162,7 @@ public class TodoScreen extends Screen {
             refreshTaskList();
         });
 
-        int labelWidth = 40;
-
         int currentY = y + headerOffset + listHeight + e;
-
         int fieldX = x + padding + labelWidth;
         int fieldWidth = guiWidth - padding * 2 - labelWidth;
 
@@ -206,13 +215,15 @@ public class TodoScreen extends Screen {
                     ClientTaskPackets.sendUpdateTask(selectedTask);
                 }
                 updatePrioritySelection();
+                markUnsaved();
             }).dimensions(priorityStartX + index * (priorityButtonWidth + 4), currentY, priorityButtonWidth, 20).build();
             this.addDrawableChild(priorityButtons[i]);
         }
 
         int actionButtonWidth = 60;
         int actionButtonGap = 5;
-        int actionButtonsWidth = actionButtonWidth * 2 + actionButtonGap;
+        int actionButtonsCount = 2;
+        int actionButtonsWidth = actionButtonWidth * actionButtonsCount + actionButtonGap * (actionButtonsCount - 1);
         int actionButtonX = x + guiWidth - padding - actionButtonsWidth;
 
         addButton = ButtonWidget.builder(Text.translatable("gui.todolist.add"), button -> {
@@ -222,7 +233,7 @@ public class TodoScreen extends Screen {
 
         deleteButton = ButtonWidget.builder(Text.translatable("gui.todolist.delete"), button -> {
             onDeleteTask();
-        }).dimensions(actionButtonX + actionButtonWidth + actionButtonGap, currentY, actionButtonWidth, 20).build();
+        }).dimensions(actionButtonX + (actionButtonWidth + actionButtonGap), currentY, actionButtonWidth, 20).build();
         deleteButton.active = false;
         this.addDrawableChild(deleteButton);
 
@@ -245,24 +256,60 @@ public class TodoScreen extends Screen {
         this.addDrawableChild(cancelButton);
 
         int modeButtonWidth = 80;
+        int modeButtonHeight = 20;
         int modeButtonGap = 4;
-        int modesX = x + padding;
-        int modesY = y + 10;
+        int modesX = x + padding - modeButtonWidth - 8;
+        int modesY = listTop;
 
         personalViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.personal"), b -> {
             switchView(ViewMode.PERSONAL);
-        }).dimensions(modesX, modesY, modeButtonWidth, 20).build();
+        }).dimensions(modesX, modesY, modeButtonWidth, modeButtonHeight).build();
         this.addDrawableChild(personalViewButton);
+
+        boolean isAdmin = isAdminClient();
+
+        int rowIndex = 1;
+
+        teamUnassignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_unassigned"), b -> {
+            switchView(ViewMode.TEAM_UNASSIGNED);
+        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
+        this.addDrawableChild(teamUnassignedViewButton);
+        rowIndex++;
 
         teamAllViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_all"), b -> {
             switchView(ViewMode.TEAM_ALL);
-        }).dimensions(modesX + (modeButtonWidth + modeButtonGap), modesY, modeButtonWidth, 20).build();
+        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
         this.addDrawableChild(teamAllViewButton);
+        rowIndex++;
 
         teamAssignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_assigned"), b -> {
             switchView(ViewMode.TEAM_ASSIGNED);
-        }).dimensions(modesX + (modeButtonWidth + modeButtonGap) * 2, modesY, modeButtonWidth, 20).build();
+        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
         this.addDrawableChild(teamAssignedViewButton);
+
+        int assignButtonWidth = 80;
+        int assignButtonHeight = 20;
+        int assignButtonGap = 4;
+        int assignsX = contentX + contentWidth + 8;
+        int assignsY = listTop;
+
+        claimButton = ButtonWidget.builder(Text.translatable("gui.todolist.claim_task"), b -> {
+            onClaimTask();
+        }).dimensions(assignsX, assignsY, assignButtonWidth, assignButtonHeight).build();
+        claimButton.active = false;
+        this.addDrawableChild(claimButton);
+
+        abandonButton = ButtonWidget.builder(Text.translatable("gui.todolist.abandon_task"), b -> {
+            onAbandonTask();
+        }).dimensions(assignsX, assignsY + (assignButtonHeight + assignButtonGap), assignButtonWidth, assignButtonHeight).build();
+        abandonButton.active = false;
+        this.addDrawableChild(abandonButton);
+
+        assignOthersButton = ButtonWidget.builder(Text.translatable("gui.todolist.assign_others"), b -> {
+            onAssignOthers();
+        }).dimensions(assignsX, assignsY + (assignButtonHeight + assignButtonGap) * 2, assignButtonWidth, assignButtonHeight).build();
+        assignOthersButton.active = false;
+        this.addDrawableChild(assignOthersButton);
 
         updateViewButtonsState();
 
@@ -271,7 +318,7 @@ public class TodoScreen extends Screen {
         int filterCount = 5;
         int totalFilterWidth = filterButtonWidth * filterCount + filterGap * (filterCount - 1);
         int filtersX = x + padding;
-        int filtersY = modesY + 24;
+        int filtersY = y + 10;
 
         filterActiveButton = ButtonWidget.builder(Text.translatable("gui.todolist.active"), button -> {
             filterTasks("active");
@@ -315,12 +362,14 @@ public class TodoScreen extends Screen {
         titleField.setChangedListener(text -> {
             if (selectedTask != null && !selectedTask.isCompleted()) {
                 selectedTask.setTitle(text);
+                markUnsaved();
             }
         });
 
         descField.setChangedListener(text -> {
             if (selectedTask != null && !selectedTask.isCompleted()) {
                 selectedTask.setDescription(text);
+                markUnsaved();
             }
         });
 
@@ -340,6 +389,7 @@ public class TodoScreen extends Screen {
                     }
                     selectedTask.setTags(tags);
                 }
+                markUnsaved();
             }
         });
 
@@ -352,11 +402,12 @@ public class TodoScreen extends Screen {
     }
 
     private void toggleTaskCompletion(Task task) {
-        taskManager.toggleTaskCompletion(task.getId());
-        if (viewMode == ViewMode.PERSONAL) {
+        if (!canToggleCompletion(task)) {
+            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        ClientTaskPackets.sendToggleTeamTask(task.getId());
+        taskManager.toggleTaskCompletion(task.getId());
+        markUnsaved();
         refreshTaskList();
     }
 
@@ -364,7 +415,8 @@ public class TodoScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, BG_COLOR);
 
-        context.drawText(this.textRenderer, TITLE, (this.width - this.textRenderer.getWidth(TITLE)) / 2, 10, 0xFFFFFFFF, false);
+        Text title = hasUnsavedChanges ? Text.translatable("gui.todolist.title.unsaved") : TITLE;
+        context.drawText(this.textRenderer, title, (this.width - this.textRenderer.getWidth(title)) / 2, 10, 0xFFFFFFFF, false);
 
         taskListWidget.render(context, mouseX, mouseY, delta);
 
@@ -458,6 +510,12 @@ public class TodoScreen extends Screen {
                 ClientTaskPackets.sendReplaceTeamTasks(taskManager.getAllTasks());
                 TodoListMod.LOGGER.info("Team tasks saved");
             }
+            hasUnsavedChanges = false;
+            if (viewMode == ViewMode.PERSONAL) {
+                personalHasUnsavedChanges = false;
+            } else {
+                teamHasUnsavedChanges = false;
+            }
             if (this.client != null && this.client.player != null) {
                 this.client.player.sendMessage(Text.translatable("message.todolist.saved"), false);
             }
@@ -509,6 +567,10 @@ public class TodoScreen extends Screen {
     // Event handlers
 
     private void onAddTask() {
+        if (viewMode != ViewMode.PERSONAL && !isAdminClient()) {
+            addNotification(Text.translatable("message.todolist.no_permission_add_team").getString());
+            return;
+        }
         String title = getFieldValue(titleField, "");
         String desc = getFieldValue(descField, "");
         String tagsStr = getFieldValue(tagField, "");
@@ -546,6 +608,7 @@ public class TodoScreen extends Screen {
             tagField.setText("");
             selectedPriority = Task.Priority.MEDIUM;
 
+            markUnsaved();
             refreshTaskList();
         }
     }
@@ -556,6 +619,7 @@ public class TodoScreen extends Screen {
             taskManager.deleteTask(id);
             selectedTask = null;
             updateButtonStates();
+            markUnsaved();
             refreshTaskList();
         }
     }
@@ -576,7 +640,7 @@ public class TodoScreen extends Screen {
 
         taskListWidget.setSelectedTask(task);
         updateButtonStates();
-        boolean editable = !task.isCompleted();
+        boolean editable = canEditTask(task);
         titleField.setEditable(editable);
         descField.setEditable(editable);
         tagField.setEditable(editable);
@@ -584,9 +648,13 @@ public class TodoScreen extends Screen {
 
     private void updateButtonStates() {
         boolean hasSelection = selectedTask != null;
-        deleteButton.active = hasSelection;
+        boolean canEdit = hasSelection && canEditTask(selectedTask);
         boolean isCompleted = hasSelection && selectedTask.isCompleted();
-        boolean priorityEnabled = !isCompleted;
+        boolean isAssigned = hasSelection
+                && selectedTask.getAssigneeUuid() != null
+                && !selectedTask.getAssigneeUuid().isEmpty();
+        boolean priorityEnabled = canEdit && !isCompleted;
+        deleteButton.active = hasSelection && canDeleteTask(selectedTask);
         if (priorityButtons != null) {
             for (ButtonWidget button : priorityButtons) {
                 if (button != null) {
@@ -594,13 +662,164 @@ public class TodoScreen extends Screen {
                 }
             }
         }
+        boolean isAdmin = isAdminClient();
         if (addButton != null) {
-            addButton.active = !isCompleted;
+            if (viewMode == ViewMode.PERSONAL) {
+                addButton.active = !isCompleted;
+            } else {
+                addButton.active = isAdmin && !isCompleted;
+            }
+        }
+        boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
+        if (claimButton != null) {
+            claimButton.visible = showAssignButtons;
+            if (isAdmin) {
+                claimButton.active = hasSelection && showAssignButtons && !isCompleted && !isAssigned;
+            } else {
+                claimButton.active = hasSelection && showAssignButtons && !isCompleted
+                        && viewMode == ViewMode.TEAM_UNASSIGNED;
+            }
+        }
+        if (abandonButton != null) {
+            abandonButton.visible = showAssignButtons;
+            if (isAdmin) {
+                abandonButton.active = hasSelection && showAssignButtons && !isCompleted;
+            } else {
+                abandonButton.active = hasSelection && showAssignButtons && !isCompleted
+                        && viewMode == ViewMode.TEAM_ASSIGNED
+                        && isCurrentPlayerAssignee(selectedTask);
+            }
+        }
+        if (assignOthersButton != null) {
+            assignOthersButton.visible = showAssignButtons;
+            assignOthersButton.active = hasSelection && showAssignButtons && isAdmin && !isCompleted;
         }
     }
 
     private void setSelectedPriority(Task.Priority priority) {
         this.selectedPriority = priority;
+    }
+
+    private boolean isAdminClient() {
+        return this.client != null && this.client.player != null && this.client.player.hasPermissionLevel(2);
+    }
+
+    private void markUnsaved() {
+        hasUnsavedChanges = true;
+        if (viewMode == ViewMode.PERSONAL) {
+            personalHasUnsavedChanges = true;
+        } else {
+            teamHasUnsavedChanges = true;
+        }
+    }
+
+    private boolean canEditTask(Task task) {
+        if (task == null || task.isCompleted()) {
+            return false;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            return true;
+        }
+        return isAdminClient();
+    }
+
+    private boolean canDeleteTask(Task task) {
+        if (task == null) {
+            return false;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            if (task.isCompleted()) {
+                return true;
+            }
+            return canEditTask(task);
+        }
+        if (!isAdminClient()) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean canToggleCompletion(Task task) {
+        if (task == null) {
+            return false;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            return true;
+        }
+        if (isAdminClient()) {
+            return true;
+        }
+        if (viewMode != ViewMode.TEAM_ASSIGNED) {
+            return false;
+        }
+        if (this.client == null || this.client.player == null) {
+            return false;
+        }
+        String uuid = this.client.player.getUuid().toString();
+        String assignee = task.getAssigneeUuid();
+        return assignee != null && assignee.equals(uuid);
+    }
+
+    private boolean isCurrentPlayerAssignee(Task task) {
+        if (task == null || this.client == null || this.client.player == null) {
+            return false;
+        }
+        String uuid = this.client.player.getUuid().toString();
+        String assignee = task.getAssigneeUuid();
+        return assignee != null && assignee.equals(uuid);
+    }
+
+    private void onClaimTask() {
+        if (selectedTask == null || this.client == null || this.client.player == null) {
+            return;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            return;
+        }
+        String uuid = this.client.player.getUuid().toString();
+        String assignee = selectedTask.getAssigneeUuid();
+        if (!isAdminClient() && assignee != null && !assignee.isEmpty() && !assignee.equals(uuid)) {
+            addNotification(Text.translatable("message.todolist.already_assigned").getString());
+            return;
+        }
+        selectedTask.setAssigneeUuid(uuid);
+        addNotification(Text.translatable("message.todolist.assigned_to_me").getString());
+        markUnsaved();
+        refreshTaskList();
+    }
+
+    private void onAbandonTask() {
+        if (selectedTask == null || this.client == null || this.client.player == null) {
+            return;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            return;
+        }
+        if (!isCurrentPlayerAssignee(selectedTask) && !isAdminClient()) {
+            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
+            return;
+        }
+        selectedTask.setAssigneeUuid(null);
+        addNotification(Text.translatable("message.todolist.abandoned_task").getString());
+        markUnsaved();
+        refreshTaskList();
+    }
+
+    private void onAssignOthers() {
+        if (selectedTask == null || this.client == null) {
+            return;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            return;
+        }
+        if (!canEditTask(selectedTask)) {
+            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
+            return;
+        }
+        this.client.setScreen(new AssignPlayerScreen(this, selectedTask));
     }
 
     private void filterTasks(String filter) {
@@ -664,21 +883,40 @@ public class TodoScreen extends Screen {
     }
 
     private List<Task> applyAssignedFilterIfNeeded(List<Task> source) {
-        if (viewMode != ViewMode.TEAM_ASSIGNED) {
-            return source;
-        }
-        if (this.client == null || this.client.player == null) {
-            return source;
-        }
-        String uuid = this.client.player.getUuid().toString();
-        List<Task> result = new ArrayList<>();
-        for (Task task : source) {
-            String assignee = task.getAssigneeUuid();
-            if (assignee != null && assignee.equals(uuid)) {
-                result.add(task);
+        if (viewMode == ViewMode.TEAM_ALL) {
+            List<Task> result = new ArrayList<>();
+            for (Task task : source) {
+                String assignee = task.getAssigneeUuid();
+                if (assignee != null && !assignee.isEmpty()) {
+                    result.add(task);
+                }
             }
+            return result;
         }
-        return result;
+        if (viewMode == ViewMode.TEAM_ASSIGNED) {
+            if (this.client == null || this.client.player == null) {
+                return source;
+            }
+            String uuid = this.client.player.getUuid().toString();
+            List<Task> result = new ArrayList<>();
+            for (Task task : source) {
+                String assignee = task.getAssigneeUuid();
+                if (assignee != null && assignee.equals(uuid)) {
+                    result.add(task);
+                }
+            }
+            return result;
+        }
+        if (viewMode == ViewMode.TEAM_UNASSIGNED) {
+            List<Task> result = new ArrayList<>();
+            for (Task task : source) {
+                if (task.getAssigneeUuid() == null || task.getAssigneeUuid().isEmpty()) {
+                    result.add(task);
+                }
+            }
+            return result;
+        }
+        return source;
     }
 
     private void switchView(ViewMode mode) {
@@ -697,6 +935,9 @@ public class TodoScreen extends Screen {
         if (teamAllViewButton != null) {
             teamAllViewButton.active = viewMode != ViewMode.TEAM_ALL;
         }
+        if (teamUnassignedViewButton != null) {
+            teamUnassignedViewButton.active = viewMode != ViewMode.TEAM_UNASSIGNED;
+        }
         if (teamAssignedViewButton != null) {
             teamAssignedViewButton.active = viewMode != ViewMode.TEAM_ASSIGNED;
         }
@@ -705,6 +946,7 @@ public class TodoScreen extends Screen {
     private enum ViewMode {
         PERSONAL,
         TEAM_ALL,
+        TEAM_UNASSIGNED,
         TEAM_ASSIGNED
     }
 
@@ -727,6 +969,63 @@ public class TodoScreen extends Screen {
         Notification(String text, long expireAt) {
             this.text = text;
             this.expireAt = expireAt;
+        }
+    }
+
+    private class AssignPlayerScreen extends Screen {
+        private final TodoScreen parentScreen;
+        private final Task targetTask;
+
+        protected AssignPlayerScreen(TodoScreen parentScreen, Task targetTask) {
+            super(Text.translatable("gui.todolist.assign_others"));
+            this.parentScreen = parentScreen;
+            this.targetTask = targetTask;
+        }
+
+        @Override
+        protected void init() {
+            super.init();
+            if (client == null || client.getNetworkHandler() == null) {
+                return;
+            }
+            int guiWidth = 200;
+            int x = (this.width - guiWidth) / 2;
+            int y = this.height / 6 + 20;
+            int rowH = 22;
+            int index = 0;
+
+            java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+            for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                String name = entry.getProfile().getName();
+                java.util.UUID uuid = entry.getProfile().getId();
+                Text label = Text.of(name);
+                int btnY = y + index * rowH;
+                ButtonWidget btn = ButtonWidget.builder(label, b -> {
+                    applyAssignTo(uuid.toString(), name);
+                }).dimensions(x, btnY, guiWidth, 20).build();
+                this.addDrawableChild(btn);
+                index++;
+            }
+
+            int cancelY = y + index * rowH + 10;
+            ButtonWidget cancel = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), b -> {
+                client.setScreen(parentScreen);
+            }).dimensions(x, cancelY, guiWidth, 20).build();
+            this.addDrawableChild(cancel);
+        }
+
+        private void applyAssignTo(String uuid, String name) {
+            targetTask.setAssigneeUuid(uuid);
+            parentScreen.addNotification(Text.translatable("message.todolist.assigned_to_player", name).getString());
+            parentScreen.markUnsaved();
+            parentScreen.refreshTaskList();
+            client.setScreen(parentScreen);
+        }
+
+        @Override
+        public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+            this.renderBackground(context);
+            super.render(context, mouseX, mouseY, delta);
         }
     }
 }

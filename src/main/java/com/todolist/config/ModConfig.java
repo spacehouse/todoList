@@ -82,6 +82,7 @@ public class ModConfig {
         private int hudCustomX = 10;
         private int hudCustomY = 10;
         private boolean hudShowWhenEmpty = false;
+        private String hudDefaultView = "PERSONAL";
     }
 
     /**
@@ -374,6 +375,21 @@ public class ModConfig {
     public boolean isHudShowWhenEmpty() { return gui.hudShowWhenEmpty; }
     public void setHudShowWhenEmpty(boolean show) {
         gui.hudShowWhenEmpty = show;
+        save();
+    }
+
+    public String getHudDefaultView() {
+        if (gui.hudDefaultView == null || gui.hudDefaultView.isEmpty()) {
+            gui.hudDefaultView = "PERSONAL";
+        }
+        return gui.hudDefaultView;
+    }
+
+    public void setHudDefaultView(String view) {
+        if (view == null || view.isEmpty()) {
+            return;
+        }
+        gui.hudDefaultView = view;
         save();
     }
 }

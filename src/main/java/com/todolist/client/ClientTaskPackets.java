@@ -132,4 +132,23 @@ public class ClientTaskPackets {
         buf.writeString(taskId);
         ClientPlayNetworking.send(TaskPackets.TEAM_TOGGLE_TASK_ID, buf);
     }
+
+    public static void sendAssignTeamTask(String taskId, String assigneeUuid) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.getNetworkHandler() == null) {
+            return;
+        }
+        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_ASSIGN_TASK_ID)) {
+            return;
+        }
+        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeString(taskId);
+        if (assigneeUuid == null || assigneeUuid.isEmpty()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeString(assigneeUuid);
+        }
+        ClientPlayNetworking.send(TaskPackets.TEAM_ASSIGN_TASK_ID, buf);
+    }
 }

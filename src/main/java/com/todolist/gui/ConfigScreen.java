@@ -4,6 +4,7 @@ import com.todolist.config.ModConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
@@ -12,12 +13,11 @@ public class ConfigScreen extends Screen {
 
     private TextFieldWidget hudWidthField;
     private TextFieldWidget hudMaxHeightField;
-    private TextFieldWidget hudTodoLimitField;
-    private TextFieldWidget hudDoneLimitField;
-    private TextFieldWidget hudExpandedField;
-    private TextFieldWidget hudShowWhenEmptyField;
-    private TextFieldWidget hudCustomXField;
-    private TextFieldWidget hudCustomYField;
+    private IntSliderWidget hudTodoLimitSlider;
+    private IntSliderWidget hudDoneLimitSlider;
+    private ButtonWidget hudExpandedButton;
+    private ButtonWidget hudShowWhenEmptyButton;
+    private ButtonWidget hudDefaultViewButton;
 
     private int previewHudX;
     private int previewHudY;
@@ -29,6 +29,11 @@ public class ConfigScreen extends Screen {
     private boolean previewUseCustom;
     private int dragOffsetX;
     private int dragOffsetY;
+
+    private boolean hudExpandedValue;
+    private boolean hudShowWhenEmptyValue;
+    private String hudDefaultViewValue;
+    private int hudDefaultViewIndex;
 
     public ConfigScreen(Screen parent) {
         super(Text.translatable("gui.todolist.config.title"));
@@ -47,30 +52,75 @@ public class ConfigScreen extends Screen {
         int labelWidth = 160;
         int fieldWidth = guiWidth - labelWidth;
 
-        hudWidthField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudWidthField.setText(Integer.toString(cfg.getHudWidth())); row++;
+        int twoColGap = 20;
+        int colWidth = (guiWidth - twoColGap) / 2;
+        int leftLabelWidth = 80;
+        int rightLabelWidth = 80;
+        int leftFieldWidth = colWidth - leftLabelWidth;
+        int rightFieldWidth = colWidth - rightLabelWidth;
+        int leftLabelX = x;
+        int leftFieldX = x + leftLabelWidth;
+        int rightLabelX = x + colWidth + twoColGap;
+        int rightFieldX = rightLabelX + rightLabelWidth;
 
-        hudMaxHeightField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudMaxHeightField.setText(Integer.toString(cfg.getHudMaxHeight())); row++;
-
-        hudTodoLimitField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudTodoLimitField.setText(Integer.toString(cfg.getHudTodoLimit())); row++;
-
-        hudDoneLimitField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudDoneLimitField.setText(Integer.toString(cfg.getHudDoneLimit())); row++;
-
-        hudExpandedField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudExpandedField.setText(Boolean.toString(cfg.isHudDefaultExpanded())); row++;
-
-        hudShowWhenEmptyField = new TextFieldWidget(this.textRenderer, x + labelWidth, y + row * rowH, fieldWidth, fieldH, Text.empty());
-        hudShowWhenEmptyField.setText(Boolean.toString(cfg.isHudShowWhenEmpty())); row++;
-
+        hudWidthField = new TextFieldWidget(this.textRenderer, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Text.empty());
+        hudWidthField.setText(Integer.toString(cfg.getHudWidth()));
         this.addDrawableChild(hudWidthField);
+
+        hudMaxHeightField = new TextFieldWidget(this.textRenderer, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Text.empty());
+        hudMaxHeightField.setText(Integer.toString(cfg.getHudMaxHeight()));
         this.addDrawableChild(hudMaxHeightField);
-        this.addDrawableChild(hudTodoLimitField);
-        this.addDrawableChild(hudDoneLimitField);
-        this.addDrawableChild(hudExpandedField);
-        this.addDrawableChild(hudShowWhenEmptyField);
+        row++;
+
+        int todoInitial = cfg.getHudTodoLimit();
+        int doneInitial = cfg.getHudDoneLimit();
+        hudTodoLimitSlider = new IntSliderWidget(leftFieldX, y + row * rowH, leftFieldWidth, fieldH, 0, 30, todoInitial);
+        hudDoneLimitSlider = new IntSliderWidget(rightFieldX, y + row * rowH, rightFieldWidth, fieldH, 0, 30, doneInitial);
+        this.addDrawableChild(hudTodoLimitSlider);
+        this.addDrawableChild(hudDoneLimitSlider);
+        row++;
+
+        hudExpandedValue = cfg.isHudDefaultExpanded();
+        hudShowWhenEmptyValue = cfg.isHudShowWhenEmpty();
+
+        hudExpandedButton = ButtonWidget.builder(Text.empty(), b -> {
+            hudExpandedValue = !hudExpandedValue;
+            updateHudExpandedButtonLabel();
+        }).dimensions(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
+        this.addDrawableChild(hudExpandedButton);
+
+        hudShowWhenEmptyButton = ButtonWidget.builder(Text.empty(), b -> {
+            hudShowWhenEmptyValue = !hudShowWhenEmptyValue;
+            updateHudShowWhenEmptyButtonLabel();
+        }).dimensions(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
+        this.addDrawableChild(hudShowWhenEmptyButton);
+        row++;
+
+        String currentView = cfg.getHudDefaultView();
+        String[] views = HudViewOptions.VALUES;
+        hudDefaultViewIndex = 0;
+        for (int i = 0; i < views.length; i++) {
+            if (views[i].equalsIgnoreCase(currentView)) {
+                hudDefaultViewIndex = i;
+                break;
+            }
+        }
+        hudDefaultViewValue = views[hudDefaultViewIndex];
+
+        int defaultViewLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_default_view"));
+        int defaultViewButtonX = x + defaultViewLabelWidth + 10;
+        int defaultViewButtonWidth = guiWidth - (defaultViewButtonX - x);
+
+        hudDefaultViewButton = ButtonWidget.builder(Text.empty(), b -> {
+            hudDefaultViewIndex = (hudDefaultViewIndex + 1) % HudViewOptions.VALUES.length;
+            hudDefaultViewValue = HudViewOptions.VALUES[hudDefaultViewIndex];
+            updateHudDefaultViewButtonLabel();
+        }).dimensions(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
+        this.addDrawableChild(hudDefaultViewButton);
+
+        updateHudExpandedButtonLabel();
+        updateHudShowWhenEmptyButtonLabel();
+        updateHudDefaultViewButtonLabel();
 
         previewUseCustom = cfg.isHudUseCustomPosition();
         if (previewUseCustom) {
@@ -87,7 +137,7 @@ public class ConfigScreen extends Screen {
         previewHudWidth = cfg.getHudWidth();
         previewHudHeight = 40;
 
-        int buttonY = y + row * rowH + 12;
+        int buttonY = y + row * rowH + 30;
         ButtonWidget save = ButtonWidget.builder(Text.translatable("gui.todolist.config.save_apply"), b -> {
             applyAndReturn();
         }).dimensions(x, buttonY, guiWidth / 2 - 5, 20).build();
@@ -103,30 +153,32 @@ public class ConfigScreen extends Screen {
         this.renderBackground(context);
         super.render(context, mouseX, mouseY, delta);
         int guiWidth = 320;
-        int labelX = (this.width - guiWidth) / 2;
+        int x = (this.width - guiWidth) / 2;
         int yStart = this.height / 6 + 20;
         int rowH = 24;
         int fieldH = 20;
         int textH = this.textRenderer.fontHeight;
 
+        int twoColGap = 20;
+        int colWidth = (guiWidth - twoColGap) / 2;
+        int leftLabelX = x;
+        int rightLabelX = x + colWidth + twoColGap;
+
         int row = 0;
         int baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_width"), labelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_width"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_max_height"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_max_height"), labelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_todo_limit"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_done_limit"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_todo_limit"), labelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_expanded"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_show_when_empty"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_done_limit"), labelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_expanded"), labelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_show_when_empty"), labelX, baseY, 0xFFFFFF, false);
+        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_view"), leftLabelX, baseY, 0xFFFFFF, false);
 
         int hudX = previewHudX;
         int hudY = previewHudY;
@@ -201,13 +253,14 @@ public class ConfigScreen extends Screen {
         ModConfig cfg = ModConfig.getInstance();
         cfg.setHudWidth(parseIntSafe(hudWidthField.getText(), cfg.getHudWidth()));
         cfg.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getText(), cfg.getHudMaxHeight()));
-        cfg.setHudTodoLimit(parseIntSafe(hudTodoLimitField.getText(), cfg.getHudTodoLimit()));
-        cfg.setHudDoneLimit(parseIntSafe(hudDoneLimitField.getText(), cfg.getHudDoneLimit()));
-        cfg.setHudDefaultExpanded(parseBooleanSafe(hudExpandedField.getText(), cfg.isHudDefaultExpanded()));
+        cfg.setHudTodoLimit(hudTodoLimitSlider.getIntValue());
+        cfg.setHudDoneLimit(hudDoneLimitSlider.getIntValue());
+        cfg.setHudDefaultExpanded(hudExpandedValue);
         cfg.setHudUseCustomPosition(previewUseCustom);
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
-        cfg.setHudShowWhenEmpty(parseBooleanSafe(hudShowWhenEmptyField.getText(), cfg.isHudShowWhenEmpty()));
+        cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
+        cfg.setHudDefaultView(hudDefaultViewValue);
         this.client.setScreen(parent);
     }
 
@@ -219,11 +272,80 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private boolean parseBooleanSafe(String s, boolean fallback) {
-        try {
-            return Boolean.parseBoolean(s.trim());
-        } catch (Exception ignored) {
-            return fallback;
+    private void updateHudExpandedButtonLabel() {
+        if (hudExpandedButton != null) {
+            String key = hudExpandedValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+            hudExpandedButton.setMessage(Text.translatable(key));
+        }
+    }
+
+    private void updateHudShowWhenEmptyButtonLabel() {
+        if (hudShowWhenEmptyButton != null) {
+            String key = hudShowWhenEmptyValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+            hudShowWhenEmptyButton.setMessage(Text.translatable(key));
+        }
+    }
+
+    private void updateHudDefaultViewButtonLabel() {
+        if (hudDefaultViewButton != null) {
+            String view = hudDefaultViewValue == null ? "" : hudDefaultViewValue;
+            String key;
+            if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
+                key = "gui.todolist.view.team_unassigned";
+            } else if ("TEAM_ALL".equalsIgnoreCase(view)) {
+                key = "gui.todolist.view.team_all";
+            } else if ("TEAM_ASSIGNED".equalsIgnoreCase(view)) {
+                key = "gui.todolist.view.team_assigned";
+            } else {
+                key = "gui.todolist.view.personal";
+            }
+            hudDefaultViewButton.setMessage(Text.translatable(key));
+        }
+    }
+
+    private static class HudViewOptions {
+        static final String[] VALUES = new String[] { "PERSONAL", "TEAM_UNASSIGNED", "TEAM_ALL", "TEAM_ASSIGNED" };
+    }
+
+    private static class IntSliderWidget extends SliderWidget {
+        private final int min;
+        private final int max;
+
+        IntSliderWidget(int x, int y, int width, int height, int min, int max, int value) {
+            super(x, y, width, height, Text.empty(), 0.0);
+            this.min = min;
+            this.max = max;
+            setValueFromInt(value);
+        }
+
+        private void setValueFromInt(int value) {
+            int clamped = Math.max(min, Math.min(max, value));
+            if (max == min) {
+                this.value = 0.0;
+            } else {
+                this.value = (double)(clamped - min) / (double)(max - min);
+            }
+            updateMessage();
+        }
+
+        int getIntValue() {
+            if (max == min) {
+                return min;
+            }
+            int range = max - min;
+            int v = (int)Math.round(this.value * range) + min;
+            if (v < min) v = min;
+            if (v > max) v = max;
+            return v;
+        }
+
+        @Override
+        protected void updateMessage() {
+            this.setMessage(Text.of(Integer.toString(getIntValue())));
+        }
+
+        @Override
+        protected void applyValue() {
         }
     }
 }

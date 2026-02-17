@@ -65,11 +65,10 @@ public class TodoHudRenderer {
             return;
         }
 
-        // Refresh tasks if needed
         refreshTasksIfNeeded();
 
-        // Get display tasks
-        List<Task> displayTasks = getDisplayTasks();
+        List<Task> baseTasks = getBaseTasksForView();
+        List<Task> displayTasks = getDisplayTasks(baseTasks);
         if (displayTasks.isEmpty() && !ModConfig.getInstance().isHudShowWhenEmpty()) {
             return;
         }
@@ -88,9 +87,15 @@ public class TodoHudRenderer {
 
         TextRenderer textRenderer = client.textRenderer;
 
-        // Get task counts
-        int incompleteCount = taskManager.getIncompleteTasks().size();
-        int completedCount = taskManager.getCompletedTasks().size();
+        int incompleteCount = 0;
+        int completedCount = 0;
+        for (Task task : baseTasks) {
+            if (task.isCompleted()) {
+                completedCount++;
+            } else {
+                incompleteCount++;
+            }
+        }
 
         if (expanded) {
             int todoLimit = ModConfig.getInstance().getHudTodoLimit();
@@ -127,14 +132,41 @@ public class TodoHudRenderer {
 
                 String statusIcon = "§7☐";
 
-                // Tags display
                 String tagsDisplay = "";
+                String baseTag = null;
                 if (!task.getTags().isEmpty()) {
                     String allTags = String.join(",", task.getTags());
                     if (allTags.length() > 10) {
                         allTags = allTags.substring(0, 7) + "..";
                     }
-                    tagsDisplay = " §b[" + allTags + "]§f";
+                    baseTag = allTags;
+                }
+                String assigneeName = null;
+                String assigneeUuid = task.getAssigneeUuid();
+                if (assigneeUuid != null && client.getNetworkHandler() != null) {
+                    java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+                    for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                        if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
+                            String name = entry.getProfile().getName();
+                            if (name != null && !name.isEmpty()) {
+                                assigneeName = name;
+                            }
+                            break;
+                        }
+                    }
+                }
+                StringBuilder sbTag = new StringBuilder();
+                if (assigneeName != null && !assigneeName.isEmpty()) {
+                    sbTag.append(assigneeName);
+                }
+                if (baseTag != null && !baseTag.isEmpty()) {
+                    if (sbTag.length() > 0) {
+                        sbTag.append(", ");
+                    }
+                    sbTag.append(baseTag);
+                }
+                if (sbTag.length() > 0) {
+                    tagsDisplay = " §b[" + sbTag + "]§f";
                 }
 
                 String taskLine = priorityIcon + " " + statusIcon + " " + taskTitle + tagsDisplay;
@@ -166,14 +198,41 @@ public class TodoHudRenderer {
 
                 String statusIcon = "§a☑";
 
-                // Tags display
                 String tagsDisplay = "";
+                String baseTag = null;
                 if (!task.getTags().isEmpty()) {
                     String allTags = String.join(",", task.getTags());
                     if (allTags.length() > 10) {
                         allTags = allTags.substring(0, 7) + "..";
                     }
-                    tagsDisplay = " §b[" + allTags + "]§f";
+                    baseTag = allTags;
+                }
+                String assigneeName = null;
+                String assigneeUuid = task.getAssigneeUuid();
+                if (assigneeUuid != null && client.getNetworkHandler() != null) {
+                    java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+                    for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                        if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
+                            String name = entry.getProfile().getName();
+                            if (name != null && !name.isEmpty()) {
+                                assigneeName = name;
+                            }
+                            break;
+                        }
+                    }
+                }
+                StringBuilder sbTagDone = new StringBuilder();
+                if (assigneeName != null && !assigneeName.isEmpty()) {
+                    sbTagDone.append(assigneeName);
+                }
+                if (baseTag != null && !baseTag.isEmpty()) {
+                    if (sbTagDone.length() > 0) {
+                        sbTagDone.append(", ");
+                    }
+                    sbTagDone.append(baseTag);
+                }
+                if (sbTagDone.length() > 0) {
+                    tagsDisplay = " §b[" + sbTagDone + "]§f";
                 }
 
                 String taskLine = priorityIcon + " " + statusIcon + " " + taskTitle + tagsDisplay;
@@ -204,7 +263,7 @@ public class TodoHudRenderer {
             } else {
                 summaryCore = I18n.translate("hud.todolist.summary", Integer.toString(incompleteCount));
             }
-            String summary = getPriorityIcon(getHighestPriority()) + " " + summaryCore;
+            String summary = getPriorityIcon(getHighestPriority(baseTasks)) + " " + summaryCore;
 
             context.drawText(textRenderer, Text.of(summary),
                     x + HUD_PADDING, y + HUD_PADDING, 0xFFFFFFFF, true);
@@ -219,20 +278,58 @@ public class TodoHudRenderer {
     }
 
     private void drawHeader(DrawContext context, TextRenderer textRenderer, int x, int y, int incomplete, int completed) {
-        String headerCore = I18n.translate("hud.todolist.header");
+        ModConfig cfg = ModConfig.getInstance();
+        String view = cfg.getHudDefaultView();
+        String viewLabelKey;
+        if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
+            viewLabelKey = "hud.todolist.view_label.team_unassigned";
+        } else if ("TEAM_ALL".equalsIgnoreCase(view)) {
+            viewLabelKey = "hud.todolist.view_label.team_all";
+        } else if ("TEAM_ASSIGNED".equalsIgnoreCase(view)) {
+            viewLabelKey = "hud.todolist.view_label.team_assigned";
+        } else {
+            viewLabelKey = "hud.todolist.view_label.personal";
+        }
+        String viewLabel = I18n.translate(viewLabelKey);
+        String headerCore = I18n.translate("hud.todolist.header", viewLabel);
         String header = "§6§l" + headerCore;
         context.drawText(textRenderer, Text.of(header), x, y, 0xFFFFFFFF, true);
     }
 
-    private List<Task> getDisplayTasks() {
+    private List<Task> getBaseTasksForView() {
+        ModConfig cfg = ModConfig.getInstance();
+        String view = cfg.getHudDefaultView();
+        TaskManager manager;
+        if (view != null && view.toUpperCase().startsWith("TEAM_")) {
+            manager = TodoClient.getTeamTaskManager();
+        } else {
+            manager = taskManager;
+        }
+        List<Task> tasks = manager.getAllTasks();
+        if ("TEAM_ASSIGNED".equalsIgnoreCase(view) && client.player != null) {
+            String uuid = client.player.getUuid().toString();
+            tasks = tasks.stream()
+                    .filter(t -> uuid.equals(t.getAssigneeUuid()))
+                    .collect(Collectors.toList());
+        } else if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
+            tasks = tasks.stream()
+                    .filter(t -> t.getAssigneeUuid() == null || t.getAssigneeUuid().isEmpty())
+                    .collect(Collectors.toList());
+        }
+        return tasks;
+    }
+
+    private List<Task> getDisplayTasks(List<Task> sourceTasks) {
         boolean sortByPriority = true;
         boolean showCompleted = ModConfig.getInstance().isShowCompletedTasks();
 
         List<Task> tasks;
         if (showCompleted) {
-            tasks = taskManager.getAllTasks();
+            tasks = sourceTasks;
         } else {
-            tasks = taskManager.getIncompleteTasks();
+            tasks = sourceTasks.stream()
+                    .filter(t -> !t.isCompleted())
+                    .collect(Collectors.toList());
         }
 
         if (sortByPriority) {
@@ -245,8 +342,10 @@ public class TodoHudRenderer {
         return tasks;
     }
 
-    private Task.Priority getHighestPriority() {
-        List<Task> incompleteTasks = taskManager.getIncompleteTasks();
+    private Task.Priority getHighestPriority(List<Task> baseTasks) {
+        List<Task> incompleteTasks = baseTasks.stream()
+                .filter(t -> !t.isCompleted())
+                .collect(Collectors.toList());
         if (incompleteTasks.isEmpty()) {
             return Task.Priority.LOW;
         }

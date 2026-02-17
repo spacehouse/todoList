@@ -91,7 +91,3 @@ tasks.register<Copy>("copyToServerMods") {
     exclude("*-sources.jar")
     into(serverModsDir)
 }
-
-tasks.named("build") {
-    finalizedBy("copyToClientMods", "copyToServerMods")
-}

@@ -33,6 +33,7 @@ public class TaskListWidget implements Drawable {
     private int hoveredTaskIndex = -1;
     private int selectedTaskIndex = -1;
     private int taskItemHeight;
+    private boolean teamAllViewForNonOp;
     private Consumer<Task> onTaskToggleCompletion;
 
     public TaskListWidget(MinecraftClient client, int x, int y, int width, int height) {
@@ -46,6 +47,10 @@ public class TaskListWidget implements Drawable {
         int barWidth = 10;
         int barX = x + width - barWidth - 1;
         this.scrollBar = new ScrollBar(barX, y, barWidth, height);
+    }
+
+    public void setTeamAllViewForNonOp(boolean enabled) {
+        this.teamAllViewForNonOp = enabled;
     }
 
     public void setTasks(List<Task> tasks) {
@@ -100,44 +105,78 @@ public class TaskListWidget implements Drawable {
             Task task = tasks.get(taskIndex);
             int taskY = y + i * taskItemHeight;
 
-            // 确定颜色
             int bgColor = getTaskBackgroundColor(taskIndex, taskY, mouseX, mouseY);
             int priorityColor = task.getPriority().getColor();
             int textColor = task.isCompleted() ? 0xFF888888 : 0xFFFFFFFF;
 
-            // 绘制任务背景
             context.fill(x + 1, taskY, x + width - 1, taskY + taskItemHeight - 1, bgColor);
 
-            // 绘制优先级指示器
             context.fill(x + 2, taskY + 2, x + 6, taskY + taskItemHeight - 3, priorityColor);
 
-            // 绘制完成状态复选框
             int checkboxX = x + 12;
             int checkboxY = taskY + (taskItemHeight - 12) / 2;
             context.fill(checkboxX, checkboxY, checkboxX + 12, checkboxY + 12, 0xFF000000);
             context.drawBorder(checkboxX, checkboxY, 12, 12, 0xFFFFFFFF);
 
             if (task.isCompleted()) {
-                // 绘制对勾
                 context.fill(checkboxX + 3, checkboxY + 5, checkboxX + 5, checkboxY + 7, 0xFF00FF00);
                 context.fill(checkboxX + 5, checkboxY + 7, checkboxX + 9, checkboxY + 3, 0xFF00FF00);
             }
 
-            // 绘制任务标题
             String title = task.getTitle();
-            int maxWidth = width - 40;
-            String truncatedTitle = textRenderer.trimToWidth(title, maxWidth);
+            if (title == null) {
+                title = "";
+            }
+            int titleX = x + 30;
+            int reservedForTags = 100;
+            int rightLimit = scrollBar.getBarX() - 2;
+            int maxTitleWidth = rightLimit - reservedForTags - titleX;
+            String truncatedTitle = trimWithEllipsis(textRenderer, title, maxTitleWidth);
             context.drawText(textRenderer, Text.of(truncatedTitle),
-                    x + 30, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
+                    titleX, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
                     textColor, false);
 
-            // 如果空间足够，绘制标签
-            if (!task.getTags().isEmpty() && width > 150) {
-                int tagX = x + width - 60;
-                String tagStr = task.getTags().iterator().next();
-                context.drawText(textRenderer, Text.of("[" + tagStr + "]"),
-                        tagX, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
-                        0xFF55FFFF, false);
+            if (width > 150) {
+                int rightForTags = scrollBar.getBarX() - 2;
+                int tagAreaWidth = 90;
+                int tagX = rightForTags - tagAreaWidth;
+                String baseTag = null;
+                if (!task.getTags().isEmpty()) {
+                    baseTag = task.getTags().iterator().next();
+                }
+                String assigneeName = null;
+                String assigneeUuid = task.getAssigneeUuid();
+                if (assigneeUuid != null && client != null && client.getNetworkHandler() != null) {
+                    java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+                    for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                        if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
+                            String name = entry.getProfile().getName();
+                            if (name != null && !name.isEmpty()) {
+                                assigneeName = name;
+                            }
+                            break;
+                        }
+                    }
+                }
+                StringBuilder sb = new StringBuilder();
+                if (assigneeName != null && !assigneeName.isEmpty()) {
+                    sb.append(assigneeName);
+                }
+                if (baseTag != null && !baseTag.isEmpty()) {
+                    if (sb.length() > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append(baseTag);
+                }
+                String tagStr = sb.length() > 0 ? sb.toString() : null;
+                if (tagStr != null) {
+                    String display = "[" + tagStr + "]";
+                    int maxTagWidth = rightForTags - tagX;
+                    String truncatedTag = trimWithEllipsis(textRenderer, display, maxTagWidth);
+                    context.drawText(textRenderer, Text.of(truncatedTag),
+                            tagX, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
+                            0xFF55FFFF, false);
+                }
             }
         }
     }
@@ -145,12 +184,20 @@ public class TaskListWidget implements Drawable {
     private int getTaskBackgroundColor(int taskIndex, int taskY, int mouseX, int mouseY) {
         ModConfig config = ModConfig.getInstance();
 
-        // 检查是否被选中
+        if (teamAllViewForNonOp && client != null && client.player != null &&
+                taskIndex >= 0 && taskIndex < tasks.size()) {
+            Task task = tasks.get(taskIndex);
+            String assignee = task.getAssigneeUuid();
+            String uuid = client.player.getUuid().toString();
+            if (assignee != null && assignee.equals(uuid)) {
+                return 0xFF202020;
+            }
+        }
+
         if (taskIndex == selectedTaskIndex) {
             return config.getSelectedBackgroundColor();
         }
 
-        // 检查是否被悬停
         if (mouseX >= x && mouseX < x + width &&
             mouseY >= taskY && mouseY < taskY + taskItemHeight) {
             hoveredTaskIndex = taskIndex;
@@ -182,7 +229,7 @@ public class TaskListWidget implements Drawable {
                     mouseY >= checkboxY && mouseY < checkboxY + 12) {
                     Task clickedTask = tasks.get(index);
                     if (!clickedTask.isCompleted()) {
-                        if (onTaskToggleCompletion != null) {
+                        if (onTaskToggleCompletion != null && !teamAllViewForNonOp) {
                             onTaskToggleCompletion.accept(clickedTask);
                         }
                     }
@@ -249,5 +296,24 @@ public class TaskListWidget implements Drawable {
 
     public void clearSelection() {
         selectedTaskIndex = -1;
+    }
+
+    private String trimWithEllipsis(TextRenderer textRenderer, String text, int maxWidth) {
+        if (text == null) {
+            return "";
+        }
+        if (maxWidth <= 0) {
+            return "...";
+        }
+        if (textRenderer.getWidth(text) <= maxWidth) {
+            return text;
+        }
+        int ellipsisWidth = textRenderer.getWidth("...");
+        int coreWidth = maxWidth - ellipsisWidth;
+        if (coreWidth <= 0) {
+            return "...";
+        }
+        String core = textRenderer.trimToWidth(text, coreWidth);
+        return core + "...";
     }
 }

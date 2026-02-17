@@ -6,29 +6,36 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### ✅ Implemented / 已实现 (v1.0.0)
+### ✅ Implemented / 已实现 (v1.0.0+)
 - ✅ **Task Management** - Add, edit, delete, and complete tasks / 任务管理（增删改查）
 - ✅ **Task Filtering** - View all, active, or completed tasks / 任务筛选（全部/进行中/已完成）
 - ✅ **Auto Save** - Tasks are automatically saved on close / 关闭时自动保存
 - ✅ **Manual Save** - Save button to manually save tasks / 手动保存按钮
 - ✅ **Scrollable List** - Mouse wheel and draggable scrollbar / 可滚动列表（滚轮+拖动）
 - 🎨 **Priority Levels** - Low, Medium, High with color coding / 优先级（低中高，颜色区分）
+- 🏷️ **Tags** - Basic tag support with colored labels in GUI & HUD / 基础标签支持（GUI与HUD显示彩色标签）
 - 🎮 **In-Game GUI** - Easy-to-use interface / 游戏内GUI界面
 - 💾 **Persistent Storage** - Tasks saved to local file / 本地文件持久化
 - ⌨️ **Keyboard Shortcuts** - K to open, Enter to add, Esc to close / 键盘快捷键
 - 🌍 **Multi-Language** - English and Chinese / 多语言支持
+- 📊 **HUD Display** - On-screen todo list with expand/collapse / HUD待办列表显示（按 H 展开/收起）
+- 👥 **Team Tasks** - Personal & team views with basic multiplayer sync / 个人与团队任务视图（基础多人同步）
+- ⚙️ **HUD Config GUI** - In-game HUD width/height/limit/default view settings / HUD配置界面（宽度、高度、条数、默认视图等）
 
 ### 🚧 Planned / 计划中
-- 🏷️ **Tags & Categories** - Organize tasks with tags / 标签分类
-- 📊 **HUD Display** - Show tasks on screen / HUD显示
+- 🏷️ **Advanced Tagging & Categories** - Rich tag filters and categories / 高级标签与分类
 - 💬 **Commands** - `/todo` command system / 命令系统
-- 🌐 **Multiplayer Support** - Server-side storage and sync / 服务器支持和同步
+- 🌐 **Advanced Multiplayer Support** - More powerful team workflows and permissions / 更完善的多人与团队权限系统
 - 📅 **Due Dates** - Set task deadlines / 截止日期
 - 🎯 **Subtasks** - Break down tasks into smaller parts / 子任务
 
 ## 📸 Screenshots / 截图
 
-*Coming soon...*
+![image-20260217175152509](https://qiniuyun.emptycity.top/typora-img/image-20260217175152509.png)
+
+![image-20260217175159300](https://qiniuyun.emptycity.top/typora-img/image-20260217175159300.png)
+
+![image-20260217175204764](https://qiniuyun.emptycity.top/typora-img/image-20260217175204764.png)
 
 ## 🚀 Installation / 安装
 

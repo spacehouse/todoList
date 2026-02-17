@@ -10,6 +10,7 @@ import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.CustomPayloadS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ public class TaskPackets {
     public static final Identifier TEAM_SYNC_TASKS_ID = new Identifier(TodoListMod.MOD_ID, "team_sync_tasks");
     public static final Identifier TEAM_REPLACE_TASKS_ID = new Identifier(TodoListMod.MOD_ID, "team_replace_tasks");
     public static final Identifier TEAM_TOGGLE_TASK_ID = new Identifier(TodoListMod.MOD_ID, "team_toggle_task");
+    public static final Identifier TEAM_ASSIGN_TASK_ID = new Identifier(TodoListMod.MOD_ID, "team_assign_task");
 
     public static void registerServerPackets() {
         ServerPlayNetworking.registerGlobalReceiver(ADD_TASK_ID, (server, player, handler, buf, responseSender) -> {
@@ -161,15 +163,92 @@ public class TaskPackets {
             List<Task> tasks = readTaskList(buf);
 
             server.execute(() -> {
-                if (!isAdmin(player)) {
-                    TodoListMod.LOGGER.warn("Player {} attempted to replace team tasks without permission", player.getName().getString());
-                    return;
-                }
                 try {
                     TaskStorage storage = TodoListMod.getTaskStorage();
-                    storage.saveTeamTasks(tasks);
-                    TodoListMod.LOGGER.info("Player {} replaced team tasks, count={}", player.getName().getString(), tasks.size());
-                    broadcastTeamTasks(server, tasks);
+                    List<Task> currentTasks = storage.loadTeamTasks();
+                    if (isAdmin(player)) {
+                        storage.saveTeamTasks(tasks);
+                        TodoListMod.LOGGER.info("Player {} replaced team tasks, count={}", player.getName().getString(), tasks.size());
+                        broadcastTeamTasks(server, tasks);
+                        return;
+                    }
+
+                    java.util.Map<String, Task> incomingById = new java.util.HashMap<>();
+                    for (Task t : tasks) {
+                        incomingById.put(t.getId(), t);
+                    }
+
+                    java.util.UUID playerUuid = player.getUuid();
+                    String selfId = playerUuid.toString();
+                    boolean changed = false;
+                    boolean hadDeniedChange = false;
+
+                    for (Task existing : currentTasks) {
+                        Task incoming = incomingById.get(existing.getId());
+                        if (incoming == null) {
+                            continue;
+                        }
+
+                        boolean localChanged = false;
+
+                        if (incoming.isCompleted() != existing.isCompleted()) {
+                            boolean canToggle = false;
+                            String assignee = existing.getAssigneeUuid();
+                            if (assignee != null && assignee.equals(selfId)) {
+                                canToggle = true;
+                            }
+                            if (canToggle) {
+                                existing.setCompleted(incoming.isCompleted());
+                                localChanged = true;
+                            } else {
+                                hadDeniedChange = true;
+                                TodoListMod.LOGGER.warn("Player {} attempted to change completion of team task {} without permission",
+                                        player.getName().getString(), existing.getId());
+                            }
+                        }
+
+                        String incomingAssignee = incoming.getAssigneeUuid();
+                        String currentAssignee = existing.getAssigneeUuid();
+                        if ((incomingAssignee != null && !incomingAssignee.equals(currentAssignee)) ||
+                                (incomingAssignee == null && currentAssignee != null)) {
+                            boolean canChange = false;
+                            if (incomingAssignee == null) {
+                                if (currentAssignee != null && currentAssignee.equals(selfId)) {
+                                    canChange = true;
+                                }
+                            } else if (incomingAssignee.equals(selfId)) {
+                                if (currentAssignee == null || currentAssignee.equals(selfId)) {
+                                    canChange = true;
+                                }
+                            }
+                            if (canChange) {
+                                existing.setAssigneeUuid(incomingAssignee);
+                                localChanged = true;
+                            } else {
+                                hadDeniedChange = true;
+                                TodoListMod.LOGGER.warn("Player {} attempted to change assignee of team task {} without permission",
+                                        player.getName().getString(), existing.getId());
+                            }
+                        }
+
+                        if (localChanged) {
+                            changed = true;
+                        }
+                    }
+
+                    if (changed) {
+                        storage.saveTeamTasks(currentTasks);
+                        TodoListMod.LOGGER.info("Player {} updated team tasks via save, count={}", player.getName().getString(), currentTasks.size());
+                        broadcastTeamTasks(server, currentTasks);
+                    } else {
+                        TodoListMod.LOGGER.info("Player {} saved team tasks with no effective changes", player.getName().getString());
+                    }
+
+                    if (hadDeniedChange) {
+                        TodoListMod.LOGGER.info("Player {} had some denied team task changes; refreshing client view", player.getName().getString());
+                        sendTeamSyncTasks(player, currentTasks);
+                        player.sendMessage(Text.translatable("message.todolist.team_conflict_refreshed"), false);
+                    }
                 } catch (Exception e) {
                     TodoListMod.LOGGER.error("Failed to replace team tasks", e);
                 }
@@ -210,6 +289,53 @@ public class TaskPackets {
                     }
                 } catch (Exception e) {
                     TodoListMod.LOGGER.error("Failed to toggle team task", e);
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(TEAM_ASSIGN_TASK_ID, (server, player, handler, buf, responseSender) -> {
+            String taskId = buf.readString();
+            boolean hasAssignee = buf.readBoolean();
+            String newAssignee = hasAssignee ? buf.readString() : null;
+
+            server.execute(() -> {
+                try {
+                    TaskStorage storage = TodoListMod.getTaskStorage();
+                    List<Task> tasks = storage.loadTeamTasks();
+                    boolean changed = false;
+                    UUID playerUuid = player.getUuid();
+                    for (Task task : tasks) {
+                        if (!task.getId().equals(taskId)) {
+                            continue;
+                        }
+                        boolean canChange = isAdmin(player);
+                        if (!canChange) {
+                            String currentAssignee = task.getAssigneeUuid();
+                            if (newAssignee == null) {
+                                if (currentAssignee != null && currentAssignee.equals(playerUuid.toString())) {
+                                    canChange = true;
+                                }
+                            } else if (newAssignee.equals(playerUuid.toString())) {
+                                if (currentAssignee == null || currentAssignee.equals(playerUuid.toString())) {
+                                    canChange = true;
+                                }
+                            }
+                        }
+                        if (!canChange) {
+                            TodoListMod.LOGGER.warn("Player {} attempted to assign team task {} without permission", player.getName().getString(), taskId);
+                            break;
+                        }
+                        task.setAssigneeUuid(newAssignee);
+                        changed = true;
+                        break;
+                    }
+                    if (changed) {
+                        storage.saveTeamTasks(tasks);
+                        TodoListMod.LOGGER.info("Player {} reassigned team task {}", player.getName().getString(), taskId);
+                        broadcastTeamTasks(server, tasks);
+                    }
+                } catch (Exception e) {
+                    TodoListMod.LOGGER.error("Failed to assign team task", e);
                 }
             });
         });
