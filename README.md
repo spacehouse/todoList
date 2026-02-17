@@ -155,8 +155,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact / 联系方式
 
-- GitHub Issues: [Report bugs](https://github.com/todolist-mod/todolist-fabric/issues)
-- Discord: [Join our server](https://discord.gg/todolist)
+- GitHub Issues: [Report bugs](https://github.com/spacehouse/todoList/issues)
+- Discord: [Join our server](https://discord.gg/uYHw9MHNe)
 
 ---
 
