@@ -38,11 +38,33 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 📸 Screenshots / 截图
 
-![image-20260217175152509](https://qiniuyun.emptycity.top/typora-img/image-20260217175152509.png)
+### Singleplayer / 单人游戏
 
-![image-20260217175159300](https://qiniuyun.emptycity.top/typora-img/image-20260217175159300.png)
+![image-20260218171343365](https://qiniuyun.emptycity.top/typora-img/image-20260218171343365.png)
 
-![image-20260217175204764](https://qiniuyun.emptycity.top/typora-img/image-20260217175204764.png)
+![image-20260218171437868](https://qiniuyun.emptycity.top/typora-img/image-20260218171437868.png)
+
+![image-20260218171517007](https://qiniuyun.emptycity.top/typora-img/image-20260218171517007.png)
+
+### Multiplayer / 多人游戏
+
+#### Op View / 管理员视角
+
+![image-20260218172028941](https://qiniuyun.emptycity.top/typora-img/image-20260218172028941.png)
+
+![image-20260218172248351](https://qiniuyun.emptycity.top/typora-img/image-20260218172248351.png)
+
+![image-20260218172311546](C:/Users/%E7%A9%BA%E5%9F%8E%E9%87%8C/AppData/Roaming/Typora/typora-user-images/image-20260218172311546.png)
+
+#### Player View / 普通玩家视角
+
+![image-20260218172335169](https://qiniuyun.emptycity.top/typora-img/image-20260218172335169.png)
+
+![image-20260218172358885](https://qiniuyun.emptycity.top/typora-img/image-20260218172358885.png)
+
+![image-20260218172423215](https://qiniuyun.emptycity.top/typora-img/image-20260218172423215.png)
+
+
 
 ## 🚀 Installation / 安装
 
