@@ -54,7 +54,7 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ![image-20260218172248351](https://qiniuyun.emptycity.top/typora-img/image-20260218172248351.png)
 
-![image-20260218172311546](C:/Users/%E7%A9%BA%E5%9F%8E%E9%87%8C/AppData/Roaming/Typora/typora-user-images/image-20260218172311546.png)
+![image-20260218172311546](https://qiniuyun.emptycity.top/typora-img/image-20260218172311546.png)
 
 #### Player View / 普通玩家视角
 
