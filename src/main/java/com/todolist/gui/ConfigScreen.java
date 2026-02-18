@@ -107,16 +107,28 @@ public class ConfigScreen extends Screen {
         }
         hudDefaultViewValue = views[hudDefaultViewIndex];
 
+        boolean singlePlayer = this.client != null && this.client.isInSingleplayer();
+        if (singlePlayer) {
+            hudDefaultViewIndex = 0;
+            hudDefaultViewValue = HudViewOptions.VALUES[0];
+        }
+
         int defaultViewLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_default_view"));
         int defaultViewButtonX = x + defaultViewLabelWidth + 10;
         int defaultViewButtonWidth = guiWidth - (defaultViewButtonX - x);
 
         hudDefaultViewButton = ButtonWidget.builder(Text.empty(), b -> {
+            if (this.client != null && this.client.isInSingleplayer()) {
+                return;
+            }
             hudDefaultViewIndex = (hudDefaultViewIndex + 1) % HudViewOptions.VALUES.length;
             hudDefaultViewValue = HudViewOptions.VALUES[hudDefaultViewIndex];
             updateHudDefaultViewButtonLabel();
         }).dimensions(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
         this.addDrawableChild(hudDefaultViewButton);
+        if (singlePlayer) {
+            hudDefaultViewButton.active = false;
+        }
 
         updateHudExpandedButtonLabel();
         updateHudShowWhenEmptyButtonLabel();
@@ -260,7 +272,11 @@ public class ConfigScreen extends Screen {
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
-        cfg.setHudDefaultView(hudDefaultViewValue);
+        if (this.client != null && this.client.isInSingleplayer()) {
+            cfg.setHudDefaultView("PERSONAL");
+        } else {
+            cfg.setHudDefaultView(hudDefaultViewValue);
+        }
         this.client.setScreen(parent);
     }
 

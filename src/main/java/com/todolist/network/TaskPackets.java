@@ -1,6 +1,11 @@
 package com.todolist.network;
 
 import com.todolist.TodoListMod;
+import com.todolist.permission.PermissionCenter;
+import com.todolist.permission.PermissionCenter.Context;
+import com.todolist.permission.PermissionCenter.Operation;
+import com.todolist.permission.PermissionCenter.Role;
+import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -41,6 +46,7 @@ public class TaskPackets {
     public static final Identifier TEAM_REPLACE_TASKS_ID = new Identifier(TodoListMod.MOD_ID, "team_replace_tasks");
     public static final Identifier TEAM_TOGGLE_TASK_ID = new Identifier(TodoListMod.MOD_ID, "team_toggle_task");
     public static final Identifier TEAM_ASSIGN_TASK_ID = new Identifier(TodoListMod.MOD_ID, "team_assign_task");
+    public static final Identifier TEAM_REQUEST_SYNC_ID = new Identifier(TodoListMod.MOD_ID, "team_request_sync");
 
     public static void registerServerPackets() {
         ServerPlayNetworking.registerGlobalReceiver(ADD_TASK_ID, (server, player, handler, buf, responseSender) -> {
@@ -180,6 +186,7 @@ public class TaskPackets {
 
                     java.util.UUID playerUuid = player.getUuid();
                     String selfId = playerUuid.toString();
+                    Role role = getRole(player);
                     boolean changed = false;
                     boolean hadDeniedChange = false;
 
@@ -191,15 +198,19 @@ public class TaskPackets {
 
                         boolean localChanged = false;
 
-                        if (incoming.isCompleted() != existing.isCompleted()) {
-                            boolean canToggle = false;
+                        boolean wasCompleted = existing.isCompleted();
+                        if (incoming.isCompleted() != wasCompleted) {
                             String assignee = existing.getAssigneeUuid();
-                            if (assignee != null && assignee.equals(selfId)) {
-                                canToggle = true;
-                            }
+                            boolean assigned = assignee != null && !assignee.isEmpty();
+                            boolean assigneeSelf = assigned && assignee.equals(selfId);
+                            ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
+                            Context ctx = new Context(scope, existing.isCompleted(), assigned, assigneeSelf);
+                            boolean canToggle = PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, ctx);
                             if (canToggle) {
                                 existing.setCompleted(incoming.isCompleted());
                                 localChanged = true;
+                                logTeamOperation(player, existing, Operation.TOGGLE_COMPLETE,
+                                        "completed:" + wasCompleted + "->" + incoming.isCompleted());
                             } else {
                                 hadDeniedChange = true;
                                 TodoListMod.LOGGER.warn("Player {} attempted to change completion of team task {} without permission",
@@ -212,18 +223,47 @@ public class TaskPackets {
                         if ((incomingAssignee != null && !incomingAssignee.equals(currentAssignee)) ||
                                 (incomingAssignee == null && currentAssignee != null)) {
                             boolean canChange = false;
+                            boolean completed = existing.isCompleted();
+                            boolean assigned = currentAssignee != null && !currentAssignee.isEmpty();
+                            boolean assigneeSelf = assigned && currentAssignee.equals(selfId);
+
+                            Operation opForLog = null;
+
                             if (incomingAssignee == null) {
-                                if (currentAssignee != null && currentAssignee.equals(selfId)) {
-                                    canChange = true;
-                                }
+                                ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                canChange = PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx);
+                                opForLog = Operation.ABANDON_TASK;
                             } else if (incomingAssignee.equals(selfId)) {
-                                if (currentAssignee == null || currentAssignee.equals(selfId)) {
-                                    canChange = true;
+                                if (currentAssignee == null) {
+                                    ViewScope scope = ViewScope.TEAM_UNASSIGNED;
+                                    Context ctx = new Context(scope, completed, false, false);
+                                    canChange = PermissionCenter.canPerform(Operation.CLAIM_TASK, role, ctx);
+                                    opForLog = Operation.CLAIM_TASK;
+                                } else if (currentAssignee.equals(selfId)) {
+                                    canChange = false;
+                                } else {
+                                    ViewScope scope = ViewScope.TEAM_ALL;
+                                    Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                    canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
+                                    opForLog = Operation.ASSIGN_OTHERS;
                                 }
+                            } else {
+                                ViewScope scope = ViewScope.TEAM_ALL;
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
+                                opForLog = Operation.ASSIGN_OTHERS;
                             }
+
                             if (canChange) {
                                 existing.setAssigneeUuid(incomingAssignee);
                                 localChanged = true;
+                                String before = currentAssignee == null ? "null" : currentAssignee;
+                                String after = incomingAssignee == null ? "null" : incomingAssignee;
+                                if (opForLog != null) {
+                                    logTeamOperation(player, existing, opForLog,
+                                            "assignee:" + before + "->" + after);
+                                }
                             } else {
                                 hadDeniedChange = true;
                                 TodoListMod.LOGGER.warn("Player {} attempted to change assignee of team task {} without permission",
@@ -264,27 +304,29 @@ public class TaskPackets {
                     List<Task> tasks = storage.loadTeamTasks();
                     boolean changed = false;
                     UUID playerUuid = player.getUuid();
+                    Role role = getRole(player);
                     for (Task task : tasks) {
                         if (task.getId().equals(taskId)) {
-                            boolean canToggle = isAdmin(player);
-                            if (!canToggle) {
-                                String assignee = task.getAssigneeUuid();
-                                if (assignee != null && assignee.equals(playerUuid.toString())) {
-                                    canToggle = true;
-                                }
-                            }
+                            String assignee = task.getAssigneeUuid();
+                            boolean assigned = assignee != null && !assignee.isEmpty();
+                            boolean assigneeSelf = assigned && assignee.equals(playerUuid.toString());
+                            ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
+                            Context ctx = new Context(scope, task.isCompleted(), assigned, assigneeSelf);
+                            boolean canToggle = PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, ctx);
                             if (!canToggle) {
                                 TodoListMod.LOGGER.warn("Player {} attempted to toggle team task {} without permission", player.getName().getString(), taskId);
                                 break;
                             }
-                            task.setCompleted(!task.isCompleted());
+                            boolean before = task.isCompleted();
+                            task.setCompleted(!before);
                             changed = true;
+                            logTeamOperation(player, task, Operation.TOGGLE_COMPLETE,
+                                    "completed:" + before + "->" + task.isCompleted());
                             break;
                         }
                     }
                     if (changed) {
                         storage.saveTeamTasks(tasks);
-                        TodoListMod.LOGGER.info("Player {} toggled team task {}", player.getName().getString(), taskId);
                         broadcastTeamTasks(server, tasks);
                     }
                 } catch (Exception e) {
@@ -304,34 +346,59 @@ public class TaskPackets {
                     List<Task> tasks = storage.loadTeamTasks();
                     boolean changed = false;
                     UUID playerUuid = player.getUuid();
+                    Role role = getRole(player);
                     for (Task task : tasks) {
                         if (!task.getId().equals(taskId)) {
                             continue;
                         }
-                        boolean canChange = isAdmin(player);
-                        if (!canChange) {
-                            String currentAssignee = task.getAssigneeUuid();
-                            if (newAssignee == null) {
-                                if (currentAssignee != null && currentAssignee.equals(playerUuid.toString())) {
-                                    canChange = true;
-                                }
-                            } else if (newAssignee.equals(playerUuid.toString())) {
-                                if (currentAssignee == null || currentAssignee.equals(playerUuid.toString())) {
-                                    canChange = true;
-                                }
+                        String currentAssignee = task.getAssigneeUuid();
+                        boolean completed = task.isCompleted();
+                        boolean assigned = currentAssignee != null && !currentAssignee.isEmpty();
+                        boolean assigneeSelf = assigned && currentAssignee.equals(playerUuid.toString());
+                        boolean canChange;
+                        Operation opForLog;
+                        if (newAssignee == null) {
+                            ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
+                            Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                            canChange = PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx);
+                            opForLog = Operation.ABANDON_TASK;
+                        } else if (newAssignee.equals(playerUuid.toString())) {
+                            if (currentAssignee == null) {
+                                ViewScope scope = ViewScope.TEAM_UNASSIGNED;
+                                Context ctx = new Context(scope, completed, false, false);
+                                canChange = PermissionCenter.canPerform(Operation.CLAIM_TASK, role, ctx);
+                                opForLog = Operation.CLAIM_TASK;
+                            } else if (currentAssignee.equals(playerUuid.toString())) {
+                                canChange = false;
+                                opForLog = null;
+                            } else {
+                                ViewScope scope = ViewScope.TEAM_ALL;
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
+                                opForLog = Operation.ASSIGN_OTHERS;
                             }
+                        } else {
+                            ViewScope scope = ViewScope.TEAM_ALL;
+                            Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                            canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
+                            opForLog = Operation.ASSIGN_OTHERS;
                         }
                         if (!canChange) {
                             TodoListMod.LOGGER.warn("Player {} attempted to assign team task {} without permission", player.getName().getString(), taskId);
                             break;
                         }
+                        String before = currentAssignee == null ? "null" : currentAssignee;
+                        String after = newAssignee == null ? "null" : newAssignee;
                         task.setAssigneeUuid(newAssignee);
                         changed = true;
+                        if (opForLog != null) {
+                            logTeamOperation(player, task, opForLog,
+                                    "assignee:" + before + "->" + after);
+                        }
                         break;
                     }
                     if (changed) {
                         storage.saveTeamTasks(tasks);
-                        TodoListMod.LOGGER.info("Player {} reassigned team task {}", player.getName().getString(), taskId);
                         broadcastTeamTasks(server, tasks);
                     }
                 } catch (Exception e) {
@@ -353,6 +420,19 @@ public class TaskPackets {
                     sendTeamSyncTasks(player, teamTasks);
                 } catch (Exception e) {
                     TodoListMod.LOGGER.error("Failed to sync tasks to player on join", e);
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(TEAM_REQUEST_SYNC_ID, (server, player, handler, buf, responseSender) -> {
+            server.execute(() -> {
+                try {
+                    TaskStorage storage = TodoListMod.getTaskStorage();
+                    List<Task> teamTasks = storage.loadTeamTasks();
+                    sendTeamSyncTasks(player, teamTasks);
+                    TodoListMod.LOGGER.info("Player {} requested team task sync, count={}", player.getName().getString(), teamTasks.size());
+                } catch (Exception e) {
+                    TodoListMod.LOGGER.error("Failed to handle team task sync request", e);
                 }
             });
         });
@@ -389,6 +469,17 @@ public class TaskPackets {
         ServerPlayNetworking.send(player, TEAM_SYNC_TASKS_ID, buf);
     }
 
+    private static void logTeamOperation(ServerPlayerEntity player, Task task, Operation op, String detail) {
+        String playerName = player.getName().getString();
+        String taskId = task.getId();
+        String title = task.getTitle();
+        if (detail == null || detail.isEmpty()) {
+            TodoListMod.LOGGER.info("[TEAM_OP] player={} op={} taskId={} title={}", playerName, op.name(), taskId, title);
+        } else {
+            TodoListMod.LOGGER.info("[TEAM_OP] player={} op={} taskId={} title={} detail={}", playerName, op.name(), taskId, title, detail);
+        }
+    }
+
     private static void broadcastTeamTasks(net.minecraft.server.MinecraftServer server, List<Task> tasks) {
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             sendTeamSyncTasks(player, tasks);
@@ -397,6 +488,10 @@ public class TaskPackets {
 
     private static boolean isAdmin(ServerPlayerEntity player) {
         return player.hasPermissionLevel(2);
+    }
+
+    private static Role getRole(ServerPlayerEntity player) {
+        return isAdmin(player) ? Role.ADMIN : Role.MEMBER;
     }
 
     // Serialization helpers

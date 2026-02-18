@@ -68,6 +68,18 @@ public class ClientTaskPackets {
         ClientPlayNetworking.send(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
     }
 
+    public static void requestTeamSync() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.getNetworkHandler() == null) {
+            return;
+        }
+        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+            return;
+        }
+        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        ClientPlayNetworking.send(TaskPackets.TEAM_REQUEST_SYNC_ID, buf);
+    }
+
     public static void sendAddTask(Task task) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.getNetworkHandler() == null) {

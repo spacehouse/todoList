@@ -278,8 +278,7 @@ public class TodoHudRenderer {
     }
 
     private void drawHeader(DrawContext context, TextRenderer textRenderer, int x, int y, int incomplete, int completed) {
-        ModConfig cfg = ModConfig.getInstance();
-        String view = cfg.getHudDefaultView();
+        String view = getEffectiveView();
         String viewLabelKey;
         if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
             viewLabelKey = "hud.todolist.view_label.team_unassigned";
@@ -296,9 +295,17 @@ public class TodoHudRenderer {
         context.drawText(textRenderer, Text.of(header), x, y, 0xFFFFFFFF, true);
     }
 
-    private List<Task> getBaseTasksForView() {
+    private String getEffectiveView() {
         ModConfig cfg = ModConfig.getInstance();
         String view = cfg.getHudDefaultView();
+        if (client != null && client.isInSingleplayer()) {
+            return "PERSONAL";
+        }
+        return view;
+    }
+
+    private List<Task> getBaseTasksForView() {
+        String view = getEffectiveView();
         TaskManager manager;
         if (view != null && view.toUpperCase().startsWith("TEAM_")) {
             manager = TodoClient.getTeamTaskManager();
@@ -306,10 +313,17 @@ public class TodoHudRenderer {
             manager = taskManager;
         }
         List<Task> tasks = manager.getAllTasks();
-        if ("TEAM_ASSIGNED".equalsIgnoreCase(view) && client.player != null) {
+        if ("TEAM_ALL".equalsIgnoreCase(view)) {
+            tasks = tasks.stream()
+                    .filter(t -> t.getAssigneeUuid() != null && !t.getAssigneeUuid().isEmpty())
+                    .collect(Collectors.toList());
+        } else if ("TEAM_ASSIGNED".equalsIgnoreCase(view) && client.player != null) {
             String uuid = client.player.getUuid().toString();
             tasks = tasks.stream()
-                    .filter(t -> uuid.equals(t.getAssigneeUuid()))
+                    .filter(t -> {
+                        String assignee = t.getAssigneeUuid();
+                        return assignee != null && assignee.equals(uuid);
+                    })
                     .collect(Collectors.toList());
         } else if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
             tasks = tasks.stream()

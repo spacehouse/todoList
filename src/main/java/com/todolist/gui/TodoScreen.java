@@ -4,6 +4,11 @@ import com.todolist.TodoListMod;
 import com.todolist.client.TodoClient;
 import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
+import com.todolist.permission.PermissionCenter;
+import com.todolist.permission.PermissionCenter.Context;
+import com.todolist.permission.PermissionCenter.Operation;
+import com.todolist.permission.PermissionCenter.Role;
+import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import com.todolist.client.ClientTaskPackets;
@@ -12,6 +17,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -251,7 +257,7 @@ public class TodoScreen extends Screen {
         this.addDrawableChild(saveButton);
 
         ButtonWidget cancelButton = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), button -> {
-            close();
+            onCancel();
         }).dimensions(saveCancelX + saveCancelWidth + saveCancelGap, currentY, saveCancelWidth, 20).build();
         this.addDrawableChild(cancelButton);
 
@@ -266,26 +272,27 @@ public class TodoScreen extends Screen {
         }).dimensions(modesX, modesY, modeButtonWidth, modeButtonHeight).build();
         this.addDrawableChild(personalViewButton);
 
-        boolean isAdmin = isAdminClient();
-
         int rowIndex = 1;
+        boolean hideTeamViews = isTrueSingleplayer();
 
-        teamUnassignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_unassigned"), b -> {
-            switchView(ViewMode.TEAM_UNASSIGNED);
-        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
-        this.addDrawableChild(teamUnassignedViewButton);
-        rowIndex++;
+        if (!hideTeamViews) {
+            teamUnassignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_unassigned"), b -> {
+                switchView(ViewMode.TEAM_UNASSIGNED);
+            }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
+            this.addDrawableChild(teamUnassignedViewButton);
+            rowIndex++;
 
-        teamAllViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_all"), b -> {
-            switchView(ViewMode.TEAM_ALL);
-        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
-        this.addDrawableChild(teamAllViewButton);
-        rowIndex++;
+            teamAllViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_all"), b -> {
+                switchView(ViewMode.TEAM_ALL);
+            }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
+            this.addDrawableChild(teamAllViewButton);
+            rowIndex++;
 
-        teamAssignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_assigned"), b -> {
-            switchView(ViewMode.TEAM_ASSIGNED);
-        }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
-        this.addDrawableChild(teamAssignedViewButton);
+            teamAssignedViewButton = ButtonWidget.builder(Text.translatable("gui.todolist.view.team_assigned"), b -> {
+                switchView(ViewMode.TEAM_ASSIGNED);
+            }).dimensions(modesX, modesY + (modeButtonHeight + modeButtonGap) * rowIndex, modeButtonWidth, modeButtonHeight).build();
+            this.addDrawableChild(teamAssignedViewButton);
+        }
 
         int assignButtonWidth = 80;
         int assignButtonHeight = 20;
@@ -399,6 +406,7 @@ public class TodoScreen extends Screen {
         });
 
         this.setFocused(titleField);
+        updateButtonStates();
     }
 
     private void toggleTaskCompletion(Task task) {
@@ -528,6 +536,17 @@ public class TodoScreen extends Screen {
         close();
     }
 
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+            if (titleField != null && titleField.isFocused()) {
+                onAddTask();
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
     private void updatePrioritySelection() {
     }
 
@@ -561,7 +580,16 @@ public class TodoScreen extends Screen {
 
     @Override
     public void close() {
+        if (viewMode != ViewMode.PERSONAL) {
+            ClientTaskPackets.requestTeamSync();
+            hasUnsavedChanges = false;
+            teamHasUnsavedChanges = false;
+        }
         this.client.setScreen(parent);
+    }
+
+    private void onCancel() {
+        close();
     }
 
     // Event handlers
@@ -648,13 +676,22 @@ public class TodoScreen extends Screen {
 
     private void updateButtonStates() {
         boolean hasSelection = selectedTask != null;
-        boolean canEdit = hasSelection && canEditTask(selectedTask);
         boolean isCompleted = hasSelection && selectedTask.isCompleted();
         boolean isAssigned = hasSelection
                 && selectedTask.getAssigneeUuid() != null
                 && !selectedTask.getAssigneeUuid().isEmpty();
-        boolean priorityEnabled = canEdit && !isCompleted;
-        deleteButton.active = hasSelection && canDeleteTask(selectedTask);
+        Role role = getCurrentRole();
+        ViewScope scope = getCurrentViewScope();
+        boolean isAssigneeSelf = hasSelection && isCurrentPlayerAssignee(selectedTask);
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf);
+        boolean canEdit = hasSelection && PermissionCenter.canPerform(Operation.EDIT_TASK, role, context);
+        boolean priorityEnabled;
+        if (!hasSelection) {
+            priorityEnabled = addButton != null && addButton.active;
+        } else {
+            priorityEnabled = canEdit && !isCompleted;
+        }
+        deleteButton.active = hasSelection && PermissionCenter.canPerform(Operation.DELETE_TASK, role, context);
         if (priorityButtons != null) {
             for (ButtonWidget button : priorityButtons) {
                 if (button != null) {
@@ -673,26 +710,23 @@ public class TodoScreen extends Screen {
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
         if (claimButton != null) {
             claimButton.visible = showAssignButtons;
-            if (isAdmin) {
-                claimButton.active = hasSelection && showAssignButtons && !isCompleted && !isAssigned;
-            } else {
-                claimButton.active = hasSelection && showAssignButtons && !isCompleted
-                        && viewMode == ViewMode.TEAM_UNASSIGNED;
-            }
+            boolean canClaim = hasSelection
+                    && PermissionCenter.canPerform(Operation.CLAIM_TASK, role, context);
+            claimButton.active = showAssignButtons && canClaim;
         }
         if (abandonButton != null) {
             abandonButton.visible = showAssignButtons;
-            if (isAdmin) {
-                abandonButton.active = hasSelection && showAssignButtons && !isCompleted;
-            } else {
-                abandonButton.active = hasSelection && showAssignButtons && !isCompleted
-                        && viewMode == ViewMode.TEAM_ASSIGNED
-                        && isCurrentPlayerAssignee(selectedTask);
-            }
+            boolean canAbandon = hasSelection
+                    && PermissionCenter.canPerform(Operation.ABANDON_TASK, role, context);
+            abandonButton.active = showAssignButtons && canAbandon;
         }
         if (assignOthersButton != null) {
-            assignOthersButton.visible = showAssignButtons;
-            assignOthersButton.active = hasSelection && showAssignButtons && isAdmin && !isCompleted;
+            boolean showAssignOthers = showAssignButtons && isAdmin;
+            assignOthersButton.visible = showAssignOthers;
+            boolean canAssignOthers = showAssignOthers
+                    && hasSelection
+                    && PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, context);
+            assignOthersButton.active = canAssignOthers;
         }
     }
 
@@ -714,50 +748,42 @@ public class TodoScreen extends Screen {
     }
 
     private boolean canEditTask(Task task) {
-        if (task == null || task.isCompleted()) {
+        if (task == null) {
             return false;
         }
-        if (viewMode == ViewMode.PERSONAL) {
-            return true;
-        }
-        return isAdminClient();
+        Role role = getCurrentRole();
+        ViewScope scope = getCurrentViewScope();
+        boolean isCompleted = task.isCompleted();
+        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
+        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf);
+        return PermissionCenter.canPerform(Operation.EDIT_TASK, role, context);
     }
 
     private boolean canDeleteTask(Task task) {
         if (task == null) {
             return false;
         }
-        if (viewMode == ViewMode.PERSONAL) {
-            if (task.isCompleted()) {
-                return true;
-            }
-            return canEditTask(task);
-        }
-        if (!isAdminClient()) {
-            return false;
-        }
-        return true;
+        Role role = getCurrentRole();
+        ViewScope scope = getCurrentViewScope();
+        boolean isCompleted = task.isCompleted();
+        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
+        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf);
+        return PermissionCenter.canPerform(Operation.DELETE_TASK, role, context);
     }
 
     private boolean canToggleCompletion(Task task) {
         if (task == null) {
             return false;
         }
-        if (viewMode == ViewMode.PERSONAL) {
-            return true;
-        }
-        if (isAdminClient()) {
-            return true;
-        }
-        if (viewMode != ViewMode.TEAM_ASSIGNED) {
-            return false;
-        }
-        if (this.client == null || this.client.player == null) {
-            return false;
-        }
-        String uuid = this.client.player.getUuid().toString();
-        String assignee = task.getAssigneeUuid();
-        return assignee != null && assignee.equals(uuid);
+        Role role = getCurrentRole();
+        ViewScope scope = getCurrentViewScope();
+        boolean isCompleted = task.isCompleted();
+        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
+        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf);
+        return PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, context);
     }
 
     private boolean isCurrentPlayerAssignee(Task task) {
@@ -767,6 +793,23 @@ public class TodoScreen extends Screen {
         String uuid = this.client.player.getUuid().toString();
         String assignee = task.getAssigneeUuid();
         return assignee != null && assignee.equals(uuid);
+    }
+
+    private Role getCurrentRole() {
+        return isAdminClient() ? Role.ADMIN : Role.MEMBER;
+    }
+
+    private ViewScope getCurrentViewScope() {
+        if (viewMode == ViewMode.PERSONAL) {
+            return ViewScope.PERSONAL;
+        }
+        if (viewMode == ViewMode.TEAM_UNASSIGNED) {
+            return ViewScope.TEAM_UNASSIGNED;
+        }
+        if (viewMode == ViewMode.TEAM_ASSIGNED) {
+            return ViewScope.TEAM_ASSIGNED;
+        }
+        return ViewScope.TEAM_ALL;
     }
 
     private void onClaimTask() {
@@ -923,9 +966,14 @@ public class TodoScreen extends Screen {
         if (this.viewMode == mode) {
             return;
         }
+        selectedTask = null;
         this.viewMode = mode;
         taskManager = viewMode == ViewMode.PERSONAL ? personalTaskManager : teamTaskManager;
         rebuildUI();
+    }
+
+    private boolean isTrueSingleplayer() {
+        return this.client != null && this.client.isInSingleplayer();
     }
 
     private void updateViewButtonsState() {
