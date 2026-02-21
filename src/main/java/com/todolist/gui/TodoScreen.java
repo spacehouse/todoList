@@ -610,10 +610,12 @@ public class TodoScreen extends Screen {
             if (viewMode != ViewMode.PERSONAL) {
                 if (this.client != null && this.client.player != null) {
                     String uuid = this.client.player.getUuid().toString();
+                    String name = this.client.player.getName().getString();
                     task.setScope(Task.Scope.TEAM);
                     task.setCreatorUuid(uuid);
                     if (viewMode == ViewMode.TEAM_ASSIGNED) {
                         task.setAssigneeUuid(uuid);
+                        task.setAssigneeName(name);
                     }
                 } else {
                     task.setScope(Task.Scope.TEAM);
@@ -827,6 +829,7 @@ public class TodoScreen extends Screen {
             return;
         }
         selectedTask.setAssigneeUuid(uuid);
+        selectedTask.setAssigneeName(this.client.player.getName().getString());
         addNotification(Text.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
         refreshTaskList();
@@ -845,6 +848,7 @@ public class TodoScreen extends Screen {
             return;
         }
         selectedTask.setAssigneeUuid(null);
+        selectedTask.setAssigneeName(null);
         addNotification(Text.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
         refreshTaskList();
@@ -1023,6 +1027,17 @@ public class TodoScreen extends Screen {
     private class AssignPlayerScreen extends Screen {
         private final TodoScreen parentScreen;
         private final Task targetTask;
+        private TextFieldWidget searchField;
+        private java.util.List<net.minecraft.client.network.PlayerListEntry> allPlayers;
+        private java.util.List<net.minecraft.client.network.PlayerListEntry> filteredPlayers;
+        private ButtonWidget[] playerButtons;
+        private int scrollOffset;
+        private int visibleRows;
+        private int listX;
+        private int listY;
+        private int listWidth;
+        private int listHeight;
+        private int rowHeight;
 
         protected AssignPlayerScreen(TodoScreen parentScreen, Task targetTask) {
             super(Text.translatable("gui.todolist.assign_others"));
@@ -1038,36 +1053,143 @@ public class TodoScreen extends Screen {
             }
             int guiWidth = 200;
             int x = (this.width - guiWidth) / 2;
-            int y = this.height / 6 + 20;
-            int rowH = 22;
-            int index = 0;
+            int topY = this.height / 6;
+            int searchHeight = 20;
+            rowHeight = 22;
+            visibleRows = 8;
+            listWidth = guiWidth;
+            listX = x;
+            listY = topY + searchHeight + 6;
+            listHeight = visibleRows * rowHeight;
 
+            searchField = new TextFieldWidget(this.textRenderer, x, topY, guiWidth, searchHeight, Text.empty());
+            searchField.setText("");
+            this.addDrawableChild(searchField);
+
+            allPlayers = new java.util.ArrayList<>();
+            filteredPlayers = new java.util.ArrayList<>();
             java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
-            for (net.minecraft.client.network.PlayerListEntry entry : entries) {
-                String name = entry.getProfile().getName();
-                java.util.UUID uuid = entry.getProfile().getId();
-                Text label = Text.of(name);
-                int btnY = y + index * rowH;
-                ButtonWidget btn = ButtonWidget.builder(label, b -> {
-                    applyAssignTo(uuid.toString(), name);
+            allPlayers.addAll(entries);
+
+            playerButtons = new ButtonWidget[visibleRows];
+            for (int i = 0; i < visibleRows; i++) {
+                int btnY = listY + i * rowHeight;
+                final int rowIndex = i;
+                ButtonWidget btn = ButtonWidget.builder(Text.empty(), b -> {
+                    net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(rowIndex);
+                    if (entry != null) {
+                        String name = entry.getProfile().getName();
+                        java.util.UUID uuid = entry.getProfile().getId();
+                        applyAssignTo(uuid.toString(), name);
+                    }
                 }).dimensions(x, btnY, guiWidth, 20).build();
+                btn.active = false;
+                btn.visible = false;
                 this.addDrawableChild(btn);
-                index++;
+                playerButtons[i] = btn;
             }
 
-            int cancelY = y + index * rowH + 10;
+            int cancelY = listY + listHeight + 10;
             ButtonWidget cancel = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), b -> {
                 client.setScreen(parentScreen);
             }).dimensions(x, cancelY, guiWidth, 20).build();
             this.addDrawableChild(cancel);
+
+            searchField.setChangedListener(text -> {
+                updateFilteredPlayers();
+            });
+            updateFilteredPlayers();
+            this.setFocused(searchField);
+        }
+
+        private net.minecraft.client.network.PlayerListEntry getPlayerForRow(int rowIndex) {
+            if (filteredPlayers == null || filteredPlayers.isEmpty()) {
+                return null;
+            }
+            int index = scrollOffset + rowIndex;
+            if (index < 0 || index >= filteredPlayers.size()) {
+                return null;
+            }
+            return filteredPlayers.get(index);
+        }
+
+        private void updateFilteredPlayers() {
+            if (allPlayers == null) {
+                return;
+            }
+            filteredPlayers.clear();
+            String query = searchField == null ? "" : searchField.getText();
+            if (query == null) {
+                query = "";
+            }
+            String q = query.trim().toLowerCase();
+            for (net.minecraft.client.network.PlayerListEntry entry : allPlayers) {
+                String name = entry.getProfile().getName();
+                if (name == null) {
+                    continue;
+                }
+                if (q.isEmpty() || name.toLowerCase().contains(q)) {
+                    filteredPlayers.add(entry);
+                }
+            }
+            scrollOffset = 0;
+            updatePlayerButtons();
+        }
+
+        private void updatePlayerButtons() {
+            if (playerButtons == null) {
+                return;
+            }
+            int maxOffset = 0;
+            if (filteredPlayers != null) {
+                maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+            }
+            if (scrollOffset > maxOffset) {
+                scrollOffset = maxOffset;
+            }
+            if (scrollOffset < 0) {
+                scrollOffset = 0;
+            }
+            for (int i = 0; i < playerButtons.length; i++) {
+                ButtonWidget btn = playerButtons[i];
+                net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(i);
+                if (entry == null) {
+                    btn.visible = false;
+                    btn.active = false;
+                    btn.setMessage(Text.empty());
+                } else {
+                    String name = entry.getProfile().getName();
+                    btn.visible = true;
+                    btn.active = true;
+                    btn.setMessage(Text.of(name));
+                }
+            }
         }
 
         private void applyAssignTo(String uuid, String name) {
             targetTask.setAssigneeUuid(uuid);
+            targetTask.setAssigneeName(name);
             parentScreen.addNotification(Text.translatable("message.todolist.assigned_to_player", name).getString());
             parentScreen.markUnsaved();
             parentScreen.refreshTaskList();
             client.setScreen(parentScreen);
+        }
+
+        @Override
+        public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+            if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
+                if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
+                    int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+                    if (amount < 0 && scrollOffset < maxOffset) {
+                        scrollOffset++;
+                        updatePlayerButtons();
+                    } else if (amount > 0 && scrollOffset > 0) {
+                        scrollOffset--;
+                        updatePlayerButtons();
+                    }
+                }
+            }
+            return super.mouseScrolled(mouseX, mouseY, amount);
         }
 
         @Override

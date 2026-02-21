@@ -146,16 +146,22 @@ public class TaskListWidget implements Drawable {
                 }
                 String assigneeName = null;
                 String assigneeUuid = task.getAssigneeUuid();
-                if (assigneeUuid != null && client != null && client.getNetworkHandler() != null) {
-                    java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
-                    for (net.minecraft.client.network.PlayerListEntry entry : entries) {
-                        if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
-                            String name = entry.getProfile().getName();
-                            if (name != null && !name.isEmpty()) {
-                                assigneeName = name;
+                if (assigneeUuid != null && !assigneeUuid.isEmpty()) {
+                    if (client != null && client.getNetworkHandler() != null) {
+                        java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+                        for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                            if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
+                                String name = entry.getProfile().getName();
+                                if (name != null && !name.isEmpty()) {
+                                    assigneeName = name;
+                                    task.setAssigneeName(name);
+                                }
+                                break;
                             }
-                            break;
                         }
+                    }
+                    if ((assigneeName == null || assigneeName.isEmpty()) && task.getAssigneeName() != null) {
+                        assigneeName = task.getAssigneeName();
                     }
                 }
                 StringBuilder sb = new StringBuilder();

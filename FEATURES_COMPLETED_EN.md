@@ -108,6 +108,10 @@
   - All validated and effective team task operations are recorded in the server operation log in a unified format, including player name, operation type, task ID and change details
   - In team views, regular players only see “Claim Task” and “Abandon” buttons; the “Assign Others” button is visible only to admins
 
+- ✅ **Assignment UI & Assignee Names**
+  - The “Assign Others” screen now shows online players in a fixed-height, scrollable list with a search box on top for real-time filtering by player name.
+  - When saving team tasks, the server resolves the assignee’s current name from their UUID and stores it with the task; both the GUI list and HUD use the online player list first and fall back to this cached name so that assigned tasks continue to show the assignee’s name even after the player goes offline.
+
 ### List & Sorting Behaviour
 - ✅ When filtering by priority, uncompleted tasks are always shown before completed tasks
 
@@ -139,5 +143,4 @@
 
 ---
 
-*Last Updated: 2026-02-18*
-
+*Last Updated: 2026-02-21*

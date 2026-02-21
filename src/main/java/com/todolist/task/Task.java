@@ -31,6 +31,7 @@ public class Task {
     private Scope scope;
     private String creatorUuid;
     private String assigneeUuid;
+    private String assigneeName;
 
     public Task(String title, String description) {
         this.id = UUID.randomUUID().toString();
@@ -45,6 +46,7 @@ public class Task {
         this.scope = Scope.PERSONAL;
         this.creatorUuid = null;
         this.assigneeUuid = null;
+        this.assigneeName = null;
     }
 
     // NBT Serialization
@@ -77,6 +79,9 @@ public class Task {
         }
         if (assigneeUuid != null) {
             nbt.putString("assigneeUuid", assigneeUuid);
+        }
+        if (assigneeName != null) {
+            nbt.putString("assigneeName", assigneeName);
         }
 
         // Subtasks
@@ -136,6 +141,9 @@ public class Task {
         if (nbt.contains("assigneeUuid")) {
             task.assigneeUuid = nbt.getString("assigneeUuid");
         }
+        if (nbt.contains("assigneeName")) {
+            task.assigneeName = nbt.getString("assigneeName");
+        }
 
         // Subtasks
         if (nbt.contains("subtasks", NbtElement.LIST_TYPE)) {
@@ -183,6 +191,8 @@ public class Task {
     public void setCreatorUuid(String creatorUuid) { this.creatorUuid = creatorUuid; }
     public String getAssigneeUuid() { return assigneeUuid; }
     public void setAssigneeUuid(String assigneeUuid) { this.assigneeUuid = assigneeUuid; }
+    public String getAssigneeName() { return assigneeName; }
+    public void setAssigneeName(String assigneeName) { this.assigneeName = assigneeName; }
 
     /**
      * Priority levels for tasks

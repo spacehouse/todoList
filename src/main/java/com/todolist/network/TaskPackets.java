@@ -277,6 +277,9 @@ public class TaskPackets {
                     }
 
                     if (changed) {
+                        for (Task task : currentTasks) {
+                            updateAssigneeName(server, task);
+                        }
                         storage.saveTeamTasks(currentTasks);
                         TodoListMod.LOGGER.info("Player {} updated team tasks via save, count={}", player.getName().getString(), currentTasks.size());
                         broadcastTeamTasks(server, currentTasks);
@@ -390,6 +393,7 @@ public class TaskPackets {
                         String before = currentAssignee == null ? "null" : currentAssignee;
                         String after = newAssignee == null ? "null" : newAssignee;
                         task.setAssigneeUuid(newAssignee);
+                        updateAssigneeName(server, task);
                         changed = true;
                         if (opForLog != null) {
                             logTeamOperation(player, task, opForLog,
@@ -480,9 +484,29 @@ public class TaskPackets {
         }
     }
 
-    private static void broadcastTeamTasks(net.minecraft.server.MinecraftServer server, List<Task> tasks) {
+        private static void broadcastTeamTasks(net.minecraft.server.MinecraftServer server, List<Task> tasks) {
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             sendTeamSyncTasks(player, tasks);
+        }
+    }
+
+    private static void updateAssigneeName(net.minecraft.server.MinecraftServer server, Task task) {
+        String assigneeUuid = task.getAssigneeUuid();
+        if (assigneeUuid == null || assigneeUuid.isEmpty()) {
+            task.setAssigneeName(null);
+            return;
+        }
+        try {
+            java.util.UUID uuid = java.util.UUID.fromString(assigneeUuid);
+            ServerPlayerEntity assignee = server.getPlayerManager().getPlayer(uuid);
+            if (assignee != null) {
+                String name = assignee.getName().getString();
+                if (name != null && !name.isEmpty()) {
+                    task.setAssigneeName(name);
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            task.setAssigneeName(null);
         }
     }
 
@@ -528,6 +552,7 @@ public class TaskPackets {
         buf.writeEnumConstant(task.getScope());
         boolean hasCreator = task.getCreatorUuid() != null;
         boolean hasAssignee = task.getAssigneeUuid() != null;
+        boolean hasAssigneeName = task.getAssigneeName() != null;
         buf.writeBoolean(hasCreator);
         if (hasCreator) {
             buf.writeString(task.getCreatorUuid());
@@ -535,6 +560,10 @@ public class TaskPackets {
         buf.writeBoolean(hasAssignee);
         if (hasAssignee) {
             buf.writeString(task.getAssigneeUuid());
+        }
+        buf.writeBoolean(hasAssigneeName);
+        if (hasAssigneeName) {
+            buf.writeString(task.getAssigneeName());
         }
 
         buf.writeCollection(task.getTags(), (taskBuf, tag) -> taskBuf.writeString(tag));
@@ -559,6 +588,8 @@ public class TaskPackets {
         String creatorUuid = hasCreator ? buf.readString() : null;
         boolean hasAssignee = buf.readBoolean();
         String assigneeUuid = hasAssignee ? buf.readString() : null;
+        boolean hasAssigneeName = buf.readBoolean();
+        String assigneeName = hasAssigneeName ? buf.readString() : null;
 
         Task task = new Task(title, description);
         task.setId(id);
@@ -567,6 +598,7 @@ public class TaskPackets {
         task.setScope(scope);
         task.setCreatorUuid(creatorUuid);
         task.setAssigneeUuid(assigneeUuid);
+        task.setAssigneeName(assigneeName);
 
         List<String> tags = buf.readList(taskBuf -> taskBuf.readString());
         for (String tag : tags) {

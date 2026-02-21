@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
-## [1.0.0] - 2026-02-18
+## [1.0.0] - 2026-02-21
 
 ### Added/Changed – HUD & Config
 - In true single-player worlds, the HUD default list view is forced to **Personal**. The corresponding option in the HUD config screen is locked to Personal and cannot be cycled.
@@ -51,6 +51,14 @@ Date format: `YYYY-MM-DD`
 - HUD task refresh logic improvements:
   - Kept the periodic refresh from local storage for personal tasks.
   - After manual save in the GUI, the HUD renderer’s `forceRefreshTasks` API is called to refresh HUD data immediately, reducing delay between GUI changes and HUD display.
+
+### Added/Changed – Assignment & Assignee Display
+- Improved the “Assign Others” screen:
+  - Reworked the player list into a fixed-height, scrollable list to prevent player buttons from overflowing the screen when many players are online.
+  - Added a search box above the player list to support real-time filtering by player name, making it easier to find the target player.
+- Added an `assigneeName` cache field for team tasks:
+  - When a task is claimed or assigned on the server, the assignee’s current name is resolved from their UUID and stored with the task, then persisted and synchronized with team task data.
+  - In both the main GUI list and the HUD, when building the `[assignee, tag]` label, the client first tries to resolve the assignee name from the current online player list; if the assignee is offline, it falls back to the cached `assigneeName` so that assigned tasks in “Team-All Assigned” views and HUD still show the assignee’s name.
 
 ### Added/Changed – Documentation
 - Updated `README.md`:
