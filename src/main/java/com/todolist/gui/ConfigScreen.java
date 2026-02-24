@@ -17,6 +17,7 @@ public class ConfigScreen extends Screen {
     private IntSliderWidget hudDoneLimitSlider;
     private ButtonWidget hudExpandedButton;
     private ButtonWidget hudShowWhenEmptyButton;
+    private ButtonWidget soundEffectsButton;
     private ButtonWidget hudDefaultViewButton;
 
     private int previewHudX;
@@ -32,6 +33,7 @@ public class ConfigScreen extends Screen {
 
     private boolean hudExpandedValue;
     private boolean hudShowWhenEmptyValue;
+    private boolean soundEffectsValue;
     private String hudDefaultViewValue;
     private int hudDefaultViewIndex;
 
@@ -82,6 +84,7 @@ public class ConfigScreen extends Screen {
 
         hudExpandedValue = cfg.isHudDefaultExpanded();
         hudShowWhenEmptyValue = cfg.isHudShowWhenEmpty();
+        soundEffectsValue = cfg.isEnableSoundEffects();
 
         hudExpandedButton = ButtonWidget.builder(Text.empty(), b -> {
             hudExpandedValue = !hudExpandedValue;
@@ -94,6 +97,13 @@ public class ConfigScreen extends Screen {
             updateHudShowWhenEmptyButtonLabel();
         }).dimensions(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
         this.addDrawableChild(hudShowWhenEmptyButton);
+        row++;
+
+        soundEffectsButton = ButtonWidget.builder(Text.empty(), b -> {
+            soundEffectsValue = !soundEffectsValue;
+            updateSoundEffectsButtonLabel();
+        }).dimensions(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
+        this.addDrawableChild(soundEffectsButton);
         row++;
 
         String currentView = cfg.getHudDefaultView();
@@ -132,6 +142,7 @@ public class ConfigScreen extends Screen {
 
         updateHudExpandedButtonLabel();
         updateHudShowWhenEmptyButtonLabel();
+        updateSoundEffectsButtonLabel();
         updateHudDefaultViewButtonLabel();
 
         previewUseCustom = cfg.isHudUseCustomPosition();
@@ -188,6 +199,9 @@ public class ConfigScreen extends Screen {
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
         context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_expanded"), leftLabelX, baseY, 0xFFFFFF, false);
         context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_show_when_empty"), rightLabelX, baseY, 0xFFFFFF, false);
+        row++;
+        baseY = yStart + row * rowH + (fieldH - textH) / 2;
+        context.drawText(this.textRenderer, Text.translatable("config.todolist.enable_sound_effects"), leftLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
         context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_view"), leftLabelX, baseY, 0xFFFFFF, false);
@@ -272,6 +286,7 @@ public class ConfigScreen extends Screen {
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
+        cfg.setEnableSoundEffects(soundEffectsValue);
         if (this.client != null && this.client.isInSingleplayer()) {
             cfg.setHudDefaultView("PERSONAL");
         } else {
@@ -299,6 +314,13 @@ public class ConfigScreen extends Screen {
         if (hudShowWhenEmptyButton != null) {
             String key = hudShowWhenEmptyValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
             hudShowWhenEmptyButton.setMessage(Text.translatable(key));
+        }
+    }
+
+    private void updateSoundEffectsButtonLabel() {
+        if (soundEffectsButton != null) {
+            String key = soundEffectsValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+            soundEffectsButton.setMessage(Text.translatable(key));
         }
     }
 

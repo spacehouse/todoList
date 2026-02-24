@@ -17,6 +17,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
+import net.minecraft.sound.SoundEvents;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -164,6 +165,10 @@ public class TodoScreen extends Screen {
             toggleTaskCompletion(task);
             if (!wasCompleted && task.isCompleted()) {
                 addNotification(Text.translatable("message.todolist.completed", task.getTitle()).getString());
+                ModConfig cfg = ModConfig.getInstance();
+                if (cfg.isEnableSoundEffects() && this.client != null && this.client.player != null) {
+                    this.client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
+                }
             }
             refreshTaskList();
         });
