@@ -22,31 +22,31 @@ More details / 更多说明：
 
 ### Singleplayer / 单人游戏
 
-![image-20260218171343365](https://qiniuyun.emptycity.top/typora-img/image-20260218171343365.png)
+![image-20260301023546358](https://qiniuyun.emptycity.top/typora-img/image-20260301023546358.png)
 
-![image-20260218171437868](https://qiniuyun.emptycity.top/typora-img/image-20260218171437868.png)
-
-![image-20260218171517007](https://qiniuyun.emptycity.top/typora-img/image-20260218171517007.png)
+![image-20260301023706816](https://qiniuyun.emptycity.top/typora-img/image-20260301023706816.png)
 
 ### Multiplayer / 多人游戏
 
 #### Op View / 管理员视角
 
-![image-20260218172028941](https://qiniuyun.emptycity.top/typora-img/image-20260218172028941.png)
+![image-20260301024006653](https://qiniuyun.emptycity.top/typora-img/image-20260301024006653.png)
 
-![image-20260218172248351](https://qiniuyun.emptycity.top/typora-img/image-20260218172248351.png)
+![image-20260301024246995](https://qiniuyun.emptycity.top/typora-img/image-20260301024246995.png)
 
-![image-20260218172311546](https://qiniuyun.emptycity.top/typora-img/image-20260218172311546.png)
+![image-20260301024700885](https://qiniuyun.emptycity.top/typora-img/image-20260301024700885.png)
+
+![image-20260301024723586](https://qiniuyun.emptycity.top/typora-img/image-20260301024723586.png)
 
 #### Player View / 普通玩家视角
 
-![image-20260218172335169](https://qiniuyun.emptycity.top/typora-img/image-20260218172335169.png)
+![image-20260301024345984](https://qiniuyun.emptycity.top/typora-img/image-20260301024345984.png)
 
-![image-20260218172358885](https://qiniuyun.emptycity.top/typora-img/image-20260218172358885.png)
+![image-20260301024802487](https://qiniuyun.emptycity.top/typora-img/image-20260301024802487.png)
 
-![image-20260218172423215](https://qiniuyun.emptycity.top/typora-img/image-20260218172423215.png)
+![image-20260301024829680](https://qiniuyun.emptycity.top/typora-img/image-20260301024829680.png)
 
-
+![image-20260301024849638](https://qiniuyun.emptycity.top/typora-img/image-20260301024849638.png)
 
 ## 🚀 Installation / 安装
 
