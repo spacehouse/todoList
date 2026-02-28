@@ -3,11 +3,13 @@ package com.todolist.client;
 import com.todolist.TodoListMod;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreen;
+import com.todolist.network.ProjectPackets;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
@@ -29,6 +31,7 @@ public class TodoClient implements ClientModInitializer {
     private static MinecraftClient client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
+    private static String activeProjectId;
 
     @Override
     public void onInitializeClient() {
@@ -49,6 +52,7 @@ public class TodoClient implements ClientModInitializer {
         }
 
         ClientTaskPackets.registerClientPackets();
+        ClientProjectPackets.registerClientPackets();
 
         // Register join event
         registerJoinEvent();
@@ -122,6 +126,14 @@ public class TodoClient implements ClientModInitializer {
         return teamTaskManager;
     }
 
+    public static String getActiveProjectId() {
+        return activeProjectId;
+    }
+
+    public static void setActiveProjectId(String projectId) {
+        activeProjectId = projectId;
+    }
+
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
         for (Task task : tasks) {
@@ -135,5 +147,12 @@ public class TodoClient implements ClientModInitializer {
 
     public static TodoHudRenderer getHudRenderer() {
         return hudRenderer;
+    }
+
+    public static boolean isTeamProjectsEnabled() {
+        MinecraftClient c = client != null ? client : MinecraftClient.getInstance();
+        if (c == null) return false;
+        if (c.isInSingleplayer()) return false;
+        return ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }

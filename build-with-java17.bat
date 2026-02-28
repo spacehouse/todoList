@@ -1,7 +1,5 @@
 @echo off
-setlocal
-set JAVA_HOME=D:\program\JAVA\JDK\jdk17
-set PATH=D:\program\JAVA\JDK\jdk17\bin;%PATH%
-cd /d "E:\AI\MC\todoList"
-"E:\AI\MC\todoList\gradlew.bat" %*
-endlocal
+set JAVA_HOME=D:\JAVA\JDK\jdk-17.0.4
+set PATH=%JAVA_HOME%\bin;%PATH%
+cd /d "%~dp0"
+call gradlew.bat %*

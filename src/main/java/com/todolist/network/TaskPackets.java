@@ -8,6 +8,8 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
+import com.todolist.project.Project;
+import com.todolist.project.ProjectManager;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
@@ -186,7 +188,6 @@ public class TaskPackets {
 
                     java.util.UUID playerUuid = player.getUuid();
                     String selfId = playerUuid.toString();
-                    Role role = getRole(player);
                     boolean changed = false;
                     boolean hadDeniedChange = false;
 
@@ -195,6 +196,8 @@ public class TaskPackets {
                         if (incoming == null) {
                             continue;
                         }
+                        Role role = getRoleForTask(player, existing);
+                        boolean projectMember = isProjectMemberForTask(player, existing);
 
                         boolean localChanged = false;
 
@@ -204,7 +207,7 @@ public class TaskPackets {
                             boolean assigned = assignee != null && !assignee.isEmpty();
                             boolean assigneeSelf = assigned && assignee.equals(selfId);
                             ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
-                            Context ctx = new Context(scope, existing.isCompleted(), assigned, assigneeSelf);
+                            Context ctx = new Context(scope, existing.isCompleted(), assigned, assigneeSelf, false, false, projectMember);
                             boolean canToggle = PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, ctx);
                             if (canToggle) {
                                 existing.setCompleted(incoming.isCompleted());
@@ -231,26 +234,26 @@ public class TaskPackets {
 
                             if (incomingAssignee == null) {
                                 ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
-                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                                 canChange = PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx);
                                 opForLog = Operation.ABANDON_TASK;
                             } else if (incomingAssignee.equals(selfId)) {
                                 if (currentAssignee == null) {
                                     ViewScope scope = ViewScope.TEAM_UNASSIGNED;
-                                    Context ctx = new Context(scope, completed, false, false);
+                                    Context ctx = new Context(scope, completed, false, false, false, false, projectMember);
                                     canChange = PermissionCenter.canPerform(Operation.CLAIM_TASK, role, ctx);
                                     opForLog = Operation.CLAIM_TASK;
                                 } else if (currentAssignee.equals(selfId)) {
                                     canChange = false;
                                 } else {
                                     ViewScope scope = ViewScope.TEAM_ALL;
-                                    Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                    Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                                     canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
                                     opForLog = Operation.ASSIGN_OTHERS;
                                 }
                             } else {
                                 ViewScope scope = ViewScope.TEAM_ALL;
-                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                                 canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
                                 opForLog = Operation.ASSIGN_OTHERS;
                             }
@@ -307,14 +310,15 @@ public class TaskPackets {
                     List<Task> tasks = storage.loadTeamTasks();
                     boolean changed = false;
                     UUID playerUuid = player.getUuid();
-                    Role role = getRole(player);
                     for (Task task : tasks) {
                         if (task.getId().equals(taskId)) {
+                            Role role = getRoleForTask(player, task);
+                            boolean projectMember = isProjectMemberForTask(player, task);
                             String assignee = task.getAssigneeUuid();
                             boolean assigned = assignee != null && !assignee.isEmpty();
                             boolean assigneeSelf = assigned && assignee.equals(playerUuid.toString());
                             ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
-                            Context ctx = new Context(scope, task.isCompleted(), assigned, assigneeSelf);
+                            Context ctx = new Context(scope, task.isCompleted(), assigned, assigneeSelf, false, false, projectMember);
                             boolean canToggle = PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, ctx);
                             if (!canToggle) {
                                 TodoListMod.LOGGER.warn("Player {} attempted to toggle team task {} without permission", player.getName().getString(), taskId);
@@ -349,11 +353,12 @@ public class TaskPackets {
                     List<Task> tasks = storage.loadTeamTasks();
                     boolean changed = false;
                     UUID playerUuid = player.getUuid();
-                    Role role = getRole(player);
                     for (Task task : tasks) {
                         if (!task.getId().equals(taskId)) {
                             continue;
                         }
+                        Role role = getRoleForTask(player, task);
+                        boolean projectMember = isProjectMemberForTask(player, task);
                         String currentAssignee = task.getAssigneeUuid();
                         boolean completed = task.isCompleted();
                         boolean assigned = currentAssignee != null && !currentAssignee.isEmpty();
@@ -362,13 +367,13 @@ public class TaskPackets {
                         Operation opForLog;
                         if (newAssignee == null) {
                             ViewScope scope = assigneeSelf ? ViewScope.TEAM_ASSIGNED : ViewScope.TEAM_ALL;
-                            Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                            Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                             canChange = PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx);
                             opForLog = Operation.ABANDON_TASK;
                         } else if (newAssignee.equals(playerUuid.toString())) {
                             if (currentAssignee == null) {
                                 ViewScope scope = ViewScope.TEAM_UNASSIGNED;
-                                Context ctx = new Context(scope, completed, false, false);
+                                Context ctx = new Context(scope, completed, false, false, false, false, projectMember);
                                 canChange = PermissionCenter.canPerform(Operation.CLAIM_TASK, role, ctx);
                                 opForLog = Operation.CLAIM_TASK;
                             } else if (currentAssignee.equals(playerUuid.toString())) {
@@ -376,13 +381,13 @@ public class TaskPackets {
                                 opForLog = null;
                             } else {
                                 ViewScope scope = ViewScope.TEAM_ALL;
-                                Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                                Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                                 canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
                                 opForLog = Operation.ASSIGN_OTHERS;
                             }
                         } else {
                             ViewScope scope = ViewScope.TEAM_ALL;
-                            Context ctx = new Context(scope, completed, assigned, assigneeSelf);
+                            Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
                             canChange = PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, ctx);
                             opForLog = Operation.ASSIGN_OTHERS;
                         }
@@ -418,6 +423,33 @@ public class TaskPackets {
                 try {
                     TaskStorage storage = TodoListMod.getTaskStorage();
                     List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+                    
+                    // Lazy migration for player tasks
+                    boolean changed = false;
+                    ProjectManager pm = TodoListMod.getProjectManager();
+                    String defaultProjectId = null;
+                    
+                    for (Project p : pm.getAllProjects()) {
+                        if (p.getScope() == Project.Scope.PERSONAL && "gui.todolist.project.default.personal".equals(p.getName())) {
+                            defaultProjectId = p.getId();
+                            break;
+                        }
+                    }
+                    
+                    if (defaultProjectId != null) {
+                        for (Task t : tasks) {
+                            if (t.getProjectId() == null) {
+                                t.setProjectId(defaultProjectId);
+                                changed = true;
+                            }
+                        }
+                    }
+                    
+                    if (changed) {
+                        storage.savePlayerTasks(playerUuid, tasks);
+                        TodoListMod.LOGGER.info("Migrated {} tasks for player {} to default project", tasks.size(), player.getName().getString());
+                    }
+                    
                     sendSyncTasks(player, tasks);
                     TodoListMod.LOGGER.info("Synced {} tasks to player {}", tasks.size(), player.getName().getString());
                     List<Task> teamTasks = storage.loadTeamTasks();
@@ -514,8 +546,70 @@ public class TaskPackets {
         return player.hasPermissionLevel(2);
     }
 
-    private static Role getRole(ServerPlayerEntity player) {
-        return isAdmin(player) ? Role.ADMIN : Role.MEMBER;
+    private static Role getRoleForTask(ServerPlayerEntity player, Task task) {
+        if (player == null) {
+            return Role.MEMBER;
+        }
+        if (isAdmin(player)) {
+            return Role.OP;
+        }
+        if (task == null || task.getScope() == Task.Scope.PERSONAL) {
+            return Role.MEMBER;
+        }
+        String projectId = task.getProjectId();
+        if (projectId == null || projectId.isEmpty()) {
+            return Role.MEMBER;
+        }
+        ProjectManager pm = TodoListMod.getProjectManager();
+        Project project = pm.getProject(projectId);
+        return getRoleForProject(player, project);
+    }
+
+    private static Role getRoleForProject(ServerPlayerEntity player, Project project) {
+        if (player == null) {
+            return Role.MEMBER;
+        }
+        if (isAdmin(player)) {
+            return Role.OP;
+        }
+        if (project == null || project.getScope() == Project.Scope.PERSONAL) {
+            return Role.MEMBER;
+        }
+        String uuid = player.getUuidAsString();
+        if (uuid.equals(project.getOwnerUuid())) {
+            return Role.PROJECT_MANAGER;
+        }
+        Project.ProjectRole r = project.getMemberRole(uuid);
+        if (r == Project.ProjectRole.LEAD) {
+            return Role.LEAD;
+        }
+        return Role.MEMBER;
+    }
+
+    private static boolean isProjectMemberForTask(ServerPlayerEntity player, Task task) {
+        if (player == null) {
+            return false;
+        }
+        if (isAdmin(player)) {
+            return true;
+        }
+        if (task == null || task.getScope() == Task.Scope.PERSONAL) {
+            return true;
+        }
+        String projectId = task.getProjectId();
+        if (projectId == null || projectId.isEmpty()) {
+            return true;
+        }
+        ProjectManager pm = TodoListMod.getProjectManager();
+        Project project = pm.getProject(projectId);
+        if (project == null) {
+            return false;
+        }
+        String uuid = player.getUuidAsString();
+        if (uuid.equals(project.getOwnerUuid())) {
+            return true;
+        }
+        return project.getMemberRole(uuid) != null;
     }
 
     // Serialization helpers
@@ -543,37 +637,86 @@ public class TaskPackets {
     }
 
     public static void writeTask(PacketByteBuf buf, Task task) {
-        buf.writeString(task.getId());
-        buf.writeString(task.getTitle());
-        buf.writeString(task.getDescription());
-        buf.writeBoolean(task.isCompleted());
-        buf.writeEnumConstant(task.getPriority());
-        buf.writeLong(task.getCreatedAt());
-        buf.writeEnumConstant(task.getScope());
-        boolean hasCreator = task.getCreatorUuid() != null;
-        boolean hasAssignee = task.getAssigneeUuid() != null;
-        boolean hasAssigneeName = task.getAssigneeName() != null;
+        String id = "";
+        String title = "";
+        String description = "";
+        boolean completed = false;
+        Task.Priority priority = Task.Priority.MEDIUM;
+        long createdAt = 0L;
+        Task.Scope scope = Task.Scope.PERSONAL;
+        String creatorUuid = null;
+        String assigneeUuid = null;
+        String assigneeName = null;
+        String projectId = null;
+        Iterable<String> tags = List.of();
+        Long dueDate = null;
+        List<Task> subtasks = List.of();
+
+        if (task != null) {
+            if (task.getId() != null) id = task.getId();
+            if (task.getTitle() != null) title = task.getTitle();
+            if (task.getDescription() != null) description = task.getDescription();
+            completed = task.isCompleted();
+            if (task.getPriority() != null) priority = task.getPriority();
+            createdAt = task.getCreatedAt();
+            if (task.getScope() != null) scope = task.getScope();
+            creatorUuid = task.getCreatorUuid();
+            assigneeUuid = task.getAssigneeUuid();
+            assigneeName = task.getAssigneeName();
+            projectId = task.getProjectId();
+            if (task.getTags() != null) tags = task.getTags();
+            dueDate = task.getDueDate();
+            if (task.getSubtasks() != null) subtasks = task.getSubtasks();
+        }
+
+        buf.writeString(id);
+        buf.writeString(title);
+        buf.writeString(description);
+        buf.writeBoolean(completed);
+        buf.writeEnumConstant(priority);
+        buf.writeLong(createdAt);
+        buf.writeEnumConstant(scope);
+        boolean hasCreator = creatorUuid != null;
+        boolean hasAssignee = assigneeUuid != null;
+        boolean hasAssigneeName = assigneeName != null;
+        boolean hasProjectId = projectId != null;
         buf.writeBoolean(hasCreator);
         if (hasCreator) {
-            buf.writeString(task.getCreatorUuid());
+            buf.writeString(creatorUuid);
         }
         buf.writeBoolean(hasAssignee);
         if (hasAssignee) {
-            buf.writeString(task.getAssigneeUuid());
+            buf.writeString(assigneeUuid);
         }
         buf.writeBoolean(hasAssigneeName);
         if (hasAssigneeName) {
-            buf.writeString(task.getAssigneeName());
+            buf.writeString(assigneeName);
+        }
+        buf.writeBoolean(hasProjectId);
+        if (hasProjectId) {
+            buf.writeString(projectId);
         }
 
-        buf.writeCollection(task.getTags(), (taskBuf, tag) -> taskBuf.writeString(tag));
+        List<String> safeTags = new ArrayList<>();
+        for (String tag : tags) {
+            if (tag != null && !tag.isEmpty()) {
+                safeTags.add(tag);
+            }
+        }
+        buf.writeCollection(safeTags, (taskBuf, tag) -> taskBuf.writeString(tag));
 
-        buf.writeBoolean(task.getDueDate() != null);
-        if (task.getDueDate() != null) {
-            buf.writeLong(task.getDueDate());
+        buf.writeBoolean(dueDate != null);
+        if (dueDate != null) {
+            buf.writeLong(dueDate);
         }
 
-        buf.writeCollection(task.getSubtasks(), (taskBuf, subtask) -> writeTask(taskBuf, subtask));
+        List<Task> safeSubtasks = new ArrayList<>();
+        for (Task subtask : subtasks) {
+            if (subtask != null) {
+                safeSubtasks.add(subtask);
+            }
+        }
+        buf.writeCollection(safeSubtasks, (taskBuf, subtask) -> writeTask(taskBuf, subtask));
     }
 
     public static Task readTask(PacketByteBuf buf) {
@@ -590,6 +733,8 @@ public class TaskPackets {
         String assigneeUuid = hasAssignee ? buf.readString() : null;
         boolean hasAssigneeName = buf.readBoolean();
         String assigneeName = hasAssigneeName ? buf.readString() : null;
+        boolean hasProjectId = buf.readBoolean();
+        String projectId = hasProjectId ? buf.readString() : null;
 
         Task task = new Task(title, description);
         task.setId(id);
@@ -599,6 +744,7 @@ public class TaskPackets {
         task.setCreatorUuid(creatorUuid);
         task.setAssigneeUuid(assigneeUuid);
         task.setAssigneeName(assigneeName);
+        task.setProjectId(projectId);
 
         List<String> tags = buf.readList(taskBuf -> taskBuf.readString());
         for (String tag : tags) {

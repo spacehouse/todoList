@@ -60,3 +60,6 @@ run/
 # Local configuration
 local.properties
 .claude/
+
+# Trae
+.trae/

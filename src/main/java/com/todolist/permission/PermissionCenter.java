@@ -2,7 +2,9 @@ package com.todolist.permission;
 
 public final class PermissionCenter {
     public enum Role {
-        ADMIN,
+        OP,
+        PROJECT_MANAGER,
+        LEAD,
         MEMBER
     }
 
@@ -20,7 +22,12 @@ public final class PermissionCenter {
         TOGGLE_COMPLETE,
         CLAIM_TASK,
         ABANDON_TASK,
-        ASSIGN_OTHERS
+        ASSIGN_OTHERS,
+        EDIT_PROJECT,
+        DELETE_PROJECT,
+        ADD_MEMBER,
+        REMOVE_MEMBER,
+        CHANGE_MEMBER_ROLE
     }
 
     public static final class Context {
@@ -28,12 +35,26 @@ public final class PermissionCenter {
         private final boolean completed;
         private final boolean assigned;
         private final boolean assigneeSelf;
+        private final boolean targetSelf;
+        private final boolean targetProjectManager;
+        private final boolean projectMember;
 
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf) {
+            this(viewScope, completed, assigned, assigneeSelf, false, false, true);
+        }
+
+        public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager) {
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true);
+        }
+
+        public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember) {
             this.viewScope = viewScope;
             this.completed = completed;
             this.assigned = assigned;
             this.assigneeSelf = assigneeSelf;
+            this.targetSelf = targetSelf;
+            this.targetProjectManager = targetProjectManager;
+            this.projectMember = projectMember;
         }
 
         public ViewScope getViewScope() {
@@ -51,6 +72,18 @@ public final class PermissionCenter {
         public boolean isAssigneeSelf() {
             return assigneeSelf;
         }
+
+        public boolean isTargetSelf() {
+            return targetSelf;
+        }
+
+        public boolean isTargetProjectManager() {
+            return targetProjectManager;
+        }
+
+        public boolean isProjectMember() {
+            return projectMember;
+        }
     }
 
     private PermissionCenter() {
@@ -59,6 +92,26 @@ public final class PermissionCenter {
     public static boolean canPerform(Operation operation, Role role, Context context) {
         if (context == null) {
             return false;
+        }
+        if (operation == Operation.REMOVE_MEMBER && context.isTargetSelf()) {
+            return false;
+        }
+        if (role == Role.OP) {
+            return true;
+        }
+        if (context.getViewScope() != ViewScope.PERSONAL && !context.isProjectMember()) {
+            switch (operation) {
+                case ADD_TASK:
+                case DELETE_TASK:
+                case EDIT_TASK:
+                case TOGGLE_COMPLETE:
+                case CLAIM_TASK:
+                case ABANDON_TASK:
+                case ASSIGN_OTHERS:
+                    return false;
+                default:
+                    break;
+            }
         }
         switch (operation) {
             case EDIT_TASK:
@@ -75,6 +128,16 @@ public final class PermissionCenter {
                 return canAbandon(role, context);
             case ASSIGN_OTHERS:
                 return canAssignOthers(role, context);
+            case EDIT_PROJECT:
+                return canEditProject(role);
+            case DELETE_PROJECT:
+                return canDeleteProject(role);
+            case ADD_MEMBER:
+                return canAddMember(role);
+            case REMOVE_MEMBER:
+                return canRemoveMember(role, context);
+            case CHANGE_MEMBER_ROLE:
+                return canChangeMemberRole(role, context);
             default:
                 return false;
         }
@@ -87,7 +150,7 @@ public final class PermissionCenter {
         if (context.getViewScope() == ViewScope.PERSONAL) {
             return true;
         }
-        return role == Role.ADMIN;
+        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
     }
 
     private static boolean canDelete(Role role, Context context) {
@@ -97,14 +160,14 @@ public final class PermissionCenter {
             }
             return canEdit(role, context);
         }
-        return role == Role.ADMIN;
+        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
     }
 
     private static boolean canToggleComplete(Role role, Context context) {
         if (context.getViewScope() == ViewScope.PERSONAL) {
             return true;
         }
-        if (role == Role.ADMIN) {
+        if (role == Role.PROJECT_MANAGER || role == Role.LEAD) {
             return true;
         }
         if (context.getViewScope() != ViewScope.TEAM_ASSIGNED) {
@@ -117,7 +180,7 @@ public final class PermissionCenter {
         if (context.getViewScope() == ViewScope.PERSONAL) {
             return true;
         }
-        return role == Role.ADMIN;
+        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
     }
 
     private static boolean canClaim(Role role, Context context) {
@@ -127,10 +190,10 @@ public final class PermissionCenter {
         if (context.isCompleted()) {
             return false;
         }
-        if (role == Role.ADMIN) {
+        if (role == Role.PROJECT_MANAGER || role == Role.LEAD) {
             return !context.isAssigned();
         }
-        return context.getViewScope() == ViewScope.TEAM_UNASSIGNED;
+        return context.getViewScope() == ViewScope.TEAM_UNASSIGNED && !context.isAssigned();
     }
 
     private static boolean canAbandon(Role role, Context context) {
@@ -140,7 +203,7 @@ public final class PermissionCenter {
         if (context.isCompleted()) {
             return false;
         }
-        if (role == Role.ADMIN) {
+        if (role == Role.PROJECT_MANAGER || role == Role.LEAD) {
             return true;
         }
         if (context.getViewScope() != ViewScope.TEAM_ASSIGNED) {
@@ -156,7 +219,39 @@ public final class PermissionCenter {
         if (context.isCompleted()) {
             return false;
         }
-        return role == Role.ADMIN;
+        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
+    }
+
+    private static boolean canEditProject(Role role) {
+        return role == Role.PROJECT_MANAGER;
+    }
+
+    private static boolean canDeleteProject(Role role) {
+        return role == Role.PROJECT_MANAGER;
+    }
+
+    private static boolean canAddMember(Role role) {
+        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
+    }
+
+    private static boolean canRemoveMember(Role role, Context context) {
+        if (role == Role.PROJECT_MANAGER) {
+            return !context.isTargetSelf();
+        }
+        if (role == Role.LEAD) {
+            return !context.isTargetSelf() && !context.isTargetProjectManager();
+        }
+        return false;
+    }
+
+    private static boolean canChangeMemberRole(Role role, Context context) {
+        if (role == Role.PROJECT_MANAGER) {
+            return !context.isTargetSelf();
+        }
+        if (role == Role.LEAD) {
+            return !context.isTargetSelf() && !context.isTargetProjectManager();
+        }
+        return false;
     }
 }
 

@@ -32,6 +32,7 @@ public class TaskListWidget implements Drawable {
     private final ScrollBar scrollBar;
     private int hoveredTaskIndex = -1;
     private int selectedTaskIndex = -1;
+    private String selectedTaskId;
     private int taskItemHeight;
     private boolean teamAllViewForNonOp;
     private Consumer<Task> onTaskToggleCompletion;
@@ -57,6 +58,7 @@ public class TaskListWidget implements Drawable {
         this.tasks = tasks;
         this.scrollBar.setValue(0);
         updateMaxScroll();
+        syncSelectionIndex();
     }
 
     private void updateMaxScroll() {
@@ -292,15 +294,31 @@ public class TaskListWidget implements Drawable {
     }
 
     public void setSelectedTask(Task task) {
-        for (int i = 0; i < tasks.size(); i++) {
-            if (tasks.get(i).equals(task)) {
-                selectedTaskIndex = i;
-                break;
-            }
+        if (task == null) {
+            clearSelection();
+            return;
         }
+        selectedTaskId = task.getId();
+        syncSelectionIndex();
     }
 
     public void clearSelection() {
+        selectedTaskIndex = -1;
+        selectedTaskId = null;
+    }
+
+    private void syncSelectionIndex() {
+        if (selectedTaskId == null || selectedTaskId.isEmpty() || tasks == null) {
+            selectedTaskIndex = -1;
+            return;
+        }
+        for (int i = 0; i < tasks.size(); i++) {
+            Task t = tasks.get(i);
+            if (t != null && selectedTaskId.equals(t.getId())) {
+                selectedTaskIndex = i;
+                return;
+            }
+        }
         selectedTaskIndex = -1;
     }
 

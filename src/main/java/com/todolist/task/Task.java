@@ -32,6 +32,7 @@ public class Task {
     private String creatorUuid;
     private String assigneeUuid;
     private String assigneeName;
+    private String projectId; // New field for project association
 
     public Task(String title, String description) {
         this.id = UUID.randomUUID().toString();
@@ -47,6 +48,7 @@ public class Task {
         this.creatorUuid = null;
         this.assigneeUuid = null;
         this.assigneeName = null;
+        this.projectId = null;
     }
 
     // NBT Serialization
@@ -82,6 +84,9 @@ public class Task {
         }
         if (assigneeName != null) {
             nbt.putString("assigneeName", assigneeName);
+        }
+        if (projectId != null) {
+            nbt.putString("projectId", projectId);
         }
 
         // Subtasks
@@ -144,6 +149,9 @@ public class Task {
         if (nbt.contains("assigneeName")) {
             task.assigneeName = nbt.getString("assigneeName");
         }
+        if (nbt.contains("projectId")) {
+            task.projectId = nbt.getString("projectId");
+        }
 
         // Subtasks
         if (nbt.contains("subtasks", NbtElement.LIST_TYPE)) {
@@ -193,6 +201,8 @@ public class Task {
     public void setAssigneeUuid(String assigneeUuid) { this.assigneeUuid = assigneeUuid; }
     public String getAssigneeName() { return assigneeName; }
     public void setAssigneeName(String assigneeName) { this.assigneeName = assigneeName; }
+    public String getProjectId() { return projectId; }
+    public void setProjectId(String projectId) { this.projectId = projectId; }
 
     /**
      * Priority levels for tasks

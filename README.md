@@ -6,35 +6,17 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### ✅ Implemented / 已实现 (v1.0.0+)
-- ✅ **Task Management** - Add, edit, delete, and complete tasks / 任务管理（增删改查）
-- ✅ **Task Filtering & Search** - Filter by status/priority and search by text/tags / 任务筛选与搜索（状态、优先级、标题/描述/标签）
-- ✅ **Auto Save** - Tasks are automatically saved on close / 关闭时自动保存
-- ✅ **Manual Save** - Save button to manually save tasks / 手动保存按钮
-- ✅ **Scrollable List** - Mouse wheel and draggable scrollbar / 可滚动列表（滚轮+拖动）
-- 🎨 **Priority Levels** - Low, Medium, High with color coding / 优先级（低中高，颜色区分）
-- 🏷️ **Tags** - Basic tag support with colored labels in GUI & HUD / 基础标签支持（GUI与HUD显示彩色标签）
-- 🎮 **In-Game GUI** - Easy-to-use interface / 游戏内GUI界面
-- 💾 **Persistent Storage** - Tasks saved to local file / 本地文件持久化
-- ⌨️ **Keyboard Shortcuts** - K to open, H to toggle HUD, Enter to add, Esc to close / 键盘快捷键（K 打开，H 切换HUD，Enter添加，Esc关闭）
-- 🌍 **Multi-Language** - English and Chinese / 多语言支持
-- 📊 **HUD Display** - On-screen todo list with expand/collapse and current-view header; in single-player HUD always shows personal tasks / HUD待办列表显示（右上角，可展开/收起，显示当前视图和数量；单人模式下HUD始终显示个人任务）
-- 👥 **Team Tasks** - Personal & team views (unassigned/assigned/assigned-to-me) with multiplayer sync, permissions and role-based buttons / 个人与团队任务视图（待分配/已分配/分配给我，多人同步与权限控制，按钮按角色区分）
-- ⚙️ **HUD Config GUI** - In-game HUD width/height/limits/default view, show-when-empty, draggable preview; HUD default view is locked to personal in single-player / HUD配置界面（宽度、高度、条数、默认视图、空列表是否显示、预览拖动位置；单人模式下HUD默认视图固定为个人）
+### v1.0.0 Capability Overview / 1.0.0 版本能力概览
+- ✅ In-game GUI task management: CRUD, priority, tags, filter & search / 游戏内GUI任务管理：增删改查、优先级、标签、筛选与搜索
+- ✅ HUD todo list: expand/collapse, view header, configurable size/position/opacity / HUD待办列表：展开/收起、视图标题、可配置尺寸/位置/透明度
+- ✅ Multiplayer & team collaboration: team tasks, view semantics, server-side permission checks and audit logs / 多人团队协作：团队任务、视图语义、服务端权限校验与操作审计日志
+- ✅ Projects: personal/team projects, project sidebar, basic project management / 项目：个人/团队项目、项目侧边栏与基础管理
+- ✅ i18n: Chinese & English / 多语言：中文与英文
 
-### 🔄 Recent Improvements / 最近改进 (2026-02)
-- HUD default list view is forced to **Personal** in true single-player worlds, and team views are hidden there / 真单人世界中HUD默认视图锁定为个人视图并隐藏团队视图
-- HUD team views now strictly follow GUI semantics: **Unassigned** (no assignee), **All Assigned**, **Assigned to Me** / HUD团队视图与GUI语义对齐：待分配（无指派人）、已分配（所有已指派）、分配给我
-- Team task GUI now always re-syncs from server after **Save**, **Cancel** or closing with **Esc**, discarding unsaved local edits / 团队任务界面在点击保存、取消或按Esc关闭后都会从服务器重新同步任务数据，丢弃未保存的本地修改
-- Priority buttons can be used even with no task selected to set the default priority for new tasks / 即使未选中任务也可以使用优先级按钮，为新任务预设优先级
-- In team views, the **Assign Others** button is only visible for admins; regular players only see Claim/Abandon actions / 团队视图中“指派他人”按钮仅对管理员可见，普通玩家只显示领取/放弃操作
-
-### 🚧 Planned / 计划中
-- 🏷️ **Advanced Tagging & Categories** - Rich tag filters and categories / 高级标签与分类
-- 💬 **Commands** - `/todo` command system / 命令系统
-- 🌐 **Advanced Multiplayer Support** - More powerful team workflows and permissions / 更完善的多人与团队权限系统
-- 📅 **Due Dates** - Set task deadlines / 截止日期
-- 🎯 **Subtasks** - Break down tasks into smaller parts / 子任务
+More details / 更多说明：
+- [FEATURES.md](FEATURES.md) / [FEATURES_EN.md](FEATURES_EN.md)
+- [ROADMAP.md](ROADMAP.md) / [ROADMAP_EN.md](ROADMAP_EN.md)
+- [CHANGELOG.md](CHANGELOG.md) / [CHANGELOG_EN.md](CHANGELOG_EN.md)
 
 ## 📸 Screenshots / 截图
 
@@ -86,10 +68,18 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 - **K** - Open Todo List / 打开待办列表
 - **H** - Toggle HUD (expand/collapse) / 展开或收起HUD
 
+### Projects / 项目
+- The todo GUI is project-based: tasks you create belong to the currently selected project in the left sidebar. / 待办界面以“项目”为维度：你创建的任务会归属到左侧侧边栏当前选中的项目。
+- Use the top button in the sidebar to switch between **Personal Projects** and **Team Projects** (team projects require server support). / 侧边栏顶部按钮可在**个人项目/团队项目**之间切换（团队项目需要服务端支持）。
+- Click a project to switch context; starred projects are sorted to the top. / 点击项目切换当前项目；星标项目会自动置顶排序。
+- Click ★/☆ to star/unstar a project (used by HUD “Starred projects” source). / 点击 ★/☆ 可星标/取消星标项目（用于 HUD 的“星标项目”来源）。
+- Use Add/Edit/Delete buttons in the sidebar to manage projects (delete requires confirmation). / 使用侧边栏的新增/编辑/删除管理项目（删除需要二次确认）。
+
 ### Creating Tasks / 创建任务
 1. Open the todo list with **K** key / 按**K**键打开待办列表
-2. Enter task title and description / 输入任务标题和描述
-3. Click **Add** button / 点击**添加**按钮
+2. Select a project in the left sidebar / 在左侧项目列表中选择一个项目
+3. Enter task title and description / 输入任务标题和描述
+4. Click **Add** button (or press Enter when the title field is focused) / 点击**添加**按钮（或在标题输入框聚焦时按 Enter）
 
 ### Managing Tasks / 管理任务
 - Click on a task to select it / 点击任务选中
@@ -104,11 +94,12 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 - Use view buttons at the top of the GUI to switch between Personal and team views: **Unassigned**, **All Assigned**, **Assigned to Me** / 使用界面顶部视图按钮在个人视图和团队视图之间切换：**待分配**、**已分配**、**分配给我**
 - In team views, changes are applied only after clicking **Save**; the server will validate permissions and handle conflicts / 在团队视图中修改后需要点击**保存**才会提交到服务器，并进行权限和冲突校验
 - After **Save**, **Cancel**, or closing with **Esc** in team views, the client always re-syncs team tasks from the server so that local unsaved edits are discarded and the list matches server state / 在团队视图中点击**保存**、**取消**或按 **Esc** 关闭界面后，客户端都会从服务器重新同步团队任务，本地未保存修改会被丢弃，列表始终与服务器一致
-- Regular players can only claim/abandon and complete their own team tasks; admins can fully manage team tasks. The “Assign Others” button is only visible for admins / 普通玩家只能领取/放弃并完成自己的团队任务，管理员可以完整管理团队任务，“指派他人”按钮仅对管理员可见
+- Project members with role **MEMBER** can only claim/abandon and complete their own team tasks; **PROJECT_MANAGER/LEAD/OP** can fully manage team tasks. The “Assign Others” button is shown only when you have permission. / 角色为 **成员** 的项目成员只能领取/放弃并完成自己的团队任务；**项目经理/负责人/OP** 可完整管理团队任务。“指派他人”按钮仅在拥有权限时显示
+- In team projects, adding new tasks is only enabled in **Unassigned** view; other team views disable the Add button and Enter-to-add. / 在团队项目中，仅 **待分配** 视图允许新增任务；其他团队视图会禁用添加按钮与 Enter 添加操作。
 
 ### HUD Config / HUD 配置
-- Open the todo GUI with **K**, then click the top-right **HUD Config** button to open the config screen / 按 **K** 打开待办界面，点击右上角的 **HUD配置** 按钮进入配置界面
-- Configure HUD width, max height, todo/done limits (0–30), default expanded state, whether to show when empty, and default list view / 可配置HUD宽度、最大高度、待办/已办显示条数（0–30）、默认展开、无任务时是否显示以及默认列表视图
+- Open the todo GUI with **K**, then click the top-right **Config** button to open the config screen / 按 **K** 打开待办界面，点击右上角的 **配置** 按钮进入配置界面
+- Configure HUD width, max height, todo/done limits (0–30), default expanded state, whether to show when empty, default list view, list project source and opacity / 可配置HUD宽度、最大高度、待办/已办显示条数（0–30）、默认展开、无任务时是否显示、默认列表视图、列表项目来源与透明度
 - In true single-player worlds, the HUD default list view is locked to **Personal** and cannot be changed; HUD team views are hidden / 在真正的单人世界中，HUD默认列表视图固定为**个人**且不可修改，同时HUD中不显示团队视图
 - Drag the HUD preview rectangle to set a custom position; changes apply after clicking **Save & Apply** / 在配置界面中拖动HUD预览矩形设置自定义位置，点击**保存并应用**后生效
 - If you use Mod Menu, you can also open this config screen from the mod’s entry / 如果安装了 Mod Menu，也可以从 Mod Menu 中打开该配置界面
@@ -117,12 +108,14 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 ## 🛡️ Permission System / 权限系统
 
 ### Permission Center / 权限中心
-The mod implements a unified server-side Permission Center that evaluates every team-related operation based on the player’s role, current view scope, task completion state and assignment status.
-模组在服务端实现了统一的权限中心，会根据玩家的角色、当前视图范围、任务完成状态以及指派关系，对所有与团队任务相关的操作进行判定。
+The mod implements a unified server-side Permission Center that evaluates operations in team projects based on role, view scope, task state/assignment, and whether the player is a member of the project. OP always bypasses checks.
+模组在服务端实现了统一的权限中心，会根据团队项目中的角色、当前视图范围、任务完成状态/指派关系以及玩家是否为项目成员，对相关操作进行判定。OP 永远拥有所有权限。
 
 ### Roles / 角色
-- **ADMIN**: Server operators (OP level 2+) / 管理员（OP等级2+）
-- **MEMBER**: Regular players / 普通玩家
+- **OP**: Server operators (OP) / 服务器管理员（OP）
+- **PROJECT_MANAGER**: Project owner/manager, full project control / 项目经理（创建人，项目权限最大）
+- **LEAD**: Project lead, elevated permissions / 负责人（次级权限）
+- **MEMBER**: Regular project member / 成员（最小权限）
 
 ### View Scopes / 视图范围
 - **PERSONAL**: Personal tasks / 个人任务
@@ -130,41 +123,27 @@ The mod implements a unified server-side Permission Center that evaluates every 
 - **TEAM_ALL**: Team tasks - All assigned / 团队任务 - 已分配（所有）
 - **TEAM_ASSIGNED**: Team tasks - Assigned to me / 团队任务 - 分配给我
 
-### Permission Matrix / 权限矩阵
+### Key Rules / 核心规则
+- Team operations require being a member of the project (non-members are read-only). / 团队相关操作要求你是该项目成员（非成员默认只读）。
+- In team projects, **PROJECT_MANAGER/LEAD** can add/edit/delete/assign tasks, and can toggle completion in all team views. / 团队项目中 **项目经理/负责人** 可新增/编辑/删除/指派任务，并可在所有团队视图中切换完成状态。
+- **MEMBER** can claim tasks in **Unassigned** view, and can abandon/complete tasks only when they are assigned to themselves (typically in **Assigned to Me**). / **成员** 仅可在 **待分配** 视图领取任务；仅能对“分配给自己”的任务执行放弃/完成（通常在 **分配给我** 视图）。
+- Project editing/deletion is restricted to **PROJECT_MANAGER** (OP always allowed). / 项目编辑/删除仅 **项目经理** 可用（OP 例外）。
+- Member management: **PROJECT_MANAGER** can manage members and roles; **LEAD** can manage members except the project manager and themselves (OP always allowed). / 成员管理：**项目经理** 可管理成员与角色；**负责人** 可管理成员（但不能操作项目经理和自己）（OP 例外）。
 
 #### 1. PERSONAL (个人视图)
-| Operation / 操作 | ADMIN | MEMBER | Note / 说明 |
-|------------------|-------|--------|-------------|
-| ADD_TASK         | ✔     | ✔      | Personal tasks / 个人任务 |
-| EDIT_TASK        | ✔     | ✔      | If not completed / 未完成即可 |
-| DELETE_TASK      | ✔     | ✔      | If editable or completed / 可编辑或已完成 |
-| TOGGLE_COMPLETE  | ✔     | ✔      | Any personal task / 任意个人任务 |
-| CLAIM/ABANDON    | ✖     | ✖      | N/A / 不适用 |
+- All players can add/edit/delete/toggle completion for personal tasks. / 所有玩家都可对个人任务进行新增、编辑、删除与完成状态切换。
 
 #### 2. TEAM_UNASSIGNED (团队-待分配)
-| Operation / 操作 | ADMIN | MEMBER | Note / 说明 |
-|------------------|-------|--------|-------------|
-| ADD_TASK         | ✔     | ✖      | Only Admin can add team tasks / 仅管理员可加团队任务 |
-| EDIT/DELETE      | ✔     | ✖      | Only Admin can manage / 仅管理员管理 |
-| TOGGLE_COMPLETE  | ✔     | ✖      | Member cannot complete unassigned / 成员不可完成未分配任务 |
-| CLAIM_TASK       | ✔     | ✔      | Member can claim unassigned / 成员可认领 |
-| ASSIGN_OTHERS    | ✔     | ✖      | Only Admin can assign / 仅管理员指派 |
+- PROJECT_MANAGER / LEAD: add/edit/delete tasks, assign others, toggle completion / 项目经理/负责人：可新增/编辑/删除、指派他人、切换完成
+- MEMBER: claim unassigned tasks / 成员：可领取未分配任务
 
 #### 3. TEAM_ALL (团队-所有已分配)
-| Operation / 操作 | ADMIN | MEMBER | Note / 说明 |
-|------------------|-------|--------|-------------|
-| VIEW             | ✔     | ✔      | Read-only for members / 成员只读 |
-| EDIT/DELETE      | ✔     | ✖      | Only Admin can manage / 仅管理员管理 |
-| CLAIM_TASK       | ✔     | ✖      | Member cannot steal tasks here / 成员不可在此抢任务 |
-| ASSIGN_OTHERS    | ✔     | ✖      | Only Admin can reassign / 仅管理员改派 |
+- PROJECT_MANAGER / LEAD: edit/delete/reassign/toggle completion / 项目经理/负责人：可编辑/删除/改派/切换完成
+- MEMBER: view only / 成员：只读查看
 
 #### 4. TEAM_ASSIGNED (团队-分配给我)
-| Operation / 操作 | ADMIN | MEMBER | Note / 说明 |
-|------------------|-------|--------|-------------|
-| EDIT_TASK        | ✔     | ✖      | Member cannot edit content / 成员不可改内容 |
-| TOGGLE_COMPLETE  | ✔     | ✔      | Member can complete own tasks / 成员可完成自己任务 |
-| ABANDON_TASK     | ✔     | ✔      | Member can abandon own tasks / 成员可放弃自己任务 |
-| ASSIGN_OTHERS    | ✔     | ✖      | Only Admin can reassign / 仅管理员改派 |
+- PROJECT_MANAGER / LEAD: edit/delete/reassign/toggle completion / 项目经理/负责人：可编辑/删除/改派/切换完成
+- MEMBER: toggle completion and abandon for own assigned tasks / 成员：可对“分配给自己”的任务完成/放弃
 
 ## 📜 Operation Logs / 操作日志
 - All effective team task operations (toggle complete, claim, abandon, assign others, save with changes) are validated by the Permission Center on the server and then recorded in the server console logs in a unified `[TEAM_OP]` format that includes player name, operation type, task ID, title and change details. / 所有有效的团队任务操作（完成状态切换、领取、放弃、指派他人、保存产生的实际变更）都会在服务器端先经过权限中心校验，然后以统一的 `[TEAM_OP]` 格式记录到服务器日志中，包含玩家名、操作类型、任务ID、标题以及变更详情。
@@ -173,13 +152,15 @@ The mod implements a unified server-side Permission Center that evaluates every 
 
 ### Build from Source / 从源码构建
 
+Requires Java 17+ / 需要 Java 17+（仓库提供 `build-with-java17.bat` 便于在 Windows 上构建）
+
 ```bash
 # Clone the repository / 克隆仓库
 git clone https://github.com/spacehouse/todoList.git
 cd todoList
 
 # Build the mod / 构建模组
-./gradlew build
+./build-with-java17.bat build
 
 # The JAR will be in build/libs/ / JAR文件位于build/libs/目录
 ```
@@ -193,19 +174,31 @@ todoList/
 │   ├── client/
 │   │   ├── TodoClient.java           # Client initialization & key bindings / 客户端初始化与按键绑定
 │   │   ├── TodoHudRenderer.java      # HUD renderer / HUD渲染
+│   │   ├── ClientProjectPackets.java # Client-side project networking / 客户端项目网络辅助
 │   │   ├── ClientTaskPackets.java    # Client-side network helpers / 客户端网络辅助
 │   │   └── ModMenuIntegration.java   # Mod Menu config integration / Mod Menu配置集成
 │   ├── config/
 │   │   └── ModConfig.java            # Configuration handling / 配置处理
 │   ├── gui/
+│   │   ├── AddProjectScreen.java     # Create project screen / 新建项目界面
+│   │   ├── ProjectSettingsScreen.java# Project settings & members / 项目设置与成员管理
+│   │   ├── AddMemberScreen.java      # Add member screen / 新增成员界面
+│   │   ├── ConfirmDeleteProjectScreen.java # Project delete confirm / 删除项目确认
+│   │   ├── ProjectListWidget.java    # Project sidebar list / 项目侧边栏列表
 │   │   ├── TodoScreen.java           # Main GUI / 主界面
 │   │   ├── TaskListWidget.java       # Task list widget / 任务列表组件
 │   │   ├── ScrollBar.java            # Scroll bar widget / 滚动条组件
 │   │   └── ConfigScreen.java         # HUD config GUI / HUD配置界面
 │   ├── network/
-│   │   └── TaskPackets.java          # Network packets / 网络包
+│   │   ├── TaskPackets.java          # Task networking / 任务网络包
+│   │   └── ProjectPackets.java       # Project networking / 项目网络包
 │   ├── permission/
 │   │   └── PermissionCenter.java     # Permission center / 权限中心
+│   ├── project/
+│   │   ├── Project.java              # Project model / 项目模型
+│   │   ├── ProjectManager.java       # Project manager / 项目管理器
+│   │   ├── ProjectStorage.java       # Project persistence / 项目持久化
+│   │   └── ProjectSaveDebouncer.java # Batched saves / 合并写入
 │   └── task/
 │       ├── Task.java                 # Task entity / 任务实体
 │       ├── TaskManager.java          # Task manager / 任务管理器
@@ -218,27 +211,8 @@ todoList/
 
 ## 📝 Roadmap / 开发路线
 
-### Phase 1: MVP ✅ (Current / 当前)
-- Basic task CRUD / 基础任务CRUD
-- Simple GUI / 简单GUI
-- Local storage / 本地存储
-
-### Phase 2: Enhanced Features / 增强功能
-- HUD display / HUD显示
-- Task filtering / 任务筛选
-- Priority system / 优先级系统
-- Command support / 命令支持
-
-### Phase 3: Multiplayer / 多人支持
-- Server-client sync / 服务器-客户端同步
-- Player data storage / 玩家数据存储
-- Network packets / 网络包通信
-
-### Phase 4: Advanced Features / 高级功能
-- Task book item / 任务书物品
-- Task rewards / 任务奖励
-- Sign board integration / 告示牌集成
-- Subtasks / 子任务
+See / 详见：
+- [ROADMAP.md](ROADMAP.md) / [ROADMAP_EN.md](ROADMAP_EN.md)
 
 ## 🤝 Contributing / 贡献
 

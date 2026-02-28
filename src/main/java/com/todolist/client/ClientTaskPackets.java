@@ -81,6 +81,9 @@ public class ClientTaskPackets {
     }
 
     public static void sendAddTask(Task task) {
+        if (task == null) {
+            return;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.getNetworkHandler() == null) {
             return;
@@ -94,6 +97,9 @@ public class ClientTaskPackets {
     }
 
     public static void sendUpdateTask(Task task) {
+        if (task == null) {
+            return;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.getNetworkHandler() == null) {
             return;

@@ -68,6 +68,7 @@ public class TodoHudRenderer {
         refreshTasksIfNeeded();
 
         List<Task> baseTasks = getBaseTasksForView();
+        baseTasks = filterTasksByProjectSource(baseTasks);
         List<Task> displayTasks = getDisplayTasks(baseTasks);
         if (displayTasks.isEmpty() && !ModConfig.getInstance().isHudShowWhenEmpty()) {
             return;
@@ -283,9 +284,10 @@ public class TodoHudRenderer {
     }
 
     private void drawBackgroundPanel(DrawContext context, int x, int y, int width, int height) {
-        // Semi-transparent black background
-        context.fill(x, y, x + width, y + height, 0xDD000000);
-        // Border
+        ModConfig cfg = ModConfig.getInstance();
+        double opacity = cfg.getHudOpacity();
+        int a = (int) Math.round(Math.max(0.0, Math.min(1.0, opacity)) * 255.0);
+        context.fill(x, y, x + width, y + height, (a << 24));
         context.drawBorder(x, y, width, height, 0xFF3F3F3F);
     }
 
@@ -311,6 +313,9 @@ public class TodoHudRenderer {
         ModConfig cfg = ModConfig.getInstance();
         String view = cfg.getHudDefaultView();
         if (client != null && client.isInSingleplayer()) {
+            return "PERSONAL";
+        }
+        if (view != null && view.toUpperCase().startsWith("TEAM_") && !TodoClient.isTeamProjectsEnabled()) {
             return "PERSONAL";
         }
         return view;
@@ -343,6 +348,43 @@ public class TodoHudRenderer {
                     .collect(Collectors.toList());
         }
         return tasks;
+    }
+
+    private List<Task> filterTasksByProjectSource(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) return tasks;
+
+        ModConfig cfg = ModConfig.getInstance();
+        String source = cfg.getHudProjectSource();
+        if (source == null || source.isEmpty() || "ALL".equalsIgnoreCase(source)) {
+            return tasks;
+        }
+
+        if ("STARRED".equalsIgnoreCase(source)) {
+            List<String> starred = cfg.getHudStarredProjectIds();
+            if (starred.isEmpty()) {
+                String current = TodoClient.getActiveProjectId();
+                if (current == null || current.isEmpty() || TodoListMod.getProjectManager().getProject(current) == null) {
+                    return tasks;
+                }
+                return tasks.stream()
+                        .filter(t -> current.equals(t.getProjectId()))
+                        .collect(Collectors.toList());
+            }
+            return tasks.stream()
+                    .filter(t -> {
+                        String pid = t.getProjectId();
+                        return pid != null && starred.contains(pid);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        String current = TodoClient.getActiveProjectId();
+        if (current == null || current.isEmpty() || TodoListMod.getProjectManager().getProject(current) == null) {
+            return tasks;
+        }
+        return tasks.stream()
+                .filter(t -> current.equals(t.getProjectId()))
+                .collect(Collectors.toList());
     }
 
     private List<Task> getDisplayTasks(List<Task> sourceTasks) {

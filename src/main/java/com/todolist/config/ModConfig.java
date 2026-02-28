@@ -11,6 +11,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Mod configuration
@@ -38,7 +40,7 @@ public class ModConfig {
 
     public static class GuiConfig {
         // Main window size
-        private int guiWidth = 400;
+        private int guiWidth = 500;
         private int guiHeight = 400;
 
         // Task list
@@ -58,7 +60,7 @@ public class ModConfig {
         private int completeButtonYOffset = -85;
 
         // Colors
-        private int backgroundColor = 0xFF000000;
+        private int backgroundColor = 0x88000000;
         private int selectedBackgroundColor = 0xFF555555;
         private int hoveredBackgroundColor = 0xFF333333;
         private int borderColor = 0xFF3F3F3F;
@@ -74,15 +76,22 @@ public class ModConfig {
         private boolean sortByPriority = false;
         private String hudPosition = "TOP_RIGHT";
         private int hudWidth = 200;
-        private int hudMaxHeight = 120;
+        private int hudMaxHeight = 400;
         private int hudTodoLimit = 5;
         private int hudDoneLimit = 5;
         private boolean hudDefaultExpanded = true;
+        private Double hudOpacity = 0.85;
         private boolean hudUseCustomPosition = false;
         private int hudCustomX = 10;
         private int hudCustomY = 10;
         private boolean hudShowWhenEmpty = false;
         private String hudDefaultView = "PERSONAL";
+        private String hudProjectSource = "ALL";
+        private List<String> hudStarredProjectIds = new ArrayList<>();
+        
+        // Project Sidebar
+        private int projectSidebarWidth = 100;
+        private int projectSidebarHeight = 200;
     }
 
     /**
@@ -93,8 +102,16 @@ public class ModConfig {
             try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
                 instance = GSON.fromJson(reader, ModConfig.class);
                 TodoListMod.LOGGER.info("Loaded configuration from {}", CONFIG_PATH);
+                boolean changed = instance == null || instance.normalize();
+                if (instance == null) {
+                    instance = new ModConfig();
+                    changed = true;
+                }
                 if (instance.gui.guiHeight < 400) {
                     instance.gui.guiHeight = 400;
+                    changed = true;
+                }
+                if (changed) {
                     save();
                 }
             } catch (IOException e) {
@@ -106,6 +123,42 @@ public class ModConfig {
             save();
             TodoListMod.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
         }
+    }
+
+    private boolean normalize() {
+        boolean changed = false;
+        if (gui == null) {
+            gui = new GuiConfig();
+            return true;
+        }
+        if (gui.backgroundColor == 0xFF000000) {
+            gui.backgroundColor = 0x88000000;
+            changed = true;
+        }
+        if (gui.hudDefaultView == null || gui.hudDefaultView.isEmpty()) {
+            gui.hudDefaultView = "PERSONAL";
+            changed = true;
+        }
+        if (gui.hudProjectSource == null || gui.hudProjectSource.isEmpty()) {
+            gui.hudProjectSource = "ALL";
+            changed = true;
+        }
+        if (gui.hudStarredProjectIds == null) {
+            gui.hudStarredProjectIds = new ArrayList<>();
+            changed = true;
+        }
+        if (gui.hudOpacity == null) {
+            gui.hudOpacity = 0.85;
+            changed = true;
+        } else {
+            double clamped = Math.max(0.0, Math.min(1.0, gui.hudOpacity));
+            double stepped = Math.round(clamped * 10.0) / 10.0;
+            if (Double.compare(stepped, gui.hudOpacity) != 0) {
+                gui.hudOpacity = stepped;
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /**
@@ -354,6 +407,23 @@ public class ModConfig {
         save();
     }
 
+    public double getHudOpacity() {
+        if (gui.hudOpacity == null) {
+            gui.hudOpacity = 0.85;
+        }
+        double v = gui.hudOpacity;
+        if (v < 0.0) v = 0.0;
+        if (v > 1.0) v = 1.0;
+        return v;
+    }
+
+    public void setHudOpacity(double opacity) {
+        double clamped = Math.max(0.0, Math.min(1.0, opacity));
+        double stepped = Math.round(clamped * 10.0) / 10.0;
+        gui.hudOpacity = stepped;
+        save();
+    }
+
     public boolean isHudUseCustomPosition() { return gui.hudUseCustomPosition; }
     public void setHudUseCustomPosition(boolean useCustom) {
         gui.hudUseCustomPosition = useCustom;
@@ -390,6 +460,61 @@ public class ModConfig {
             return;
         }
         gui.hudDefaultView = view;
+        save();
+    }
+
+    public String getHudProjectSource() {
+        if (gui.hudProjectSource == null || gui.hudProjectSource.isEmpty()) {
+            gui.hudProjectSource = "ALL";
+        }
+        return gui.hudProjectSource;
+    }
+
+    public void setHudProjectSource(String source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        gui.hudProjectSource = source;
+        save();
+    }
+
+    public List<String> getHudStarredProjectIds() {
+        if (gui.hudStarredProjectIds == null) {
+            gui.hudStarredProjectIds = new ArrayList<>();
+        }
+        return new ArrayList<>(gui.hudStarredProjectIds);
+    }
+
+    public boolean isHudProjectStarred(String projectId) {
+        if (projectId == null || projectId.isEmpty()) return false;
+        if (gui.hudStarredProjectIds == null) {
+            gui.hudStarredProjectIds = new ArrayList<>();
+        }
+        return gui.hudStarredProjectIds.contains(projectId);
+    }
+
+    public void toggleHudStarredProjectId(String projectId) {
+        if (projectId == null || projectId.isEmpty()) return;
+        if (gui.hudStarredProjectIds == null) {
+            gui.hudStarredProjectIds = new ArrayList<>();
+        }
+        if (gui.hudStarredProjectIds.contains(projectId)) {
+            gui.hudStarredProjectIds.remove(projectId);
+        } else {
+            gui.hudStarredProjectIds.add(projectId);
+        }
+        save();
+    }
+
+    public int getProjectSidebarWidth() { return gui.projectSidebarWidth; }
+    public void setProjectSidebarWidth(int width) {
+        gui.projectSidebarWidth = width;
+        save();
+    }
+    
+    public int getProjectSidebarHeight() { return gui.projectSidebarHeight; }
+    public void setProjectSidebarHeight(int height) {
+        gui.projectSidebarHeight = height;
         save();
     }
 }

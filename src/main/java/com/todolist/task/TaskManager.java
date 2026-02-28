@@ -120,6 +120,16 @@ public class TaskManager {
     }
 
     /**
+     * Get tasks by project ID
+     */
+    public List<Task> getTasksByProject(String projectId) {
+        return tasks.values().stream()
+                .filter(t -> Objects.equals(t.getProjectId(), projectId))
+                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Get tasks with specific tag
      */
     public List<Task> getTasksByTag(String tag) {
