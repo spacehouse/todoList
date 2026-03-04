@@ -1,0 +1,8 @@
+[10:00:01 INFO] bootstrap start
+[10:00:02 INFO] COMMAND_RESULT_TRIPLET code=1 messageKey=command.todolist.result.none sideEffects=[NONE]
+[10:00:03 INFO] COMMAND_RESULT_TRIPLET code=1 messageKey=command.todolist.result.none sideEffects=[NONE]
+[10:00:04 INFO] COMMAND_RESULT_TRIPLET code=1 messageKey=command.todolist.task.done.success sideEffects=[PERSIST_DATA,REFRESH_HUD]
+[10:00:05 INFO] COMMAND_RESULT_TRIPLET code=1 messageKey=command.todolist.hud.toggle sideEffects=[REFRESH_HUD]
+[10:00:06 INFO] COMMAND_RESULT_TRIPLET code=1 messageKey=command.todolist.join.accept.success sideEffects=[PERSIST_DATA]
+[10:00:07 INFO] COMMAND_RESULT_TRIPLET code=0 messageKey=command.todolist.permission_denied sideEffects=[NONE]
+[10:00:08 INFO] regression finished

@@ -1,0 +1,40 @@
+name: release-precheck-minimal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  precheck:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure report directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path .\build\reports -Force | Out-Null
+
+      - name: Run release precheck
+        shell: cmd
+        run: |
+          release-precheck.bat ".\tools\triplet-compare\log-sample.txt" ".\tools\triplet-compare\baseline-sample.json" ".\build\reports\triplet-diff.json" false build
+
+      - name: Upload triplet diff report
+        uses: actions/upload-artifact@v4
+        with:
+          name: triplet-diff
+          path: build/reports/triplet-diff.json
+          if-no-files-found: error

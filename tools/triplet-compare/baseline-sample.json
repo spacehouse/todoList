@@ -1,0 +1,55 @@
+{
+  "name": "COMMAND_RESULT_TRIPLET baseline sample",
+  "description": "示例基线：用于演示 code/messageKey/sideEffects 三元组自动比对流程。",
+  "triplets": [
+    {
+      "caseId": "todo.help",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": [
+        "NONE"
+      ]
+    },
+    {
+      "caseId": "todo.task.list",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": [
+        "NONE"
+      ]
+    },
+    {
+      "caseId": "todo.task.done.success",
+      "code": 1,
+      "messageKey": "command.todolist.task.done.success",
+      "sideEffects": [
+        "PERSIST_DATA",
+        "REFRESH_HUD"
+      ]
+    },
+    {
+      "caseId": "todo.hud.toggle",
+      "code": 1,
+      "messageKey": "command.todolist.hud.toggle",
+      "sideEffects": [
+        "REFRESH_HUD"
+      ]
+    },
+    {
+      "caseId": "todo.join.accept",
+      "code": 1,
+      "messageKey": "command.todolist.join.accept.success",
+      "sideEffects": [
+        "PERSIST_DATA"
+      ]
+    },
+    {
+      "caseId": "todo.permission.denied",
+      "code": 0,
+      "messageKey": "command.todolist.permission_denied",
+      "sideEffects": [
+        "NONE"
+      ]
+    }
+  ]
+}
