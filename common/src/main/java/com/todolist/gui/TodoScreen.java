@@ -8,6 +8,7 @@ import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -90,6 +91,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private ButtonWidget applyJoinProjectBtn;
     private Project.Scope projectScopeFilter = Project.Scope.PERSONAL;
     private String projectSearchQuery = "";
+    private String preferredPersonalProjectId;
+    private String preferredTeamProjectId;
     private boolean teamProjectsEnabled = true;
     
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
@@ -112,9 +115,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         String currentFilter;
         String searchQuery;
         String projectSearchQuery;
+        String lastPersonalProjectId;
+        String lastTeamProjectId;
     }
 
 
+    /**
+     * 创建主界面，并在关闭时返回到父界面。
+     */
     public TodoScreen(Screen parent) {
         super(TITLE);
         this.parent = parent;
@@ -143,7 +151,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         // Initialize ProjectManager
         projectManager = TodoListCommon.getProjectManager();
         projectManager.addListener(this);
-
         teamProjectsEnabled = ClientBridge.ops().isTeamProjectsEnabled();
         if (!teamProjectsEnabled) {
             projectScopeFilter = Project.Scope.PERSONAL;
@@ -166,36 +173,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         if (currentProject == null) {
-            // Default to first personal project
-            List<Project> projects = projectManager.getProjectsByScope(Project.Scope.PERSONAL);
-            if (!projects.isEmpty()) {
-                currentProject = projects.get(0);
-            } else if (teamProjectsEnabled) {
-                List<Project> teamProjects = projectManager.getProjectsByScope(Project.Scope.TEAM);
-                if (!teamProjects.isEmpty()) {
-                    currentProject = teamProjects.get(0);
-                }
-            }
+            currentProject = getPreferredProjectForScope(projectScopeFilter);
+        }
+        if (currentProject != null) {
+            rememberSelectedProject(currentProject);
+            projectScopeFilter = currentProject.getScope();
         }
         
         // Ensure taskManager matches currentProject
         if (currentProject != null) {
             if (!teamProjectsEnabled || currentProject.getScope() == Project.Scope.PERSONAL) {
-                // For Personal Project, we should use a project-specific task manager or filter the main one?
-                // Currently personalTaskManager loads ALL personal tasks.
-                // Requirement 4: "Different personal projects still show the same task list, personal projects should be local and independent"
-                // So we need to filter personalTaskManager by project ID.
-                taskManager = new TaskManager(); // Temporary manager for view? Or just use personalTaskManager and filter?
-                // Better: Use personalTaskManager but filter in `rebuildUI` by project ID.
-                // But `taskManager` is used for add/delete etc.
-                // If we add to `personalTaskManager`, we need to set Project ID.
                 taskManager = personalTaskManager;
                 viewMode = ViewMode.PERSONAL;
             } else {
                 taskManager = teamTaskManager;
-                // Default to ALL if switching to team
                 if (viewMode == ViewMode.PERSONAL) {
-                    viewMode = ViewMode.TEAM_UNASSIGNED; // Default to UNASSIGNED for team
+                    viewMode = ViewMode.TEAM_UNASSIGNED;
                 }
             }
         } else {
@@ -203,7 +196,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             viewMode = ViewMode.PERSONAL;
         }
 
-        ClientBridge.ops().setActiveProjectId(currentProject != null ? currentProject.getId() : null);
+        syncActiveProjectIdWithCurrentProject();
         hasUnsavedChanges = (viewMode == ViewMode.PERSONAL) ? personalHasUnsavedChanges : teamHasUnsavedChanges;
 
         rebuildUI();
@@ -229,6 +222,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (lastGuiState.projectSearchQuery != null) {
             projectSearchQuery = lastGuiState.projectSearchQuery;
         }
+        preferredPersonalProjectId = lastGuiState.lastPersonalProjectId;
+        preferredTeamProjectId = lastGuiState.lastTeamProjectId;
 
         if (lastGuiState.viewMode != null) {
             viewMode = lastGuiState.viewMode;
@@ -250,11 +245,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (p != null && (teamProjectsEnabled || p.getScope() == Project.Scope.PERSONAL)) {
                 currentProject = p;
                 projectScopeFilter = p.getScope();
+                rememberSelectedProject(p);
             }
         }
     }
 
     private void saveLastGuiState() {
+        rememberSelectedProject(currentProject);
         LastGuiState s = new LastGuiState();
         s.projectScopeFilter = projectScopeFilter;
         s.currentProjectId = currentProject == null ? null : currentProject.getId();
@@ -263,6 +260,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         s.currentFilter = currentFilter;
         s.searchQuery = searchQuery;
         s.projectSearchQuery = projectSearchQuery;
+        s.lastPersonalProjectId = preferredPersonalProjectId;
+        s.lastTeamProjectId = preferredTeamProjectId;
         lastGuiState = s;
     }
 
@@ -271,42 +270,88 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (this.client == null) return;
         this.client.execute(() -> {
             if (type == ProjectManager.ProjectChangeType.CLEARED) {
-                currentProject = null;
-                // Reset view mode if needed
-                viewMode = ViewMode.PERSONAL; 
-                init(); // Re-initialize to pick a default project
+                switchProject(null);
                 return;
             }
 
             if (project == null) return;
 
             if (type == ProjectManager.ProjectChangeType.REMOVED) {
+                hardDeleteTasksForDeletedProject(project);
                 if (currentProject != null && currentProject.getId().equals(project.getId())) {
-                    currentProject = null;
-                    init(); // Re-initialize to pick another project
+                    switchProject(resolveFallbackProjectAfterRemoval(project));
                 } else {
-                    updateProjectList();
+                    refreshAfterProjectMutation();
                 }
             } else if (type == ProjectManager.ProjectChangeType.ADDED) {
-                updateProjectList();
-                // Optional: Auto-select newly created project?
-                // Only if user just created it? Hard to tell here.
+                if (currentProject == null) {
+                    switchProject(resolvePreferredProjectForCurrentScope());
+                } else {
+                    refreshAfterProjectMutation();
+                }
             } else if (type == ProjectManager.ProjectChangeType.UPDATED) {
                 if (currentProject != null && currentProject.getId().equals(project.getId())) {
-                    currentProject = project; // Update reference
-                    // Rebuild UI to update title/permissions
-                    // But rebuildUI is heavy. Maybe just updateProjectList() and specific fields?
-                    // Permissions might change, so init() or rebuildUI() is safer.
-                    // But init() resets everything.
-                    // Let's just update project list and maybe settings button state.
-                    updateProjectList();
-                    // If name changed, we might need to update displayed name in UI if any.
-                    // If scope changed (unlikely), we might need to switch view.
-                } else {
-                    updateProjectList();
+                    currentProject = project;
                 }
+                refreshAfterProjectMutation();
             }
         });
+    }
+
+    /**
+     * 项目增删改后执行轻量刷新，避免整页重新初始化。
+     */
+    private void refreshAfterProjectMutation() {
+        syncActiveProjectIdWithCurrentProject();
+        updateProjectList();
+        refreshTaskList();
+        updateButtonStates();
+        updateProjectActionButtons();
+    }
+
+    /**
+     * 将 activeProjectId 与当前项目状态对齐，避免残留失效项目 ID。
+     */
+    private void syncActiveProjectIdWithCurrentProject() {
+        if (currentProject == null || projectManager == null) {
+            ClientBridge.ops().setActiveProjectId(null);
+            return;
+        }
+        Project fresh = projectManager.getProject(currentProject.getId());
+        if (fresh == null) {
+            currentProject = null;
+            ClientBridge.ops().setActiveProjectId(null);
+            return;
+        }
+        currentProject = fresh;
+        ClientBridge.ops().setActiveProjectId(currentProject.getId());
+    }
+
+    /**
+     * 当前项目被删除时，按当前 scope 优先选择一个可用项目，允许为空。
+     */
+    private Project resolveFallbackProjectAfterRemoval(Project removedProject) {
+        Project preferred = resolvePreferredProjectForCurrentScope();
+        if (preferred != null) {
+            return preferred;
+        }
+        if (removedProject != null) {
+            Project.Scope fallbackScope = removedProject.getScope() == Project.Scope.PERSONAL ? Project.Scope.TEAM : Project.Scope.PERSONAL;
+            return getPreferredProjectForScope(fallbackScope);
+        }
+        return null;
+    }
+
+    /**
+     * 按当前 scope 选择首选项目，不可用时回退到另一 scope。
+     */
+    private Project resolvePreferredProjectForCurrentScope() {
+        Project preferred = getPreferredProjectForScope(projectScopeFilter);
+        if (preferred != null) {
+            return preferred;
+        }
+        Project.Scope fallbackScope = projectScopeFilter == Project.Scope.PERSONAL ? Project.Scope.TEAM : Project.Scope.PERSONAL;
+        return getPreferredProjectForScope(fallbackScope);
     }
 
     private void rebuildUI() {
@@ -423,12 +468,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         projectScopeButton = ButtonWidget.builder(getProjectScopeText(), b -> {
             if (!teamProjectsEnabled) return;
             projectScopeFilter = (projectScopeFilter == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
-            List<Project> projects = projectManager.getProjectsByScope(projectScopeFilter);
-            if (!projects.isEmpty()) {
-                switchProject(projects.get(0));
-            } else {
-                switchProject(null);
-            }
+            Project targetProject = getPreferredProjectForScope(projectScopeFilter);
+            switchProject(targetProject);
         }).dimensions(x + padding, sidebarTopY, sidebarWidth, sidebarScopeBtnHeight).build();
         projectScopeButton.active = teamProjectsEnabled;
         this.addDrawableChild(projectScopeButton);
@@ -548,7 +589,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 case MEDIUM: base = Text.translatable("gui.todolist.priority.medium").getString(); break;
                 case LOW: default: base = Text.translatable("gui.todolist.priority.low").getString(); break;
             }
-            String buttonText = (priority == Task.Priority.HIGH ? "搂c[" : priority == Task.Priority.MEDIUM ? "搂e[" : "搂a[") + base + "]";
+            String buttonText = (priority == Task.Priority.HIGH ? "§c[" : priority == Task.Priority.MEDIUM ? "§e[" : "§a[") + base + "]";
             int index = i;
             priorityButtons[i] = ButtonWidget.builder(Text.of(buttonText), button -> {
                 setSelectedPriority(priority);
@@ -967,6 +1008,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     // Event handlers
 
     private void onAddTask() {
+        if (currentProject == null) {
+            addNotification(Text.translatable("message.todolist.select_project_first").getString());
+            return;
+        }
         if (!isAddTaskAllowedInCurrentView()) {
             addNotification(Text.translatable("message.todolist.add_not_allowed_in_view").getString());
             return;
@@ -1085,21 +1130,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return false;
         }
         if (currentProject == null) {
-            return true;
+            return false;
         }
         String selectedId = selectedTask.getId();
         if (selectedId == null || selectedId.isEmpty()) {
             return false;
         }
-        boolean inProject = false;
         String projectId = currentProject.getId();
-        String taskProjectId = selectedTask.getProjectId();
-        if (projectId != null && projectId.equals(taskProjectId)) {
-            inProject = true;
-        } else if (taskProjectId == null && currentProject.getScope() == Project.Scope.PERSONAL && isDefaultProject(currentProject)) {
-            inProject = true;
-        }
-        if (!inProject) {
+        if (!selectedTask.belongsToProject(projectId)) {
             return false;
         }
         if (filteredTasks == null) {
@@ -1145,6 +1183,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (addButton != null) {
             if (hasSelection) {
+                addButton.active = false;
+            } else if (currentProject == null) {
                 addButton.active = false;
             } else if (viewMode == ViewMode.PERSONAL) {
                 addButton.active = true;
@@ -1347,6 +1387,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         all.addAll(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
         all.addAll(projectManager.getProjectsByScope(Project.Scope.TEAM));
         
+        Project defaultProject = null;
+        for (Project p : all) {
+            if (p == null) continue;
+            if (p.getScope() != projectScopeFilter) continue;
+            if (projectScopeFilter == Project.Scope.PERSONAL && p.isDefaultPersonalProject()) {
+                defaultProject = p;
+                break;
+            }
+            if (projectScopeFilter == Project.Scope.TEAM && p.isDefaultTeamProject()) {
+                defaultProject = p;
+                break;
+            }
+        }
+
         List<Project> filtered = new ArrayList<>();
         String q = projectSearchQuery.toLowerCase().trim();
         
@@ -1355,9 +1409,24 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (p.getScope() != projectScopeFilter) continue;
             
             // Name filter
-            if (!q.isEmpty() && !p.getName().toLowerCase().contains(q)) continue;
+            String searchableName = ProjectNameFormatter.toDisplayText(p).getString().toLowerCase();
+            if (!q.isEmpty() && !searchableName.contains(q)) continue;
             
             filtered.add(p);
+        }
+
+        if (defaultProject != null) {
+            boolean exists = false;
+            String id = defaultProject.getId();
+            for (Project p : filtered) {
+                if (p != null && id != null && id.equals(p.getId())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                filtered.add(0, defaultProject);
+            }
         }
         
         projectListWidget.setProjects(filtered);
@@ -1611,28 +1680,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
     
-    // NEW METHODS
-    
     private List<Task> applyAssignedFilterIfNeeded(List<Task> tasks) {
-        // First, filter by Project ID
+        if (currentProject == null) {
+            return new ArrayList<>();
+        }
         List<Task> projectFiltered = new ArrayList<>();
-        if (currentProject != null) {
-            for (Task t : tasks) {
-                // For Personal Scope, check if task belongs to this project
-                // For Team Scope, check if task belongs to this project
-                // Assuming Task has getProjectId().
-                // If legacy task has no project ID, what to do?
-                // If Task doesn't have projectId field yet, we need to add it.
-                // Assuming it was added in previous steps.
-                if (currentProject.getId().equals(t.getProjectId())) {
-                    projectFiltered.add(t);
-                } else if (t.getProjectId() == null && currentProject.getScope() == Project.Scope.PERSONAL && isDefaultProject(currentProject)) {
-                     // Legacy tasks -> Default Project
-                     projectFiltered.add(t);
-                }
+        for (Task t : tasks) {
+            if (t.belongsToProject(currentProject.getId())) {
+                projectFiltered.add(t);
             }
-        } else {
-            projectFiltered = tasks;
         }
         
         List<Task> result = new ArrayList<>();
@@ -1655,7 +1711,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             return result;
         } else if (viewMode == ViewMode.TEAM_ALL) {
-            // "Team 路 Assigned" (All assigned tasks)
             for (Task t : projectFiltered) {
                 String assignee = t.getAssigneeUuid();
                 if (assignee != null && !assignee.isEmpty()) {
@@ -1665,11 +1720,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return result;
         }
         return projectFiltered;
-    }
-    
-    private boolean isDefaultProject(Project p) {
-        // Only the project with the specific translation key is default
-        return "gui.todolist.project.default.personal".equals(p.getName());
     }
     
     private boolean isTrueSingleplayer() {
@@ -1693,6 +1743,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void switchProject(Project project) {
         this.selectedTask = null;
         this.currentProject = project;
+        rememberSelectedProject(project);
 
         if (project == null) {
             this.taskManager = this.personalTaskManager;
@@ -1706,6 +1757,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Text.translatable("message.todolist.team_disabled").getString());
             return;
         }
+        projectScopeFilter = project.getScope();
         ClientBridge.ops().setActiveProjectId(project.getId());
         
         if (project.getScope() == Project.Scope.PERSONAL) {
@@ -1719,6 +1771,68 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         
         rebuildUI();
+    }
+
+    /**
+     * 当项目删除时，立即从本地任务管理器硬删除关联任务。
+     */
+    private void hardDeleteTasksForDeletedProject(Project deletedProject) {
+        if (deletedProject == null || deletedProject.getId() == null || deletedProject.getId().isEmpty()) {
+            return;
+        }
+        String deletedProjectId = deletedProject.getId();
+        hardDeleteProjectTasksInManager(personalTaskManager, deletedProjectId);
+        hardDeleteProjectTasksInManager(teamTaskManager, deletedProjectId);
+    }
+
+    /**
+     * 在指定任务管理器中删除目标项目下全部任务。
+     */
+    private void hardDeleteProjectTasksInManager(TaskManager manager, String deletedProjectId) {
+        if (manager == null || deletedProjectId == null || deletedProjectId.isEmpty()) {
+            return;
+        }
+        manager.deleteTasksByProjectId(deletedProjectId);
+    }
+
+    private void rememberSelectedProject(Project project) {
+        if (project == null || project.getId() == null || project.getId().isEmpty()) {
+            return;
+        }
+        if (project.getScope() == Project.Scope.TEAM) {
+            preferredTeamProjectId = project.getId();
+        } else {
+            preferredPersonalProjectId = project.getId();
+        }
+    }
+
+    private Project getPreferredProjectForScope(Project.Scope scope) {
+        if (scope == null) {
+            return null;
+        }
+        if (scope == Project.Scope.TEAM && !teamProjectsEnabled) {
+            return null;
+        }
+        String preferredId = scope == Project.Scope.TEAM ? preferredTeamProjectId : preferredPersonalProjectId;
+        if (preferredId != null && !preferredId.isEmpty()) {
+            Project preferred = projectManager.getProject(preferredId);
+            if (preferred != null && preferred.getScope() == scope) {
+                return preferred;
+            }
+        }
+        List<Project> projects = projectManager.getProjectsByScope(scope);
+        if (projects.isEmpty()) {
+            return null;
+        }
+        for (Project p : projects) {
+            if (scope == Project.Scope.PERSONAL && p.isDefaultPersonalProject()) {
+                return p;
+            }
+            if (scope == Project.Scope.TEAM && p.isDefaultTeamProject()) {
+                return p;
+            }
+        }
+        return projects.get(0);
     }
     
     private void onAddProject() {
@@ -1745,6 +1859,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private boolean canDeleteCurrentProject() {
         if (currentProject == null || this.client == null || this.client.player == null) {
+            return false;
+        }
+        if (currentProject.isDefaultPersonalProject() || currentProject.isDefaultTeamProject()) {
             return false;
         }
         String uuid = this.client.player.getUuid().toString();
@@ -1783,7 +1900,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Text.translatable("message.todolist.no_permission_delete_project").getString());
             return;
         }
-        String projectName = Text.translatable(currentProject.getName()).getString();
+        String projectName = ProjectNameFormatter.toDisplayText(currentProject).getString();
         Text message = Text.translatable("gui.todolist.project.delete_confirm.message", projectName);
         client.setScreen(new ConfirmDeleteProjectScreen(this, message, () -> {
             ClientBridge.ops().sendDeleteProject(currentProject.getId());

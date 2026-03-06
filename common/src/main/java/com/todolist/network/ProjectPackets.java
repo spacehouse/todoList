@@ -9,8 +9,11 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.task.Task;
+import com.todolist.task.TaskStorage;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -44,6 +47,9 @@ public class ProjectPackets {
     public static final Identifier UPDATE_MEMBER_ROLE_ID = new Identifier(TodoConstants.MOD_ID, "update_member_role");
     public static final Identifier REQUEST_JOIN_PROJECT_ID = new Identifier(TodoConstants.MOD_ID, "request_join_project");
 
+    /**
+     * 在服务端注册项目/成员相关的全局接收器，并在玩家加入时同步可见项目列表。
+     */
     public static void registerServerPackets() {
         // ADD_PROJECT
         ServerPlayNetworking.registerGlobalReceiver(ADD_PROJECT_ID, (server, player, handler, buf, responseSender) -> {
@@ -261,6 +267,12 @@ public class ProjectPackets {
     }
 
     private static void handleDeleteProject(MinecraftServer server, ServerPlayerEntity player, String projectId) {
+        if (ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID.equals(projectId) ||
+            ProjectNameFormatter.DEFAULT_TEAM_PROJECT_ID.equals(projectId)) {
+             TodoConstants.LOGGER.warn("Player {} tried to delete default project {}", player.getName().getString(), projectId);
+             return;
+        }
+
         ProjectManager manager = TodoListCommon.getProjectManager();
         Project existingProject = manager.getProject(projectId);
 
@@ -284,18 +296,87 @@ public class ProjectPackets {
         }
 
         manager.deleteProject(projectId);
+        purgeDeletedProjectTasks(existingProject.getScope(), projectId, player);
 
-        // Save
-        saveProjects(server, existingProject.getScope());
-
-        // Sync
         if (existingProject.getScope() == Project.Scope.PERSONAL) {
+            saveProjects(server, Project.Scope.PERSONAL);
             syncProjectsToPlayer(player);
         } else {
+            saveProjects(server, existingProject.getScope());
             broadcastProjects(server);
+            TaskPackets.broadcastTeamTasks(server);
         }
         
         TodoConstants.LOGGER.info("Player {} deleted project: {}", player.getName().getString(), projectId);
+    }
+
+    /**
+     * 按项目范围从存储中硬删除被删项目关联的任务。
+     */
+    private static void purgeDeletedProjectTasks(Project.Scope scope, String projectId, ServerPlayerEntity player) {
+        if (scope == null || projectId == null || projectId.isEmpty() || player == null) {
+            return;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        if (scope == Project.Scope.PERSONAL) {
+            purgeDeletedProjectTasksInPlayerFile(storage, player, projectId);
+            purgeDeletedProjectTasksInSingleFile(storage, projectId);
+            return;
+        }
+        if (scope == Project.Scope.TEAM) {
+            purgeDeletedProjectTasksInTeamFile(storage, projectId);
+        }
+    }
+
+    /**
+     * 在玩家任务文件中删除指定项目的任务。
+     */
+    private static void purgeDeletedProjectTasksInPlayerFile(TaskStorage storage, ServerPlayerEntity player, String projectId) {
+        try {
+            List<Task> tasks = storage.loadPlayerTasks(player.getUuid());
+            if (removeTasksByProjectId(tasks, projectId)) {
+                storage.savePlayerTasks(player.getUuid(), tasks);
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to purge deleted project tasks in player task file, projectId={}", projectId, e);
+        }
+    }
+
+    /**
+     * 在单文件任务存储中删除指定项目的任务。
+     */
+    private static void purgeDeletedProjectTasksInSingleFile(TaskStorage storage, String projectId) {
+        try {
+            List<Task> tasks = storage.loadTasks();
+            if (removeTasksByProjectId(tasks, projectId)) {
+                storage.saveTasks(tasks);
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to purge deleted project tasks in local task file, projectId={}", projectId, e);
+        }
+    }
+
+    /**
+     * 在团队任务文件中删除指定项目的任务。
+     */
+    private static void purgeDeletedProjectTasksInTeamFile(TaskStorage storage, String projectId) {
+        try {
+            List<Task> tasks = storage.loadTeamTasks();
+            if (removeTasksByProjectId(tasks, projectId)) {
+                storage.saveTeamTasks(tasks);
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to purge deleted project tasks in team task file, projectId={}", projectId, e);
+        }
+    }
+
+    /**
+     * 从任务集合中删除关联到指定项目的任务。
+     */
+    private static boolean removeTasksByProjectId(List<Task> tasks, String projectId) {
+        int beforeSize = tasks.size();
+        tasks.removeIf(task -> task != null && task.belongsToProject(projectId));
+        return beforeSize != tasks.size();
     }
 
     private static void handleAddMember(MinecraftServer server, ServerPlayerEntity player, String projectId, String memberUuid, String memberName) {
@@ -470,6 +551,9 @@ public class ProjectPackets {
         }
     }
 
+    /**
+     * 处理“加入项目申请”的审批结果，并向相关玩家发送提示与同步。
+     */
     public static void handleJoinDecision(MinecraftServer server, ServerPlayerEntity approver, String projectId, String applicantUuid, boolean accepted) {
         if (server == null || approver == null || projectId == null || projectId.isEmpty() || applicantUuid == null || applicantUuid.isEmpty()) {
             return;
@@ -525,17 +609,7 @@ public class ProjectPackets {
     }
 
     private static MutableText getProjectDisplayName(Project project) {
-        if (project == null) {
-            return Text.empty();
-        }
-        String name = project.getName();
-        if (name == null) {
-            return Text.empty();
-        }
-        if (name.startsWith("gui.todolist.") || name.startsWith("item.") || name.startsWith("block.")) {
-            return Text.translatable(name);
-        }
-        return Text.literal(name);
+        return ProjectNameFormatter.toDisplayText(project);
     }
 
     private static Role getRole(ServerPlayerEntity player, Project project) {
@@ -580,7 +654,10 @@ public class ProjectPackets {
             if (p == null) {
                 continue;
             }
-            if (playerUuid.equals(p.getOwnerUuid())) {
+            String ownerUuid = p.getOwnerUuid();
+            boolean isOwnedByPlayer = playerUuid.equals(ownerUuid);
+            boolean isUnownedDefaultPersonal = (ownerUuid == null || ownerUuid.isEmpty()) && p.isDefaultPersonalProject();
+            if (isOwnedByPlayer || isUnownedDefaultPersonal) {
                 projectsToSend.add(p);
             }
         }
@@ -597,10 +674,16 @@ public class ProjectPackets {
     }
 
     // Helper methods
+    /**
+     * 将单个项目写入网络缓冲区。
+     */
     public static void writeProject(PacketByteBuf buf, Project project) {
         buf.writeNbt(project.toNbt());
     }
 
+    /**
+     * 从网络缓冲区读取单个项目。
+     */
     public static Project readProject(PacketByteBuf buf) {
         try {
             NbtCompound nbt = PacketGuards.readNbt(buf, "project");
@@ -612,6 +695,9 @@ public class ProjectPackets {
         }
     }
 
+    /**
+     * 将项目列表写入网络缓冲区。
+     */
     public static void writeProjectList(PacketByteBuf buf, List<Project> projects) {
         buf.writeInt(projects.size());
         for (Project project : projects) {
@@ -619,6 +705,9 @@ public class ProjectPackets {
         }
     }
 
+    /**
+     * 从网络缓冲区读取项目列表。
+     */
     public static List<Project> readProjectList(PacketByteBuf buf) {
         try {
             int count = PacketGuards.readBoundedCount(buf, PacketGuards.MAX_PROJECT_LIST_SIZE, "projects");

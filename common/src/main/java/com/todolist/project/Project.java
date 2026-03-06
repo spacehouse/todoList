@@ -90,11 +90,37 @@ public class Project {
     }
 
     public boolean isDefaultPersonalProject() {
-        return "gui.todolist.project.default.personal".equals(this.name);
+        if ("default-personal-project".equals(this.id)) {
+            return true;
+        }
+        return matchesAnyName(this.name,
+                "gui.todolist.project.default.personal",
+                "默认项目",
+                "Default Project",
+                "Inbox");
     }
 
     public boolean isDefaultTeamProject() {
-        return "gui.todolist.project.default.team".equals(this.name);
+        if ("default-team-project".equals(this.id)) {
+            return true;
+        }
+        return matchesAnyName(this.name,
+                "gui.todolist.project.default.team",
+                "团队项目",
+                "Team Project",
+                "General");
+    }
+
+    private static boolean matchesAnyName(String value, String... candidates) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        for (String candidate : candidates) {
+            if (value.equals(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public int getColor() {
@@ -213,10 +239,28 @@ public class Project {
 
     public static Project fromNbt(NbtCompound nbt) {
         Project project = new Project();
-        if (nbt.contains("id")) project.setId(nbt.getString("id"));
+        if (nbt.contains("id")) {
+            String id = nbt.getString("id");
+            if (id != null) {
+                id = id.trim();
+            }
+            if (id != null && !id.isEmpty()) {
+                project.setId(id);
+            }
+        }
         if (nbt.contains("name")) project.setName(nbt.getString("name"));
         if (nbt.contains("color")) project.setColor(nbt.getInt("color"));
-        if (nbt.contains("scope")) project.setScope(Scope.valueOf(nbt.getString("scope")));
+        if (nbt.contains("scope")) {
+            String scope = nbt.getString("scope");
+            if (scope != null) {
+                scope = scope.trim();
+            }
+            try {
+                project.setScope(Scope.valueOf(scope));
+            } catch (IllegalArgumentException e) {
+                project.setScope(Scope.PERSONAL);
+            }
+        }
         if (nbt.contains("ownerUuid")) project.setOwnerUuid(nbt.getString("ownerUuid"));
         if (nbt.contains("createdAt")) project.setCreatedAt(nbt.getLong("createdAt"));
         if (nbt.contains("allowMemberCreate")) project.setAllowMemberCreate(nbt.getBoolean("allowMemberCreate"));
