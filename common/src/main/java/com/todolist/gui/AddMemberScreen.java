@@ -13,6 +13,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 新增成员界面：从在线玩家列表中搜索并向服务端发送添加成员请求。
+ */
 public class AddMemberScreen extends Screen {
     private final Screen parent;
     private final String projectId;
@@ -28,6 +31,9 @@ public class AddMemberScreen extends Screen {
     private int listHeight;
     private int rowHeight;
 
+    /**
+     * 创建新增成员界面。
+     */
     public AddMemberScreen(Screen parent, String projectId) {
         super(Text.translatable("gui.todolist.add_member.title"));
         this.parent = parent;

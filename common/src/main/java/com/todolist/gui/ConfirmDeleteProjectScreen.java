@@ -5,11 +5,17 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
+/**
+ * 删除项目确认弹窗：展示提示信息并在确认后执行回调。
+ */
 public class ConfirmDeleteProjectScreen extends Screen {
     private final Screen parent;
     private final Text message;
     private final Runnable onConfirm;
 
+    /**
+     * 创建删除项目确认弹窗。
+     */
     public ConfirmDeleteProjectScreen(Screen parent, Text message, Runnable onConfirm) {
         super(Text.translatable("gui.todolist.project.delete_confirm.title"));
         this.parent = parent;

@@ -1,11 +1,15 @@
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.plugins.JavaPluginExtension
+
 plugins {
     id("fabric-loom")
 }
 
 val archives_name: String by project
+val commonProject = project(":common")
 
 base {
-    archivesName.set(archives_name)
+    archivesName.set("$archives_name-fabric")
 }
 
 dependencies {
@@ -29,6 +33,17 @@ tasks.processResources {
     filesMatching("fabric.mod.json") {
         expand(mapOf("version" to project.version))
     }
+}
+
+val commonMainOutput = commonProject.extensions
+    .getByType(JavaPluginExtension::class.java)
+    .sourceSets
+    .getByName("main")
+    .output
+
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(commonMainOutput)
 }
 
 val clientModsDir = file("E:/MC/cloudSave/mc-mss/version/.minecraft/versions/1.20.1-Fabric 0.15.11/mods")

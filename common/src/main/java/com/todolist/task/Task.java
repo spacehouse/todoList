@@ -40,7 +40,7 @@ public class Task {
         this.description = description;
         this.completed = false;
         this.priority = Priority.MEDIUM;
-        this.tags = new HashSet<>();
+        this.tags = new LinkedHashSet<>();
         this.createdAt = System.currentTimeMillis();
         this.dueDate = null;
         this.subtasks = new ArrayList<>();
@@ -175,7 +175,7 @@ public class Task {
     public void setCompleted(boolean completed) { this.completed = completed; }
     public Priority getPriority() { return priority; }
     public void setPriority(Priority priority) { this.priority = priority; }
-    public Set<String> getTags() { return new HashSet<>(tags); }
+    public Set<String> getTags() { return new LinkedHashSet<>(tags); }
     public void setTags(Iterable<String> tags) {
         this.tags.clear();
         for (String tag : tags) {
@@ -203,6 +203,17 @@ public class Task {
     public void setAssigneeName(String assigneeName) { this.assigneeName = assigneeName; }
     public String getProjectId() { return projectId; }
     public void setProjectId(String projectId) { this.projectId = projectId; }
+    public boolean isProjectUnassigned() { return projectId == null || projectId.isEmpty(); }
+    public boolean belongsToProject(String targetProjectId) {
+        return targetProjectId != null && !targetProjectId.isEmpty() && targetProjectId.equals(projectId);
+    }
+    public boolean clearProjectBindingIfMatches(String targetProjectId) {
+        if (!belongsToProject(targetProjectId)) {
+            return false;
+        }
+        this.projectId = null;
+        return true;
+    }
 
     /**
      * Priority levels for tasks

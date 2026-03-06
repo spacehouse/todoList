@@ -11,6 +11,9 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
 
+/**
+ * 新建项目界面：输入项目名称并选择个人/团队范围后发送创建请求。
+ */
 public class AddProjectScreen extends Screen {
     private final Screen parent;
     private TextFieldWidget nameField;
@@ -19,10 +22,16 @@ public class AddProjectScreen extends Screen {
     private boolean teamProjectsEnabled = true;
     private final Random random = new Random();
 
+    /**
+     * 创建新建项目界面，默认范围为个人项目。
+     */
     public AddProjectScreen(Screen parent) {
         this(parent, null);
     }
 
+    /**
+     * 创建新建项目界面，并可指定默认范围。
+     */
     public AddProjectScreen(Screen parent, Project.Scope defaultScope) {
         super(Text.translatable("gui.todolist.add_project.title"));
         this.parent = parent;

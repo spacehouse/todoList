@@ -12,14 +12,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * 鏄剧ず浠诲姟鍒楄〃鐨勭粍浠?
- *
- * 鐗规€?
- * - 鍙粴鍔ㄥ垪琛紝浣跨敤鐙珛 ScrollBar 缁勪欢
- * - 鏍规嵁浼樺厛绾ц繘琛岄鑹茬紪鐮?
- * - 瀹屾垚鐘舵€佹寚绀哄櫒
- * - 鎮仠鏁堟灉
- * - 鍙偣鍑诲閫夋鍒囨崲瀹屾垚鐘舵€?
+ * 任务列表组件：渲染任务条目、处理选中/悬停，并支持滚动与完成状态切换。
  */
 public class TaskListWidget implements Drawable {
     private final MinecraftClient client;
@@ -37,6 +30,9 @@ public class TaskListWidget implements Drawable {
     private boolean teamAllViewForNonOp;
     private Consumer<Task> onTaskToggleCompletion;
 
+    /**
+     * 创建任务列表组件。
+     */
     public TaskListWidget(MinecraftClient client, int x, int y, int width, int height) {
         this.client = client;
         this.x = x;
@@ -50,10 +46,16 @@ public class TaskListWidget implements Drawable {
         this.scrollBar = new ScrollBar(barX, y, barWidth, height);
     }
 
+    /**
+     * 设置非 OP 在 TEAM_ALL 视图下的特殊行为开关（用于客户端展示策略）。
+     */
     public void setTeamAllViewForNonOp(boolean enabled) {
         this.teamAllViewForNonOp = enabled;
     }
 
+    /**
+     * 设置要展示的任务列表，并重置滚动与选择状态。
+     */
     public void setTasks(List<Task> tasks) {
         this.tasks = tasks;
         this.scrollBar.setValue(0);
@@ -66,6 +68,9 @@ public class TaskListWidget implements Drawable {
         scrollBar.setMaxValue(maxScroll);
     }
 
+    /**
+     * 设置任务“切换完成状态”的回调。
+     */
     public void setOnTaskToggleCompletion(Consumer<Task> callback) {
         this.onTaskToggleCompletion = callback;
     }
@@ -142,9 +147,13 @@ public class TaskListWidget implements Drawable {
                 int rightForTags = scrollBar.getBarX() - 2;
                 int tagAreaWidth = 90;
                 int tagX = rightForTags - tagAreaWidth;
-                String baseTag = null;
-                if (!task.getTags().isEmpty()) {
-                    baseTag = task.getTags().iterator().next();
+                List<String> tags = new ArrayList<>();
+                for (String tag : task.getTags()) {
+                    if (tag == null) continue;
+                    String t = tag.trim();
+                    if (!t.isEmpty()) {
+                        tags.add(t);
+                    }
                 }
                 String assigneeName = null;
                 String assigneeUuid = task.getAssigneeUuid();
@@ -168,17 +177,17 @@ public class TaskListWidget implements Drawable {
                 }
                 StringBuilder sb = new StringBuilder();
                 if (assigneeName != null && !assigneeName.isEmpty()) {
-                    sb.append(assigneeName);
+                    sb.append("[").append(assigneeName).append("]");
                 }
-                if (baseTag != null && !baseTag.isEmpty()) {
+                for (String tag : tags) {
                     if (sb.length() > 0) {
-                        sb.append(", ");
+                        sb.append(" ");
                     }
-                    sb.append(baseTag);
+                    sb.append("[").append(tag).append("]");
                 }
-                String tagStr = sb.length() > 0 ? sb.toString() : null;
-                if (tagStr != null) {
-                    String display = "[" + tagStr + "]";
+                
+                String display = sb.toString();
+                if (!display.isEmpty()) {
                     int maxTagWidth = rightForTags - tagX;
                     String truncatedTag = trimWithEllipsis(textRenderer, display, maxTagWidth);
                     context.drawText(textRenderer, Text.of(truncatedTag),

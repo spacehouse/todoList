@@ -2,6 +2,7 @@ package com.todolist.gui;
 
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
+import com.todolist.project.ProjectNameFormatter;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.Drawable;
@@ -16,6 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+/**
+ * 项目侧边栏列表组件：展示项目并处理选择/滚动等交互。
+ */
 public class ProjectListWidget implements Drawable, Element, Selectable {
     private final MinecraftClient client;
     private final int x;
@@ -32,6 +36,9 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
     // Simple scrolling
     private int scrollOffset = 0;
 
+    /**
+     * 创建项目列表组件。
+     */
     public ProjectListWidget(MinecraftClient client, int x, int y, int width, int height) {
         this.client = client;
         this.x = x;
@@ -40,6 +47,9 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
         this.height = height;
     }
 
+    /**
+     * 设置项目数据源并重建可见列表（含星标排序与筛选逻辑）。
+     */
     public void setProjects(List<Project> projects) {
         if (projects == null) {
             this.sourceProjects = new ArrayList<>();
@@ -47,14 +57,19 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
             this.sourceProjects = new ArrayList<>(projects);
         }
         rebuildProjects();
+        ensureSelectionFallback();
     }
 
+    /**
+     * 设置项目选择回调。
+     */
     public void setOnProjectSelected(Consumer<Project> callback) {
         this.onProjectSelected = callback;
     }
 
     public void setSelectedProject(Project project) {
         this.selectedProject = project;
+        ensureSelectionFallback();
     }
 
     public Project getSelectedProject() {
@@ -78,6 +93,28 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
         merged.addAll(unstarred);
         this.projects = merged;
         clampScrollOffset();
+    }
+
+    private void ensureSelectionFallback() {
+        if (projects == null || projects.isEmpty()) {
+            selectedProject = null;
+            return;
+        }
+        if (selectedProject != null && selectedProject.getId() != null && !selectedProject.getId().isEmpty()) {
+            for (Project p : projects) {
+                if (p != null && selectedProject.getId().equals(p.getId())) {
+                    return;
+                }
+            }
+        }
+        for (Project p : projects) {
+            if (p == null) continue;
+            if (p.isDefaultPersonalProject() || p.isDefaultTeamProject()) {
+                selectedProject = p;
+                return;
+            }
+        }
+        selectedProject = projects.get(0);
     }
 
     private void clampScrollOffset() {
@@ -130,10 +167,7 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
             context.drawText(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
 
             // Name
-            String name = project.getName();
-            if (name != null && (name.startsWith("gui.todolist.") || name.startsWith("item.") || name.startsWith("block."))) {
-                name = Text.translatable(name).getString();
-            }
+            String name = ProjectNameFormatter.toDisplayText(project).getString();
             int nameColor = isSelected ? 0xFFFFFFFF : 0xFFAAAAAA;
             
             // Truncate name if too long

@@ -97,6 +97,7 @@
   "message.todolist.no_permission_toggle_team": "You do not have permission to toggle this team task",
   "message.todolist.no_permission_add_team": "You do not have permission to add team tasks",
   "message.todolist.add_not_allowed_in_view": "Adding is not allowed in the current view",
+  "message.todolist.select_project_first": "Please select a project first",
   "message.todolist.already_assigned": "This task has already been claimed by another player",
   "message.todolist.assign_only_team": "Assign operation is only available for team tasks",
   "message.todolist.assigned_to_me": "Task assigned to you",

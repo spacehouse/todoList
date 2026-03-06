@@ -1,5 +1,8 @@
 package com.todolist.permission;
 
+/**
+ * 服务端权限中心：根据操作类型、角色与上下文信息判定是否允许执行。
+ */
 public final class PermissionCenter {
     public enum Role {
         OP,
@@ -30,6 +33,9 @@ public final class PermissionCenter {
         CHANGE_MEMBER_ROLE
     }
 
+    /**
+     * 权限判定上下文，用于描述当前视图范围、任务状态与目标成员关系等信息。
+     */
     public static final class Context {
         private final ViewScope viewScope;
         private final boolean completed;
@@ -39,14 +45,23 @@ public final class PermissionCenter {
         private final boolean targetProjectManager;
         private final boolean projectMember;
 
+        /**
+         * 创建用于任务相关操作的上下文（默认视为项目成员，且不涉及成员目标）。
+         */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf) {
             this(viewScope, completed, assigned, assigneeSelf, false, false, true);
         }
 
+        /**
+         * 创建用于成员管理相关操作的上下文（默认视为项目成员）。
+         */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager) {
             this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true);
         }
 
+        /**
+         * 创建完整上下文。
+         */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember) {
             this.viewScope = viewScope;
             this.completed = completed;
@@ -89,6 +104,9 @@ public final class PermissionCenter {
     private PermissionCenter() {
     }
 
+    /**
+     * 判断指定角色在给定上下文下是否允许执行某个操作。
+     */
     public static boolean canPerform(Operation operation, Role role, Context context) {
         if (context == null) {
             return false;

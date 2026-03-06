@@ -10,6 +10,7 @@ public final class TodoListCommon {
     private static TaskStorage taskStorage;
     private static ProjectStorage projectStorage;
     private static ProjectManager projectManager;
+    private static volatile boolean projectSyncInProgress;
 
     private TodoListCommon() {
     }
@@ -41,6 +42,20 @@ public final class TodoListCommon {
      */
     public static ProjectManager getProjectManager() {
         return projectManager;
+    }
+
+    /**
+     * 标记客户端项目同步是否处于进行中，用于避免 GUI 在同步过程中触发兜底创建逻辑。
+     */
+    public static void setProjectSyncInProgress(boolean syncing) {
+        projectSyncInProgress = syncing;
+    }
+
+    /**
+     * 获取客户端项目同步进行中标记。
+     */
+    public static boolean isProjectSyncInProgress() {
+        return projectSyncInProgress;
     }
 }
 

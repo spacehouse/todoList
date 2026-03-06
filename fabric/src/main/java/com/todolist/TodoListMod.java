@@ -8,6 +8,7 @@ import com.todolist.network.ProjectPackets;
 import com.todolist.network.TaskPackets;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.task.Task;
@@ -18,7 +19,9 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Todo List Mod - Main Entry Point
@@ -40,6 +43,10 @@ public class TodoListMod implements ModInitializer {
     private static ProjectStorage projectStorage;
     private static ProjectManager projectManager;
 
+    /**
+     * Fabric 服务端/通用入口点。
+     * 负责初始化通用逻辑、配置、存储以及服务端网络包与事件注册。
+     */
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing Todo List Mod...");
@@ -95,129 +102,194 @@ public class TodoListMod implements ModInitializer {
         LOGGER.info("Todo List Mod loaded successfully!");
     }
     
+    /**
+     * 执行数据迁移逻辑，用于兼容旧数据与默认项目名称变更。
+     */
     private void performMigration() {
-        // 1. Check if we need to create default projects
-        if (projectManager.getAllProjects().isEmpty()) {
-            LOGGER.info("No projects found, creating default projects...");
-            
-            // Create default Personal project
-            Project personalProject = new Project("gui.todolist.project.default.personal", Project.Scope.PERSONAL, null);
-            projectManager.addProject(personalProject);
-            
-            // Create default Team project
-            Project teamProject = new Project("gui.todolist.project.default.team", Project.Scope.TEAM, null);
-            projectManager.addProject(teamProject);
-            
+        String defaultPersonalName = ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY;
+        String defaultTeamName = ProjectNameFormatter.DEFAULT_TEAM_PROJECT_KEY;
+        ModConfig config = ModConfig.getInstance();
+        boolean changedPersonal = false;
+        boolean changedTeam = false;
+        Project defaultPersonal = null;
+        Project defaultTeam = null;
+        int personalCount = 0;
+        int teamCount = 0;
+
+        for (Project p : projectManager.getAllProjects()) {
+            if (p.getScope() == Project.Scope.PERSONAL) {
+                personalCount++;
+                String normalizedName = ProjectNameFormatter.normalizeDefaultName(p.getName(), Project.Scope.PERSONAL);
+                if (!normalizedName.equals(p.getName())) {
+                    p.setName(normalizedName);
+                    changedPersonal = true;
+                }
+                if (p.isDefaultPersonalProject()) {
+                    defaultPersonal = p;
+                }
+            } else if (p.getScope() == Project.Scope.TEAM) {
+                teamCount++;
+                String normalizedName = ProjectNameFormatter.normalizeDefaultName(p.getName(), Project.Scope.TEAM);
+                if (!normalizedName.equals(p.getName())) {
+                    p.setName(normalizedName);
+                    changedTeam = true;
+                }
+                if (p.isDefaultTeamProject()) {
+                    defaultTeam = p;
+                }
+            }
+        }
+
+        boolean personalProjectsFileMissing = !projectStorage.hasPersonalProjectsFile();
+        if (personalCount == 0 && (!config.isDefaultPersonalProjectInitialized() || personalProjectsFileMissing)) {
+            defaultPersonal = new Project(defaultPersonalName, Project.Scope.PERSONAL, null);
+            defaultPersonal.setId(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID);
+            projectManager.addProject(defaultPersonal);
+            personalCount = 1;
+            changedPersonal = true;
+            LOGGER.info("Created default personal project on initialization");
+        }
+        if (!config.isDefaultPersonalProjectInitialized()) {
+            config.setDefaultPersonalProjectInitialized(true);
+        }
+
+        if (defaultTeam == null && teamCount == 0) {
+            defaultTeam = new Project(defaultTeamName, Project.Scope.TEAM, null);
+            defaultTeam.setId(ProjectNameFormatter.DEFAULT_TEAM_PROJECT_ID);
+            projectManager.addProject(defaultTeam);
+            changedTeam = true;
+            LOGGER.info("Created missing default team project");
+        }
+
+        if (changedPersonal || changedTeam) {
             try {
-                // Save separately
-                projectStorage.saveProjects(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
-                projectStorage.saveTeamProjects(projectManager.getProjectsByScope(Project.Scope.TEAM));
+                if (changedPersonal) projectStorage.saveProjects(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
+                if (changedTeam) projectStorage.saveTeamProjects(projectManager.getProjectsByScope(Project.Scope.TEAM));
             } catch (Exception e) {
-                LOGGER.error("Failed to save default projects", e);
+                LOGGER.error("Failed to save migrated default projects", e);
             }
-            
-            // 2. Migrate existing tasks
-            migrateTasks(personalProject, teamProject);
-        } else {
-            // Check for legacy default names and update them
-            boolean changedPersonal = false;
-            boolean changedTeam = false;
-            Project defaultPersonal = null;
-            Project defaultTeam = null;
-            
-            for (Project p : projectManager.getAllProjects()) {
-                if (p.getScope() == Project.Scope.PERSONAL) {
-                    if ("Inbox".equals(p.getName())) {
-                        p.setName("gui.todolist.project.default.personal");
-                        changedPersonal = true;
-                    }
-                    if ("gui.todolist.project.default.personal".equals(p.getName())) {
-                        defaultPersonal = p;
-                    }
-                } else if (p.getScope() == Project.Scope.TEAM) {
-                    if ("General".equals(p.getName())) {
-                        p.setName("gui.todolist.project.default.team");
-                        changedTeam = true;
-                    }
-                    if ("gui.todolist.project.default.team".equals(p.getName())) {
-                        defaultTeam = p;
-                    }
-                }
-            }
-            
-            if (changedPersonal || changedTeam) {
-                try {
-                    if (changedPersonal) projectStorage.saveProjects(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
-                    if (changedTeam) projectStorage.saveTeamProjects(projectManager.getProjectsByScope(Project.Scope.TEAM));
-                    LOGGER.info("Updated legacy default project names to translation keys");
-                } catch (Exception e) {
-                    LOGGER.error("Failed to save updated project names", e);
-                }
-            }
-            
-            // Migrate tasks for existing projects if they have null projectId
-            if (defaultPersonal != null && defaultTeam != null) {
-                migrateTasks(defaultPersonal, defaultTeam);
-            }
+        }
+
+        Set<String> validPersonalProjectIds = collectValidProjectIds(Project.Scope.PERSONAL);
+        Set<String> validTeamProjectIds = collectValidProjectIds(Project.Scope.TEAM);
+        if (!validPersonalProjectIds.isEmpty() || !validTeamProjectIds.isEmpty()) {
+            migrateTasks(validPersonalProjectIds, validTeamProjectIds);
         }
     }
 
-    private void migrateTasks(Project defaultPersonalProject, Project defaultTeamProject) {
-        // Migrate Personal Tasks (moddata.dat)
+    /**
+     * 收敛旧任务中的非法项目引用，仅保留仍然关联到现有项目的任务。
+     *
+     * @param validPersonalProjectIds 当前有效的个人项目 ID 集合
+     * @param validTeamProjectIds     当前有效的团队项目 ID 集合
+     */
+    private void migrateTasks(Set<String> validPersonalProjectIds, Set<String> validTeamProjectIds) {
         try {
             List<Task> personalTasks = taskStorage.loadTasks();
-            boolean changed = false;
-            for (Task task : personalTasks) {
-                if (task.getProjectId() == null) {
-                    task.setProjectId(defaultPersonalProject.getId());
-                    changed = true;
-                }
-            }
-            if (changed) {
+            int beforeSize = personalTasks.size();
+            personalTasks.removeIf(task -> shouldRemoveTaskByProjectBinding(task, validPersonalProjectIds));
+            if (beforeSize != personalTasks.size()) {
                 taskStorage.saveTasks(personalTasks);
-                LOGGER.info("Migrated {} personal tasks to project {}", personalTasks.size(), defaultPersonalProject.getName());
+                LOGGER.info("Removed {} orphan personal tasks during migration", beforeSize - personalTasks.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to migrate personal tasks", e);
         }
 
-        // Migrate Team Tasks (team_tasks.dat)
         try {
             List<Task> teamTasks = taskStorage.loadTeamTasks();
-            boolean changed = false;
-            for (Task task : teamTasks) {
-                if (task.getProjectId() == null) {
-                    task.setProjectId(defaultTeamProject.getId());
-                    changed = true;
-                }
-            }
-            if (changed) {
+            int beforeSize = teamTasks.size();
+            teamTasks.removeIf(task -> shouldRemoveTaskByProjectBinding(task, validTeamProjectIds));
+            if (beforeSize != teamTasks.size()) {
                 taskStorage.saveTeamTasks(teamTasks);
-                LOGGER.info("Migrated {} team tasks to project {}", teamTasks.size(), defaultTeamProject.getName());
+                LOGGER.info("Removed {} orphan team tasks during migration", beforeSize - teamTasks.size());
             }
         } catch (Exception e) {
             LOGGER.error("Failed to migrate team tasks", e);
         }
     }
 
+    /**
+     * 收集指定范围下全部有效项目 ID。
+     *
+     * @param scope 项目范围
+     * @return 有效项目 ID 集合
+     */
+    private Set<String> collectValidProjectIds(Project.Scope scope) {
+        Set<String> ids = new HashSet<>();
+        for (Project project : projectManager.getProjectsByScope(scope)) {
+            if (project == null) {
+                continue;
+            }
+            String projectId = project.getId();
+            if (projectId != null && !projectId.isEmpty()) {
+                ids.add(projectId);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * 判断任务是否应因项目绑定非法而在迁移中删除。
+     *
+     * @param task 任务对象
+     * @param validProjectIds 当前范围的有效项目 ID 集合
+     * @return true 表示应删除
+     */
+    private boolean shouldRemoveTaskByProjectBinding(Task task, Set<String> validProjectIds) {
+        if (task == null) {
+            return true;
+        }
+        String projectId = task.getProjectId();
+        if (projectId == null || projectId.isEmpty()) {
+            return true;
+        }
+        return !validProjectIds.contains(projectId);
+    }
+
+    /**
+     * 服务端启动回调。
+     *
+     * @param server Minecraft 服务端实例
+     */
     private void onServerStarting(MinecraftServer server) {
         LOGGER.info("Todo List Mod: Server starting, initializing storage...");
         // Server-specific initialization
     }
 
+    /**
+     * 服务端停止回调，用于触发最终保存。
+     *
+     * @param server Minecraft 服务端实例
+     */
     private void onServerStopped(MinecraftServer server) {
         LOGGER.info("Todo List Mod: Server stopped, saving data...");
         ProjectSaveDebouncer.flushNow(server);
     }
 
+    /**
+     * 获取任务存储实例。
+     *
+     * @return 任务存储
+     */
     public static TaskStorage getTaskStorage() {
         return taskStorage;
     }
 
+    /**
+     * 获取项目存储实例。
+     *
+     * @return 项目存储
+     */
     public static ProjectStorage getProjectStorage() {
         return projectStorage;
     }
 
+    /**
+     * 获取项目管理器实例。
+     *
+     * @return 项目管理器
+     */
     public static ProjectManager getProjectManager() {
         return projectManager;
     }

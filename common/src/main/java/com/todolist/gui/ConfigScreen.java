@@ -5,6 +5,7 @@ import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
+import com.todolist.project.ProjectNameFormatter;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -12,6 +13,9 @@ import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
+/**
+ * 配置界面：提供 GUI/HUD 外观与行为的本地配置编辑与预览。
+ */
 public class ConfigScreen extends Screen {
     private final Screen parent;
 
@@ -51,6 +55,9 @@ public class ConfigScreen extends Screen {
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
 
+    /**
+     * 创建配置界面。
+     */
     public ConfigScreen(Screen parent) {
         super(Text.translatable("gui.todolist.config.title"));
         this.parent = parent;
@@ -470,7 +477,8 @@ public class ConfigScreen extends Screen {
         if (hudProjectSourceButton != null) {
             String value = hudProjectSourceValue == null ? "" : hudProjectSourceValue;
             if ("CURRENT".equalsIgnoreCase(value)) {
-                Project project = getActiveProject();
+                Project.Scope scope = resolveHudScope();
+                Project project = getActiveProject(scope);
                 Text projectName = getProjectDisplayName(project);
                 if (projectName != null && !projectName.getString().trim().isEmpty()) {
                     hudProjectSourceButton.setMessage(Text.translatable("gui.todolist.hud.project_source.current_selected", projectName.getString()));
@@ -488,26 +496,20 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private static Project getActiveProject() {
-        String activeProjectId = ClientBridge.ops().getActiveProjectId();
-        if (activeProjectId == null || activeProjectId.isEmpty()) {
-            return null;
+    private Project.Scope resolveHudScope() {
+        String view = hudDefaultViewValue == null ? "" : hudDefaultViewValue;
+        if ("TEAM_UNASSIGNED".equalsIgnoreCase(view) || "TEAM_ALL".equalsIgnoreCase(view) || "TEAM_ASSIGNED".equalsIgnoreCase(view)) {
+            return Project.Scope.TEAM;
         }
-        return TodoListCommon.getProjectManager().getProject(activeProjectId);
+        return Project.Scope.PERSONAL;
+    }
+
+    private static Project getActiveProject(Project.Scope scope) {
+        return ClientBridge.getActiveProject(TodoListCommon.getProjectManager(), scope);
     }
 
     private static Text getProjectDisplayName(Project project) {
-        if (project == null) {
-            return Text.empty();
-        }
-        String name = project.getName();
-        if (name == null || name.isEmpty()) {
-            return Text.empty();
-        }
-        if (name.startsWith("gui.todolist.") || name.startsWith("item.") || name.startsWith("block.")) {
-            return Text.translatable(name);
-        }
-        return Text.literal(name);
+        return ProjectNameFormatter.toDisplayText(project);
     }
 
     private static class HudViewOptions {

@@ -38,3 +38,21 @@ subprojects {
         withSourcesJar()
     }
 }
+
+tasks.register<Copy>("distReleaseJars") {
+    group = "distribution"
+    description = "Collect release-ready loader jars into root build/dist (exclude sources/dev)."
+
+    dependsOn(":fabric:build", ":forge:build")
+
+    into(layout.buildDirectory.dir("dist"))
+
+    from(project(":fabric").layout.buildDirectory.dir("libs")) {
+        include("todolist-fabric-*.jar")
+        exclude("*-sources.jar", "*-dev.jar")
+    }
+    from(project(":forge").layout.buildDirectory.dir("libs")) {
+        include("todolist-forge-*.jar")
+        exclude("*-sources.jar", "*-dev.jar")
+    }
+}

@@ -1,43 +1,98 @@
 package com.todolist.client;
 
 import com.todolist.project.Project;
+import com.todolist.project.ProjectManager;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 
 import java.util.List;
 
+/**
+ * 客户端能力桥接层：在 common 侧通过 {@link ClientOps} 调用各平台的客户端实现。
+ */
 public final class ClientBridge {
+    /**
+     * 由平台端（Fabric/Forge）注入的客户端操作集合。
+     */
     public interface ClientOps {
+        /**
+         * 获取团队任务管理器（仅客户端本地缓存，用于渲染与交互）。
+         */
         TaskManager getTeamTaskManager();
 
+        /**
+         * 当前环境是否启用团队项目能力（例如是否连接到支持服务端）。
+         */
         boolean isTeamProjectsEnabled();
 
+        /**
+         * 获取当前激活的项目 ID（用于 UI 记忆与默认选择）。
+         */
         String getActiveProjectId();
 
+        /**
+         * 设置当前激活的项目 ID。
+         */
         void setActiveProjectId(String projectId);
 
+        /**
+         * 发送单条任务更新到服务端。
+         */
         void sendUpdateTask(Task task);
 
+        /**
+         * 用给定列表替换个人任务列表（客户端到服务端）。
+         */
         void sendReplaceAllTasks(List<Task> tasks);
 
+        /**
+         * 用给定列表替换团队任务列表（客户端到服务端）。
+         */
         void sendReplaceTeamTasks(List<Task> tasks);
 
+        /**
+         * 主动请求服务端同步团队任务列表（服务端到客户端）。
+         */
         void requestTeamSync();
 
+        /**
+         * 发送加入指定项目的申请。
+         */
         void sendRequestJoinProject(String projectId);
 
+        /**
+         * 请求删除指定项目。
+         */
         void sendDeleteProject(String projectId);
 
+        /**
+         * 发送项目更新到服务端。
+         */
         void sendUpdateProject(Project project);
 
+        /**
+         * 请求将成员从项目中移除。
+         */
         void sendRemoveMember(String projectId, String memberUuid);
 
+        /**
+         * 请求变更成员在项目中的角色。
+         */
         void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role);
 
+        /**
+         * 发送新增项目请求。
+         */
         void sendAddProject(Project project);
 
+        /**
+         * 请求将成员加入项目。
+         */
         void sendAddMember(String projectId, String memberUuid, String memberName);
 
+        /**
+         * 当前平台是否支持“修改成员角色”相关的网络能力。
+         */
         boolean canSendUpdateMemberRole();
     }
 
@@ -120,11 +175,48 @@ public final class ClientBridge {
     private ClientBridge() {
     }
 
+    /**
+     * 注入平台端实现；传入 null 将回退到 NO_OP 实现。
+     */
     public static void setOps(ClientOps clientOps) {
         ops = clientOps == null ? NO_OPS : clientOps;
     }
 
+    /**
+     * 获取当前注入的客户端操作实现。
+     */
     public static ClientOps ops() {
         return ops;
+    }
+
+    /**
+     * 获取当前激活项目；若 ID 失效会自动清空激活 ID。
+     */
+    public static Project getActiveProject(ProjectManager manager) {
+        return getActiveProject(manager, null);
+    }
+
+    /**
+     * 获取指定范围内的激活项目；若 ID 失效或范围不匹配会自动清空激活 ID。
+     */
+    public static Project getActiveProject(ProjectManager manager, Project.Scope scope) {
+        if (manager == null) {
+            ops().setActiveProjectId(null);
+            return null;
+        }
+        String activeProjectId = ops().getActiveProjectId();
+        if (activeProjectId == null || activeProjectId.isEmpty()) {
+            return null;
+        }
+        Project activeProject = manager.getProject(activeProjectId);
+        if (activeProject == null) {
+            ops().setActiveProjectId(null);
+            return null;
+        }
+        if (scope != null && activeProject.getScope() != scope) {
+            ops().setActiveProjectId(null);
+            return null;
+        }
+        return activeProject;
     }
 }

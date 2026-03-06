@@ -34,6 +34,7 @@ public class ModConfig {
     private int autoSaveIntervalMinutes = 5;
     private String defaultPriority = "MEDIUM";
     private boolean enableTaskRewards = false;
+    private boolean defaultPersonalProjectInitialized = false;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -233,6 +234,12 @@ public class ModConfig {
     public boolean isEnableTaskRewards() { return enableTaskRewards; }
     public void setEnableTaskRewards(boolean enableTaskRewards) {
         this.enableTaskRewards = enableTaskRewards;
+        save();
+    }
+
+    public boolean isDefaultPersonalProjectInitialized() { return defaultPersonalProjectInitialized; }
+    public void setDefaultPersonalProjectInitialized(boolean defaultPersonalProjectInitialized) {
+        this.defaultPersonalProjectInitialized = defaultPersonalProjectInitialized;
         save();
     }
 

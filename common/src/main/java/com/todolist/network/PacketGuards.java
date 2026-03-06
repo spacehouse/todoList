@@ -5,7 +5,8 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.PacketByteBuf;
 
 /**
- * 缃戠粶鏁版嵁鍖呭畨鍏ㄦ牎楠屽伐鍏风被銆? */
+ * 网络包读取防护工具：对来自客户端的数据做长度/范围校验并统一抛错。
+ */
 public final class PacketGuards {
     public static final int MAX_STRING_LENGTH = 32767;
     public static final int MAX_TASK_LIST_SIZE = 10_000;
@@ -17,7 +18,8 @@ public final class PacketGuards {
     }
 
     /**
-     * 浠庣紦鍐插尯璇诲彇鍙楅檺闀垮害鐨勫瓧绗︿覆銆?     * @param buf 缂撳啿鍖?     * @param fieldName 瀛楁鍚?     * @return 瀛楃涓?     */
+     * 从缓冲区读取受限长度的字符串字段。
+     */
     public static String readString(PacketByteBuf buf, String fieldName) {
         try {
             return buf.readString(MAX_STRING_LENGTH);
@@ -27,7 +29,7 @@ public final class PacketGuards {
     }
 
     /**
-     * 浠庣紦鍐插尯璇诲彇鍙楅檺鑼冨洿鐨勬暣鏁拌鏁般€?     * @param buf 缂撳啿鍖?     * @param max 鏈€澶у€?     * @param fieldName 瀛楁鍚?     * @return 鏁存暟璁℃暟
+     * 从缓冲区读取列表数量，并限制在 [0, max] 范围内。
      */
     public static int readBoundedCount(PacketByteBuf buf, int max, String fieldName) {
         final int count;
@@ -43,7 +45,8 @@ public final class PacketGuards {
     }
 
     /**
-     * 浠庣紦鍐插尯璇诲彇甯冨皵鍊笺€?     * @param buf 缂撳啿鍖?     * @param fieldName 瀛楁鍚?     * @return 甯冨皵鍊?     */
+     * 从缓冲区读取布尔字段。
+     */
     public static boolean readBoolean(PacketByteBuf buf, String fieldName) {
         try {
             return buf.readBoolean();
@@ -53,7 +56,7 @@ public final class PacketGuards {
     }
 
     /**
-     * 浠庣紦鍐插尯璇诲彇 NBT 澶嶅悎鏍囩銆?     * @param buf 缂撳啿鍖?     * @param fieldName 瀛楁鍚?     * @return NBT 澶嶅悎鏍囩
+     * 从缓冲区读取 NBT Compound 字段（不允许为 null）。
      */
     public static NbtCompound readNbt(PacketByteBuf buf, String fieldName) {
         try {
@@ -70,9 +73,7 @@ public final class PacketGuards {
     }
 
     /**
-     * 鍒涘缓鏍煎紡閿欒寮傚父銆?     * @param message 閿欒娑堟伅
-     * @param cause 鍘熷洜
-     * @return IllegalArgumentException
+     * 构造用于标记“格式错误网络包”的异常。
      */
     public static IllegalArgumentException malformedPacket(String message, Throwable cause) {
         if (cause == null) {
@@ -82,8 +83,7 @@ public final class PacketGuards {
     }
 
     /**
-     * 璁板綍涓㈠純鐨勬暟鎹寘淇℃伅銆?     * @param packetName 鏁版嵁鍖呭悕
-     * @param error 寮傚父
+     * 记录被丢弃的异常包信息（用于排查客户端或协议不兼容问题）。
      */
     public static void logDrop(String packetName, Throwable error) {
         if (error == null) {

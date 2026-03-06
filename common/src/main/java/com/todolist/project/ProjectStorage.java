@@ -13,7 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 澶勭悊椤圭洰鏁版嵁鐨勬寔涔呭寲瀛樺偍銆? */
+ * 项目数据持久化：负责从磁盘加载/保存个人与团队项目列表。
+ */
 public class ProjectStorage {
     private static final String PERSONAL_PROJECTS_FILE = "projects.dat";
     private static final String TEAM_PROJECTS_FILE = "team_projects.dat";
@@ -36,7 +37,8 @@ public class ProjectStorage {
     }
 
     /**
-     * 鍔犺浇涓汉椤圭洰鍒楄〃銆?     */
+     * 加载个人项目列表。
+     */
     public List<Project> loadProjects() throws IOException {
         Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
         if (!Files.exists(file)) {
@@ -46,7 +48,8 @@ public class ProjectStorage {
     }
 
     /**
-     * 鍔犺浇鍥㈤槦椤圭洰鍒楄〃銆?     */
+     * 加载团队项目列表。
+     */
     public List<Project> loadTeamProjects() throws IOException {
         Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
         if (!Files.exists(file)) {
@@ -56,26 +59,61 @@ public class ProjectStorage {
     }
 
     /**
-     * 淇濆瓨涓汉椤圭洰鍒楄〃銆?     */
+     * 保存个人项目列表。
+     */
     public void saveProjects(List<Project> projects) throws IOException {
         Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
 
     /**
-     * 淇濆瓨鍥㈤槦椤圭洰鍒楄〃銆?     */
+     * 保存团队项目列表。
+     */
     public void saveTeamProjects(List<Project> projects) throws IOException {
         Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
 
+    /**
+     * 判断个人项目数据文件是否存在。
+     */
+    public boolean hasPersonalProjectsFile() {
+        Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
+        return Files.exists(file);
+    }
+
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
         NbtCompound root = NbtIo.read(file.toFile());
+        boolean dirty = false;
         if (root != null && root.contains("projects", 9)) {
             NbtList list = root.getList("projects", 10);
             for (int i = 0; i < list.size(); i++) {
-                projects.add(Project.fromNbt(list.getCompound(i)));
+                NbtCompound projectNbt = list.getCompound(i);
+                boolean hadValidId = projectNbt.contains("id") && !projectNbt.getString("id").trim().isEmpty();
+                boolean scopeDirty = false;
+                if (!projectNbt.contains("scope")) {
+                    scopeDirty = true;
+                } else {
+                    try {
+                        Project.Scope.valueOf(projectNbt.getString("scope").trim());
+                    } catch (IllegalArgumentException e) {
+                        scopeDirty = true;
+                    }
+                }
+                Project project = Project.fromNbt(projectNbt);
+                projects.add(project);
+                if (!hadValidId || scopeDirty) {
+                    dirty = true;
+                }
+            }
+        }
+        if (dirty) {
+            try {
+                saveProjectsToFile(projects, file);
+                TodoConstants.LOGGER.info("Rewrote projects file with normalized ids/scopes: {}", file);
+            } catch (Exception e) {
+                TodoConstants.LOGGER.warn("Failed to rewrite projects file with normalized ids/scopes: {}", file, e);
             }
         }
         return projects;
@@ -91,5 +129,4 @@ public class ProjectStorage {
         NbtIo.write(root, file.toFile());
     }
 }
-
 

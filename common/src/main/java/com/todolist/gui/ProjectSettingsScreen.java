@@ -8,6 +8,7 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import net.minecraft.client.MinecraftClient;
@@ -26,6 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
+ */
 public class ProjectSettingsScreen extends Screen implements ProjectManager.ProjectChangeListener {
     private final Screen parent;
     private Project project;
@@ -35,6 +39,9 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     private MemberListWidget memberList;
     private ButtonWidget addMemberBtn;
 
+    /**
+     * 创建项目设置界面。
+     */
     public ProjectSettingsScreen(Screen parent, Project project) {
         super(Text.translatable("gui.todolist.project_settings.title"));
         this.parent = parent;
@@ -66,7 +73,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
         // Name Field
         nameField = new TextFieldWidget(textRenderer, x + 10, y + 35, w - 20, 20, Text.translatable("gui.todolist.project.name"));
-        nameField.setText(Text.translatable(project.getName()).getString());
+        nameField.setText(ProjectNameFormatter.toDisplayText(project).getString());
         nameField.setMaxLength(32);
         nameField.setEditable(canEdit);
         addDrawableChild(nameField);
@@ -170,10 +177,29 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     private void saveProject() {
         String name = nameField.getText().trim();
         if (name.isEmpty()) return;
-        
-        project.setName(name);
+
+        String normalizedName = normalizeProjectNameForSave(name, project.getName());
+        project.setName(normalizedName);
         ClientBridge.ops().sendUpdateProject(project);
         close();
+    }
+
+    /**
+     * 规范化项目名称保存值。
+     * 当用户未实际修改默认项目显示名时，保留原翻译键，避免把默认项目误保存为本地化文本。
+     * @param editedName 输入框中的项目名
+     * @param originalName 原始项目名
+     * @return 应保存的项目名
+     */
+    private String normalizeProjectNameForSave(String editedName, String originalName) {
+        if (!ProjectNameFormatter.isTranslationKey(originalName)) {
+            return editedName;
+        }
+        String originalDisplay = ProjectNameFormatter.toDisplayText(originalName).getString();
+        if (editedName.equals(originalDisplay)) {
+            return originalName;
+        }
+        return editedName;
     }
 
     @Override
@@ -451,5 +477,3 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
     }
 }
-
-

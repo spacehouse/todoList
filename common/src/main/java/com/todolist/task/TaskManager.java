@@ -45,6 +45,9 @@ public class TaskManager {
         return tasks.get(id);
     }
 
+    /**
+     * 获取所有任务并按优先级从高到低排序返回。
+     */
     public List<Task> getAllTasks() {
         List<Task> list = new ArrayList<>(tasks.values());
         list.sort((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal());
@@ -69,6 +72,29 @@ public class TaskManager {
         if (removed != null) {
             notifyListeners(TaskChangeType.REMOVED, removed);
         }
+    }
+
+    /**
+     * Delete all tasks in the specified project
+     */
+    public int deleteTasksByProjectId(String projectId) {
+        if (projectId == null || projectId.isEmpty()) {
+            return 0;
+        }
+        int removedCount = 0;
+        Iterator<Map.Entry<String, Task>> iterator = tasks.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, Task> entry = iterator.next();
+            Task task = entry.getValue();
+            if (task != null && task.belongsToProject(projectId)) {
+                iterator.remove();
+                removedCount++;
+            }
+        }
+        if (removedCount > 0) {
+            notifyListeners(TaskChangeType.BATCH_UPDATED, null);
+        }
+        return removedCount;
     }
 
     /**
@@ -221,10 +247,16 @@ public class TaskManager {
 
     // Listener Management
 
+    /**
+     * 添加任务变更监听器。
+     */
     public void addListener(TaskChangeListener listener) {
         listeners.add(listener);
     }
 
+    /**
+     * 移除任务变更监听器。
+     */
     public void removeListener(TaskChangeListener listener) {
         listeners.remove(listener);
     }
@@ -245,7 +277,13 @@ public class TaskManager {
         CLEARED
     }
 
+    /**
+     * 监听任务列表的增删改清事件。
+     */
     public interface TaskChangeListener {
+        /**
+         * 在任务发生变更时回调。
+         */
         void onTaskChanged(TaskChangeType type, Task task);
     }
 }

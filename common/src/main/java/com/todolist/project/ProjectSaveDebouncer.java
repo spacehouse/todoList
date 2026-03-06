@@ -9,6 +9,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 项目保存防抖：将短时间内的多次保存请求合并为一次写盘，降低 IO 频率。
+ */
 public final class ProjectSaveDebouncer {
     private static final long DEBOUNCE_MS = 750;
 
@@ -26,6 +29,9 @@ public final class ProjectSaveDebouncer {
 
     private ProjectSaveDebouncer() {}
 
+    /**
+     * 请求在短延迟后保存指定范围的项目数据；多次调用会被合并。
+     */
     public static void requestSave(MinecraftServer server, Project.Scope scope) {
         if (server == null || scope == null) {
             return;
@@ -52,6 +58,9 @@ public final class ProjectSaveDebouncer {
         }
     }
 
+    /**
+     * 立即执行一次保存（会清空 pending 标记），通常由服务端线程调度调用。
+     */
     public static void flushNow(MinecraftServer server) {
         if (server == null) {
             return;

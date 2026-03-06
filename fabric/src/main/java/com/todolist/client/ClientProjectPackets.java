@@ -1,9 +1,11 @@
 package com.todolist.client;
 
+import com.todolist.TodoListCommon;
 import com.todolist.TodoListMod;
 import com.todolist.network.ProjectPackets;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.PacketByteBuf;
@@ -17,6 +19,9 @@ import java.util.Map;
  */
 public class ClientProjectPackets {
 
+    /**
+     * 注册客户端接收的项目相关网络包处理器。
+     */
     public static void registerClientPackets() {
         // SYNC_PROJECTS
         ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
@@ -25,31 +30,48 @@ public class ClientProjectPackets {
         });
     }
 
+    /**
+     * 将服务端下发的项目列表同步到客户端项目管理器。
+     *
+     * @param projects 服务端项目列表
+     */
     private static void handleSyncProjects(List<Project> projects) {
+        TodoListCommon.setProjectSyncInProgress(true);
         ProjectManager manager = TodoListMod.getProjectManager();
-        Map<String, Project> incoming = new HashMap<>();
-        for (Project p : projects) {
-            incoming.put(p.getId(), p);
-        }
-
-        for (Project existing : manager.getAllProjects()) {
-            if (!incoming.containsKey(existing.getId())) {
-                manager.deleteProject(existing.getId());
+        try {
+            Map<String, Project> incoming = new HashMap<>();
+            for (Project p : projects) {
+                p.setName(ProjectNameFormatter.normalizeDefaultName(p.getName(), p.getScope()));
+                incoming.put(p.getId(), p);
             }
-        }
 
-        for (Project project : projects) {
-            if (manager.getProject(project.getId()) == null) {
-                manager.addProject(project);
-            } else {
-                manager.updateProject(project);
+            for (Project existing : manager.getAllProjects()) {
+                if (!incoming.containsKey(existing.getId())) {
+                    manager.deleteProject(existing.getId());
+                }
             }
+
+            for (Project project : projects) {
+                if (manager.getProject(project.getId()) == null) {
+                    manager.addProject(project);
+                } else {
+                    manager.updateProject(project);
+                }
+            }
+            ClientBridge.getActiveProject(manager);
+            TodoListMod.LOGGER.info("Client: Synced {} projects from server", projects.size());
+        } finally {
+            TodoListCommon.setProjectSyncInProgress(false);
         }
-        TodoListMod.LOGGER.info("Client: Synced {} projects from server", projects.size());
     }
 
     // Sender methods
 
+    /**
+     * 向服务端发送新增项目请求。
+     *
+     * @param project 项目对象
+     */
     public static void sendAddProject(Project project) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID)) {
             return;
@@ -59,6 +81,11 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.ADD_PROJECT_ID, buf);
     }
 
+    /**
+     * 向服务端发送更新项目请求。
+     *
+     * @param project 项目对象
+     */
     public static void sendUpdateProject(Project project) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_PROJECT_ID)) {
             return;
@@ -68,6 +95,11 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.UPDATE_PROJECT_ID, buf);
     }
 
+    /**
+     * 向服务端发送删除项目请求。
+     *
+     * @param projectId 项目 ID
+     */
     public static void sendDeleteProject(String projectId) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.DELETE_PROJECT_ID)) {
             return;
@@ -77,6 +109,13 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.DELETE_PROJECT_ID, buf);
     }
 
+    /**
+     * 向服务端发送添加成员请求。
+     *
+     * @param projectId   项目 ID
+     * @param memberUuid  成员 UUID
+     * @param memberName  成员名称
+     */
     public static void sendAddMember(String projectId, String memberUuid, String memberName) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_MEMBER_ID)) {
             return;
@@ -88,6 +127,12 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.ADD_MEMBER_ID, buf);
     }
 
+    /**
+     * 向服务端发送移除成员请求。
+     *
+     * @param projectId  项目 ID
+     * @param memberUuid 成员 UUID
+     */
     public static void sendRemoveMember(String projectId, String memberUuid) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.REMOVE_MEMBER_ID)) {
             return;
@@ -98,6 +143,13 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.REMOVE_MEMBER_ID, buf);
     }
 
+    /**
+     * 向服务端发送更新成员角色请求。
+     *
+     * @param projectId  项目 ID
+     * @param memberUuid 成员 UUID
+     * @param role       新角色
+     */
     public static void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
             return;
@@ -109,6 +161,11 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
     }
 
+    /**
+     * 向服务端发送申请加入项目请求。
+     *
+     * @param projectId 项目 ID
+     */
     public static void sendRequestJoinProject(String projectId) {
         if (!ClientPlayNetworking.canSend(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
             return;

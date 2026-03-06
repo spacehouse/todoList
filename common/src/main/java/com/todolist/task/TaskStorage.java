@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -26,6 +28,10 @@ public class TaskStorage {
     private static final String TEAM_FILE = "team_tasks.dat";
 
     private final Path dataDir;
+    private boolean loggedNoTaskData;
+    private boolean loggedNoTeamTaskData;
+    private final Map<Path, Long> lastLoggedLastSavedByFile = new HashMap<>();
+    private final Map<Path, Integer> lastLoggedTaskCountByFile = new HashMap<>();
 
     public TaskStorage() {
         this.dataDir = getDataDirectory();
@@ -123,7 +129,10 @@ public class TaskStorage {
     public List<Task> loadTasks() throws IOException {
         Path dataFile = dataDir.resolve(DATA_FILE);
         if (!Files.exists(dataFile)) {
-            TodoConstants.LOGGER.info("No existing task data found, starting fresh");
+            if (!loggedNoTaskData) {
+                loggedNoTaskData = true;
+                TodoConstants.LOGGER.info("No existing task data found, starting fresh");
+            }
             return new ArrayList<>();
         }
         return loadTasksFromFile(dataFile);
@@ -145,7 +154,10 @@ public class TaskStorage {
     public List<Task> loadTeamTasks() throws IOException {
         Path teamFile = dataDir.resolve(TEAM_FILE);
         if (!Files.exists(teamFile)) {
-            TodoConstants.LOGGER.info("No existing team task data");
+            if (!loggedNoTeamTaskData) {
+                loggedNoTeamTaskData = true;
+                TodoConstants.LOGGER.info("No existing team task data");
+            }
             return new ArrayList<>();
         }
         return loadTasksFromFile(teamFile);
@@ -163,7 +175,6 @@ public class TaskStorage {
 
         long lastSaved = root.getLong("lastSaved");
         int version = root.getInt("version");
-        TodoConstants.LOGGER.info("Loading task data, version {}, last saved: {}", version, lastSaved);
 
         NbtList taskList = root.getList("tasks", NbtElement.COMPOUND_TYPE);
         List<Task> tasks = new ArrayList<>();
@@ -178,8 +189,20 @@ public class TaskStorage {
             }
         }
 
-        TodoConstants.LOGGER.info("Successfully loaded {} tasks", tasks.size());
+        maybeLogLoadSummary(file, version, lastSaved, tasks.size());
         return tasks;
+    }
+
+    private void maybeLogLoadSummary(Path file, int version, long lastSaved, int taskCount) {
+        Long lastLoggedLastSaved = lastLoggedLastSavedByFile.get(file);
+        Integer lastLoggedCount = lastLoggedTaskCountByFile.get(file);
+        if (lastLoggedLastSaved != null && lastLoggedCount != null &&
+                lastLoggedLastSaved == lastSaved && lastLoggedCount == taskCount) {
+            return;
+        }
+        lastLoggedLastSavedByFile.put(file, lastSaved);
+        lastLoggedTaskCountByFile.put(file, taskCount);
+        TodoConstants.LOGGER.debug("Loaded task data from {}, version {}, last saved: {}, tasks: {}", file, version, lastSaved, taskCount);
     }
 
     /**

@@ -82,10 +82,16 @@ public class ProjectManager {
 
     // Listener Management
 
+    /**
+     * 添加项目变更监听器。
+     */
     public void addListener(ProjectChangeListener listener) {
         listeners.add(listener);
     }
 
+    /**
+     * 移除项目变更监听器。
+     */
     public void removeListener(ProjectChangeListener listener) {
         listeners.remove(listener);
     }
@@ -105,7 +111,13 @@ public class ProjectManager {
         CLEARED
     }
 
+    /**
+     * 监听项目列表的增删改清事件。
+     */
     public interface ProjectChangeListener {
+        /**
+         * 在项目发生变更时回调。
+         */
         void onProjectChanged(ProjectChangeType type, Project project);
     }
 }
