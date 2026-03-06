@@ -57,10 +57,15 @@ public class TaskListWidget implements Drawable {
      * 设置要展示的任务列表，并重置滚动与选择状态。
      */
     public void setTasks(List<Task> tasks) {
-        this.tasks = tasks;
-        this.scrollBar.setValue(0);
+        int previousScroll = this.scrollBar.getValue();
+        this.tasks = tasks == null ? new ArrayList<>() : tasks;
         updateMaxScroll();
         syncSelectionIndex();
+        if (selectedTaskIndex >= 0) {
+            ensureVisibleIndex(selectedTaskIndex);
+        } else {
+            this.scrollBar.setValue(previousScroll);
+        }
     }
 
     private void updateMaxScroll() {
@@ -329,6 +334,33 @@ public class TaskListWidget implements Drawable {
             }
         }
         selectedTaskIndex = -1;
+    }
+
+    public void ensureVisible(Task task) {
+        if (task == null || task.getId() == null || task.getId().isEmpty()) {
+            return;
+        }
+        selectedTaskId = task.getId();
+        syncSelectionIndex();
+        if (selectedTaskIndex >= 0) {
+            ensureVisibleIndex(selectedTaskIndex);
+        }
+    }
+
+    private void ensureVisibleIndex(int index) {
+        if (index < 0 || tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        int visibleCount = Math.max(1, height / taskItemHeight);
+        int currentTop = scrollBar.getValue();
+        int currentBottom = currentTop + visibleCount - 1;
+        if (index < currentTop) {
+            scrollBar.setValue(index);
+            return;
+        }
+        if (index > currentBottom) {
+            scrollBar.setValue(index - visibleCount + 1);
+        }
     }
 
     private String trimWithEllipsis(TextRenderer textRenderer, String text, int maxWidth) {

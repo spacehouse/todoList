@@ -7,7 +7,6 @@ import com.mojang.brigadier.context.CommandContext;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
-import com.todolist.network.ProjectPackets;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -17,8 +16,10 @@ import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
+import com.todolist.project.ProjectSaveDebouncer;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.command.CommandRegistryAccess;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -205,13 +206,61 @@ public final class CommandBootstrap {
             return COMMAND_FAILURE;
         }
         String applicantUuid = StringArgumentType.getString(ctx, "applicantUuid");
-        ProjectPackets.handleJoinDecision(source.getServer(), approver, projectId, applicantUuid, approved);
+        if (!handleJoinDecision(source.getServer(), approver, projectId, applicantUuid, approved)) {
+            return COMMAND_FAILURE;
+        }
         return sendCommandSuccess(
                 source,
                 COMMAND_SUCCESS,
                 SIDE_EFFECT_PERSIST_DATA,
                 approved ? "command.todolist.join.accept.success" : "command.todolist.join.deny.success"
         );
+    }
+
+    private static boolean handleJoinDecision(MinecraftServer server, ServerPlayerEntity approver, String projectId, String applicantUuid, boolean accepted) {
+        if (server == null || approver == null || projectId == null || projectId.isEmpty() || applicantUuid == null || applicantUuid.isEmpty()) {
+            return false;
+        }
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        Project project = manager.getProject(projectId);
+        if (project == null || project.getScope() != Project.Scope.TEAM) {
+            approver.sendMessage(Text.translatable("message.todolist.project.join.invalid_project"), false);
+            return false;
+        }
+        if (approver.getUuidAsString().equals(applicantUuid)) {
+            approver.sendMessage(Text.translatable("message.todolist.project.join.cannot_approve_self"), false);
+            return false;
+        }
+        boolean alreadyMember = applicantUuid.equals(project.getOwnerUuid()) || project.getMemberRole(applicantUuid) != null;
+        if (alreadyMember) {
+            approver.sendMessage(Text.translatable("message.todolist.project.join.already_member"), false);
+            return false;
+        }
+        ServerPlayerEntity applicant;
+        try {
+            applicant = server.getPlayerManager().getPlayer(UUID.fromString(applicantUuid));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        if (applicant == null) {
+            approver.sendMessage(Text.translatable("message.todolist.project.join.applicant_offline"), false);
+            return false;
+        }
+        if (accepted) {
+            project.addMember(applicantUuid, Project.ProjectRole.MEMBER, applicant.getName().getString());
+            manager.updateProject(project);
+            try {
+                ProjectSaveDebouncer.requestSave(server, project.getScope());
+            } catch (Exception e) {
+                TodoConstants.LOGGER.error("Failed to save project join decision", e);
+            }
+            applicant.sendMessage(Text.translatable("message.todolist.project.join.accepted", getProjectDisplayName(project, projectId)), false);
+            approver.sendMessage(Text.translatable("message.todolist.project.join.approved", applicant.getName().getString()), false);
+        } else {
+            applicant.sendMessage(Text.translatable("message.todolist.project.join.denied", getProjectDisplayName(project, projectId)), false);
+            approver.sendMessage(Text.translatable("message.todolist.project.join.rejected", applicant.getName().getString()), false);
+        }
+        return true;
     }
 
     /**

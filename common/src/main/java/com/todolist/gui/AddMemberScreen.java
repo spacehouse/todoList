@@ -1,6 +1,8 @@
 package com.todolist.gui;
 
+import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.project.Project;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -111,12 +113,16 @@ public class AddMemberScreen extends Screen {
             return;
         }
         filteredPlayers.clear();
+        Project project = TodoListCommon.getProjectManager().getProject(projectId);
         String query = searchField == null ? "" : searchField.getText();
         if (query == null) {
             query = "";
         }
         String q = query.trim().toLowerCase();
         for (net.minecraft.client.network.PlayerListEntry entry : allPlayers) {
+            if (isAlreadyMember(project, entry.getProfile().getId())) {
+                continue;
+            }
             String name = entry.getProfile().getName();
             if (name == null) {
                 continue;
@@ -127,6 +133,18 @@ public class AddMemberScreen extends Screen {
         }
         scrollOffset = 0;
         updatePlayerButtons();
+    }
+
+    private boolean isAlreadyMember(Project project, UUID playerId) {
+        if (project == null || playerId == null) {
+            return false;
+        }
+        String uuid = playerId.toString();
+        String ownerUuid = project.getOwnerUuid();
+        if (ownerUuid != null && !ownerUuid.isEmpty() && ownerUuid.equals(uuid)) {
+            return true;
+        }
+        return project.getMembers().containsKey(uuid);
     }
 
     private void updatePlayerButtons() {

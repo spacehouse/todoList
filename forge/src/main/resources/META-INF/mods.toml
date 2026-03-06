@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+
+[[mods]]
+modId = "todolist"
+version = "${version}"
+displayName = "Todo List Mod"
+authors = "TodoList Team"
+description = '''
+A simple and powerful todo list mod for Minecraft
+'''
+
+[[dependencies.todolist]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.todolist]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1,1.21)"
+ordering = "NONE"
+side = "BOTH"

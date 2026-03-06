@@ -598,6 +598,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     taskToUpdate.setPriority(priority);
                 }
                 refreshTaskList();
+                if (taskToUpdate != null && taskListWidget != null) {
+                    taskListWidget.ensureVisible(taskToUpdate);
+                }
                 if (taskToUpdate != null) {
                     ClientBridge.ops().sendUpdateTask(taskToUpdate);
                 }
@@ -1732,6 +1735,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         updateViewButtonsState();
         rebuildUI();
     }
+
+    private void syncHudViewForProject(Project project) {
+        ModConfig config = ModConfig.getInstance();
+        if (project == null || project.getScope() == Project.Scope.PERSONAL) {
+            config.setHudDefaultView("PERSONAL");
+            return;
+        }
+        config.setHudDefaultView("TEAM_UNASSIGNED");
+    }
     
     private void updateViewButtonsState() {
         if (viewToggleButton != null) {
@@ -1744,6 +1756,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.selectedTask = null;
         this.currentProject = project;
         rememberSelectedProject(project);
+        syncHudViewForProject(project);
 
         if (project == null) {
             this.taskManager = this.personalTaskManager;

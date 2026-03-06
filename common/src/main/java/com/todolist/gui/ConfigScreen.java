@@ -52,6 +52,8 @@ public class ConfigScreen extends Screen {
     private boolean soundEffectsValue;
     private String hudDefaultViewValue;
     private int hudDefaultViewIndex;
+    private String[] hudDefaultViewOptions = HudViewOptions.VALUES;
+    private boolean lockHudDefaultViewOption;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
 
@@ -162,36 +164,45 @@ public class ConfigScreen extends Screen {
         row++;
 
         String currentView = cfg.getHudDefaultView();
-        String[] views = HudViewOptions.VALUES;
+        Project.Scope activeScope = resolveActiveProjectScope();
+        boolean singlePlayer = this.client != null && this.client.isInSingleplayer();
+        if (singlePlayer || activeScope == Project.Scope.PERSONAL) {
+            hudDefaultViewOptions = new String[] { "PERSONAL" };
+            lockHudDefaultViewOption = true;
+        } else if (activeScope == Project.Scope.TEAM) {
+            hudDefaultViewOptions = new String[] { "TEAM_UNASSIGNED", "TEAM_ALL", "TEAM_ASSIGNED" };
+            lockHudDefaultViewOption = false;
+        } else {
+            hudDefaultViewOptions = HudViewOptions.VALUES;
+            lockHudDefaultViewOption = false;
+        }
         hudDefaultViewIndex = 0;
-        for (int i = 0; i < views.length; i++) {
-            if (views[i].equalsIgnoreCase(currentView)) {
+        for (int i = 0; i < hudDefaultViewOptions.length; i++) {
+            if (hudDefaultViewOptions[i].equalsIgnoreCase(currentView)) {
                 hudDefaultViewIndex = i;
                 break;
             }
         }
-        hudDefaultViewValue = views[hudDefaultViewIndex];
-
-        boolean singlePlayer = this.client != null && this.client.isInSingleplayer();
-        if (singlePlayer) {
+        if (hudDefaultViewOptions.length == 0) {
+            hudDefaultViewOptions = new String[] { "PERSONAL" };
             hudDefaultViewIndex = 0;
-            hudDefaultViewValue = HudViewOptions.VALUES[0];
         }
+        hudDefaultViewValue = hudDefaultViewOptions[Math.max(0, Math.min(hudDefaultViewIndex, hudDefaultViewOptions.length - 1))];
 
         int defaultViewLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_default_view"));
         int defaultViewButtonX = x + defaultViewLabelWidth + 10;
         int defaultViewButtonWidth = guiWidth - (defaultViewButtonX - x);
 
         hudDefaultViewButton = ButtonWidget.builder(Text.empty(), b -> {
-            if (this.client != null && this.client.isInSingleplayer()) {
+            if (lockHudDefaultViewOption || hudDefaultViewOptions.length == 0) {
                 return;
             }
-            hudDefaultViewIndex = (hudDefaultViewIndex + 1) % HudViewOptions.VALUES.length;
-            hudDefaultViewValue = HudViewOptions.VALUES[hudDefaultViewIndex];
+            hudDefaultViewIndex = (hudDefaultViewIndex + 1) % hudDefaultViewOptions.length;
+            hudDefaultViewValue = hudDefaultViewOptions[hudDefaultViewIndex];
             updateHudDefaultViewButtonLabel();
         }).dimensions(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
         this.addDrawableChild(hudDefaultViewButton);
-        if (singlePlayer) {
+        if (lockHudDefaultViewOption) {
             hudDefaultViewButton.active = false;
         }
 
@@ -510,6 +521,14 @@ public class ConfigScreen extends Screen {
 
     private static Text getProjectDisplayName(Project project) {
         return ProjectNameFormatter.toDisplayText(project);
+    }
+
+    private Project.Scope resolveActiveProjectScope() {
+        Project activeProject = ClientBridge.getActiveProject(TodoListCommon.getProjectManager());
+        if (activeProject == null) {
+            return null;
+        }
+        return activeProject.getScope();
     }
 
     private static class HudViewOptions {
