@@ -124,6 +124,25 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf);
     }
 
+    /**
+     * 向服务端上报当前激活项目 ID（用于命令默认关联项目等服务端逻辑）。
+     *
+     * @param projectId 项目 ID，null 表示清空
+     */
+    public static void sendSetActiveProjectId(String projectId) {
+        if (!ForgeNetworkBridge.canSend(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        if (projectId == null || projectId.isEmpty()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeUtf(projectId);
+        }
+        ForgeNetworkBridge.sendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
+    }
+
     private static void addProjectLocally(Project project) {
         if (project == null) {
             return;

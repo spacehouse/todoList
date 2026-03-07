@@ -24,6 +24,8 @@ public final class FabricProjectPacketRegistrar {
                 ProjectPackets.onUpdateMemberRolePacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(ProjectPackets.REQUEST_JOIN_PROJECT_ID, (server, player, handler, buf, responseSender) ->
                 ProjectPackets.onRequestJoinProjectPacket(server, player, buf));
+        ServerPlayNetworking.registerGlobalReceiver(ProjectPackets.SET_ACTIVE_PROJECT_ID, (server, player, handler, buf, responseSender) ->
+                ProjectPackets.onSetActiveProjectPacket(server, player, buf));
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 ProjectPackets.onPlayerJoin(server, handler.getPlayer()));

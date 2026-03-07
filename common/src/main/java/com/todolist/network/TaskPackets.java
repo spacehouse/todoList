@@ -82,7 +82,10 @@ public class TaskPackets {
         });
     }
 
-    private static void syncTasksToPlayer(ServerPlayer player) {
+    /**
+     * 将服务端当前玩家个人任务列表同步到该玩家客户端。
+     */
+    public static void syncTasksToPlayer(ServerPlayer player) {
         if (player == null) {
             return;
         }
@@ -90,12 +93,21 @@ public class TaskPackets {
         try {
             java.util.UUID playerUuid = player.getUUID();
             List<Task> tasks = storage.loadPlayerTasks(playerUuid);
-            if (!storage.hasPlayerTasks(playerUuid)) {
-                List<Task> fallback = storage.loadTasks();
+            boolean playerFileExists = storage.hasPlayerTasks(playerUuid);
+            List<Task> fallback = storage.loadTasks();
+            if (!playerFileExists) {
                 if (!fallback.isEmpty()) {
                     tasks = fallback;
                     storage.savePlayerTasks(playerUuid, tasks);
                     TodoConstants.LOGGER.info("Migrated {} tasks from local storage to player file {}", tasks.size(), playerUuid);
+                }
+            } else if (tasks.isEmpty() && !fallback.isEmpty()) {
+                long playerLastSaved = storage.getPlayerTasksLastSaved(playerUuid);
+                long localLastSaved = storage.getLocalTasksLastSaved();
+                if (localLastSaved > playerLastSaved) {
+                    tasks = fallback;
+                    storage.savePlayerTasks(playerUuid, tasks);
+                    TodoConstants.LOGGER.info("Recovered {} tasks from local storage for player file {}", tasks.size(), playerUuid);
                 }
             }
             FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -219,4 +231,3 @@ public class TaskPackets {
         void send(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf);
     }
 }
-

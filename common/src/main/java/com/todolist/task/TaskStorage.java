@@ -192,6 +192,34 @@ public class TaskStorage {
         return tasks;
     }
 
+    public long getLocalTasksLastSaved() {
+        return readLastSavedSafe(dataDir.resolve(DATA_FILE));
+    }
+
+    public long getPlayerTasksLastSaved(UUID playerUuid) {
+        if (playerUuid == null) {
+            return 0L;
+        }
+        Path playersDir = DataPathProvider.getTaskPlayersDir();
+        Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
+        return readLastSavedSafe(playerFile);
+    }
+
+    private long readLastSavedSafe(Path file) {
+        if (file == null || !Files.exists(file)) {
+            return 0L;
+        }
+        try {
+            CompoundTag root = NbtIo.read(file.toFile());
+            if (root == null) {
+                return 0L;
+            }
+            return root.getLong("lastSaved");
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
     private void maybeLogLoadSummary(Path file, int version, long lastSaved, int taskCount) {
         Long lastLoggedLastSaved = lastLoggedLastSavedByFile.get(file);
         Integer lastLoggedCount = lastLoggedTaskCountByFile.get(file);

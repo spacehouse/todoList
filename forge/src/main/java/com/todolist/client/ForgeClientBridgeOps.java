@@ -30,6 +30,11 @@ public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
     }
 
     @Override
+    public void sendSetActiveProjectId(String projectId) {
+        ForgeClientProjectPackets.sendSetActiveProjectId(projectId);
+    }
+
+    @Override
     public void sendUpdateTask(Task task) {
         ForgeClientTaskPackets.sendUpdateTask(task);
     }

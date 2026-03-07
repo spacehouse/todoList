@@ -4,11 +4,14 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.network.ProjectPackets;
+import com.todolist.network.TaskPackets;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -16,6 +19,7 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
@@ -23,6 +27,8 @@ import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -35,10 +41,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +87,9 @@ public final class CommandBootstrap {
         PERSIST_DATA,
         REFRESH_HUD
     }
+
+    private static final long CLEAR_CONFIRM_WINDOW_MILLIS = 15_000L;
+    private static final ConcurrentHashMap<String, Long> pendingTaskClearConfirmMap = new ConcurrentHashMap<>();
 
     /**
      * 私有构造函数，避免工具类被实例化。
@@ -129,6 +140,7 @@ public final class CommandBootstrap {
                                                                 StringArgumentType.getString(ctx, "text")
                                                         ))))))
                         .then(Commands.literal("add")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("title", StringArgumentType.string())
                                         .executes(ctx -> executeTaskAdd(
                                                 ctx.getSource(),
@@ -149,21 +161,59 @@ public final class CommandBootstrap {
                                                                 StringArgumentType.getString(ctx, "title"),
                                                                 StringArgumentType.getString(ctx, "description"),
                                                                 StringArgumentType.getString(ctx, "tags")
-                                                        )))))))
+                                                        ))))))
+                        .then(Commands.literal("addp")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestBindableProjectIds)
+                                        .then(Commands.argument("title", StringArgumentType.string())
+                                                .executes(ctx -> executeTaskAddWithProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "title"),
+                                                        null,
+                                                        null
+                                                ))
+                                                .then(Commands.argument("description", StringArgumentType.string())
+                                                        .executes(ctx -> executeTaskAddWithProject(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "title"),
+                                                                StringArgumentType.getString(ctx, "description"),
+                                                                null
+                                                        ))
+                                                        .then(Commands.argument("tags", StringArgumentType.greedyString())
+                                                                .executes(ctx -> executeTaskAddWithProject(
+                                                                        ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                                        StringArgumentType.getString(ctx, "title"),
+                                                                        StringArgumentType.getString(ctx, "description"),
+                                                                        StringArgumentType.getString(ctx, "tags")
+                                                                )))))))
                         .then(Commands.literal("clear")
-                                .executes(ctx -> executeTaskClear(ctx.getSource())))
+                                .executes(ctx -> requestTaskClearConfirm(ctx.getSource(), "/todo task clear confirm"))
+                                .then(Commands.literal("confirm")
+                                        .executes(ctx -> executeTaskClearConfirm(ctx.getSource()))))
+                        .then(Commands.literal("clean")
+                                .executes(ctx -> requestTaskClearConfirm(ctx.getSource(), "/todo task clean confirm"))
+                                .then(Commands.literal("confirm")
+                                        .executes(ctx -> executeTaskClearConfirm(ctx.getSource()))))
                         .then(Commands.literal("done")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("taskId", StringArgumentType.word())
                                         .executes(ctx -> executeTaskDone(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
                         .then(Commands.literal("remove")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("taskId", StringArgumentType.word())
                                         .executes(ctx -> executeTaskRemove(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
+                )
+                        
                 .then(Commands.literal("project")
                         .executes(ctx -> sendUnimplemented(ctx.getSource(), "project"))
                         .then(Commands.literal("list")
@@ -171,6 +221,7 @@ public final class CommandBootstrap {
                         .then(Commands.literal("current")
                                 .executes(ctx -> sendCurrentProjectByTaskStats(ctx.getSource()))))
                 .then(Commands.literal("hud")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL, null))
                         .executes(ctx -> sendHudStatus(ctx.getSource()))
                         .then(Commands.literal("status")
                                 .executes(ctx -> sendHudStatus(ctx.getSource())))
@@ -233,7 +284,9 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_task",
                 "command.todolist.help.todo_task_list",
                 "command.todolist.help.todo_task_add",
+                "command.todolist.help.todo_task_addp",
                 "command.todolist.help.todo_task_clear",
+                "command.todolist.help.todo_task_clean",
                 "command.todolist.help.todo_task_done",
                 "command.todolist.help.todo_task_remove",
                 "command.todolist.help.todo_project",
@@ -246,6 +299,10 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_join_deny",
                 "command.todolist.help.alias"
         );
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player != null && source.getServer() != null) {
+            source.getServer().getCommands().sendCommands(player);
+        }
         return sendCommandSuccess(source, Command.SINGLE_SUCCESS, SIDE_EFFECT_NONE);
     }
 
@@ -365,8 +422,13 @@ public final class CommandBootstrap {
                 newTask.setTags(parsedTags);
             }
             newTask.setCreatorUuid(playerUuid.toString());
+            String resolvedProjectId = resolveProjectIdForCommandTaskAdd(source, player);
+            if (resolvedProjectId != null && !resolvedProjectId.isBlank()) {
+                newTask.setProjectId(resolvedProjectId);
+            }
             tasks.add(newTask);
             storage.savePlayerTasks(playerUuid, tasks);
+            syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -380,6 +442,28 @@ public final class CommandBootstrap {
         }
     }
 
+    /**
+     * 为 /todo task add 解析默认 projectId：优先使用客户端上报的激活项目，其次回退到默认个人项目。
+     */
+    private static String resolveProjectIdForCommandTaskAdd(CommandSourceStack source, ServerPlayer player) {
+        if (player == null) {
+            return null;
+        }
+        String activeProjectId = ProjectPackets.getActiveProjectId(player);
+        if (activeProjectId != null && !activeProjectId.isBlank()) {
+            Project active = TodoListCommon.getProjectManager().getProject(activeProjectId);
+            if (active != null && active.getScope() == Project.Scope.PERSONAL && isProjectBindableForPlayer(activeProjectId, player)) {
+                return activeProjectId;
+            }
+        }
+        String defaultId = ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID;
+        Project def = TodoListCommon.getProjectManager().getProject(defaultId);
+        if (def != null && def.getScope() == Project.Scope.PERSONAL && isProjectBindableForPlayer(defaultId, player)) {
+            return defaultId;
+        }
+        return null;
+    }
+
     private static Set<String> parseTagSet(String tags) {
         if (tags == null || tags.isBlank()) {
             return Set.of();
@@ -388,6 +472,16 @@ public final class CommandBootstrap {
                 .map(String::trim)
                 .filter(tag -> !tag.isEmpty())
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * 将当前玩家个人任务列表同步到客户端，保证命令写盘后界面能立即刷新。
+     */
+    private static void syncTasksToPlayer(MinecraftServer server, ServerPlayer player) {
+        if (server == null || player == null) {
+            return;
+        }
+        TaskPackets.syncTasksToPlayer(player);
     }
 
     private static boolean matchesTaskStatus(Task task, String status) {
@@ -434,20 +528,50 @@ public final class CommandBootstrap {
     }
 
     /**
-     * 清空当前玩家所有任务并写回存储。
+     * 请求任务清空确认：首次执行仅提示确认入口，不做实际清空。
      */
-    private static int executeTaskClear(CommandSourceStack source) {
-        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+    private static int requestTaskClearConfirm(CommandSourceStack source, String confirmCommand) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
         ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
+        pendingTaskClearConfirmMap.put(player.getStringUUID(), System.currentTimeMillis());
+        return sendTaskClearConfirmHint(source, confirmCommand);
+    }
+
+    /**
+     * 执行任务清空确认：仅在确认窗口内才会实际清空任务。
+     */
+    private static int executeTaskClearConfirm(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String uuid = player.getStringUUID();
+        Long issuedAt = pendingTaskClearConfirmMap.get(uuid);
+        if (issuedAt == null || System.currentTimeMillis() - issuedAt > CLEAR_CONFIRM_WINDOW_MILLIS) {
+            pendingTaskClearConfirmMap.remove(uuid);
+            return sendCommandFailure(source, "command.todolist.task.clear.confirm_expired");
+        }
+        pendingTaskClearConfirmMap.remove(uuid);
+        return executeTaskClearNow(source, player);
+    }
+
+    /**
+     * 清空当前玩家所有任务并写回存储。
+     */
+    private static int executeTaskClearNow(CommandSourceStack source, ServerPlayer player) {
         UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.savePlayerTasks(playerUuid, List.of());
+            syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -458,6 +582,16 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.error("Failed to clear tasks for command", e);
             return sendCommandFailure(source, "command.todolist.task.clear.failed");
         }
+    }
+
+    /**
+     * 输出二次确认提示，并提供可点击的 confirm 命令。
+     */
+    private static int sendTaskClearConfirmHint(CommandSourceStack source, String confirmCommand) {
+        MutableComponent button = Component.translatable("command.todolist.task.clear.confirm_button")
+                .withStyle(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, confirmCommand)));
+        sendFeedback(source, () -> Component.translatable("command.todolist.task.clear.confirm_hint", button));
+        return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE);
     }
 
     /**
@@ -644,6 +778,7 @@ public final class CommandBootstrap {
 
             task.setCompleted(true);
             storage.savePlayerTasks(playerUuid, tasks);
+            syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -679,6 +814,7 @@ public final class CommandBootstrap {
 
             tasks.remove(task);
             storage.savePlayerTasks(playerUuid, tasks);
+            syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -779,6 +915,8 @@ public final class CommandBootstrap {
             return source.hasPermission(2);
         }
 
+        ModConfig.CommandAccessMode accessMode = ModConfig.getInstance().getCommandAccessMode();
+        boolean op = source.hasPermission(2);
         ServerPlayer player = getPlayerOrNull(source);
         if (player == null) {
             return false;
@@ -788,15 +926,119 @@ public final class CommandBootstrap {
             return hasProjectAdminPermission(source, player, projectId);
         }
         if (semantic == CommandPermissionSemantic.HUD_CONTROL) {
-            return true;
+            return op;
         }
         if (semantic == CommandPermissionSemantic.VIEW) {
-            return true;
+            return accessMode != ModConfig.CommandAccessMode.OP_ONLY || op;
         }
         if (semantic == CommandPermissionSemantic.EDIT) {
-            return true;
+            if (accessMode == ModConfig.CommandAccessMode.FULL) {
+                return true;
+            }
+            return op;
         }
         return false;
+    }
+
+    /**
+     * 为当前玩家添加一条新任务（关联指定项目）并写回存储。
+     */
+    private static int executeTaskAddWithProject(CommandSourceStack source, String projectId, String title, String description, String tags) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.task.add.invalid_project");
+        }
+        if (!isProjectBindableForPlayer(normalizedProjectId, player)) {
+            return sendCommandFailure(source, "command.todolist.task.add.invalid_project");
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+            String normalizedTitle = title == null ? "" : title.trim();
+            if (normalizedTitle.isEmpty()) {
+                return sendCommandFailure(source, "command.todolist.task.add.invalid_title");
+            }
+            String normalizedDescription = description == null ? "" : description.trim();
+            Task newTask = new Task(normalizedTitle, normalizedDescription);
+            Set<String> parsedTags = parseTagSet(tags);
+            if (!parsedTags.isEmpty()) {
+                newTask.setTags(parsedTags);
+            }
+            newTask.setCreatorUuid(playerUuid.toString());
+            newTask.setProjectId(normalizedProjectId);
+            tasks.add(newTask);
+            storage.savePlayerTasks(playerUuid, tasks);
+            syncTasksToPlayer(source.getServer(), player);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.add.success",
+                    normalizedTitle
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to add task with project for command", e);
+            return sendCommandFailure(source, "command.todolist.task.add.failed");
+        }
+    }
+
+    /**
+     * 判断指定项目是否允许被当前玩家用于任务关联。
+     */
+    private static boolean isProjectBindableForPlayer(String projectId, ServerPlayer player) {
+        if (player == null || projectId == null || projectId.isBlank()) {
+            return false;
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(projectId);
+        if (project == null) {
+            return false;
+        }
+        String playerUuid = player.getStringUUID();
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            String ownerUuid = project.getOwnerUuid();
+            return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(playerUuid);
+        }
+        if (player.hasPermissions(2)) {
+            return true;
+        }
+        if (playerUuid.equals(project.getOwnerUuid())) {
+            return true;
+        }
+        return project.getMemberRole(playerUuid) != null;
+    }
+
+    /**
+     * 为 addp 命令的 projectId 参数提供自动补全，只返回玩家权限范围内可关联的项目 ID。
+     */
+    private static CompletableFuture<Suggestions> suggestBindableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player == null) {
+            return builder.buildFuture();
+        }
+        ProjectManager projectManager = TodoListCommon.getProjectManager();
+        for (Project project : projectManager.getAllProjects()) {
+            if (project == null) {
+                continue;
+            }
+            String projectId = project.getId();
+            if (projectId == null || projectId.isBlank()) {
+                continue;
+            }
+            if (!isProjectBindableForPlayer(projectId, player)) {
+                continue;
+            }
+            builder.suggest(projectId);
+        }
+        return builder.buildFuture();
     }
 
     /**

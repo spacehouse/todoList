@@ -36,6 +36,11 @@ public final class ClientBridge {
         void setActiveProjectId(String projectId);
 
         /**
+         * 将当前激活的项目 ID 同步到服务端，供命令默认关联项目等逻辑使用。
+         */
+        void sendSetActiveProjectId(String projectId);
+
+        /**
          * 发送单条任务更新到服务端。
          */
         void sendUpdateTask(Task task);
@@ -118,6 +123,10 @@ public final class ClientBridge {
         @Override
         public void setActiveProjectId(String projectId) {
             activeProjectId = projectId;
+        }
+
+        @Override
+        public void sendSetActiveProjectId(String projectId) {
         }
 
         @Override

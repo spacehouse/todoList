@@ -25,6 +25,18 @@ public class ModConfig {
 
     private static ModConfig instance;
 
+    /**
+     * 服务端命令开放级别：
+     * - OP_ONLY：仅 OP 可用（默认）。
+     * - VIEW_ONLY：普通玩家仅可使用查看类命令，编辑类仍需 OP。
+     * - FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器开启）。
+     */
+    public enum CommandAccessMode {
+        OP_ONLY,
+        VIEW_ONLY,
+        FULL
+    }
+
     // Configuration options
     private boolean enableHud = true;
     private boolean enableTaskBook = true;
@@ -35,6 +47,7 @@ public class ModConfig {
     private String defaultPriority = "MEDIUM";
     private boolean enableTaskRewards = false;
     private boolean defaultPersonalProjectInitialized = false;
+    private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -131,6 +144,10 @@ public class ModConfig {
         if (gui == null) {
             gui = new GuiConfig();
             return true;
+        }
+        if (commandAccessMode == null) {
+            commandAccessMode = CommandAccessMode.OP_ONLY;
+            changed = true;
         }
         if (gui.backgroundColor == 0xFF000000) {
             gui.backgroundColor = 0x88000000;
@@ -240,6 +257,21 @@ public class ModConfig {
     public boolean isDefaultPersonalProjectInitialized() { return defaultPersonalProjectInitialized; }
     public void setDefaultPersonalProjectInitialized(boolean defaultPersonalProjectInitialized) {
         this.defaultPersonalProjectInitialized = defaultPersonalProjectInitialized;
+        save();
+    }
+
+    /**
+     * 获取命令开放级别配置。
+     */
+    public CommandAccessMode getCommandAccessMode() {
+        return commandAccessMode == null ? CommandAccessMode.OP_ONLY : commandAccessMode;
+    }
+
+    /**
+     * 设置命令开放级别配置并立即写盘。
+     */
+    public void setCommandAccessMode(CommandAccessMode commandAccessMode) {
+        this.commandAccessMode = commandAccessMode == null ? CommandAccessMode.OP_ONLY : commandAccessMode;
         save();
     }
 

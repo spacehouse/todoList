@@ -315,16 +315,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void syncActiveProjectIdWithCurrentProject() {
         if (currentProject == null || projectManager == null) {
             ClientBridge.ops().setActiveProjectId(null);
+            ClientBridge.ops().sendSetActiveProjectId(null);
             return;
         }
         Project fresh = projectManager.getProject(currentProject.getId());
         if (fresh == null) {
             currentProject = null;
             ClientBridge.ops().setActiveProjectId(null);
+            ClientBridge.ops().sendSetActiveProjectId(null);
             return;
         }
         currentProject = fresh;
         ClientBridge.ops().setActiveProjectId(currentProject.getId());
+        ClientBridge.ops().sendSetActiveProjectId(currentProject.getId());
     }
 
     /**

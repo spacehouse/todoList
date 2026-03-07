@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Network packet handling for project synchronization
@@ -42,7 +43,9 @@ public class ProjectPackets {
     public static final ResourceLocation REMOVE_MEMBER_ID = new ResourceLocation(TodoConstants.MOD_ID, "remove_member");
     public static final ResourceLocation UPDATE_MEMBER_ROLE_ID = new ResourceLocation(TodoConstants.MOD_ID, "update_member_role");
     public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_join_project");
+    public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
+    private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
 
     public static void setServerPacketSender(TaskPackets.ServerPacketSender sender) {
         serverPacketSender = sender == null ? (player, channelId, buf) -> { } : sender;
@@ -141,6 +144,45 @@ public class ProjectPackets {
             return;
         }
         server.execute(() -> handleRequestJoinProject(server, player, projectId));
+    }
+
+    /**
+     * 客户端上报当前激活（选中）的项目 ID，用于命令默认关联项目等服务端逻辑。
+     */
+    public static void onSetActiveProjectPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        boolean present;
+        String projectId = null;
+        try {
+            present = buf.readBoolean();
+            if (present) {
+                projectId = PacketGuards.readString(buf, "projectId");
+            }
+        } catch (IllegalArgumentException ex) {
+            PacketGuards.logDrop(SET_ACTIVE_PROJECT_ID.toString(), ex);
+            return;
+        }
+        String finalProjectId = projectId;
+        server.execute(() -> {
+            if (player == null) {
+                return;
+            }
+            String uuid = player.getStringUUID();
+            if (!present || finalProjectId == null || finalProjectId.isBlank()) {
+                playerActiveProjectIdMap.remove(uuid);
+                return;
+            }
+            playerActiveProjectIdMap.put(uuid, finalProjectId.trim());
+        });
+    }
+
+    /**
+     * 获取服务端记录的玩家当前激活项目 ID（可能为 null）。
+     */
+    public static String getActiveProjectId(ServerPlayer player) {
+        if (player == null) {
+            return null;
+        }
+        return playerActiveProjectIdMap.get(player.getStringUUID());
     }
 
     public static void onPlayerJoin(MinecraftServer server, ServerPlayer player) {

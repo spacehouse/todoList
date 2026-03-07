@@ -54,6 +54,16 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
     }
 
     /**
+     * 将当前激活项目 ID 同步到服务端。
+     *
+     * @param projectId 项目 ID
+     */
+    @Override
+    public void sendSetActiveProjectId(String projectId) {
+        ClientProjectPackets.sendSetActiveProjectId(projectId);
+    }
+
+    /**
      * 发送更新任务请求（个人任务）。
      *
      * @param task 任务对象
