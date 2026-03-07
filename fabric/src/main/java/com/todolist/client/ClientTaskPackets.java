@@ -4,9 +4,8 @@ import com.todolist.TodoListMod;
 import com.todolist.network.TaskPackets;
 import com.todolist.task.Task;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.network.PacketByteBuf;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.FriendlyByteBuf;
 import java.util.List;
 
 /**
@@ -38,8 +37,8 @@ public class ClientTaskPackets {
         });
 
         ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TASK_CONFIRMED_ID, (client, handler, buf, responseSender) -> {
-            String action = buf.readString();
-            String taskId = buf.readString();
+            String action = buf.readUtf();
+            String taskId = buf.readUtf();
             boolean success = buf.readBoolean();
 
             client.execute(() -> {
@@ -54,14 +53,14 @@ public class ClientTaskPackets {
      * @param tasks 需要替换的任务列表
      */
     public static void sendReplaceAllTasks(List<Task> tasks) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.REPLACE_TASKS_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
         ClientPlayNetworking.send(TaskPackets.REPLACE_TASKS_ID, buf);
     }
@@ -72,14 +71,14 @@ public class ClientTaskPackets {
      * @param tasks 需要替换的团队任务列表
      */
     public static void sendReplaceTeamTasks(List<Task> tasks) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
         ClientPlayNetworking.send(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
     }
@@ -88,14 +87,14 @@ public class ClientTaskPackets {
      * 向服务端请求同步团队任务列表。
      */
     public static void requestTeamSync() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ClientPlayNetworking.send(TaskPackets.TEAM_REQUEST_SYNC_ID, buf);
     }
 
@@ -108,14 +107,14 @@ public class ClientTaskPackets {
         if (task == null) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.ADD_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
         ClientPlayNetworking.send(TaskPackets.ADD_TASK_ID, buf);
     }
@@ -129,14 +128,14 @@ public class ClientTaskPackets {
         if (task == null) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.UPDATE_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
         ClientPlayNetworking.send(TaskPackets.UPDATE_TASK_ID, buf);
     }
@@ -147,15 +146,15 @@ public class ClientTaskPackets {
      * @param taskId 任务 ID
      */
     public static void sendDeleteTask(String taskId) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.DELETE_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(taskId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(taskId);
         ClientPlayNetworking.send(TaskPackets.DELETE_TASK_ID, buf);
     }
 
@@ -165,15 +164,15 @@ public class ClientTaskPackets {
      * @param taskId 任务 ID
      */
     public static void sendToggleTask(String taskId) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.TOGGLE_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(taskId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(taskId);
         ClientPlayNetworking.send(TaskPackets.TOGGLE_TASK_ID, buf);
     }
 
@@ -183,15 +182,15 @@ public class ClientTaskPackets {
      * @param taskId 团队任务 ID
      */
     public static void sendToggleTeamTask(String taskId) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_TOGGLE_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(taskId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(taskId);
         ClientPlayNetworking.send(TaskPackets.TEAM_TOGGLE_TASK_ID, buf);
     }
 
@@ -202,20 +201,20 @@ public class ClientTaskPackets {
      * @param assigneeUuid  被指派玩家 UUID，为空表示取消指派
      */
     public static void sendAssignTeamTask(String taskId, String assigneeUuid) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.getNetworkHandler() == null) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
             return;
         }
         if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_ASSIGN_TASK_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(taskId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(taskId);
         if (assigneeUuid == null || assigneeUuid.isEmpty()) {
             buf.writeBoolean(false);
         } else {
             buf.writeBoolean(true);
-            buf.writeString(assigneeUuid);
+            buf.writeUtf(assigneeUuid);
         }
         ClientPlayNetworking.send(TaskPackets.TEAM_ASSIGN_TASK_ID, buf);
     }

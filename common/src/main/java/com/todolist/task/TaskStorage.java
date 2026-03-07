@@ -2,11 +2,9 @@ package com.todolist.task;
 
 import com.todolist.TodoConstants;
 import com.todolist.platform.DataPathProvider;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtList;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +22,7 @@ import java.util.UUID;
  * - Multiplayer: world/todo/players/{uuid}.dat
  */
 public class TaskStorage {
+    private static final int NBT_COMPOUND_TYPE = 10;
     private static final String DATA_FILE = "moddata.dat";
     private static final String TEAM_FILE = "team_tasks.dat";
 
@@ -97,11 +96,11 @@ public class TaskStorage {
      * Save tasks to a specific file
      */
     private void saveTasksToFile(List<Task> tasks, Path file) throws IOException {
-        NbtCompound root = new NbtCompound();
+        CompoundTag root = new CompoundTag();
         root.putLong("lastSaved", System.currentTimeMillis());
         root.putInt("version", 1);
 
-        NbtList taskList = new NbtList();
+        ListTag taskList = new ListTag();
         for (Task task : tasks) {
             taskList.add(task.toNbt());
         }
@@ -167,7 +166,7 @@ public class TaskStorage {
      * Load tasks from a specific file
      */
     private List<Task> loadTasksFromFile(Path file) throws IOException {
-        NbtCompound root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIo.read(file.toFile());
         if (root == null) {
             TodoConstants.LOGGER.warn("Failed to read task data from {}", file);
             return new ArrayList<>();
@@ -176,11 +175,11 @@ public class TaskStorage {
         long lastSaved = root.getLong("lastSaved");
         int version = root.getInt("version");
 
-        NbtList taskList = root.getList("tasks", NbtElement.COMPOUND_TYPE);
+        ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
         List<Task> tasks = new ArrayList<>();
 
         for (int i = 0; i < taskList.size(); i++) {
-            NbtCompound taskNbt = taskList.getCompound(i);
+            CompoundTag taskNbt = taskList.getCompound(i);
             try {
                 Task task = Task.fromNbt(taskNbt);
                 tasks.add(task);

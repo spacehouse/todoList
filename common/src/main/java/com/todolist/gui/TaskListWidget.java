@@ -2,20 +2,19 @@ package com.todolist.gui;
 
 import com.todolist.config.ModConfig;
 import com.todolist.task.Task;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.Drawable;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.network.chat.Component;
 
 /**
  * 任务列表组件：渲染任务条目、处理选中/悬停，并支持滚动与完成状态切换。
  */
-public class TaskListWidget implements Drawable {
-    private final MinecraftClient client;
+public class TaskListWidget implements Renderable {
+    private final Minecraft client;
     private final int x;
     private final int y;
     private final int width;
@@ -33,7 +32,7 @@ public class TaskListWidget implements Drawable {
     /**
      * 创建任务列表组件。
      */
-    public TaskListWidget(MinecraftClient client, int x, int y, int width, int height) {
+    public TaskListWidget(Minecraft client, int x, int y, int width, int height) {
         this.client = client;
         this.x = x;
         this.y = y;
@@ -81,12 +80,12 @@ public class TaskListWidget implements Drawable {
     }
 
     @Override
-    public void render(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
 
         // 缁樺埗鑳屾櫙
         context.fill(x, y, x + width, y + height, config.getBackgroundColor());
-        context.drawBorder(x, y, width, height, config.getBorderColor());
+        context.renderOutline(x, y, width, height, config.getBorderColor());
 
         // 缁樺埗浠诲姟
         renderTasks(context, mouseX, mouseY);
@@ -104,8 +103,8 @@ public class TaskListWidget implements Drawable {
         }
     }
 
-    private void renderTasks(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY) {
-        TextRenderer textRenderer = client.textRenderer;
+    private void renderTasks(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY) {
+        Font textRenderer = client.font;
         ModConfig config = ModConfig.getInstance();
         int scrollOffset = scrollBar.getValue();
         int visibleTasks = Math.min(tasks.size() - scrollOffset, height / taskItemHeight);
@@ -128,7 +127,7 @@ public class TaskListWidget implements Drawable {
             int checkboxX = x + 12;
             int checkboxY = taskY + (taskItemHeight - 12) / 2;
             context.fill(checkboxX, checkboxY, checkboxX + 12, checkboxY + 12, 0xFF000000);
-            context.drawBorder(checkboxX, checkboxY, 12, 12, 0xFFFFFFFF);
+            context.renderOutline(checkboxX, checkboxY, 12, 12, 0xFFFFFFFF);
 
             if (task.isCompleted()) {
                 context.fill(checkboxX + 3, checkboxY + 5, checkboxX + 5, checkboxY + 7, 0xFF00FF00);
@@ -144,8 +143,8 @@ public class TaskListWidget implements Drawable {
             int rightLimit = scrollBar.getBarX() - 2;
             int maxTitleWidth = rightLimit - reservedForTags - titleX;
             String truncatedTitle = trimWithEllipsis(textRenderer, title, maxTitleWidth);
-            context.drawText(textRenderer, Text.of(truncatedTitle),
-                    titleX, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
+            context.drawString(textRenderer, Component.nullToEmpty(truncatedTitle),
+                    titleX, taskY + (taskItemHeight - textRenderer.lineHeight) / 2,
                     textColor, false);
 
             if (width > 150) {
@@ -163,9 +162,9 @@ public class TaskListWidget implements Drawable {
                 String assigneeName = null;
                 String assigneeUuid = task.getAssigneeUuid();
                 if (assigneeUuid != null && !assigneeUuid.isEmpty()) {
-                    if (client != null && client.getNetworkHandler() != null) {
-                        java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
-                        for (net.minecraft.client.network.PlayerListEntry entry : entries) {
+                    if (client != null && client.getConnection() != null) {
+                        java.util.Collection<net.minecraft.client.multiplayer.PlayerInfo> entries = client.getConnection().getOnlinePlayers();
+                        for (net.minecraft.client.multiplayer.PlayerInfo entry : entries) {
                             if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
                                 String name = entry.getProfile().getName();
                                 if (name != null && !name.isEmpty()) {
@@ -195,8 +194,8 @@ public class TaskListWidget implements Drawable {
                 if (!display.isEmpty()) {
                     int maxTagWidth = rightForTags - tagX;
                     String truncatedTag = trimWithEllipsis(textRenderer, display, maxTagWidth);
-                    context.drawText(textRenderer, Text.of(truncatedTag),
-                            tagX, taskY + (taskItemHeight - textRenderer.fontHeight) / 2,
+                    context.drawString(textRenderer, Component.nullToEmpty(truncatedTag),
+                            tagX, taskY + (taskItemHeight - textRenderer.lineHeight) / 2,
                             0xFF55FFFF, false);
                 }
             }
@@ -210,7 +209,7 @@ public class TaskListWidget implements Drawable {
                 taskIndex >= 0 && taskIndex < tasks.size()) {
             Task task = tasks.get(taskIndex);
             String assignee = task.getAssigneeUuid();
-            String uuid = client.player.getUuid().toString();
+            String uuid = client.player.getUUID().toString();
             if (assignee != null && assignee.equals(uuid)) {
                 return 0xFF202020;
             }
@@ -363,22 +362,22 @@ public class TaskListWidget implements Drawable {
         }
     }
 
-    private String trimWithEllipsis(TextRenderer textRenderer, String text, int maxWidth) {
+    private String trimWithEllipsis(Font textRenderer, String text, int maxWidth) {
         if (text == null) {
             return "";
         }
         if (maxWidth <= 0) {
             return "...";
         }
-        if (textRenderer.getWidth(text) <= maxWidth) {
+        if (textRenderer.width(text) <= maxWidth) {
             return text;
         }
-        int ellipsisWidth = textRenderer.getWidth("...");
+        int ellipsisWidth = textRenderer.width("...");
         int coreWidth = maxWidth - ellipsisWidth;
         if (coreWidth <= 0) {
             return "...";
         }
-        String core = textRenderer.trimToWidth(text, coreWidth);
+        String core = textRenderer.plainSubstrByWidth(text, coreWidth);
         return core + "...";
     }
 }

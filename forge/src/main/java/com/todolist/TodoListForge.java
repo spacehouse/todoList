@@ -2,7 +2,11 @@ package com.todolist;
 
 import com.todolist.bootstrap.CommandBootstrap;
 import com.todolist.bootstrap.EventBootstrap;
+import com.todolist.client.ForgeTodoClient;
 import com.todolist.config.ModConfig;
+import com.todolist.forge.network.ForgeNetworkBridge;
+import com.todolist.forge.network.ForgeProjectPacketRegistrar;
+import com.todolist.forge.network.ForgeTaskPacketRegistrar;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -18,6 +22,11 @@ import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.IExtensionPoint;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +53,7 @@ public class TodoListForge {
      */
     public TodoListForge() {
         LOGGER.info("Initializing Todo List Mod (Forge)...");
+        registerDisplayTest();
 
         DataPathProvider.setGameDirSupplier(() -> FMLPaths.GAMEDIR.get());
 
@@ -75,9 +85,28 @@ public class TodoListForge {
             LOGGER.error("Failed to load projects", e);
         }
 
+        ForgeNetworkBridge.init();
+        ForgeTaskPacketRegistrar.register();
+        ForgeProjectPacketRegistrar.register();
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> ForgeTodoClient::initialize);
+
         MinecraftForge.EVENT_BUS.register(this);
 
         LOGGER.info("Todo List Mod (Forge) initialized!");
+    }
+
+    private void registerDisplayTest() {
+        try {
+            ModLoadingContext.get().registerExtensionPoint(
+                    IExtensionPoint.DisplayTest.class,
+                    () -> new IExtensionPoint.DisplayTest(
+                            () -> "IGNORE_SERVER_VERSION",
+                            (remoteVersion, isFromServer) -> true
+                    )
+            );
+        } catch (Exception e) {
+            LOGGER.warn("Failed to register display test extension point", e);
+        }
     }
 
     /**
@@ -287,5 +316,17 @@ public class TodoListForge {
     private void serverStopped(MinecraftServer server) {
         LOGGER.info("Todo List Mod (Forge): Server stopped, saving data...");
         ProjectSaveDebouncer.flushNow(server);
+    }
+
+    public static TaskStorage getTaskStorage() {
+        return taskStorage;
+    }
+
+    public static ProjectStorage getProjectStorage() {
+        return projectStorage;
+    }
+
+    public static ProjectManager getProjectManager() {
+        return projectManager;
     }
 }

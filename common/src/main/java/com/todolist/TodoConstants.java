@@ -4,11 +4,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 妯＄粍甯搁噺绫汇€? * 鍖呭惈妯＄粍 ID銆佹棩蹇楄褰曞櫒绛夊叏灞€甯搁噺銆? */
+ * 模组常量类。
+ * 包含模组 ID、日志记录器等全局常量。
+ */
 public final class TodoConstants {
-    /** 妯＄粍 ID */
+    /** 模组 ID */
     public static final String MOD_ID = "todolist";
-    /** 鍏ㄥ眬鏃ュ織璁板綍鍣?*/
+    /** 全局日志记录器 */
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private TodoConstants() {

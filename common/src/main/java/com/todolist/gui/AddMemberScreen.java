@@ -3,17 +3,17 @@ package com.todolist.gui;
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
 import com.todolist.project.Project;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /**
  * 新增成员界面：从在线玩家列表中搜索并向服务端发送添加成员请求。
@@ -21,10 +21,10 @@ import java.util.UUID;
 public class AddMemberScreen extends Screen {
     private final Screen parent;
     private final String projectId;
-    private TextFieldWidget searchField;
-    private List<net.minecraft.client.network.PlayerListEntry> allPlayers;
-    private List<net.minecraft.client.network.PlayerListEntry> filteredPlayers;
-    private ButtonWidget[] playerButtons;
+    private EditBox searchField;
+    private List<net.minecraft.client.multiplayer.PlayerInfo> allPlayers;
+    private List<net.minecraft.client.multiplayer.PlayerInfo> filteredPlayers;
+    private Button[] playerButtons;
     private int scrollOffset;
     private int visibleRows;
     private int listX;
@@ -37,14 +37,14 @@ public class AddMemberScreen extends Screen {
      * 创建新增成员界面。
      */
     public AddMemberScreen(Screen parent, String projectId) {
-        super(Text.translatable("gui.todolist.add_member.title"));
+        super(Component.translatable("gui.todolist.add_member.title"));
         this.parent = parent;
         this.projectId = projectId;
     }
 
     @Override
     protected void init() {
-        if (client == null || client.getNetworkHandler() == null) {
+        if (minecraft == null || minecraft.getConnection() == null) {
             return;
         }
         int guiWidth = 200;
@@ -58,46 +58,46 @@ public class AddMemberScreen extends Screen {
         listY = topY + searchHeight + 6;
         listHeight = visibleRows * rowHeight;
 
-        searchField = new TextFieldWidget(this.textRenderer, x, topY, guiWidth, searchHeight, Text.empty());
-        searchField.setPlaceholder(Text.translatable("gui.todolist.member.name"));
-        searchField.setText("");
-        this.addDrawableChild(searchField);
+        searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+        searchField.setHint(Component.translatable("gui.todolist.member.name"));
+        searchField.setValue("");
+        this.addRenderableWidget(searchField);
 
         allPlayers = new ArrayList<>();
         filteredPlayers = new ArrayList<>();
-        Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+        Collection<net.minecraft.client.multiplayer.PlayerInfo> entries = minecraft.getConnection().getOnlinePlayers();
         allPlayers.addAll(entries);
 
-        playerButtons = new ButtonWidget[visibleRows];
+        playerButtons = new Button[visibleRows];
         for (int i = 0; i < visibleRows; i++) {
             int btnY = listY + i * rowHeight;
             final int rowIndex = i;
-            ButtonWidget btn = ButtonWidget.builder(Text.empty(), b -> {
-                net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(rowIndex);
+            Button btn = Button.builder(Component.empty(), b -> {
+                net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(rowIndex);
                 if (entry != null) {
                     addMember(entry);
                 }
-            }).dimensions(x, btnY, guiWidth, 20).build();
+            }).bounds(x, btnY, guiWidth, 20).build();
             btn.active = false;
             btn.visible = false;
-            this.addDrawableChild(btn);
+            this.addRenderableWidget(btn);
             playerButtons[i] = btn;
         }
 
         int cancelY = listY + listHeight + 10;
-        ButtonWidget cancel = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), b -> {
-            client.setScreen(parent);
-        }).dimensions(x, cancelY, guiWidth, 20).build();
-        this.addDrawableChild(cancel);
+        Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+            minecraft.setScreen(parent);
+        }).bounds(x, cancelY, guiWidth, 20).build();
+        this.addRenderableWidget(cancel);
 
-        searchField.setChangedListener(text -> {
+        searchField.setResponder(text -> {
             updateFilteredPlayers();
         });
         updateFilteredPlayers();
         this.setFocused(searchField);
     }
 
-    private net.minecraft.client.network.PlayerListEntry getPlayerForRow(int rowIndex) {
+    private net.minecraft.client.multiplayer.PlayerInfo getPlayerForRow(int rowIndex) {
         if (filteredPlayers == null || filteredPlayers.isEmpty()) {
             return null;
         }
@@ -114,12 +114,12 @@ public class AddMemberScreen extends Screen {
         }
         filteredPlayers.clear();
         Project project = TodoListCommon.getProjectManager().getProject(projectId);
-        String query = searchField == null ? "" : searchField.getText();
+        String query = searchField == null ? "" : searchField.getValue();
         if (query == null) {
             query = "";
         }
         String q = query.trim().toLowerCase();
-        for (net.minecraft.client.network.PlayerListEntry entry : allPlayers) {
+        for (net.minecraft.client.multiplayer.PlayerInfo entry : allPlayers) {
             if (isAlreadyMember(project, entry.getProfile().getId())) {
                 continue;
             }
@@ -162,33 +162,33 @@ public class AddMemberScreen extends Screen {
             scrollOffset = 0;
         }
         for (int i = 0; i < playerButtons.length; i++) {
-            ButtonWidget btn = playerButtons[i];
-            net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(i);
+            Button btn = playerButtons[i];
+            net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(i);
             if (entry == null) {
                 btn.visible = false;
                 btn.active = false;
-                btn.setMessage(Text.empty());
+                btn.setMessage(Component.empty());
             } else {
                 String name = entry.getProfile().getName();
                 btn.visible = true;
                 btn.active = true;
-                btn.setMessage(Text.of(name));
+                btn.setMessage(Component.nullToEmpty(name));
             }
         }
     }
 
-    private void addMember(net.minecraft.client.network.PlayerListEntry entry) {
+    private void addMember(net.minecraft.client.multiplayer.PlayerInfo entry) {
         String name = entry.getProfile().getName();
         ClientBridge.ops().sendAddMember(projectId, entry.getProfile().getId().toString(), name);
         if (parent instanceof ProjectSettingsScreen) {
             ((ProjectSettingsScreen) parent).optimisticAddMember(entry.getProfile().getId().toString(), name);
         }
-        close();
+        onClose();
     }
 
     @Override
-    public void close() {
-        client.setScreen(parent);
+    public void onClose() {
+        minecraft.setScreen(parent);
     }
     
     @Override
@@ -209,11 +209,11 @@ public class AddMemberScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
         
-        context.drawText(textRenderer, title, listX, 10, 0xFFFFFFFF, false);
-        context.drawText(textRenderer, Text.translatable("gui.todolist.label.member_name"), listX, searchField.getY() - 10, 0xFFAAAAAA, false);
+        context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
+        context.drawString(font, Component.translatable("gui.todolist.label.member_name"), listX, searchField.getY() - 10, 0xFFAAAAAA, false);
         
         super.render(context, mouseX, mouseY, delta);
     }

@@ -5,7 +5,6 @@ plugins {
 
 val archives_name: String by project
 val minecraftVersion = property("minecraft_version") as String
-val yarnMappings = property("yarn_mappings") as String
 val loaderVersion = property("loader_version") as String
 
 base {
@@ -21,16 +20,13 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    mappings(loom.layered {
-        officialMojangMappings()
-        mappings("net.fabricmc:yarn:$yarnMappings")
-    })
-    compileOnly("net.minecraftforge:forge:$minecraftVersion-47.2.0:universal")
+    mappings(loom.officialMojangMappings())
+    forge("net.minecraftforge:forge:$minecraftVersion-47.2.0")
+    compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
     compileOnly("net.minecraftforge:fmlloader:$minecraftVersion-47.2.0")
     compileOnly("net.minecraftforge:javafmllanguage:$minecraftVersion-47.2.0")
     compileOnly("net.minecraftforge:eventbus:6.0.5")
 
-    compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
     compileOnly("org.slf4j:slf4j-api:2.0.7")
 }
 
@@ -41,14 +37,14 @@ tasks.processResources {
     }
 }
 
+tasks.named("build") {
+    dependsOn("remapJar")
+}
+
 sourceSets {
     named("main") {
         java {
             srcDir(project(":common").file("src/main/java"))
-            exclude(
-                "com/todolist/network/ProjectPackets.java",
-                "com/todolist/network/TaskPackets.java"
-            )
         }
         resources.srcDir(project(":common").file("src/main/resources"))
     }

@@ -44,25 +44,30 @@ public final class PermissionCenter {
         private final boolean targetSelf;
         private final boolean targetProjectManager;
         private final boolean projectMember;
+        private final boolean allowMemberCreate;
 
         /**
          * 创建用于任务相关操作的上下文（默认视为项目成员，且不涉及成员目标）。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf) {
-            this(viewScope, completed, assigned, assigneeSelf, false, false, true);
+            this(viewScope, completed, assigned, assigneeSelf, false, false, true, false);
         }
 
         /**
          * 创建用于成员管理相关操作的上下文（默认视为项目成员）。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager) {
-            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true);
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true, false);
         }
 
         /**
          * 创建完整上下文。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember) {
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, projectMember, false);
+        }
+
+        public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember, boolean allowMemberCreate) {
             this.viewScope = viewScope;
             this.completed = completed;
             this.assigned = assigned;
@@ -70,6 +75,7 @@ public final class PermissionCenter {
             this.targetSelf = targetSelf;
             this.targetProjectManager = targetProjectManager;
             this.projectMember = projectMember;
+            this.allowMemberCreate = allowMemberCreate;
         }
 
         public ViewScope getViewScope() {
@@ -98,6 +104,10 @@ public final class PermissionCenter {
 
         public boolean isProjectMember() {
             return projectMember;
+        }
+
+        public boolean isAllowMemberCreate() {
+            return allowMemberCreate;
         }
     }
 
@@ -198,7 +208,10 @@ public final class PermissionCenter {
         if (context.getViewScope() == ViewScope.PERSONAL) {
             return true;
         }
-        return role == Role.PROJECT_MANAGER || role == Role.LEAD;
+        if (role == Role.PROJECT_MANAGER || role == Role.LEAD) {
+            return true;
+        }
+        return role == Role.MEMBER && context.isAllowMemberCreate();
     }
 
     private static boolean canClaim(Role role, Context context) {

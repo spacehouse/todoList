@@ -16,17 +16,17 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.sound.SoundEvents;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.sounds.SoundEvents;
 
 /**
  * Todo List GUI Screen
@@ -39,7 +39,7 @@ import java.util.List;
  * - Project management (Sidebar)
  */
 public class TodoScreen extends Screen implements ProjectManager.ProjectChangeListener {
-    private static final Text TITLE = Text.translatable("gui.todolist.title");
+    private static final Component TITLE = Component.translatable("gui.todolist.title");
 
     private enum ViewMode {
         PERSONAL,
@@ -61,34 +61,34 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private ViewMode viewMode = ViewMode.PERSONAL;
 
     // Input fields
-    private TextFieldWidget searchField;
-    private TextFieldWidget titleField;
-    private TextFieldWidget descField;
-    private TextFieldWidget tagField;
+    private EditBox searchField;
+    private EditBox titleField;
+    private EditBox descField;
+    private EditBox tagField;
 
     // Buttons
-    private ButtonWidget addButton;
-    private ButtonWidget deleteButton;
-    private ButtonWidget claimButton;
-    private ButtonWidget abandonButton;
-    private ButtonWidget assignOthersButton;
-    private ButtonWidget[] priorityButtons;
+    private Button addButton;
+    private Button deleteButton;
+    private Button claimButton;
+    private Button abandonButton;
+    private Button assignOthersButton;
+    private Button[] priorityButtons;
 
     // Selected priority for new/edited tasks
     private Task.Priority selectedPriority = Task.Priority.MEDIUM;
 
     // Filter buttons
-    private ButtonWidget filterStatusButton;
-    private ButtonWidget filterPriorityButton; // Unified priority button
-    private ButtonWidget viewToggleButton;
-    private ButtonWidget configButton;
+    private Button filterStatusButton;
+    private Button filterPriorityButton; // Unified priority button
+    private Button viewToggleButton;
+    private Button configButton;
     
     // Project Search & Toggle
-    private TextFieldWidget projectSearchField;
-    private ButtonWidget projectScopeButton;
-    private ButtonWidget editProjectBtn;
-    private ButtonWidget deleteProjectBtn;
-    private ButtonWidget applyJoinProjectBtn;
+    private EditBox projectSearchField;
+    private Button projectScopeButton;
+    private Button editProjectBtn;
+    private Button deleteProjectBtn;
+    private Button applyJoinProjectBtn;
     private Project.Scope projectScopeFilter = Project.Scope.PERSONAL;
     private String projectSearchQuery = "";
     private String preferredPersonalProjectId;
@@ -267,8 +267,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public void onProjectChanged(ProjectManager.ProjectChangeType type, Project project) {
-        if (this.client == null) return;
-        this.client.execute(() -> {
+        if (this.minecraft == null) return;
+        this.minecraft.execute(() -> {
             if (type == ProjectManager.ProjectChangeType.CLEARED) {
                 switchProject(null);
                 return;
@@ -370,7 +370,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         baseFilteredTasks = new ArrayList<>();
         filteredTasks = new ArrayList<>();
-        this.clearChildren();
+        this.clearWidgets();
 
         // Get configuration
         ModConfig config = ModConfig.getInstance();
@@ -465,14 +465,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (sidebarListHeight < 20) sidebarListHeight = 20;
 
         // Scope Toggle
-        projectScopeButton = ButtonWidget.builder(getProjectScopeText(), b -> {
+        projectScopeButton = Button.builder(getProjectScopeText(), b -> {
             if (!teamProjectsEnabled) return;
             projectScopeFilter = (projectScopeFilter == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
             Project targetProject = getPreferredProjectForScope(projectScopeFilter);
             switchProject(targetProject);
-        }).dimensions(x + padding, sidebarTopY, sidebarWidth, sidebarScopeBtnHeight).build();
+        }).bounds(x + padding, sidebarTopY, sidebarWidth, sidebarScopeBtnHeight).build();
         projectScopeButton.active = teamProjectsEnabled;
-        this.addDrawableChild(projectScopeButton);
+        this.addRenderableWidget(projectScopeButton);
         
         // Project Search
         // User said: "Project List and Add/Edit buttons spacing adjusted to 10px"
@@ -480,14 +480,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         // So gaps should be 10.
         int gap10 = 10;
         
-        projectSearchField = new TextFieldWidget(this.textRenderer, x + padding, sidebarTopY + sidebarScopeBtnHeight + gap10, sidebarWidth, sidebarSearchHeight, Text.translatable("gui.todolist.project.search"));
-        projectSearchField.setPlaceholder(Text.translatable("gui.todolist.project.search"));
-        projectSearchField.setText(projectSearchQuery);
-        projectSearchField.setChangedListener(text -> {
+        projectSearchField = new EditBox(this.font, x + padding, sidebarTopY + sidebarScopeBtnHeight + gap10, sidebarWidth, sidebarSearchHeight, Component.translatable("gui.todolist.project.search"));
+        projectSearchField.setHint(Component.translatable("gui.todolist.project.search"));
+        projectSearchField.setValue(projectSearchQuery);
+        projectSearchField.setResponder(text -> {
             projectSearchQuery = text;
             updateProjectList();
         });
-        this.addDrawableChild(projectSearchField);
+        this.addRenderableWidget(projectSearchField);
 
         // Project List
         projListY = sidebarTopY + sidebarScopeBtnHeight + gap10 + sidebarSearchHeight + gap10;
@@ -507,36 +507,36 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (sidebarListHeight < 20) sidebarListHeight = 20;
         
-        projectListWidget = new ProjectListWidget(this.client, x + padding, projListY, sidebarWidth, sidebarListHeight);
+        projectListWidget = new ProjectListWidget(this.minecraft, x + padding, projListY, sidebarWidth, sidebarListHeight);
         updateProjectList(); 
         projectListWidget.setSelectedProject(currentProject);
         projectListWidget.setOnProjectSelected(this::switchProject);
-        this.addDrawableChild(projectListWidget);
+        this.addRenderableWidget(projectListWidget);
         
         int projBtnY = projListY + sidebarListHeight + gap10;
         int projBtnGap = 5;
 
-        ButtonWidget addProjectBtn = ButtonWidget.builder(Text.translatable("gui.todolist.add"), b -> onAddProject())
-                .dimensions(x + padding, projBtnY, sidebarWidth, 20).build();
-        this.addDrawableChild(addProjectBtn);
+        Button addProjectBtn = Button.builder(Component.translatable("gui.todolist.add"), b -> onAddProject())
+                .bounds(x + padding, projBtnY, sidebarWidth, 20).build();
+        this.addRenderableWidget(addProjectBtn);
 
-        editProjectBtn = ButtonWidget.builder(Text.translatable("gui.todolist.edit"), b -> onProjectSettings())
-                .dimensions(x + padding, projBtnY + 20 + projBtnGap, sidebarWidth, 20).build();
+        editProjectBtn = Button.builder(Component.translatable("gui.todolist.edit"), b -> onProjectSettings())
+                .bounds(x + padding, projBtnY + 20 + projBtnGap, sidebarWidth, 20).build();
         editProjectBtn.active = currentProject != null;
-        this.addDrawableChild(editProjectBtn);
+        this.addRenderableWidget(editProjectBtn);
 
-        deleteProjectBtn = ButtonWidget.builder(Text.translatable("gui.todolist.delete"), b -> onProjectDelete())
-                .dimensions(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
-        this.addDrawableChild(deleteProjectBtn);
+        deleteProjectBtn = Button.builder(Component.translatable("gui.todolist.delete"), b -> onProjectDelete())
+                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
+        this.addRenderableWidget(deleteProjectBtn);
 
-        applyJoinProjectBtn = ButtonWidget.builder(Text.translatable("gui.todolist.project.join.apply"), b -> onApplyJoinProject())
-                .dimensions(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
-        this.addDrawableChild(applyJoinProjectBtn);
+        applyJoinProjectBtn = Button.builder(Component.translatable("gui.todolist.project.join.apply"), b -> onApplyJoinProject())
+                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
+        this.addRenderableWidget(applyJoinProjectBtn);
 
         updateProjectActionButtons();
 
         // 2. Task List
-        taskListWidget = new TaskListWidget(this.client, contentX, listTop, contentWidth, listHeight);
+        taskListWidget = new TaskListWidget(this.minecraft, contentX, listTop, contentWidth, listHeight);
         boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
         taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
         taskListWidget.setTasks(filteredTasks);
@@ -545,9 +545,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             boolean wasCompleted = task.isCompleted();
             toggleTaskCompletion(task);
             if (!wasCompleted && task.isCompleted()) {
-                addNotification(Text.translatable("message.todolist.completed", task.getTitle()).getString());
-                if (config.isEnableSoundEffects() && this.client != null && this.client.player != null) {
-                    this.client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
+                addNotification(Component.translatable("message.todolist.completed", task.getTitle()).getString());
+                if (config.isEnableSoundEffects() && this.minecraft != null && this.minecraft.player != null) {
+                    this.minecraft.player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
                 }
             }
             refreshTaskList();
@@ -559,39 +559,39 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int fieldX = contentX + labelWidth;
         int fieldWidth = contentWidth - labelWidth;
 
-        titleField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
-        titleField.setText("");
+        titleField = new EditBox(this.font, fieldX, currentY, fieldWidth, 20, Component.empty());
+        titleField.setValue("");
         titleField.setMaxLength(100);
-        this.addDrawableChild(titleField);
+        this.addRenderableWidget(titleField);
         currentY += 24;
 
-        descField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
-        descField.setText("");
+        descField = new EditBox(this.font, fieldX, currentY, fieldWidth, 20, Component.empty());
+        descField.setValue("");
         descField.setMaxLength(255);
-        this.addDrawableChild(descField);
+        this.addRenderableWidget(descField);
         currentY += 24;
 
-        tagField = new TextFieldWidget(this.textRenderer, fieldX, currentY, fieldWidth, 20, Text.empty());
-        tagField.setText("");
+        tagField = new EditBox(this.font, fieldX, currentY, fieldWidth, 20, Component.empty());
+        tagField.setValue("");
         tagField.setMaxLength(100);
-        this.addDrawableChild(tagField);
+        this.addRenderableWidget(tagField);
         currentY += 24;
 
         // 4. Priority Buttons
         int priorityButtonWidth = 50;
         int priorityStartX = fieldX;
-        priorityButtons = new ButtonWidget[3];
+        priorityButtons = new Button[3];
         for (int i = 0; i < 3; i++) {
             Task.Priority priority = Task.Priority.values()[2 - i];
             String base;
             switch (priority) {
-                case HIGH: base = Text.translatable("gui.todolist.priority.high").getString(); break;
-                case MEDIUM: base = Text.translatable("gui.todolist.priority.medium").getString(); break;
-                case LOW: default: base = Text.translatable("gui.todolist.priority.low").getString(); break;
+                case HIGH: base = Component.translatable("gui.todolist.priority.high").getString(); break;
+                case MEDIUM: base = Component.translatable("gui.todolist.priority.medium").getString(); break;
+                case LOW: default: base = Component.translatable("gui.todolist.priority.low").getString(); break;
             }
             String buttonText = (priority == Task.Priority.HIGH ? "§c[" : priority == Task.Priority.MEDIUM ? "§e[" : "§a[") + base + "]";
             int index = i;
-            priorityButtons[i] = ButtonWidget.builder(Text.of(buttonText), button -> {
+            priorityButtons[i] = Button.builder(Component.nullToEmpty(buttonText), button -> {
                 setSelectedPriority(priority);
                 Task taskToUpdate = selectedTask;
                 if (taskToUpdate != null) {
@@ -606,8 +606,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
                 updatePrioritySelection();
                 markUnsaved();
-            }).dimensions(priorityStartX + index * (priorityButtonWidth + 4), currentY, priorityButtonWidth, 20).build();
-            this.addDrawableChild(priorityButtons[i]);
+            }).bounds(priorityStartX + index * (priorityButtonWidth + 4), currentY, priorityButtonWidth, 20).build();
+            this.addRenderableWidget(priorityButtons[i]);
         }
 
         // 5. Action Buttons (Add/Delete)
@@ -617,14 +617,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int actionButtonsWidth = actionButtonWidth * actionButtonsCount + actionButtonGap * (actionButtonsCount - 1);
         int actionButtonX = x + guiWidth - padding - actionButtonsWidth;
 
-        addButton = ButtonWidget.builder(Text.translatable("gui.todolist.add"), button -> onAddTask())
-                .dimensions(actionButtonX, currentY, actionButtonWidth, 20).build();
-        this.addDrawableChild(addButton);
+        addButton = Button.builder(Component.translatable("gui.todolist.add"), button -> onAddTask())
+                .bounds(actionButtonX, currentY, actionButtonWidth, 20).build();
+        this.addRenderableWidget(addButton);
 
-        deleteButton = ButtonWidget.builder(Text.translatable("gui.todolist.delete"), button -> onDeleteTask())
-                .dimensions(actionButtonX + (actionButtonWidth + actionButtonGap), currentY, actionButtonWidth, 20).build();
+        deleteButton = Button.builder(Component.translatable("gui.todolist.delete"), button -> onDeleteTask())
+                .bounds(actionButtonX + (actionButtonWidth + actionButtonGap), currentY, actionButtonWidth, 20).build();
         deleteButton.active = false;
-        this.addDrawableChild(deleteButton);
+        this.addRenderableWidget(deleteButton);
 
         currentY += 24 + 25;
 
@@ -634,13 +634,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int totalSaveCancelWidth = saveCancelWidth * 2 + saveCancelGap;
         int saveCancelX = x + (guiWidth - totalSaveCancelWidth) / 2;
 
-        ButtonWidget saveButton = ButtonWidget.builder(Text.translatable("gui.todolist.save"), button -> onSaveTasks())
-                .dimensions(saveCancelX, currentY, saveCancelWidth, 20).build();
-        this.addDrawableChild(saveButton);
+        Button saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> onSaveTasks())
+                .bounds(saveCancelX, currentY, saveCancelWidth, 20).build();
+        this.addRenderableWidget(saveButton);
 
-        ButtonWidget cancelButton = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), button -> onCancel())
-                .dimensions(saveCancelX + saveCancelWidth + saveCancelGap, currentY, saveCancelWidth, 20).build();
-        this.addDrawableChild(cancelButton);
+        Button cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onCancel())
+                .bounds(saveCancelX + saveCancelWidth + saveCancelGap, currentY, saveCancelWidth, 20).build();
+        this.addRenderableWidget(cancelButton);
 
         // 7. Filter Row (View/Priority/Status/Config)
         int filterGap = 4;
@@ -649,20 +649,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int filtersY = topRowY;
         int btnH = 20;
 
-        this.addDrawableChild(new TextLabelWidget(contentX, filtersY + (btnH - 8) / 2, Text.translatable("gui.todolist.label.filter"), 0xFFFFFF));
+        this.addRenderableWidget(new TextLabelWidget(contentX, filtersY + (btnH - 8) / 2, Component.translatable("gui.todolist.label.filter"), 0xFFFFFF));
 
         int configBtnW = 50;
         int configBtnX = x + guiWidth - padding - configBtnW;
-        configButton = ButtonWidget.builder(Text.translatable("gui.todolist.config.title"), b -> this.client.setScreen(new ConfigScreen(this)))
-                .dimensions(configBtnX, filtersY, configBtnW, btnH).build();
-        this.addDrawableChild(configButton);
+        configButton = Button.builder(Component.translatable("gui.todolist.config.title"), b -> this.minecraft.setScreen(new ConfigScreen(this)))
+                .bounds(configBtnX, filtersY, configBtnW, btnH).build();
+        this.addRenderableWidget(configButton);
 
         int availableBeforeConfig = configBtnX - filtersX;
         int minBtnW = 70;
         int maxBtnW = 140;
-        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.textRenderer.getWidth(getViewToggleText()) + 16));
-        int priorityBtnWidth = Math.min(120, Math.max(minBtnW, this.textRenderer.getWidth(getPriorityFilterText()) + 16));
-        int statusBtnWidth = Math.min(120, Math.max(minBtnW, this.textRenderer.getWidth(getStatusFilterText()) + 16));
+        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.font.width(getViewToggleText()) + 16));
+        int priorityBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getPriorityFilterText()) + 16));
+        int statusBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getStatusFilterText()) + 16));
         int totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
         int maxW = Math.max(0, availableBeforeConfig - filterGap);
         int guard = 0;
@@ -679,7 +679,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
         }
 
-        viewToggleButton = ButtonWidget.builder(getViewToggleText(), b -> {
+        viewToggleButton = Button.builder(getViewToggleText(), b -> {
             if (viewMode == ViewMode.PERSONAL) {
                 return;
             }
@@ -690,23 +690,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             } else {
                 switchView(ViewMode.TEAM_UNASSIGNED);
             }
-        }).dimensions(filtersX, filtersY, viewBtnWidth, btnH).build();
+        }).bounds(filtersX, filtersY, viewBtnWidth, btnH).build();
         viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-        this.addDrawableChild(viewToggleButton);
+        this.addRenderableWidget(viewToggleButton);
 
         int priorityBtnX = filtersX + viewBtnWidth + filterGap;
-        filterPriorityButton = ButtonWidget.builder(getPriorityFilterText(), button -> {
+        filterPriorityButton = Button.builder(getPriorityFilterText(), button -> {
             currentPriorityFilter = (currentPriorityFilter + 1) % 4;
             button.setMessage(getPriorityFilterText());
             applyPriorityFilter();
-        }).dimensions(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
-        this.addDrawableChild(filterPriorityButton);
+        }).bounds(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
+        this.addRenderableWidget(filterPriorityButton);
 
         int statusBtnX = priorityBtnX + priorityBtnWidth + filterGap;
-        filterStatusButton = ButtonWidget.builder(getStatusFilterText(), button -> {
+        filterStatusButton = Button.builder(getStatusFilterText(), button -> {
             filterTasks("completed".equals(currentFilter) ? "active" : "completed");
-        }).dimensions(statusBtnX, filtersY, statusBtnWidth, btnH).build();
-        this.addDrawableChild(filterStatusButton);
+        }).bounds(statusBtnX, filtersY, statusBtnWidth, btnH).build();
+        this.addRenderableWidget(filterStatusButton);
         
         // 8. Assign Buttons (Claim/Abandon/Assign Others) - Right side of task list, aligned with top
         int assignButtonWidth = 80;
@@ -715,20 +715,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int assignsX = contentX + contentWidth + 8;
         int assignsY = listTop;
         
-        claimButton = ButtonWidget.builder(Text.translatable("gui.todolist.claim_task"), b -> onClaimTask())
-                .dimensions(assignsX, assignsY, assignButtonWidth, assignButtonHeight).build();
+        claimButton = Button.builder(Component.translatable("gui.todolist.claim_task"), b -> onClaimTask())
+                .bounds(assignsX, assignsY, assignButtonWidth, assignButtonHeight).build();
         claimButton.active = false;
-        this.addDrawableChild(claimButton);
+        this.addRenderableWidget(claimButton);
 
-        abandonButton = ButtonWidget.builder(Text.translatable("gui.todolist.abandon_task"), b -> onAbandonTask())
-                .dimensions(assignsX, assignsY + (assignButtonHeight + assignButtonGap), assignButtonWidth, assignButtonHeight).build();
+        abandonButton = Button.builder(Component.translatable("gui.todolist.abandon_task"), b -> onAbandonTask())
+                .bounds(assignsX, assignsY + (assignButtonHeight + assignButtonGap), assignButtonWidth, assignButtonHeight).build();
         abandonButton.active = false;
-        this.addDrawableChild(abandonButton);
+        this.addRenderableWidget(abandonButton);
 
-        assignOthersButton = ButtonWidget.builder(Text.translatable("gui.todolist.assign_others"), b -> onAssignOthers())
-                .dimensions(assignsX, assignsY + (assignButtonHeight + assignButtonGap) * 2, assignButtonWidth, assignButtonHeight).build();
+        assignOthersButton = Button.builder(Component.translatable("gui.todolist.assign_others"), b -> onAssignOthers())
+                .bounds(assignsX, assignsY + (assignButtonHeight + assignButtonGap) * 2, assignButtonWidth, assignButtonHeight).build();
         assignOthersButton.active = false;
-        this.addDrawableChild(assignOthersButton);
+        this.addRenderableWidget(assignOthersButton);
 
         // 9. Search Field
         int searchY = secondRowY;
@@ -743,24 +743,24 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         // But Search field was added with hardcoded X.
         // We need to match the layout of input fields below.
         
-        searchField = new TextFieldWidget(this.textRenderer, searchFieldX, searchY, searchFieldWidth, 20, Text.empty());
-        searchField.setText(searchQuery);
-        this.addDrawableChild(searchField);
+        searchField = new EditBox(this.font, searchFieldX, searchY, searchFieldWidth, 20, Component.empty());
+        searchField.setValue(searchQuery);
+        this.addRenderableWidget(searchField);
 
         // Listeners
-        titleField.setChangedListener(text -> {
+        titleField.setResponder(text -> {
             if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
                 selectedTask.setTitle(text);
                 markUnsaved();
             }
         });
-        descField.setChangedListener(text -> {
+        descField.setResponder(text -> {
             if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
                 selectedTask.setDescription(text);
                 markUnsaved();
             }
         });
-        tagField.setChangedListener(text -> {
+        tagField.setResponder(text -> {
             if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
                 String value = getFieldValue(tagField, "");
                 if (value.isEmpty()) selectedTask.clearTags();
@@ -775,7 +775,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 markUnsaved();
             }
         });
-        searchField.setChangedListener(text -> {
+        searchField.setResponder(text -> {
             searchQuery = text == null ? "" : text.trim().toLowerCase();
             applySearchFilter();
         });
@@ -787,7 +787,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void toggleTaskCompletion(Task task) {
         if (!canToggleCompletion(task)) {
-            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
+            addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
         taskManager.toggleTaskCompletion(task.getId());
@@ -796,11 +796,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
-        Text title = hasUnsavedChanges ? Text.translatable("gui.todolist.title.unsaved") : TITLE;
-        context.drawText(this.textRenderer, title, (this.width - this.textRenderer.getWidth(title)) / 2, 10, 0xFFFFFFFF, false);
+        Component title = hasUnsavedChanges ? Component.translatable("gui.todolist.title.unsaved") : TITLE;
+        context.drawString(this.font, title, (this.width - this.font.width(title)) / 2, 10, 0xFFFFFFFF, false);
 
         if (taskListWidget != null) taskListWidget.render(context, mouseX, mouseY, delta);
         if (projectListWidget != null) projectListWidget.render(context, mouseX, mouseY, delta);
@@ -815,34 +815,34 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int padding = config.getPadding();
         int labelX = x + padding + 100 + 8; // Adjust for sidebar
         int color = 0xFFFFFFFF;
-        int textH = this.textRenderer.fontHeight;
+        int textH = this.font.lineHeight;
 
         if (titleField != null) {
             int ty = titleField.getY() + (titleField.getHeight() - textH) / 2;
-            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.title"), labelX, ty, color, false);
+            context.drawString(this.font, Component.translatable("gui.todolist.label.title"), labelX, ty, color, false);
         }
         if (descField != null) {
             int dy = descField.getY() + (descField.getHeight() - textH) / 2;
-            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.description"), labelX, dy, color, false);
+            context.drawString(this.font, Component.translatable("gui.todolist.label.description"), labelX, dy, color, false);
         }
         if (tagField != null) {
             int zy = tagField.getY() + (tagField.getHeight() - textH) / 2;
-            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.tags"), labelX, zy, color, false);
+            context.drawString(this.font, Component.translatable("gui.todolist.label.tags"), labelX, zy, color, false);
         }
         if (searchField != null) {
             int sy = searchField.getY() + (searchField.getHeight() - textH) / 2;
             int searchLabelX = searchField.getX() - 40; // Relative to field
-            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
+            context.drawString(this.font, Component.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
         }
         if (priorityButtons != null && priorityButtons.length > 0 && priorityButtons[0] != null) {
             int py = priorityButtons[0].getY() + (priorityButtons[0].getHeight() - textH) / 2;
-            context.drawText(this.textRenderer, Text.translatable("gui.todolist.label.priority"), labelX, py, color, false);
+            context.drawString(this.font, Component.translatable("gui.todolist.label.priority"), labelX, py, color, false);
         }
 
         renderNotifications(context);
     }
 
-    private void renderNotifications(DrawContext context) {
+    private void renderNotifications(GuiGraphics context) {
         if (notifications.isEmpty()) return;
         long now = System.currentTimeMillis();
 
@@ -873,10 +873,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             int bx2 = bx1 + boxWidth;
             int by2 = by1 + boxHeight;
             context.fill(bx1, by1, bx2, by2, 0xCC000000);
-            context.drawBorder(bx1, by1, boxWidth, boxHeight, 0xFFFFFFFF);
+            context.renderOutline(bx1, by1, boxWidth, boxHeight, 0xFFFFFFFF);
             int tx = bx1 + 6;
-            int ty = by1 + (boxHeight - this.textRenderer.fontHeight) / 2;
-            context.drawText(this.textRenderer, Text.of(n.text), tx, ty, 0xFFFFFF00, false);
+            int ty = by1 + (boxHeight - this.font.lineHeight) / 2;
+            context.drawString(this.font, Component.nullToEmpty(n.text), tx, ty, 0xFFFFFF00, false);
             dy += boxHeight + gap;
         }
     }
@@ -901,16 +901,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             } else {
                 teamHasUnsavedChanges = false;
             }
-            if (this.client != null && this.client.player != null) {
-                this.client.player.sendMessage(Text.translatable("message.todolist.saved"), false);
+            if (this.minecraft != null && this.minecraft.player != null) {
+                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
             }
         } catch (Exception e) {
             TodoConstants.LOGGER.error("Failed to save tasks", e);
-            if (this.client != null && this.client.player != null) {
-                this.client.player.sendMessage(Text.translatable("message.todolist.save_failed"), false);
+            if (this.minecraft != null && this.minecraft.player != null) {
+                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
             }
         }
-        close();
+        onClose();
     }
 
     @Override
@@ -918,7 +918,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
             if (titleField != null && titleField.isFocused()) {
                 if (!isAddTaskAllowedInCurrentView()) {
-                    addNotification(Text.translatable("message.todolist.add_not_allowed_in_view").getString());
+                    addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
                     return true;
                 }
                 onAddTask();
@@ -936,7 +936,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (descField != null && descField.isMouseOver(mouseX, mouseY)) return true;
         if (tagField != null && tagField.isMouseOver(mouseX, mouseY)) return true;
         if (priorityButtons != null) {
-            for (ButtonWidget b : priorityButtons) {
+            for (Button b : priorityButtons) {
                 if (b != null && b.isMouseOver(mouseX, mouseY)) return true;
             }
         }
@@ -995,36 +995,37 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         if (viewMode != ViewMode.PERSONAL && teamHasUnsavedChanges) {
             ClientBridge.ops().requestTeamSync();
             hasUnsavedChanges = false;
             teamHasUnsavedChanges = false;
         }
-        this.client.setScreen(parent);
+        this.minecraft.setScreen(parent);
     }
 
     private void onCancel() {
-        close();
+        onClose();
     }
 
     // Event handlers
 
     private void onAddTask() {
         if (currentProject == null) {
-            addNotification(Text.translatable("message.todolist.select_project_first").getString());
+            addNotification(Component.translatable("message.todolist.select_project_first").getString());
             return;
         }
         if (!isAddTaskAllowedInCurrentView()) {
-            addNotification(Text.translatable("message.todolist.add_not_allowed_in_view").getString());
+            addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
             return;
         }
         if (viewMode != ViewMode.PERSONAL) {
             Role role = getCurrentRole();
             ViewScope scope = getCurrentViewScope();
             boolean projectMember = isCurrentPlayerProjectMember();
-            if (!PermissionCenter.canPerform(Operation.ADD_TASK, role, new Context(scope, false, false, false, false, false, projectMember))) {
-                addNotification(Text.translatable("message.todolist.no_permission_add_team").getString());
+            boolean allowMemberCreate = currentProject.isAllowMemberCreate();
+            if (!PermissionCenter.canPerform(Operation.ADD_TASK, role, new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate))) {
+                addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
                 return;
             }
         }
@@ -1040,9 +1041,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
 
             if (viewMode != ViewMode.PERSONAL) {
-                if (this.client != null && this.client.player != null) {
-                    String uuid = this.client.player.getUuid().toString();
-                    String name = this.client.player.getName().getString();
+                if (this.minecraft != null && this.minecraft.player != null) {
+                    String uuid = this.minecraft.player.getUUID().toString();
+                    String name = this.minecraft.player.getName().getString();
                     task.setScope(Task.Scope.TEAM);
                     task.setCreatorUuid(uuid);
                     if (viewMode == ViewMode.TEAM_ASSIGNED) {
@@ -1065,9 +1066,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
             }
 
-            titleField.setText("");
-            descField.setText("");
-            tagField.setText("");
+            titleField.setValue("");
+            descField.setValue("");
+            tagField.setValue("");
             selectedPriority = Task.Priority.MEDIUM;
 
             markUnsaved();
@@ -1089,15 +1090,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void selectTask(Task task) {
         selectedTask = task;
         selectedPriority = task.getPriority();
-        titleField.setText(task.getTitle());
-        descField.setText(task.getDescription());
+        titleField.setValue(task.getTitle());
+        descField.setValue(task.getDescription());
 
         // Display tags as comma-separated string
         if (task.getTags() != null && !task.getTags().isEmpty()) {
             String tagsStr = String.join(",", task.getTags());
-            tagField.setText(tagsStr);
+            tagField.setValue(tagsStr);
         } else {
-            tagField.setText("");
+            tagField.setValue("");
         }
 
         taskListWidget.setSelectedTask(task);
@@ -1114,15 +1115,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             taskListWidget.clearSelection();
         }
         if (titleField != null) {
-            titleField.setText("");
+            titleField.setValue("");
             titleField.setEditable(true);
         }
         if (descField != null) {
-            descField.setText("");
+            descField.setValue("");
             descField.setEditable(true);
         }
         if (tagField != null) {
-            tagField.setText("");
+            tagField.setValue("");
             tagField.setEditable(true);
         }
         updateButtonStates();
@@ -1168,7 +1169,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         ViewScope scope = getCurrentViewScope();
         boolean isAssigneeSelf = hasSelection && isCurrentPlayerAssignee(selectedTask);
         boolean projectMember = isCurrentPlayerProjectMember();
-        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember);
+        boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate);
         boolean canEdit = hasSelection && PermissionCenter.canPerform(Operation.EDIT_TASK, role, context);
         boolean priorityEnabled;
         if (!hasSelection) {
@@ -1178,7 +1180,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         deleteButton.active = hasSelection && PermissionCenter.canPerform(Operation.DELETE_TASK, role, context);
         if (priorityButtons != null) {
-            for (ButtonWidget button : priorityButtons) {
+            for (Button button : priorityButtons) {
                 if (button != null) {
                     button.active = priorityEnabled;
                 }
@@ -1195,7 +1197,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 if (!isAddTaskAllowedInCurrentView()) {
                     addButton.active = false;
                 } else {
-                    boolean canAdd = PermissionCenter.canPerform(Operation.ADD_TASK, role, new Context(scope, false, false, false, false, false, projectMember));
+                    boolean allowMemberCreate2 = currentProject != null && currentProject.isAllowMemberCreate();
+                    boolean canAdd = PermissionCenter.canPerform(Operation.ADD_TASK, role, new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate2));
                     addButton.active = canAdd;
                 }
             }
@@ -1227,7 +1230,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private boolean isAdminClient() {
-        return this.client != null && this.client.player != null && this.client.player.hasPermissionLevel(2);
+        return this.minecraft != null && this.minecraft.player != null && this.minecraft.player.hasPermissions(2);
     }
 
     private void markUnsaved() {
@@ -1282,10 +1285,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private boolean isCurrentPlayerAssignee(Task task) {
-        if (task == null || this.client == null || this.client.player == null) {
+        if (task == null || this.minecraft == null || this.minecraft.player == null) {
             return false;
         }
-        String uuid = this.client.player.getUuid().toString();
+        String uuid = this.minecraft.player.getUUID().toString();
         String assignee = task.getAssigneeUuid();
         return assignee != null && assignee.equals(uuid);
     }
@@ -1294,13 +1297,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (isAdminClient()) {
             return Role.OP;
         }
-        if (this.client == null || this.client.player == null) {
+        if (this.minecraft == null || this.minecraft.player == null) {
             return Role.MEMBER;
         }
         if (currentProject == null || currentProject.getScope() == Project.Scope.PERSONAL) {
             return Role.MEMBER;
         }
-        String uuid = this.client.player.getUuid().toString();
+        String uuid = this.minecraft.player.getUUID().toString();
         if (uuid.equals(currentProject.getOwnerUuid())) {
             return Role.PROJECT_MANAGER;
         }
@@ -1315,13 +1318,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (isAdminClient()) {
             return true;
         }
-        if (this.client == null || this.client.player == null) {
+        if (this.minecraft == null || this.minecraft.player == null) {
             return false;
         }
         if (currentProject == null || currentProject.getScope() == Project.Scope.PERSONAL) {
             return true;
         }
-        String uuid = this.client.player.getUuid().toString();
+        String uuid = this.minecraft.player.getUUID().toString();
         if (uuid.equals(currentProject.getOwnerUuid())) {
             return true;
         }
@@ -1342,45 +1345,45 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void onClaimTask() {
-        if (selectedTask == null || this.client == null || this.client.player == null) {
+        if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
         if (viewMode == ViewMode.PERSONAL) {
-            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            addNotification(Component.translatable("message.todolist.assign_only_team").getString());
             return;
         }
-        String uuid = this.client.player.getUuid().toString();
+        String uuid = this.minecraft.player.getUUID().toString();
         String assignee = selectedTask.getAssigneeUuid();
         if (assignee != null && !assignee.isEmpty() && !assignee.equals(uuid)) {
-            addNotification(Text.translatable("message.todolist.already_assigned").getString());
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
             return;
         }
         selectedTask.setAssigneeUuid(uuid);
-        selectedTask.setAssigneeName(this.client.player.getName().getString());
-        addNotification(Text.translatable("message.todolist.assigned_to_me").getString());
+        selectedTask.setAssigneeName(this.minecraft.player.getName().getString());
+        addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
         refreshTaskList();
     }
 
     // Helper for rendering labels
-    private class TextLabelWidget extends net.minecraft.client.gui.widget.ClickableWidget {
-        private final Text text;
+    private class TextLabelWidget extends net.minecraft.client.gui.components.AbstractWidget {
+        private final Component text;
         private final int color;
         
-        public TextLabelWidget(int x, int y, Text text, int color) {
-            super(x, y, client.textRenderer.getWidth(text), client.textRenderer.fontHeight, text);
+        public TextLabelWidget(int x, int y, Component text, int color) {
+            super(x, y, minecraft.font.width(text), minecraft.font.lineHeight, text);
             this.text = text;
             this.color = color;
             this.active = false; // Not clickable
         }
 
         @Override
-        public void renderButton(DrawContext context, int mouseX, int mouseY, float delta) {
-            context.drawText(client.textRenderer, text, getX(), getY(), color, false);
+        public void renderWidget(GuiGraphics context, int mouseX, int mouseY, float delta) {
+            context.drawString(minecraft.font, text, getX(), getY(), color, false);
         }
 
         @Override
-        protected void appendClickableNarrations(net.minecraft.client.gui.screen.narration.NarrationMessageBuilder builder) {
+        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput builder) {
         }
     }
     
@@ -1443,7 +1446,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (currentProject == null) {
             editProjectBtn.active = false;
-            editProjectBtn.setMessage(Text.translatable("gui.todolist.edit"));
+            editProjectBtn.setMessage(Component.translatable("gui.todolist.edit"));
             deleteProjectBtn.visible = true;
             deleteProjectBtn.active = false;
             applyJoinProjectBtn.visible = false;
@@ -1452,7 +1455,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (currentProject.getScope() != Project.Scope.TEAM) {
             editProjectBtn.active = true;
-            editProjectBtn.setMessage(Text.translatable("gui.todolist.edit"));
+            editProjectBtn.setMessage(Component.translatable("gui.todolist.edit"));
             deleteProjectBtn.visible = true;
             deleteProjectBtn.active = canDeleteCurrentProject();
             applyJoinProjectBtn.visible = false;
@@ -1463,7 +1466,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false);
         boolean canEdit = PermissionCenter.canPerform(Operation.EDIT_PROJECT, role, ctx);
         editProjectBtn.active = true;
-        editProjectBtn.setMessage(Text.translatable(canEdit ? "gui.todolist.edit" : "gui.todolist.project.view"));
+        editProjectBtn.setMessage(Component.translatable(canEdit ? "gui.todolist.edit" : "gui.todolist.project.view"));
         boolean member = isCurrentPlayerProjectMember();
         if (!member) {
             deleteProjectBtn.visible = false;
@@ -1478,19 +1481,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         deleteProjectBtn.active = canDeleteCurrentProject();
     }
     
-    private Text getProjectScopeText() {
+    private Component getProjectScopeText() {
         if (projectScopeFilter == Project.Scope.PERSONAL) {
-            return Text.translatable("gui.todolist.project.toggle.personal");
+            return Component.translatable("gui.todolist.project.toggle.personal");
         } else {
-            return Text.translatable("gui.todolist.project.toggle.team");
+            return Component.translatable("gui.todolist.project.toggle.team");
         }
     }
     private void onAbandonTask() {
-        if (selectedTask == null || this.client == null || this.client.player == null) {
+        if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
         if (viewMode == ViewMode.PERSONAL) {
-            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            addNotification(Component.translatable("message.todolist.assign_only_team").getString());
             return;
         }
         Role role = getCurrentRole();
@@ -1502,17 +1505,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean projectMember = isCurrentPlayerProjectMember();
         Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
         if (!PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx)) {
-            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
+            addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
         selectedTask.setAssigneeUuid(null);
         selectedTask.setAssigneeName(null);
-        addNotification(Text.translatable("message.todolist.abandoned_task").getString());
+        addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
         refreshTaskList();
     }
 
-    private Text getPriorityFilterText() {
+    private Component getPriorityFilterText() {
         String labelKey = "gui.todolist.label.priority";
         String valueKey;
         switch (currentPriorityFilter) {
@@ -1529,17 +1532,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 valueKey = "gui.todolist.all"; 
                 break;
         }
-        return Text.translatable(labelKey).append(Text.translatable(valueKey));
+        return Component.translatable(labelKey).append(Component.translatable(valueKey));
     }
 
-    private Text getStatusFilterText() {
-        MutableText label = Text.translatable("gui.todolist.label.status");
-        Text value = "completed".equals(currentFilter) ? Text.translatable("gui.todolist.completed") : Text.translatable("gui.todolist.active");
+    private Component getStatusFilterText() {
+        MutableComponent label = Component.translatable("gui.todolist.label.status");
+        Component value = "completed".equals(currentFilter) ? Component.translatable("gui.todolist.completed") : Component.translatable("gui.todolist.active");
         return label.append(value);
     }
 
-    private Text getViewToggleText() {
-        MutableText label = Text.translatable("gui.todolist.label.view");
+    private Component getViewToggleText() {
+        MutableComponent label = Component.translatable("gui.todolist.label.view");
         String key;
         if (viewMode == ViewMode.TEAM_UNASSIGNED) {
             key = "gui.todolist.view.team_unassigned";
@@ -1550,7 +1553,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         } else {
             key = "gui.todolist.view.personal";
         }
-        return label.append(Text.translatable(key));
+        return label.append(Component.translatable(key));
     }
 
     private void applyPriorityFilter() {
@@ -1558,18 +1561,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void onAssignOthers() {
-        if (selectedTask == null || this.client == null) {
+        if (selectedTask == null || this.minecraft == null) {
             return;
         }
         if (viewMode == ViewMode.PERSONAL) {
-            addNotification(Text.translatable("message.todolist.assign_only_team").getString());
+            addNotification(Component.translatable("message.todolist.assign_only_team").getString());
             return;
         }
         if (!canEditTask(selectedTask)) {
-            addNotification(Text.translatable("message.todolist.no_permission_toggle_team").getString());
+            addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        this.client.setScreen(new AssignPlayerScreen(this, selectedTask));
+        this.minecraft.setScreen(new AssignPlayerScreen(this, selectedTask));
     }
 
     private void filterTasks(String filter) {
@@ -1661,8 +1664,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskListWidget != null) taskListWidget.setTasks(filteredTasks);
     }
 
-    private String getFieldValue(TextFieldWidget field, String hint) {
-        String raw = field.getText() == null ? "" : field.getText().trim();
+    private String getFieldValue(EditBox field, String hint) {
+        String raw = field.getValue() == null ? "" : field.getValue().trim();
         if (raw.isEmpty()) return "";
         if (!hint.isEmpty() && raw.equals(hint)) return "";
         return raw;
@@ -1696,8 +1699,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         
         List<Task> result = new ArrayList<>();
         if (viewMode == ViewMode.TEAM_ASSIGNED) {
-            if (this.client != null && this.client.player != null) {
-                String myUuid = this.client.player.getUuid().toString();
+            if (this.minecraft != null && this.minecraft.player != null) {
+                String myUuid = this.minecraft.player.getUUID().toString();
                 for (Task t : projectFiltered) {
                     if (myUuid.equals(t.getAssigneeUuid())) {
                         result.add(t);
@@ -1767,7 +1770,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         if (!teamProjectsEnabled && project.getScope() == Project.Scope.TEAM) {
-            addNotification(Text.translatable("message.todolist.team_disabled").getString());
+            addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
         projectScopeFilter = project.getScope();
@@ -1858,26 +1861,26 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (defaultScope == Project.Scope.TEAM && !ClientBridge.ops().isTeamProjectsEnabled()) {
             defaultScope = Project.Scope.PERSONAL;
         }
-        client.setScreen(new AddProjectScreen(this, defaultScope));
+        minecraft.setScreen(new AddProjectScreen(this, defaultScope));
     }
     
     private void onProjectSettings() {
         if (currentProject == null) return;
         if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
-            addNotification(Text.translatable("message.todolist.team_disabled").getString());
+            addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
-        client.setScreen(new ProjectSettingsScreen(this, currentProject));
+        minecraft.setScreen(new ProjectSettingsScreen(this, currentProject));
     }
 
     private boolean canDeleteCurrentProject() {
-        if (currentProject == null || this.client == null || this.client.player == null) {
+        if (currentProject == null || this.minecraft == null || this.minecraft.player == null) {
             return false;
         }
         if (currentProject.isDefaultPersonalProject() || currentProject.isDefaultTeamProject()) {
             return false;
         }
-        String uuid = this.client.player.getUuid().toString();
+        String uuid = this.minecraft.player.getUUID().toString();
         if (currentProject.getScope() == Project.Scope.PERSONAL) {
             String owner = currentProject.getOwnerUuid();
             return owner == null || owner.isEmpty() || owner.equals(uuid);
@@ -1890,7 +1893,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void onApplyJoinProject() {
         if (currentProject == null) return;
         if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
-            addNotification(Text.translatable("message.todolist.team_disabled").getString());
+            addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
         if (currentProject.getScope() != Project.Scope.TEAM) {
@@ -1900,22 +1903,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         ClientBridge.ops().sendRequestJoinProject(currentProject.getId());
-        addNotification(Text.translatable("message.todolist.project.join.sent").getString());
+        addNotification(Component.translatable("message.todolist.project.join.sent").getString());
     }
 
     private void onProjectDelete() {
         if (currentProject == null) return;
         if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
-            addNotification(Text.translatable("message.todolist.team_disabled").getString());
+            addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
         if (!canDeleteCurrentProject()) {
-            addNotification(Text.translatable("message.todolist.no_permission_delete_project").getString());
+            addNotification(Component.translatable("message.todolist.no_permission_delete_project").getString());
             return;
         }
         String projectName = ProjectNameFormatter.toDisplayText(currentProject).getString();
-        Text message = Text.translatable("gui.todolist.project.delete_confirm.message", projectName);
-        client.setScreen(new ConfirmDeleteProjectScreen(this, message, () -> {
+        Component message = Component.translatable("gui.todolist.project.delete_confirm.message", projectName);
+        minecraft.setScreen(new ConfirmDeleteProjectScreen(this, message, () -> {
             ClientBridge.ops().sendDeleteProject(currentProject.getId());
         }));
     }
@@ -1923,10 +1926,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private class AssignPlayerScreen extends Screen {
         private final TodoScreen parentScreen;
         private final Task targetTask;
-        private TextFieldWidget searchField;
-        private java.util.List<net.minecraft.client.network.PlayerListEntry> allPlayers;
-        private java.util.List<net.minecraft.client.network.PlayerListEntry> filteredPlayers;
-        private ButtonWidget[] playerButtons;
+        private EditBox searchField;
+        private java.util.List<net.minecraft.client.multiplayer.PlayerInfo> allPlayers;
+        private java.util.List<net.minecraft.client.multiplayer.PlayerInfo> filteredPlayers;
+        private Button[] playerButtons;
         private int scrollOffset;
         private int visibleRows;
         private int listX;
@@ -1936,7 +1939,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private int rowHeight;
 
         protected AssignPlayerScreen(TodoScreen parentScreen, Task targetTask) {
-            super(Text.translatable("gui.todolist.assign_others"));
+            super(Component.translatable("gui.todolist.assign_others"));
             this.parentScreen = parentScreen;
             this.targetTask = targetTask;
         }
@@ -1944,7 +1947,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         @Override
         protected void init() {
             super.init();
-            if (client == null || client.getNetworkHandler() == null) {
+            if (minecraft == null || minecraft.getConnection() == null) {
                 return;
             }
             int guiWidth = 200;
@@ -1958,47 +1961,47 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             listY = topY + searchHeight + 6;
             listHeight = visibleRows * rowHeight;
 
-            searchField = new TextFieldWidget(this.textRenderer, x, topY, guiWidth, searchHeight, Text.empty());
-            searchField.setText("");
-            this.addDrawableChild(searchField);
+            searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+            searchField.setValue("");
+            this.addRenderableWidget(searchField);
 
             allPlayers = new java.util.ArrayList<>();
             filteredPlayers = new java.util.ArrayList<>();
-            java.util.Collection<net.minecraft.client.network.PlayerListEntry> entries = client.getNetworkHandler().getPlayerList();
+            java.util.Collection<net.minecraft.client.multiplayer.PlayerInfo> entries = minecraft.getConnection().getOnlinePlayers();
             allPlayers.addAll(entries);
 
-            playerButtons = new ButtonWidget[visibleRows];
+            playerButtons = new Button[visibleRows];
             for (int i = 0; i < visibleRows; i++) {
                 int btnY = listY + i * rowHeight;
                 final int rowIndex = i;
-                ButtonWidget btn = ButtonWidget.builder(Text.empty(), b -> {
-                    net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(rowIndex);
+                Button btn = Button.builder(Component.empty(), b -> {
+                    net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(rowIndex);
                     if (entry != null) {
                         String name = entry.getProfile().getName();
                         java.util.UUID uuid = entry.getProfile().getId();
                         applyAssignTo(uuid.toString(), name);
                     }
-                }).dimensions(x, btnY, guiWidth, 20).build();
+                }).bounds(x, btnY, guiWidth, 20).build();
                 btn.active = false;
                 btn.visible = false;
-                this.addDrawableChild(btn);
+                this.addRenderableWidget(btn);
                 playerButtons[i] = btn;
             }
 
             int cancelY = listY + listHeight + 10;
-            ButtonWidget cancel = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), b -> {
-                client.setScreen(parentScreen);
-            }).dimensions(x, cancelY, guiWidth, 20).build();
-            this.addDrawableChild(cancel);
+            Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+                minecraft.setScreen(parentScreen);
+            }).bounds(x, cancelY, guiWidth, 20).build();
+            this.addRenderableWidget(cancel);
 
-            searchField.setChangedListener(text -> {
+            searchField.setResponder(text -> {
                 updateFilteredPlayers();
             });
             updateFilteredPlayers();
             this.setFocused(searchField);
         }
 
-        private net.minecraft.client.network.PlayerListEntry getPlayerForRow(int rowIndex) {
+        private net.minecraft.client.multiplayer.PlayerInfo getPlayerForRow(int rowIndex) {
             if (filteredPlayers == null || filteredPlayers.isEmpty()) {
                 return null;
             }
@@ -2014,12 +2017,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 return;
             }
             filteredPlayers.clear();
-            String query = searchField == null ? "" : searchField.getText();
+            String query = searchField == null ? "" : searchField.getValue();
             if (query == null) {
                 query = "";
             }
             String q = query.trim().toLowerCase();
-            for (net.minecraft.client.network.PlayerListEntry entry : allPlayers) {
+            for (net.minecraft.client.multiplayer.PlayerInfo entry : allPlayers) {
                 String name = entry.getProfile().getName();
                 if (name == null) {
                     continue;
@@ -2047,17 +2050,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 scrollOffset = 0;
             }
             for (int i = 0; i < playerButtons.length; i++) {
-                ButtonWidget btn = playerButtons[i];
-                net.minecraft.client.network.PlayerListEntry entry = getPlayerForRow(i);
+                Button btn = playerButtons[i];
+                net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(i);
                 if (entry == null) {
                     btn.visible = false;
                     btn.active = false;
-                    btn.setMessage(Text.empty());
+                    btn.setMessage(Component.empty());
                 } else {
                     String name = entry.getProfile().getName();
                     btn.visible = true;
                     btn.active = true;
-                    btn.setMessage(Text.of(name));
+                    btn.setMessage(Component.nullToEmpty(name));
                 }
             }
         }
@@ -2065,10 +2068,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private void applyAssignTo(String uuid, String name) {
             targetTask.setAssigneeUuid(uuid);
             targetTask.setAssigneeName(name);
-            parentScreen.addNotification(Text.translatable("message.todolist.assigned_to_player", name).getString());
+            parentScreen.addNotification(Component.translatable("message.todolist.assigned_to_player", name).getString());
             parentScreen.markUnsaved();
             parentScreen.refreshTaskList();
-            client.setScreen(parentScreen);
+            minecraft.setScreen(parentScreen);
         }
 
         @Override
@@ -2089,7 +2092,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         @Override
-        public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
             this.renderBackground(context);
             super.render(context, mouseX, mouseY, delta);
         }

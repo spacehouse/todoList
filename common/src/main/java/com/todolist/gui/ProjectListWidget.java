@@ -3,25 +3,24 @@ package com.todolist.gui;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.Drawable;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.Selectable;
-import net.minecraft.client.gui.navigation.GuiNavigation;
-import net.minecraft.client.gui.navigation.GuiNavigationPath;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ComponentPath;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
+import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 
 /**
  * 项目侧边栏列表组件：展示项目并处理选择/滚动等交互。
  */
-public class ProjectListWidget implements Drawable, Element, Selectable {
-    private final MinecraftClient client;
+public class ProjectListWidget implements Renderable, GuiEventListener, NarratableEntry {
+    private final Minecraft client;
     private final int x;
     private final int y;
     private final int width;
@@ -39,7 +38,7 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
     /**
      * 创建项目列表组件。
      */
-    public ProjectListWidget(MinecraftClient client, int x, int y, int width, int height) {
+    public ProjectListWidget(Minecraft client, int x, int y, int width, int height) {
         this.client = client;
         this.x = x;
         this.y = y;
@@ -125,13 +124,13 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
     }
 
     @Override
-    public void render(net.minecraft.client.gui.DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
-        TextRenderer textRenderer = client.textRenderer;
+        Font textRenderer = client.font;
 
         // Background
         context.fill(x, y, x + width, y + height, 0xFF101010); // Darker background for sidebar
-        context.drawBorder(x, y, width, height, config.getBorderColor());
+        context.renderOutline(x, y, width, height, config.getBorderColor());
 
         // Header "PROJECTS"
         // context.drawText(textRenderer, "Projects", x + 5, y - 12, 0xFFFFFFFF, false);
@@ -164,15 +163,15 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
             boolean starred = config.isHudProjectStarred(project.getId());
             int starX = x + width - 12;
             int starColor = starred ? 0xFFFFD700 : 0xFF666666;
-            context.drawText(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
+            context.drawString(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
 
             // Name
             String name = ProjectNameFormatter.toDisplayText(project).getString();
             int nameColor = isSelected ? 0xFFFFFFFF : 0xFFAAAAAA;
             
             // Truncate name if too long
-            String displayName = textRenderer.trimToWidth(name, width - 28);
-            context.drawText(textRenderer, displayName, x + 12, itemY + (itemHeight - 8) / 2, nameColor, false);
+            String displayName = textRenderer.plainSubstrByWidth(name, width - 28);
+            context.drawString(textRenderer, displayName, x + 12, itemY + (itemHeight - 8) / 2, nameColor, false);
             
             // Scope indicator (Icon or text?)
             // For now just name
@@ -237,17 +236,17 @@ public class ProjectListWidget implements Drawable, Element, Selectable {
     }
 
     @Override
-    public SelectionType getType() {
-        return SelectionType.NONE;
+    public NarrationPriority narrationPriority() {
+        return NarrationPriority.NONE;
     }
 
     @Override
-    public void appendNarrations(net.minecraft.client.gui.screen.narration.NarrationMessageBuilder builder) {
+    public void updateNarration(net.minecraft.client.gui.narration.NarrationElementOutput builder) {
     }
     
     @Nullable
     @Override
-    public GuiNavigationPath getNavigationPath(GuiNavigation navigation) {
+    public ComponentPath nextFocusPath(FocusNavigationEvent navigation) {
         return null;
     }
 }

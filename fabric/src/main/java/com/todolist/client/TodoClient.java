@@ -1,5 +1,6 @@
 package com.todolist.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.todolist.TodoListMod;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
@@ -13,9 +14,8 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -27,9 +27,9 @@ import org.lwjgl.glfw.GLFW;
  * - Network event handling
  */
 public class TodoClient implements ClientModInitializer {
-    private static KeyBinding openTodoKeyBinding;
-    private static KeyBinding toggleHudKeyBinding;
-    private static MinecraftClient client;
+    private static KeyMapping openTodoKeyBinding;
+    private static KeyMapping toggleHudKeyBinding;
+    private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
     private static String activeProjectId;
@@ -42,7 +42,7 @@ public class TodoClient implements ClientModInitializer {
     public void onInitializeClient() {
         TodoListMod.LOGGER.info("Initializing Todo List Mod client...");
 
-        client = MinecraftClient.getInstance();
+        client = Minecraft.getInstance();
         ClientBridge.setOps(new FabricClientBridgeOps());
 
         // Register key bindings
@@ -71,27 +71,27 @@ public class TodoClient implements ClientModInitializer {
      */
     private void registerKeyBindings() {
         // Key: K key to open todo list
-        openTodoKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        openTodoKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.todolist.open",
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
                 "category.todolist"
         ));
 
         // Key: H key to toggle HUD expanded state
-        toggleHudKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        toggleHudKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.todolist.togglehud",
-                InputUtil.Type.KEYSYM,
+                InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_H,
                 "category.todolist"
         ));
 
         // Register key press handler
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openTodoKeyBinding.wasPressed()) {
+            while (openTodoKeyBinding.consumeClick()) {
                 openTodoScreen();
             }
-            while (toggleHudKeyBinding.wasPressed()) {
+            while (toggleHudKeyBinding.consumeClick()) {
                 toggleHud();
             }
         });
@@ -130,8 +130,8 @@ public class TodoClient implements ClientModInitializer {
      * 打开主 Todo 界面。
      */
     private void openTodoScreen() {
-        if (client.currentScreen == null) {
-            client.setScreen(new TodoScreen(client.currentScreen));
+        if (client.screen == null) {
+            client.setScreen(new TodoScreen(client.screen));
         }
     }
 
@@ -188,7 +188,7 @@ public class TodoClient implements ClientModInitializer {
      *
      * @return 按键绑定实例
      */
-    public static KeyBinding getOpenTodoKeyBinding() {
+    public static KeyMapping getOpenTodoKeyBinding() {
         return openTodoKeyBinding;
     }
 
@@ -207,9 +207,9 @@ public class TodoClient implements ClientModInitializer {
      * @return 是否启用团队项目能力
      */
     public static boolean isTeamProjectsEnabled() {
-        MinecraftClient c = client != null ? client : MinecraftClient.getInstance();
+        Minecraft c = client != null ? client : Minecraft.getInstance();
         if (c == null) return false;
-        if (c.isInSingleplayer()) return false;
+        if (c.isLocalServer()) return false;
         return ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }

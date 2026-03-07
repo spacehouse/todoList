@@ -1,0 +1,91 @@
+package com.todolist.client;
+
+import com.todolist.forge.network.ForgeNetworkBridge;
+import com.todolist.network.ProjectPackets;
+import com.todolist.project.Project;
+import com.todolist.task.Task;
+import com.todolist.task.TaskManager;
+
+import java.util.List;
+
+public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
+    @Override
+    public TaskManager getTeamTaskManager() {
+        return ForgeTodoClient.getTeamTaskManager();
+    }
+
+    @Override
+    public boolean isTeamProjectsEnabled() {
+        return ForgeTodoClient.isTeamProjectsEnabled();
+    }
+
+    @Override
+    public String getActiveProjectId() {
+        return ForgeTodoClient.getActiveProjectId();
+    }
+
+    @Override
+    public void setActiveProjectId(String projectId) {
+        ForgeTodoClient.setActiveProjectId(projectId);
+    }
+
+    @Override
+    public void sendUpdateTask(Task task) {
+        ForgeClientTaskPackets.sendUpdateTask(task);
+    }
+
+    @Override
+    public void sendReplaceAllTasks(List<Task> tasks) {
+        ForgeClientTaskPackets.sendReplaceAllTasks(tasks);
+    }
+
+    @Override
+    public void sendReplaceTeamTasks(List<Task> tasks) {
+        ForgeClientTaskPackets.sendReplaceTeamTasks(tasks);
+    }
+
+    @Override
+    public void requestTeamSync() {
+        ForgeClientTaskPackets.requestTeamSync();
+    }
+
+    @Override
+    public void sendRequestJoinProject(String projectId) {
+        ForgeClientProjectPackets.sendRequestJoinProject(projectId);
+    }
+
+    @Override
+    public void sendDeleteProject(String projectId) {
+        ForgeClientProjectPackets.sendDeleteProject(projectId);
+    }
+
+    @Override
+    public void sendUpdateProject(Project project) {
+        ForgeClientProjectPackets.sendUpdateProject(project);
+    }
+
+    @Override
+    public void sendRemoveMember(String projectId, String memberUuid) {
+        ForgeClientProjectPackets.sendRemoveMember(projectId, memberUuid);
+    }
+
+    @Override
+    public void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
+        ForgeClientProjectPackets.sendUpdateMemberRole(projectId, memberUuid, role);
+    }
+
+    @Override
+    public void sendAddProject(Project project) {
+        ForgeClientProjectPackets.sendAddProject(project);
+    }
+
+    @Override
+    public void sendAddMember(String projectId, String memberUuid, String memberName) {
+        ForgeClientProjectPackets.sendAddMember(projectId, memberUuid, memberName);
+    }
+
+    @Override
+    public boolean canSendUpdateMemberRole() {
+        return ForgeNetworkBridge.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID);
+    }
+}

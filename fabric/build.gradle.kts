@@ -2,7 +2,7 @@ import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginExtension
 
 plugins {
-    id("fabric-loom")
+    id("dev.architectury.loom") version "1.6-SNAPSHOT"
 }
 
 val archives_name: String by project
@@ -14,12 +14,11 @@ base {
 
 dependencies {
     val minecraftVersion = property("minecraft_version") as String
-    val yarnMappings = property("yarn_mappings") as String
     val loaderVersion = property("loader_version") as String
     val fabricApiVersion = property("fabric_api_version") as String
 
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    mappings("net.fabricmc:yarn:$yarnMappings")
+    mappings(loom.officialMojangMappings())
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 

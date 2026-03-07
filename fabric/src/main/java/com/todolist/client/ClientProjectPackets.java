@@ -7,9 +7,7 @@ import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.network.PacketByteBuf;
-
+import net.minecraft.network.FriendlyByteBuf;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +74,7 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
         ClientPlayNetworking.send(ProjectPackets.ADD_PROJECT_ID, buf);
     }
@@ -90,7 +88,7 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_PROJECT_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
         ClientPlayNetworking.send(ProjectPackets.UPDATE_PROJECT_ID, buf);
     }
@@ -104,8 +102,8 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.DELETE_PROJECT_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(projectId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(projectId);
         ClientPlayNetworking.send(ProjectPackets.DELETE_PROJECT_ID, buf);
     }
 
@@ -120,10 +118,10 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_MEMBER_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(projectId);
-        buf.writeString(memberUuid);
-        buf.writeString(memberName);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(projectId);
+        buf.writeUtf(memberUuid);
+        buf.writeUtf(memberName);
         ClientPlayNetworking.send(ProjectPackets.ADD_MEMBER_ID, buf);
     }
 
@@ -137,9 +135,9 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.REMOVE_MEMBER_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(projectId);
-        buf.writeString(memberUuid);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(projectId);
+        buf.writeUtf(memberUuid);
         ClientPlayNetworking.send(ProjectPackets.REMOVE_MEMBER_ID, buf);
     }
 
@@ -154,10 +152,10 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(projectId);
-        buf.writeString(memberUuid);
-        buf.writeString(role.name());
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(projectId);
+        buf.writeUtf(memberUuid);
+        buf.writeUtf(role.name());
         ClientPlayNetworking.send(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
     }
 
@@ -170,8 +168,8 @@ public class ClientProjectPackets {
         if (!ClientPlayNetworking.canSend(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
             return;
         }
-        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
-        buf.writeString(projectId);
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(projectId);
         ClientPlayNetworking.send(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf);
     }
 }

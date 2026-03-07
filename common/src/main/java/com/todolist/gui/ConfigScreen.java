@@ -6,12 +6,12 @@ import com.todolist.client.ClientBridge;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /**
  * 配置界面：提供 GUI/HUD 外观与行为的本地配置编辑与预览。
@@ -19,22 +19,22 @@ import net.minecraft.text.Text;
 public class ConfigScreen extends Screen {
     private final Screen parent;
 
-    private TextFieldWidget guiWidthField;
-    private TextFieldWidget guiHeightField;
-    private TextFieldWidget hudWidthField;
-    private TextFieldWidget hudMaxHeightField;
-    private TextFieldWidget taskItemHeightField;
-    private TextFieldWidget backgroundColorField;
-    private TextFieldWidget sidebarWidthField;
-    private TextFieldWidget sidebarHeightField;
+    private EditBox guiWidthField;
+    private EditBox guiHeightField;
+    private EditBox hudWidthField;
+    private EditBox hudMaxHeightField;
+    private EditBox taskItemHeightField;
+    private EditBox backgroundColorField;
+    private EditBox sidebarWidthField;
+    private EditBox sidebarHeightField;
     private IntSliderWidget hudTodoLimitSlider;
     private IntSliderWidget hudDoneLimitSlider;
     private DoubleStepSliderWidget hudOpacitySlider;
-    private ButtonWidget hudExpandedButton;
-    private ButtonWidget hudShowWhenEmptyButton;
-    private ButtonWidget soundEffectsButton;
-    private ButtonWidget hudDefaultViewButton;
-    private ButtonWidget hudProjectSourceButton;
+    private Button hudExpandedButton;
+    private Button hudShowWhenEmptyButton;
+    private Button soundEffectsButton;
+    private Button hudDefaultViewButton;
+    private Button hudProjectSourceButton;
 
     private int previewHudX;
     private int previewHudY;
@@ -61,7 +61,7 @@ public class ConfigScreen extends Screen {
      * 创建配置界面。
      */
     public ConfigScreen(Screen parent) {
-        super(Text.translatable("gui.todolist.config.title"));
+        super(Component.translatable("gui.todolist.config.title"));
         this.parent = parent;
     }
 
@@ -88,84 +88,84 @@ public class ConfigScreen extends Screen {
         int rightLabelX = x + colWidth + twoColGap;
         int rightFieldX = rightLabelX + rightLabelWidth;
 
-        guiWidthField = new TextFieldWidget(this.textRenderer, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Text.empty());
-        guiWidthField.setText(Integer.toString(cfg.getGuiWidth()));
-        this.addDrawableChild(guiWidthField);
+        guiWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
+        guiWidthField.setValue(Integer.toString(cfg.getGuiWidth()));
+        this.addRenderableWidget(guiWidthField);
 
-        guiHeightField = new TextFieldWidget(this.textRenderer, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Text.empty());
-        guiHeightField.setText(Integer.toString(cfg.getGuiHeight()));
-        this.addDrawableChild(guiHeightField);
+        guiHeightField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
+        guiHeightField.setValue(Integer.toString(cfg.getGuiHeight()));
+        this.addRenderableWidget(guiHeightField);
         row++;
 
-        hudWidthField = new TextFieldWidget(this.textRenderer, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Text.empty());
-        hudWidthField.setText(Integer.toString(cfg.getHudWidth()));
-        this.addDrawableChild(hudWidthField);
+        hudWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
+        hudWidthField.setValue(Integer.toString(cfg.getHudWidth()));
+        this.addRenderableWidget(hudWidthField);
 
-        hudMaxHeightField = new TextFieldWidget(this.textRenderer, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Text.empty());
-        hudMaxHeightField.setText(Integer.toString(cfg.getHudMaxHeight()));
-        this.addDrawableChild(hudMaxHeightField);
+        hudMaxHeightField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
+        hudMaxHeightField.setValue(Integer.toString(cfg.getHudMaxHeight()));
+        this.addRenderableWidget(hudMaxHeightField);
         row++;
 
-        taskItemHeightField = new TextFieldWidget(this.textRenderer, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Text.empty());
-        taskItemHeightField.setText(Integer.toString(cfg.getTaskItemHeight()));
-        this.addDrawableChild(taskItemHeightField);
+        taskItemHeightField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
+        taskItemHeightField.setValue(Integer.toString(cfg.getTaskItemHeight()));
+        this.addRenderableWidget(taskItemHeightField);
 
-        backgroundColorField = new TextFieldWidget(this.textRenderer, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Text.empty());
-        backgroundColorField.setText(String.format("%08X", cfg.getBackgroundColor()));
-        this.addDrawableChild(backgroundColorField);
+        backgroundColorField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
+        backgroundColorField.setValue(String.format("%08X", cfg.getBackgroundColor()));
+        this.addRenderableWidget(backgroundColorField);
         row++;
 
-        sidebarWidthField = new TextFieldWidget(this.textRenderer, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Text.empty());
-        sidebarWidthField.setText(Integer.toString(cfg.getProjectSidebarWidth()));
-        this.addDrawableChild(sidebarWidthField);
+        sidebarWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
+        sidebarWidthField.setValue(Integer.toString(cfg.getProjectSidebarWidth()));
+        this.addRenderableWidget(sidebarWidthField);
         
-        sidebarHeightField = new TextFieldWidget(this.textRenderer, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Text.empty());
-        sidebarHeightField.setText(Integer.toString(cfg.getProjectSidebarHeight()));
-        this.addDrawableChild(sidebarHeightField);
+        sidebarHeightField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
+        sidebarHeightField.setValue(Integer.toString(cfg.getProjectSidebarHeight()));
+        this.addRenderableWidget(sidebarHeightField);
         row++;
 
         int todoInitial = cfg.getHudTodoLimit();
         int doneInitial = cfg.getHudDoneLimit();
         hudTodoLimitSlider = new IntSliderWidget(leftFieldX, y + row * rowH, leftFieldWidth, fieldH, 0, 30, todoInitial);
         hudDoneLimitSlider = new IntSliderWidget(rightFieldX, y + row * rowH, rightFieldWidth, fieldH, 0, 30, doneInitial);
-        this.addDrawableChild(hudTodoLimitSlider);
-        this.addDrawableChild(hudDoneLimitSlider);
+        this.addRenderableWidget(hudTodoLimitSlider);
+        this.addRenderableWidget(hudDoneLimitSlider);
         row++;
 
-        int opacityLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_opacity"));
+        int opacityLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_opacity"));
         int opacitySliderX = x + opacityLabelWidth + 10;
         int opacitySliderW = guiWidth - (opacitySliderX - x);
         hudOpacitySlider = new DoubleStepSliderWidget(opacitySliderX, y + row * rowH, opacitySliderW, fieldH, 0.0, 1.0, 0.1, cfg.getHudOpacity());
-        this.addDrawableChild(hudOpacitySlider);
+        this.addRenderableWidget(hudOpacitySlider);
         row++;
 
         hudExpandedValue = cfg.isHudDefaultExpanded();
         hudShowWhenEmptyValue = cfg.isHudShowWhenEmpty();
         soundEffectsValue = cfg.isEnableSoundEffects();
 
-        hudExpandedButton = ButtonWidget.builder(Text.empty(), b -> {
+        hudExpandedButton = Button.builder(Component.empty(), b -> {
             hudExpandedValue = !hudExpandedValue;
             updateHudExpandedButtonLabel();
-        }).dimensions(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
-        this.addDrawableChild(hudExpandedButton);
+        }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
+        this.addRenderableWidget(hudExpandedButton);
 
-        hudShowWhenEmptyButton = ButtonWidget.builder(Text.empty(), b -> {
+        hudShowWhenEmptyButton = Button.builder(Component.empty(), b -> {
             hudShowWhenEmptyValue = !hudShowWhenEmptyValue;
             updateHudShowWhenEmptyButtonLabel();
-        }).dimensions(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
-        this.addDrawableChild(hudShowWhenEmptyButton);
+        }).bounds(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
+        this.addRenderableWidget(hudShowWhenEmptyButton);
         row++;
 
-        soundEffectsButton = ButtonWidget.builder(Text.empty(), b -> {
+        soundEffectsButton = Button.builder(Component.empty(), b -> {
             soundEffectsValue = !soundEffectsValue;
             updateSoundEffectsButtonLabel();
-        }).dimensions(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
-        this.addDrawableChild(soundEffectsButton);
+        }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
+        this.addRenderableWidget(soundEffectsButton);
         row++;
 
         String currentView = cfg.getHudDefaultView();
         Project.Scope activeScope = resolveActiveProjectScope();
-        boolean singlePlayer = this.client != null && this.client.isInSingleplayer();
+        boolean singlePlayer = this.minecraft != null && this.minecraft.isLocalServer();
         if (singlePlayer || activeScope == Project.Scope.PERSONAL) {
             hudDefaultViewOptions = new String[] { "PERSONAL" };
             lockHudDefaultViewOption = true;
@@ -189,19 +189,19 @@ public class ConfigScreen extends Screen {
         }
         hudDefaultViewValue = hudDefaultViewOptions[Math.max(0, Math.min(hudDefaultViewIndex, hudDefaultViewOptions.length - 1))];
 
-        int defaultViewLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_default_view"));
+        int defaultViewLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_default_view"));
         int defaultViewButtonX = x + defaultViewLabelWidth + 10;
         int defaultViewButtonWidth = guiWidth - (defaultViewButtonX - x);
 
-        hudDefaultViewButton = ButtonWidget.builder(Text.empty(), b -> {
+        hudDefaultViewButton = Button.builder(Component.empty(), b -> {
             if (lockHudDefaultViewOption || hudDefaultViewOptions.length == 0) {
                 return;
             }
             hudDefaultViewIndex = (hudDefaultViewIndex + 1) % hudDefaultViewOptions.length;
             hudDefaultViewValue = hudDefaultViewOptions[hudDefaultViewIndex];
             updateHudDefaultViewButtonLabel();
-        }).dimensions(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
-        this.addDrawableChild(hudDefaultViewButton);
+        }).bounds(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
+        this.addRenderableWidget(hudDefaultViewButton);
         if (lockHudDefaultViewOption) {
             hudDefaultViewButton.active = false;
         }
@@ -223,16 +223,16 @@ public class ConfigScreen extends Screen {
         }
         hudProjectSourceValue = sources[hudProjectSourceIndex];
 
-        int sourceLabelWidth = this.textRenderer.getWidth(Text.translatable("gui.todolist.config.hud_project_source"));
+        int sourceLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_project_source"));
         int sourceButtonX = x + sourceLabelWidth + 10;
         int sourceButtonWidth = guiWidth - (sourceButtonX - x);
 
-        hudProjectSourceButton = ButtonWidget.builder(Text.empty(), b -> {
+        hudProjectSourceButton = Button.builder(Component.empty(), b -> {
             hudProjectSourceIndex = (hudProjectSourceIndex + 1) % HudProjectSourceOptions.VALUES.length;
             hudProjectSourceValue = HudProjectSourceOptions.VALUES[hudProjectSourceIndex];
             updateHudProjectSourceButtonLabel();
-        }).dimensions(sourceButtonX, y + row * rowH, sourceButtonWidth, fieldH).build();
-        this.addDrawableChild(hudProjectSourceButton);
+        }).bounds(sourceButtonX, y + row * rowH, sourceButtonWidth, fieldH).build();
+        this.addRenderableWidget(hudProjectSourceButton);
         updateHudProjectSourceButtonLabel();
         row++;
 
@@ -252,18 +252,18 @@ public class ConfigScreen extends Screen {
         previewHudHeight = 40;
 
         int buttonY = y + row * rowH + 30;
-        ButtonWidget save = ButtonWidget.builder(Text.translatable("gui.todolist.config.save_apply"), b -> {
+        Button save = Button.builder(Component.translatable("gui.todolist.config.save_apply"), b -> {
             applyAndReturn();
-        }).dimensions(x, buttonY, guiWidth / 2 - 5, 20).build();
-        ButtonWidget cancel = ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), b -> {
-            this.client.setScreen(parent);
-        }).dimensions(x + guiWidth / 2 + 5, buttonY, guiWidth / 2 - 5, 20).build();
-        this.addDrawableChild(save);
-        this.addDrawableChild(cancel);
+        }).bounds(x, buttonY, guiWidth / 2 - 5, 20).build();
+        Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+            this.minecraft.setScreen(parent);
+        }).bounds(x + guiWidth / 2 + 5, buttonY, guiWidth / 2 - 5, 20).build();
+        this.addRenderableWidget(save);
+        this.addRenderableWidget(cancel);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context);
         super.render(context, mouseX, mouseY, delta);
         int guiWidth = 320;
@@ -271,7 +271,7 @@ public class ConfigScreen extends Screen {
         int yStart = this.height / 6 + 20;
         int rowH = 24;
         int fieldH = 20;
-        int textH = this.textRenderer.fontHeight;
+        int textH = this.font.lineHeight;
 
         int twoColGap = 20;
         int colWidth = (guiWidth - twoColGap) / 2;
@@ -280,40 +280,40 @@ public class ConfigScreen extends Screen {
 
         int row = 0;
         int baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.gui_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.gui_height"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.gui_width"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.gui_height"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_max_height"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_width"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_max_height"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.task_item_height"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.background_color"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.task_item_height"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.background_color"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.sidebar_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.sidebar_height"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.sidebar_width"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.sidebar_height"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_todo_limit"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_done_limit"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_todo_limit"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_done_limit"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_opacity"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_opacity"), leftLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_expanded"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_show_when_empty"), rightLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_default_expanded"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_show_when_empty"), rightLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("config.todolist.enable_sound_effects"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("config.todolist.enable_sound_effects"), leftLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_default_view"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_default_view"), leftLabelX, baseY, 0xFFFFFF, false);
         row++;
         baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawText(this.textRenderer, Text.translatable("gui.todolist.config.hud_project_source"), leftLabelX, baseY, 0xFFFFFF, false);
+        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_project_source"), leftLabelX, baseY, 0xFFFFFF, false);
 
         int hudX = previewHudX;
         int hudY = previewHudY;
@@ -326,11 +326,11 @@ public class ConfigScreen extends Screen {
         double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
         int a = (int) Math.round(Math.max(0.0, Math.min(1.0, opacity)) * 255.0);
         context.fill(hudX, hudY, hudX + previewHudWidth, hudY + previewHudHeight, (a << 24));
-        context.drawBorder(hudX, hudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
-        Text line1 = Text.translatable("gui.todolist.config.hud_preview.title");
-        Text line2 = Text.translatable("gui.todolist.config.hud_preview.hint");
-        int line1Width = this.textRenderer.getWidth(line1);
-        int line2Width = this.textRenderer.getWidth(line2);
+        context.renderOutline(hudX, hudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
+        Component line1 = Component.translatable("gui.todolist.config.hud_preview.title");
+        Component line2 = Component.translatable("gui.todolist.config.hud_preview.hint");
+        int line1Width = this.font.width(line1);
+        int line2Width = this.font.width(line2);
         int centerX = hudX + previewHudWidth / 2;
         int centerY = hudY + previewHudHeight / 2;
         int lineSpacing = 2;
@@ -338,8 +338,8 @@ public class ConfigScreen extends Screen {
         int startY = centerY - totalTextHeight / 2;
         int line1X = centerX - line1Width / 2;
         int line2X = centerX - line2Width / 2;
-        context.drawText(this.textRenderer, line1, line1X, startY, 0xFFFFFF, false);
-        context.drawText(this.textRenderer, line2, line2X, startY + textH + lineSpacing, 0xFFFFFF, false);
+        context.drawString(this.font, line1, line1X, startY, 0xFFFFFF, false);
+        context.drawString(this.font, line2, line2X, startY + textH + lineSpacing, 0xFFFFFF, false);
     }
 
     @Override
@@ -388,14 +388,14 @@ public class ConfigScreen extends Screen {
 
     private void applyAndReturn() {
         ModConfig cfg = ModConfig.getInstance();
-        cfg.setGuiWidth(parseIntSafe(guiWidthField.getText(), cfg.getGuiWidth()));
-        cfg.setGuiHeight(parseIntSafe(guiHeightField.getText(), cfg.getGuiHeight()));
-        cfg.setHudWidth(parseIntSafe(hudWidthField.getText(), cfg.getHudWidth()));
-        cfg.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getText(), cfg.getHudMaxHeight()));
-        cfg.setTaskItemHeight(parseIntSafe(taskItemHeightField.getText(), cfg.getTaskItemHeight()));
-        cfg.setBackgroundColor(parseColorSafe(backgroundColorField.getText(), cfg.getBackgroundColor()));
-        cfg.setProjectSidebarWidth(parseIntSafe(sidebarWidthField.getText(), cfg.getProjectSidebarWidth()));
-        cfg.setProjectSidebarHeight(parseIntSafe(sidebarHeightField.getText(), cfg.getProjectSidebarHeight()));
+        cfg.setGuiWidth(parseIntSafe(guiWidthField.getValue(), cfg.getGuiWidth()));
+        cfg.setGuiHeight(parseIntSafe(guiHeightField.getValue(), cfg.getGuiHeight()));
+        cfg.setHudWidth(parseIntSafe(hudWidthField.getValue(), cfg.getHudWidth()));
+        cfg.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getValue(), cfg.getHudMaxHeight()));
+        cfg.setTaskItemHeight(parseIntSafe(taskItemHeightField.getValue(), cfg.getTaskItemHeight()));
+        cfg.setBackgroundColor(parseColorSafe(backgroundColorField.getValue(), cfg.getBackgroundColor()));
+        cfg.setProjectSidebarWidth(parseIntSafe(sidebarWidthField.getValue(), cfg.getProjectSidebarWidth()));
+        cfg.setProjectSidebarHeight(parseIntSafe(sidebarHeightField.getValue(), cfg.getProjectSidebarHeight()));
         cfg.setHudTodoLimit(hudTodoLimitSlider.getIntValue());
         cfg.setHudDoneLimit(hudDoneLimitSlider.getIntValue());
         if (hudOpacitySlider != null) {
@@ -408,13 +408,13 @@ public class ConfigScreen extends Screen {
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
         cfg.setEnableSoundEffects(soundEffectsValue);
         // cfg.setSortByPriority(sortByPriorityValue); // Removed from UI
-        if (this.client != null && this.client.isInSingleplayer()) {
+        if (this.minecraft != null && this.minecraft.isLocalServer()) {
             cfg.setHudDefaultView("PERSONAL");
         } else {
             cfg.setHudDefaultView(hudDefaultViewValue);
         }
         cfg.setHudProjectSource(hudProjectSourceValue);
-        this.client.setScreen(parent);
+        this.minecraft.setScreen(parent);
     }
 
     private int parseIntSafe(String s, int fallback) {
@@ -440,21 +440,21 @@ public class ConfigScreen extends Screen {
     private void updateHudExpandedButtonLabel() {
         if (hudExpandedButton != null) {
             String key = hudExpandedValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            hudExpandedButton.setMessage(Text.translatable(key));
+            hudExpandedButton.setMessage(Component.translatable(key));
         }
     }
 
     private void updateHudShowWhenEmptyButtonLabel() {
         if (hudShowWhenEmptyButton != null) {
             String key = hudShowWhenEmptyValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            hudShowWhenEmptyButton.setMessage(Text.translatable(key));
+            hudShowWhenEmptyButton.setMessage(Component.translatable(key));
         }
     }
 
     private void updateSoundEffectsButtonLabel() {
         if (soundEffectsButton != null) {
             String key = soundEffectsValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            soundEffectsButton.setMessage(Text.translatable(key));
+            soundEffectsButton.setMessage(Component.translatable(key));
         }
     }
 
@@ -480,7 +480,7 @@ public class ConfigScreen extends Screen {
             } else {
                 key = "gui.todolist.view.personal";
             }
-            hudDefaultViewButton.setMessage(Text.translatable(key));
+            hudDefaultViewButton.setMessage(Component.translatable(key));
         }
     }
 
@@ -490,18 +490,18 @@ public class ConfigScreen extends Screen {
             if ("CURRENT".equalsIgnoreCase(value)) {
                 Project.Scope scope = resolveHudScope();
                 Project project = getActiveProject(scope);
-                Text projectName = getProjectDisplayName(project);
+                Component projectName = getProjectDisplayName(project);
                 if (projectName != null && !projectName.getString().trim().isEmpty()) {
-                    hudProjectSourceButton.setMessage(Text.translatable("gui.todolist.hud.project_source.current_selected", projectName.getString()));
+                    hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.current_selected", projectName.getString()));
                 } else {
-                    hudProjectSourceButton.setMessage(Text.translatable("gui.todolist.hud.project_source.current_selected_fallback"));
+                    hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.current_selected_fallback"));
                 }
                 return;
             } else if ("STARRED".equalsIgnoreCase(value)) {
-                hudProjectSourceButton.setMessage(Text.translatable("gui.todolist.hud.project_source.starred"));
+                hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.starred"));
                 return;
             } else {
-                hudProjectSourceButton.setMessage(Text.translatable("gui.todolist.hud.project_source.all"));
+                hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.all"));
                 return;
             }
         }
@@ -519,7 +519,7 @@ public class ConfigScreen extends Screen {
         return ClientBridge.getActiveProject(TodoListCommon.getProjectManager(), scope);
     }
 
-    private static Text getProjectDisplayName(Project project) {
+    private static Component getProjectDisplayName(Project project) {
         return ProjectNameFormatter.toDisplayText(project);
     }
 
@@ -539,12 +539,12 @@ public class ConfigScreen extends Screen {
         static final String[] VALUES = new String[] { "CURRENT", "STARRED", "ALL" };
     }
 
-    private static class IntSliderWidget extends SliderWidget {
+    private static class IntSliderWidget extends AbstractSliderButton {
         private final int min;
         private final int max;
 
         IntSliderWidget(int x, int y, int width, int height, int min, int max, int value) {
-            super(x, y, width, height, Text.empty(), 0.0);
+            super(x, y, width, height, Component.empty(), 0.0);
             this.min = min;
             this.max = max;
             setValueFromInt(value);
@@ -573,7 +573,7 @@ public class ConfigScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            this.setMessage(Text.of(Integer.toString(getIntValue())));
+            this.setMessage(Component.nullToEmpty(Integer.toString(getIntValue())));
         }
 
         @Override
@@ -581,13 +581,13 @@ public class ConfigScreen extends Screen {
         }
     }
 
-    private static class DoubleStepSliderWidget extends SliderWidget {
+    private static class DoubleStepSliderWidget extends AbstractSliderButton {
         private final double min;
         private final double max;
         private final double step;
 
         DoubleStepSliderWidget(int x, int y, int width, int height, double min, double max, double step, double value) {
-            super(x, y, width, height, Text.empty(), 0.0);
+            super(x, y, width, height, Component.empty(), 0.0);
             this.min = min;
             this.max = max;
             this.step = step;
@@ -620,7 +620,7 @@ public class ConfigScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            this.setMessage(Text.of(String.format(java.util.Locale.ROOT, "%.1f", getDoubleValue())));
+            this.setMessage(Component.nullToEmpty(String.format(java.util.Locale.ROOT, "%.1f", getDoubleValue())));
         }
 
         @Override

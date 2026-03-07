@@ -5,7 +5,9 @@ import com.todolist.project.ProjectStorage;
 import com.todolist.task.TaskStorage;
 
 /**
- * 妯＄粍閫氱敤閫昏緫绫汇€? * 鍖呭惈鍏ㄥ眬瀛樺偍瀹炰緥鐨勭鐞嗐€? */
+ * 模组通用逻辑类。
+ * 包含全局存储实例的管理。
+ */
 public final class TodoListCommon {
     private static TaskStorage taskStorage;
     private static ProjectStorage projectStorage;
@@ -16,7 +18,8 @@ public final class TodoListCommon {
     }
 
     /**
-     * 鍒濆鍖栭€氱敤缁勪欢銆?     */
+     * 初始化通用组件。
+     */
     public static void init() {
         taskStorage = new TaskStorage();
         projectStorage = new ProjectStorage();
@@ -24,21 +27,24 @@ public final class TodoListCommon {
     }
 
     /**
-     * 鑾峰彇浠诲姟瀛樺偍瀹炰緥銆?     * @return TaskStorage 瀹炰緥
+     * 获取任务存储实例。
+     * @return TaskStorage 实例
      */
     public static TaskStorage getTaskStorage() {
         return taskStorage;
     }
 
     /**
-     * 鑾峰彇椤圭洰瀛樺偍瀹炰緥銆?     * @return ProjectStorage 瀹炰緥
+     * 获取项目存储实例。
+     * @return ProjectStorage 实例
      */
     public static ProjectStorage getProjectStorage() {
         return projectStorage;
     }
 
     /**
-     * 鑾峰彇椤圭洰绠＄悊鍣ㄥ疄渚嬨€?     * @return ProjectManager 瀹炰緥
+     * 获取项目管理器实例。
+     * @return ProjectManager 实例
      */
     public static ProjectManager getProjectManager() {
         return projectManager;

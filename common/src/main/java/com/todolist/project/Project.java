@@ -1,12 +1,10 @@
 package com.todolist.project;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 
 /**
  * Project entity for Todo List
@@ -14,6 +12,7 @@ import java.util.UUID;
  * Represents a collection of tasks with specific settings and permissions.
  */
 public class Project {
+    private static final int NBT_COMPOUND_TYPE = 10;
     private String id;
     private String name;
     private int color; // Hex color for UI representation
@@ -22,7 +21,7 @@ public class Project {
     private long createdAt;
     
     // Permission settings
-    private boolean allowMemberCreate = true; // Whether members can create tasks
+    private boolean allowMemberCreate = false; // Whether members can create tasks
     
     // Member roles: UUID -> Role
     private Map<String, ProjectRole> members = new HashMap<>();
@@ -211,8 +210,8 @@ public class Project {
 
     // NBT Serialization
 
-    public NbtCompound toNbt() {
-        NbtCompound nbt = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putString("id", id);
         if (name != null) nbt.putString("name", name);
         nbt.putInt("color", color);
@@ -221,9 +220,9 @@ public class Project {
         nbt.putLong("createdAt", createdAt);
         nbt.putBoolean("allowMemberCreate", allowMemberCreate);
         
-        NbtList memberList = new NbtList();
+        ListTag memberList = new ListTag();
         for (Map.Entry<String, ProjectRole> entry : members.entrySet()) {
-            NbtCompound memberTag = new NbtCompound();
+            CompoundTag memberTag = new CompoundTag();
             memberTag.putString("uuid", entry.getKey());
             memberTag.putString("role", entry.getValue().name());
             String name = memberNames.get(entry.getKey());
@@ -237,7 +236,7 @@ public class Project {
         return nbt;
     }
 
-    public static Project fromNbt(NbtCompound nbt) {
+    public static Project fromNbt(CompoundTag nbt) {
         Project project = new Project();
         if (nbt.contains("id")) {
             String id = nbt.getString("id");
@@ -266,9 +265,9 @@ public class Project {
         if (nbt.contains("allowMemberCreate")) project.setAllowMemberCreate(nbt.getBoolean("allowMemberCreate"));
         
         if (nbt.contains("members")) {
-            NbtList memberList = nbt.getList("members", NbtElement.COMPOUND_TYPE);
+            ListTag memberList = nbt.getList("members", NBT_COMPOUND_TYPE);
             for (int i = 0; i < memberList.size(); i++) {
-                NbtCompound memberTag = memberList.getCompound(i);
+                CompoundTag memberTag = memberList.getCompound(i);
                 String uuid = memberTag.getString("uuid");
                 String roleStr = memberTag.getString("role");
                 ProjectRole role;
@@ -292,5 +291,3 @@ public class Project {
         return project;
     }
 }
-
-

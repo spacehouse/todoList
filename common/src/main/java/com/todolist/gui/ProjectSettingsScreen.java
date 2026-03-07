@@ -11,21 +11,20 @@ import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.Selectable;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ElementListWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.ContainerObjectSelectionList;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.network.chat.Component;
 
 /**
  * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
@@ -33,17 +32,19 @@ import java.util.UUID;
 public class ProjectSettingsScreen extends Screen implements ProjectManager.ProjectChangeListener {
     private final Screen parent;
     private Project project;
-    private TextFieldWidget nameField;
-    private TextFieldWidget memberSearchField;
+    private EditBox nameField;
+    private EditBox memberSearchField;
     private boolean canEdit;
     private MemberListWidget memberList;
-    private ButtonWidget addMemberBtn;
+    private Button addMemberBtn;
+    private Button allowMemberCreateBtn;
+    private boolean allowMemberCreate;
 
     /**
      * 创建项目设置界面。
      */
     public ProjectSettingsScreen(Screen parent, Project project) {
-        super(Text.translatable("gui.todolist.project_settings.title"));
+        super(Component.translatable("gui.todolist.project_settings.title"));
         this.parent = parent;
         this.project = project;
     }
@@ -53,18 +54,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         TodoListCommon.getProjectManager().addListener(this);
         canEdit = checkPermission();
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
-
-        if (isTeam && project.isDefaultTeamProject() && isOpClient()) {
-            String owner = project.getOwnerUuid();
-            if ((owner == null || owner.isEmpty()) && client != null && client.player != null) {
-                String myUuid = client.player.getUuid().toString();
-                project.setOwnerUuid(myUuid);
-                if (project.getMemberRole(myUuid) == null) {
-                    project.addMember(myUuid, Project.ProjectRole.PROJECT_MANAGER);
-                }
-                canEdit = true;
-            }
-        }
+        allowMemberCreate = project.isAllowMemberCreate();
         
         int w = 200;
         int h = isTeam ? 220 : 150;
@@ -72,42 +62,49 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         int y = (height - h) / 2;
 
         // Name Field
-        nameField = new TextFieldWidget(textRenderer, x + 10, y + 35, w - 20, 20, Text.translatable("gui.todolist.project.name"));
-        nameField.setText(ProjectNameFormatter.toDisplayText(project).getString());
+        nameField = new EditBox(font, x + 10, y + 35, w - 20, 20, Component.translatable("gui.todolist.project.name"));
+        nameField.setValue(ProjectNameFormatter.toDisplayText(project).getString());
         nameField.setMaxLength(32);
         nameField.setEditable(canEdit);
-        addDrawableChild(nameField);
+        addRenderableWidget(nameField);
 
         // Team Member Management
         if (isTeam) {
+            allowMemberCreateBtn = Button.builder(getAllowMemberCreateText(), button -> {
+                allowMemberCreate = !allowMemberCreate;
+                button.setMessage(getAllowMemberCreateText());
+            }).bounds(x + 10, y + 70, w - 20, 16).build();
+            allowMemberCreateBtn.active = canEdit;
+            addRenderableWidget(allowMemberCreateBtn);
+
             // Member Search Field
-            memberSearchField = new TextFieldWidget(textRenderer, x + 10, y + 70, w - 100, 16, Text.empty());
-            memberSearchField.setPlaceholder(Text.translatable("gui.todolist.member.search"));
-            memberSearchField.setChangedListener(text -> memberList.updateEntries(text));
-            addDrawableChild(memberSearchField);
+            memberSearchField = new EditBox(font, x + 10, y + 90, w - 100, 16, Component.empty());
+            memberSearchField.setHint(Component.translatable("gui.todolist.member.search"));
+            memberSearchField.setResponder(text -> memberList.updateEntries(text));
+            addRenderableWidget(memberSearchField);
 
-            int listTop = y + 90;
+            int listTop = y + 110;
             int listBottom = y + h - 40;
-            memberList = new MemberListWidget(client, w - 20, listBottom - listTop, listTop, listBottom, 20);
+            memberList = new MemberListWidget(minecraft, w - 20, listBottom - listTop, listTop, listBottom, 20);
             memberList.setLeftPos(x + 10);
-            addDrawableChild(memberList);
+            addRenderableWidget(memberList);
 
-            addMemberBtn = ButtonWidget.builder(Text.translatable("gui.todolist.add_member"), button -> {
-                client.setScreen(new AddMemberScreen(this, project.getId()));
-            }).dimensions(x + w - 85, y + 70, 75, 16).build();
+            addMemberBtn = Button.builder(Component.translatable("gui.todolist.add_member"), button -> {
+                minecraft.setScreen(new AddMemberScreen(this, project.getId()));
+            }).bounds(x + w - 85, y + 90, 75, 16).build();
             addMemberBtn.active = checkAdminPermission();
-            addDrawableChild(addMemberBtn);
+            addRenderableWidget(addMemberBtn);
         }
 
         // Save Button
-        ButtonWidget saveBtn = ButtonWidget.builder(Text.translatable("gui.todolist.save"), button -> saveProject())
-                .dimensions(x + 80, y + h - 30, 50, 20).build();
+        Button saveBtn = Button.builder(Component.translatable("gui.todolist.save"), button -> saveProject())
+                .bounds(x + 80, y + h - 30, 50, 20).build();
         saveBtn.active = canEdit;
-        addDrawableChild(saveBtn);
+        addRenderableWidget(saveBtn);
 
         // Cancel Button
-        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), button -> close())
-                .dimensions(x + w - 60, y + h - 30, 50, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.todolist.cancel"), button -> onClose())
+                .bounds(x + w - 60, y + h - 30, 50, 20).build());
         
         if (canEdit) {
             setFocused(nameField);
@@ -126,14 +123,14 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
         project.addMember(memberUuid, Project.ProjectRole.MEMBER, memberName);
         if (memberList != null) {
-            String search = memberSearchField != null ? memberSearchField.getText() : "";
+            String search = memberSearchField != null ? memberSearchField.getValue() : "";
             memberList.updateEntries(search);
         }
     }
 
     private boolean checkPermission() {
-        if (client.player == null) return false;
-        String uuid = client.player.getUuid().toString();
+        if (minecraft.player == null) return false;
+        String uuid = minecraft.player.getUUID().toString();
         
         if (project.getScope() == Project.Scope.PERSONAL) {
              String owner = project.getOwnerUuid();
@@ -153,17 +150,17 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     private boolean isOpClient() {
-        return client != null && client.player != null && client.player.hasPermissionLevel(2);
+        return minecraft != null && minecraft.player != null && minecraft.player.hasPermissions(2);
     }
 
     private Role getCurrentRole() {
         if (isOpClient()) {
             return Role.OP;
         }
-        if (client == null || client.player == null) {
+        if (minecraft == null || minecraft.player == null) {
             return Role.MEMBER;
         }
-        String uuid = client.player.getUuid().toString();
+        String uuid = minecraft.player.getUUID().toString();
         if (uuid.equals(project.getOwnerUuid())) {
             return Role.PROJECT_MANAGER;
         }
@@ -175,13 +172,21 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     private void saveProject() {
-        String name = nameField.getText().trim();
+        String name = nameField.getValue().trim();
         if (name.isEmpty()) return;
 
         String normalizedName = normalizeProjectNameForSave(name, project.getName());
         project.setName(normalizedName);
+        project.setAllowMemberCreate(allowMemberCreate);
         ClientBridge.ops().sendUpdateProject(project);
-        close();
+        onClose();
+    }
+
+    private Component getAllowMemberCreateText() {
+        return Component.translatable(
+                "gui.todolist.project.allow_member_create",
+                Component.translatable(allowMemberCreate ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off")
+        );
     }
 
     /**
@@ -203,19 +208,19 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         TodoListCommon.getProjectManager().removeListener(this);
-        client.setScreen(parent);
+        minecraft.setScreen(parent);
     }
 
     @Override
     public void onProjectChanged(ProjectManager.ProjectChangeType type, Project project) {
         if (project != null && project.getId().equals(this.project.getId())) {
             this.project = project;
-            if (client != null) {
-                client.execute(() -> {
+            if (minecraft != null) {
+                minecraft.execute(() -> {
                     if (memberList != null) {
-                        String search = memberSearchField != null ? memberSearchField.getText() : "";
+                        String search = memberSearchField != null ? memberSearchField.getValue() : "";
                         memberList.updateEntries(search);
                     }
                 });
@@ -224,7 +229,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         int w = 200;
@@ -233,20 +238,20 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         int y = (height - h) / 2;
         
         context.fill(x, y, x + w, y + h, 0xFF202020);
-        context.drawBorder(x, y, w, h, 0xFFFFFFFF);
+        context.renderOutline(x, y, w, h, 0xFFFFFFFF);
         
-        context.drawText(textRenderer, title, x + 10, y + 10, 0xFFFFFFFF, false);
-        context.drawText(textRenderer, Text.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
+        context.drawString(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
+        context.drawString(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
         
         if (isTeam) {
-            context.drawText(textRenderer, Text.translatable("gui.todolist.label.members"), x + 10, y + 60, 0xFFAAAAAA, false);
+            context.drawString(font, Component.translatable("gui.todolist.label.members"), x + 10, y + 60, 0xFFAAAAAA, false);
         }
         
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private class MemberListWidget extends ElementListWidget<MemberListWidget.MemberEntry> {
-        public MemberListWidget(MinecraftClient client, int width, int height, int top, int bottom, int itemHeight) {
+    private class MemberListWidget extends ContainerObjectSelectionList<MemberListWidget.MemberEntry> {
+        public MemberListWidget(Minecraft client, int width, int height, int top, int bottom, int itemHeight) {
             super(client, width, height, top, bottom, itemHeight);
             
             this.setRenderBackground(false);
@@ -269,8 +274,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 }
                 try {
                     UUID id = UUID.fromString(ownerUuid);
-                    if (client.getNetworkHandler() != null) {
-                        PlayerListEntry ple = client.getNetworkHandler().getPlayerListEntry(id);
+                    if (minecraft.getConnection() != null) {
+                        PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
                         if (ple != null) {
                             name = ple.getProfile().getName();
                             project.setMemberName(ownerUuid, name);
@@ -294,8 +299,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 }
                 try {
                     UUID id = UUID.fromString(uuid);
-                    if (client.getNetworkHandler() != null) {
-                        PlayerListEntry ple = client.getNetworkHandler().getPlayerListEntry(id);
+                    if (minecraft.getConnection() != null) {
+                        PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
                         if (ple != null) {
                             name = ple.getProfile().getName();
                             project.setMemberName(uuid, name);
@@ -310,18 +315,18 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
         
         @Override
-        public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
              // Access fields directly. In Yarn/Fabric 1.20.1, these are protected in EntryListWidget
              // width, height, top, bottom, left, right
              
              // Draw background
-             context.fill(this.left, this.top, this.right, this.bottom, 0xFF101010);
+             context.fill(this.x0, this.y0, this.x1, this.y1, 0xFF101010);
              
              // Scissor
-             double scale = client.getWindow().getScaleFactor();
+             double scale = minecraft.getWindow().getGuiScale();
              com.mojang.blaze3d.systems.RenderSystem.enableScissor(
-                 (int)(this.left * scale), 
-                 (int)((client.getWindow().getScaledHeight() - this.bottom) * scale), 
+                 (int)(this.x0 * scale), 
+                 (int)((minecraft.getWindow().getGuiScaledHeight() - this.y1) * scale), 
                  (int)(this.width * scale), 
                  (int)(this.height * scale)
              );
@@ -333,9 +338,9 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                  int entryTop = this.getRowTop(i);
                  int entryBottom = entryTop + itemHeight;
                  
-                 if (entryBottom >= this.top && entryTop <= this.bottom) {
+                 if (entryBottom >= this.y0 && entryTop <= this.y1) {
                      MemberEntry entry = this.children().get(i);
-                     int rowLeft = this.left + (this.width - getRowWidth()) / 2;
+                     int rowLeft = this.x0 + (this.width - getRowWidth()) / 2;
                      entry.render(context, i, entryTop, rowLeft, getRowWidth(), itemHeight, mouseX, mouseY, isMouseOver(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom, delta);
                  }
              }
@@ -344,7 +349,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
         
         @Override
-        protected void renderBackground(DrawContext context) {
+        protected void renderBackground(GuiGraphics context) {
             // Do nothing
         }
         
@@ -354,15 +359,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
 
         @Override
-        protected int getScrollbarPositionX() {
-            return this.left + this.width + 6;
+        protected int getScrollbarPosition() {
+            return this.x0 + this.width + 6;
         }
 
-        public class MemberEntry extends ElementListWidget.Entry<MemberEntry> {
+        public class MemberEntry extends ContainerObjectSelectionList.Entry<MemberEntry> {
             private final String uuid;
             private final Project.ProjectRole role;
-            private final ButtonWidget roleBtn;
-            private final ButtonWidget removeBtn;
+            private final Button roleBtn;
+            private final Button removeBtn;
             private String name;
 
             public MemberEntry(String uuid, Project.ProjectRole role) {
@@ -376,8 +381,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 }
                 try {
                     UUID id = UUID.fromString(uuid);
-                    if (client.getNetworkHandler() != null) {
-                         PlayerListEntry entry = client.getNetworkHandler().getPlayerListEntry(id);
+                    if (minecraft.getConnection() != null) {
+                         PlayerInfo entry = minecraft.getConnection().getPlayerInfo(id);
                          if (entry != null) {
                              name = entry.getProfile().getName();
                              project.setMemberName(uuid, name);
@@ -387,15 +392,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                     // Ignore
                 }
 
-                this.roleBtn = ButtonWidget.builder(getRoleText(role), b -> toggleRole())
-                        .dimensions(0, 0, 60, 16).build();
+                this.roleBtn = Button.builder(getRoleText(role), b -> toggleRole())
+                        .bounds(0, 0, 60, 16).build();
                 this.roleBtn.active = canEditRole();
 
-                this.removeBtn = ButtonWidget.builder(Text.literal("X").formatted(Formatting.RED), b -> {
+                this.removeBtn = Button.builder(Component.literal("X").withStyle(ChatFormatting.RED), b -> {
                     ClientBridge.ops().sendRemoveMember(project.getId(), uuid);
-                }).dimensions(0, 0, 20, 16).build();
+                }).bounds(0, 0, 20, 16).build();
                 
-                boolean targetSelf = client.player != null && client.player.getUuid().toString().equals(uuid);
+                boolean targetSelf = minecraft.player != null && minecraft.player.getUUID().toString().equals(uuid);
                 boolean targetProjectManager = project.getOwnerUuid() != null && project.getOwnerUuid().equals(uuid);
                 Role actorRole = getCurrentRole();
                 Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, targetSelf, targetProjectManager);
@@ -403,8 +408,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }
 
             @Override
-            public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
-                context.drawText(textRenderer, name, x + 2, y + 4, 0xFFFFFFFF, false);
+            public void render(GuiGraphics context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+                context.drawString(font, name, x + 2, y + 4, 0xFFFFFFFF, false);
 
                 int btnY = y + (entryHeight - 16) / 2;
                 int roleBtnX = x + entryWidth - 22 - 4 - 60;
@@ -418,7 +423,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }
 
             private boolean canEditRole() {
-                boolean targetSelf = client.player != null && client.player.getUuid().toString().equals(uuid);
+                boolean targetSelf = minecraft.player != null && minecraft.player.getUUID().toString().equals(uuid);
                 boolean targetProjectManager = project.getOwnerUuid() != null && project.getOwnerUuid().equals(uuid);
                 Role actorRole = getCurrentRole();
                 Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, targetSelf, targetProjectManager);
@@ -436,18 +441,18 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
                 project.addMember(uuid, newRole, project.getMemberName(uuid));
                 if (memberList != null) {
-                    String search = memberSearchField != null ? memberSearchField.getText() : "";
+                    String search = memberSearchField != null ? memberSearchField.getValue() : "";
                     memberList.updateEntries(search);
                 }
 
                 if (!ClientBridge.ops().canSendUpdateMemberRole()) {
                     if (prevRole != null) project.addMember(uuid, prevRole, project.getMemberName(uuid));
                     if (memberList != null) {
-                        String search = memberSearchField != null ? memberSearchField.getText() : "";
+                        String search = memberSearchField != null ? memberSearchField.getValue() : "";
                         memberList.updateEntries(search);
                     }
-                    if (client.player != null) {
-                        client.player.sendMessage(Text.translatable("message.todolist.role_update_failed"), false);
+                    if (minecraft.player != null) {
+                        minecraft.player.displayClientMessage(Component.translatable("message.todolist.role_update_failed"), false);
                     }
                     return;
                 }
@@ -456,23 +461,23 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }
 
             @Override
-            public List<? extends Element> children() {
+            public List<? extends GuiEventListener> children() {
                 return List.of(roleBtn, removeBtn);
             }
 
             @Override
-            public List<? extends Selectable> selectableChildren() {
+            public List<? extends NarratableEntry> narratables() {
                 return List.of(roleBtn, removeBtn);
             }
 
-            private Text getRoleText(Project.ProjectRole role) {
+            private Component getRoleText(Project.ProjectRole role) {
                 if (role == Project.ProjectRole.MEMBER) {
-                    return Text.translatable("gui.todolist.role.member");
+                    return Component.translatable("gui.todolist.role.member");
                 }
                 if (role == Project.ProjectRole.LEAD) {
-                    return Text.translatable("gui.todolist.role.lead");
+                    return Component.translatable("gui.todolist.role.lead");
                 }
-                return Text.translatable("gui.todolist.role.manager");
+                return Component.translatable("gui.todolist.role.manager");
             }
         }
     }

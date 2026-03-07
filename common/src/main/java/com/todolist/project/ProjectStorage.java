@@ -2,10 +2,9 @@ package com.todolist.project;
 
 import com.todolist.TodoConstants;
 import com.todolist.platform.DataPathProvider;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtList;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,12 +83,12 @@ public class ProjectStorage {
 
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
-        NbtCompound root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIo.read(file.toFile());
         boolean dirty = false;
         if (root != null && root.contains("projects", 9)) {
-            NbtList list = root.getList("projects", 10);
+            ListTag list = root.getList("projects", 10);
             for (int i = 0; i < list.size(); i++) {
-                NbtCompound projectNbt = list.getCompound(i);
+                CompoundTag projectNbt = list.getCompound(i);
                 boolean hadValidId = projectNbt.contains("id") && !projectNbt.getString("id").trim().isEmpty();
                 boolean scopeDirty = false;
                 if (!projectNbt.contains("scope")) {
@@ -120,8 +119,8 @@ public class ProjectStorage {
     }
 
     private void saveProjectsToFile(List<Project> projects, Path file) throws IOException {
-        NbtCompound root = new NbtCompound();
-        NbtList list = new NbtList();
+        CompoundTag root = new CompoundTag();
+        ListTag list = new ListTag();
         for (Project project : projects) {
             list.add(project.toNbt());
         }

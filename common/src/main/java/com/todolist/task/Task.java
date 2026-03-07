@@ -1,11 +1,9 @@
 package com.todolist.task;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.text.Text;
-
 import java.util.*;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
 
 /**
  * Task entity for Todo List
@@ -19,6 +17,8 @@ import java.util.*;
  * - Subtasks support
  */
 public class Task {
+    private static final int NBT_LIST_TYPE = 9;
+    private static final int NBT_COMPOUND_TYPE = 10;
     private String id;
     private String title;
     private String description;
@@ -52,8 +52,8 @@ public class Task {
     }
 
     // NBT Serialization
-    public NbtCompound toNbt() {
-        NbtCompound nbt = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putString("id", id);
         nbt.putString("title", title);
         nbt.putString("description", description);
@@ -62,9 +62,9 @@ public class Task {
         nbt.putLong("createdAt", createdAt);
 
         // Tags
-        NbtList tagsList = new NbtList();
+        ListTag tagsList = new ListTag();
         for (String tag : tags) {
-            NbtCompound tagNbt = new NbtCompound();
+            CompoundTag tagNbt = new CompoundTag();
             tagNbt.putString("tag", tag);
             tagsList.add(tagNbt);
         }
@@ -90,7 +90,7 @@ public class Task {
         }
 
         // Subtasks
-        NbtList subtasksList = new NbtList();
+        ListTag subtasksList = new ListTag();
         for (Task subtask : subtasks) {
             subtasksList.add(subtask.toNbt());
         }
@@ -99,7 +99,7 @@ public class Task {
         return nbt;
     }
 
-    public static Task fromNbt(NbtCompound nbt) {
+    public static Task fromNbt(CompoundTag nbt) {
         String title = nbt.getString("title");
         String description = nbt.getString("description");
         Task task = new Task(title, description);
@@ -118,10 +118,10 @@ public class Task {
         task.createdAt = nbt.getLong("createdAt");
 
         // Tags
-        if (nbt.contains("tags", NbtElement.LIST_TYPE)) {
-            NbtList tagsList = nbt.getList("tags", NbtElement.COMPOUND_TYPE);
+        if (nbt.contains("tags", NBT_LIST_TYPE)) {
+            ListTag tagsList = nbt.getList("tags", NBT_COMPOUND_TYPE);
             for (int i = 0; i < tagsList.size(); i++) {
-                NbtCompound tagNbt = tagsList.getCompound(i);
+                CompoundTag tagNbt = tagsList.getCompound(i);
                 task.tags.add(tagNbt.getString("tag"));
             }
         }
@@ -154,8 +154,8 @@ public class Task {
         }
 
         // Subtasks
-        if (nbt.contains("subtasks", NbtElement.LIST_TYPE)) {
-            NbtList subtasksList = nbt.getList("subtasks", NbtElement.COMPOUND_TYPE);
+        if (nbt.contains("subtasks", NBT_LIST_TYPE)) {
+            ListTag subtasksList = nbt.getList("subtasks", NBT_COMPOUND_TYPE);
             for (int i = 0; i < subtasksList.size(); i++) {
                 task.subtasks.add(Task.fromNbt(subtasksList.getCompound(i)));
             }
@@ -231,7 +231,7 @@ public class Task {
             this.color = color;
         }
 
-        public Text getDisplayName() { return Text.translatable(translationKey); }
+        public Component getDisplayName() { return Component.translatable(translationKey); }
         public int getColor() { return color; }
     }
 

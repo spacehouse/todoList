@@ -1,7 +1,7 @@
 package com.todolist.project;
 
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
 /**
  * 项目名称格式化工具类。
@@ -21,9 +21,9 @@ public final class ProjectNameFormatter {
      * @param project 项目对象
      * @return 可用于 UI 的文本对象
      */
-    public static MutableText toDisplayText(Project project) {
+    public static MutableComponent toDisplayText(Project project) {
         if (project == null) {
-            return Text.empty();
+            return Component.empty();
         }
         String normalizedName = normalizeDefaultName(project.getName(), project.getScope());
         return toDisplayText(normalizedName);
@@ -34,14 +34,25 @@ public final class ProjectNameFormatter {
      * @param projectName 项目名或翻译键
      * @return 可用于 UI 的文本对象
      */
-    public static MutableText toDisplayText(String projectName) {
+    public static MutableComponent toDisplayText(String projectName) {
         if (projectName == null || projectName.isEmpty()) {
-            return Text.empty();
+            return Component.empty();
         }
         if (isTranslationKey(projectName)) {
-            return Text.translatable(projectName);
+            MutableComponent translated = Component.translatable(projectName);
+            String resolved = translated.getString();
+            if (!projectName.equals(resolved)) {
+                return translated;
+            }
+            if (DEFAULT_PERSONAL_PROJECT_KEY.equals(projectName)) {
+                return Component.literal("Default Project");
+            }
+            if (DEFAULT_TEAM_PROJECT_KEY.equals(projectName)) {
+                return Component.literal("Team Project");
+            }
+            return Component.literal(projectName);
         }
-        return Text.literal(projectName);
+        return Component.literal(projectName);
     }
 
     /**

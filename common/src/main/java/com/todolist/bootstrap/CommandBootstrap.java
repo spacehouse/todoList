@@ -4,9 +4,11 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
+import com.todolist.network.ProjectPackets;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -18,13 +20,12 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.mojang.brigadier.CommandDispatcher;
-import net.minecraft.command.CommandRegistryAccess;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-
+import net.minecraft.server.level.ServerPlayer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -88,116 +89,116 @@ public final class CommandBootstrap {
     @SuppressWarnings("unchecked")
     public static void registerReflective(Object dispatcher, Object registryAccess, Object environment) {
         if (!(dispatcher instanceof CommandDispatcher<?> rawDispatcher)
-                || !(registryAccess instanceof CommandRegistryAccess rawRegistryAccess)
-                || !(environment instanceof CommandManager.RegistrationEnvironment rawEnvironment)) {
+                || !(registryAccess instanceof CommandBuildContext rawRegistryAccess)
+                || !(environment instanceof Commands.CommandSelection rawEnvironment)) {
             return;
         }
-        register((CommandDispatcher<ServerCommandSource>) rawDispatcher, rawRegistryAccess, rawEnvironment);
+        register((CommandDispatcher<CommandSourceStack>) rawDispatcher, rawRegistryAccess, rawEnvironment);
     }
 
     /**
      * 注册命令树，并保留 /todolist 到 /todo 的别名重定向。
      */
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess registryAccess, CommandManager.RegistrationEnvironment environment) {
-        LiteralArgumentBuilder<ServerCommandSource> todoRoot = CommandManager.literal("todo")
-                .then(CommandManager.literal("help")
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext registryAccess, Commands.CommandSelection environment) {
+        LiteralArgumentBuilder<CommandSourceStack> todoRoot = Commands.literal("todo")
+                .then(Commands.literal("help")
                         .executes(ctx -> sendHelp(ctx.getSource())))
-                .then(CommandManager.literal("task")
+                .then(Commands.literal("task")
                         .executes(ctx -> sendUnimplemented(ctx.getSource(), "task"))
-                        .then(CommandManager.literal("list")
+                        .then(Commands.literal("list")
                                 .executes(ctx -> sendTaskList(ctx.getSource(), "all", "all", null))
-                                .then(CommandManager.argument("status", StringArgumentType.word())
+                                .then(Commands.argument("status", StringArgumentType.word())
                                         .executes(ctx -> sendTaskList(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "status"),
                                                 "all",
                                                 null
                                         ))
-                                        .then(CommandManager.argument("priority", StringArgumentType.word())
+                                        .then(Commands.argument("priority", StringArgumentType.word())
                                                 .executes(ctx -> sendTaskList(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "status"),
                                                         StringArgumentType.getString(ctx, "priority"),
                                                         null
                                                 ))
-                                                .then(CommandManager.argument("text", StringArgumentType.greedyString())
+                                                .then(Commands.argument("text", StringArgumentType.greedyString())
                                                         .executes(ctx -> sendTaskList(
                                                                 ctx.getSource(),
                                                                 StringArgumentType.getString(ctx, "status"),
                                                                 StringArgumentType.getString(ctx, "priority"),
                                                                 StringArgumentType.getString(ctx, "text")
                                                         ))))))
-                        .then(CommandManager.literal("add")
-                                .then(CommandManager.argument("title", StringArgumentType.string())
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("title", StringArgumentType.string())
                                         .executes(ctx -> executeTaskAdd(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "title"),
                                                 null,
                                                 null
                                         ))
-                                        .then(CommandManager.argument("description", StringArgumentType.string())
+                                        .then(Commands.argument("description", StringArgumentType.string())
                                                 .executes(ctx -> executeTaskAdd(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "title"),
                                                         StringArgumentType.getString(ctx, "description"),
                                                         null
                                                 ))
-                                                .then(CommandManager.argument("tags", StringArgumentType.greedyString())
+                                                .then(Commands.argument("tags", StringArgumentType.greedyString())
                                                         .executes(ctx -> executeTaskAdd(
                                                                 ctx.getSource(),
                                                                 StringArgumentType.getString(ctx, "title"),
                                                                 StringArgumentType.getString(ctx, "description"),
                                                                 StringArgumentType.getString(ctx, "tags")
                                                         )))))))
-                        .then(CommandManager.literal("clear")
+                        .then(Commands.literal("clear")
                                 .executes(ctx -> executeTaskClear(ctx.getSource())))
-                        .then(CommandManager.literal("done")
-                                .then(CommandManager.argument("taskId", StringArgumentType.word())
+                        .then(Commands.literal("done")
+                                .then(Commands.argument("taskId", StringArgumentType.word())
                                         .executes(ctx -> executeTaskDone(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
-                        .then(CommandManager.literal("remove")
-                                .then(CommandManager.argument("taskId", StringArgumentType.word())
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("taskId", StringArgumentType.word())
                                         .executes(ctx -> executeTaskRemove(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
-                .then(CommandManager.literal("project")
+                .then(Commands.literal("project")
                         .executes(ctx -> sendUnimplemented(ctx.getSource(), "project"))
-                        .then(CommandManager.literal("list")
+                        .then(Commands.literal("list")
                                 .executes(ctx -> sendProjectList(ctx.getSource())))
-                        .then(CommandManager.literal("current")
+                        .then(Commands.literal("current")
                                 .executes(ctx -> sendCurrentProjectByTaskStats(ctx.getSource()))))
-                .then(CommandManager.literal("hud")
+                .then(Commands.literal("hud")
                         .executes(ctx -> sendHudStatus(ctx.getSource()))
-                        .then(CommandManager.literal("status")
+                        .then(Commands.literal("status")
                                 .executes(ctx -> sendHudStatus(ctx.getSource())))
-                        .then(CommandManager.literal("toggle")
+                        .then(Commands.literal("toggle")
                                 .executes(ctx -> toggleHudStatus(ctx.getSource()))))
-                .then(CommandManager.literal("join")
+                .then(Commands.literal("join")
                         .then(buildJoinDecisionLiteral("accept", true))
                         .then(buildJoinDecisionLiteral("deny", false)));
 
         var todoRootNode = dispatcher.register(todoRoot);
-        dispatcher.register(CommandManager.literal("todolist").redirect(todoRootNode));
+        dispatcher.register(Commands.literal("todolist").redirect(todoRootNode));
     }
 
     /**
      * 构建 join 审批子命令（accept/deny），复用同一套处理逻辑。
      */
-    private static LiteralArgumentBuilder<ServerCommandSource> buildJoinDecisionLiteral(String literal, boolean approved) {
-        return CommandManager.literal(literal)
-                .then(CommandManager.argument("projectId", StringArgumentType.word())
-                        .then(CommandManager.argument("applicantUuid", StringArgumentType.word())
+    private static LiteralArgumentBuilder<CommandSourceStack> buildJoinDecisionLiteral(String literal, boolean approved) {
+        return Commands.literal(literal)
+                .then(Commands.argument("projectId", StringArgumentType.word())
+                        .then(Commands.argument("applicantUuid", StringArgumentType.word())
                                 .executes(ctx -> executeJoinDecision(ctx.getSource(), ctx, approved))));
     }
 
     /**
      * 执行加入申请审批逻辑，并根据 approved 决定通过或拒绝。
      */
-    private static int executeJoinDecision(ServerCommandSource source, CommandContext<ServerCommandSource> ctx, boolean approved) {
-        ServerPlayerEntity approver = getPlayerIfPresent(source);
+    private static int executeJoinDecision(CommandSourceStack source, CommandContext<CommandSourceStack> ctx, boolean approved) {
+        ServerPlayer approver = getPlayerIfPresent(source);
         if (approver == null) {
             return COMMAND_FAILURE;
         }
@@ -217,56 +218,14 @@ public final class CommandBootstrap {
         );
     }
 
-    private static boolean handleJoinDecision(MinecraftServer server, ServerPlayerEntity approver, String projectId, String applicantUuid, boolean accepted) {
-        if (server == null || approver == null || projectId == null || projectId.isEmpty() || applicantUuid == null || applicantUuid.isEmpty()) {
-            return false;
-        }
-        ProjectManager manager = TodoListCommon.getProjectManager();
-        Project project = manager.getProject(projectId);
-        if (project == null || project.getScope() != Project.Scope.TEAM) {
-            approver.sendMessage(Text.translatable("message.todolist.project.join.invalid_project"), false);
-            return false;
-        }
-        if (approver.getUuidAsString().equals(applicantUuid)) {
-            approver.sendMessage(Text.translatable("message.todolist.project.join.cannot_approve_self"), false);
-            return false;
-        }
-        boolean alreadyMember = applicantUuid.equals(project.getOwnerUuid()) || project.getMemberRole(applicantUuid) != null;
-        if (alreadyMember) {
-            approver.sendMessage(Text.translatable("message.todolist.project.join.already_member"), false);
-            return false;
-        }
-        ServerPlayerEntity applicant;
-        try {
-            applicant = server.getPlayerManager().getPlayer(UUID.fromString(applicantUuid));
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
-        if (applicant == null) {
-            approver.sendMessage(Text.translatable("message.todolist.project.join.applicant_offline"), false);
-            return false;
-        }
-        if (accepted) {
-            project.addMember(applicantUuid, Project.ProjectRole.MEMBER, applicant.getName().getString());
-            manager.updateProject(project);
-            try {
-                ProjectSaveDebouncer.requestSave(server, project.getScope());
-            } catch (Exception e) {
-                TodoConstants.LOGGER.error("Failed to save project join decision", e);
-            }
-            applicant.sendMessage(Text.translatable("message.todolist.project.join.accepted", getProjectDisplayName(project, projectId)), false);
-            approver.sendMessage(Text.translatable("message.todolist.project.join.approved", applicant.getName().getString()), false);
-        } else {
-            applicant.sendMessage(Text.translatable("message.todolist.project.join.denied", getProjectDisplayName(project, projectId)), false);
-            approver.sendMessage(Text.translatable("message.todolist.project.join.rejected", applicant.getName().getString()), false);
-        }
-        return true;
+    private static boolean handleJoinDecision(MinecraftServer server, ServerPlayer approver, String projectId, String applicantUuid, boolean accepted) {
+        return ProjectPackets.handleJoinDecision(server, approver, projectId, applicantUuid, accepted);
     }
 
     /**
      * 输出 todo 命令帮助信息，展示当前可用命令。
      */
-    private static int sendHelp(ServerCommandSource source) {
+    private static int sendHelp(CommandSourceStack source) {
         sendFeedbackBatchByTranslationKeys(
                 source,
                 "command.todolist.help.title",
@@ -293,7 +252,7 @@ public final class CommandBootstrap {
     /**
      * 输出 HUD 开关状态，便于玩家确认当前配置值。
      */
-    private static int sendHudStatus(ServerCommandSource source) {
+    private static int sendHudStatus(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
@@ -310,7 +269,7 @@ public final class CommandBootstrap {
     /**
      * 切换 HUD 开关状态并立即写回配置文件。
      */
-    private static int toggleHudStatus(ServerCommandSource source) {
+    private static int toggleHudStatus(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
@@ -329,23 +288,23 @@ public final class CommandBootstrap {
     /**
      * 返回 HUD 开关状态文案（开/关），由语言文件统一翻译。
      */
-    private static Text getHudSwitchText(boolean enabled) {
-        return Text.translatable(enabled ? "command.todolist.hud.enabled" : "command.todolist.hud.disabled");
+    private static Component getHudSwitchText(boolean enabled) {
+        return Component.translatable(enabled ? "command.todolist.hud.enabled" : "command.todolist.hud.disabled");
     }
 
     /**
      * 读取当前玩家任务并输出统计信息与最多 10 条摘要。
      * 支持 all/todo/done 过滤参数。
      */
-    private static int sendTaskList(ServerCommandSource source, String status, String priority, String text) {
+    private static int sendTaskList(CommandSourceStack source, String status, String priority, String text) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
 
         try {
@@ -364,9 +323,9 @@ public final class CommandBootstrap {
                     source,
                     filteredTasks,
                     TASK_LIST_MAX_SUMMARY,
-                    () -> Text.translatable("command.todolist.task.list.summary", totalCount, completedCount),
+                    () -> Component.translatable("command.todolist.task.list.summary", totalCount, completedCount),
                     "command.todolist.task.list.empty",
-                    (displayIndex, task) -> Text.translatable(
+                    (displayIndex, task) -> Component.translatable(
                             "command.todolist.task.list.item",
                             displayIndex,
                             task.isCompleted() ? "✓" : "✗",
@@ -383,15 +342,15 @@ public final class CommandBootstrap {
     /**
      * 为当前玩家添加一条新任务并写回存储。
      */
-    private static int executeTaskAdd(ServerCommandSource source, String title, String description, String tags) {
+    private static int executeTaskAdd(CommandSourceStack source, String title, String description, String tags) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadPlayerTasks(playerUuid);
@@ -477,15 +436,15 @@ public final class CommandBootstrap {
     /**
      * 清空当前玩家所有任务并写回存储。
      */
-    private static int executeTaskClear(ServerCommandSource source) {
+    private static int executeTaskClear(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.savePlayerTasks(playerUuid, List.of());
@@ -504,15 +463,15 @@ public final class CommandBootstrap {
     /**
      * 输出当前玩家可见项目摘要，包含总数与最多 10 条项目信息。
      */
-    private static int sendProjectList(ServerCommandSource source) {
+    private static int sendProjectList(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        String playerUuid = player.getUuidAsString();
+        String playerUuid = player.getStringUUID();
         ProjectManager projectManager = TodoListCommon.getProjectManager();
 
         List<Project> visibleProjects = projectManager.getAllProjects().stream()
@@ -525,9 +484,9 @@ public final class CommandBootstrap {
                 source,
                 visibleProjects,
                 PROJECT_LIST_MAX_SUMMARY,
-                () -> Text.translatable("command.todolist.project.list.summary", totalCount),
+                () -> Component.translatable("command.todolist.project.list.summary", totalCount),
                 "command.todolist.project.list.empty",
-                (displayIndex, project) -> Text.translatable(
+                (displayIndex, project) -> Component.translatable(
                         "command.todolist.project.list.item",
                         displayIndex,
                         getProjectScopeText(project),
@@ -541,15 +500,15 @@ public final class CommandBootstrap {
     /**
      * 基于当前玩家任务的 projectId 频次，输出最常用项目作为当前项目。
      */
-    private static int sendCurrentProjectByTaskStats(ServerCommandSource source) {
+    private static int sendCurrentProjectByTaskStats(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadPlayerTasks(playerUuid);
@@ -629,42 +588,42 @@ public final class CommandBootstrap {
     /**
      * 获取项目范围的本地化文本（个人/团队）。
      */
-    private static Text getProjectScopeText(Project project) {
+    private static Component getProjectScopeText(Project project) {
         if (project == null || project.getScope() == Project.Scope.PERSONAL) {
-            return Text.translatable("gui.todolist.scope.personal");
+            return Component.translatable("gui.todolist.scope.personal");
         }
-        return Text.translatable("gui.todolist.scope.team");
+        return Component.translatable("gui.todolist.scope.team");
     }
 
     /**
      * 获取项目展示名称：优先使用项目名，其次回退到 projectId。
      */
-    private static Text getProjectDisplayName(Project project, String fallbackProjectId) {
+    private static Component getProjectDisplayName(Project project, String fallbackProjectId) {
         if (project == null) {
-            return fallbackProjectId == null ? Text.empty() : Text.literal(fallbackProjectId);
+            return fallbackProjectId == null ? Component.empty() : Component.literal(fallbackProjectId);
         }
         String name = project.getName();
         if (name == null || name.isBlank()) {
-            return fallbackProjectId == null ? Text.empty() : Text.literal(fallbackProjectId);
+            return fallbackProjectId == null ? Component.empty() : Component.literal(fallbackProjectId);
         }
         if (name.startsWith("gui.todolist.") || name.startsWith("item.") || name.startsWith("block.")) {
-            return Text.translatable(name);
+            return Component.translatable(name);
         }
-        return Text.literal(name);
+        return Component.literal(name);
     }
 
     /**
      * 将当前玩家指定任务标记为已完成并写回存储。
      */
-    private static int executeTaskDone(ServerCommandSource source, String taskId) {
+    private static int executeTaskDone(CommandSourceStack source, String taskId) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadPlayerTasks(playerUuid);
@@ -701,15 +660,15 @@ public final class CommandBootstrap {
     /**
      * 从当前玩家任务列表删除指定任务并写回存储。
      */
-    private static int executeTaskRemove(ServerCommandSource source, String taskId) {
+    private static int executeTaskRemove(CommandSourceStack source, String taskId) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        ServerPlayerEntity player = getPlayerIfPresent(source);
+        ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadPlayerTasks(playerUuid);
@@ -757,8 +716,8 @@ public final class CommandBootstrap {
     /**
      * 检测命令来源是否为玩家；若不是玩家则返回统一的本地化错误提示。
      */
-    private static ServerPlayerEntity getPlayerIfPresent(ServerCommandSource source) {
-        if (source.getEntity() instanceof ServerPlayerEntity player) {
+    private static ServerPlayer getPlayerIfPresent(CommandSourceStack source) {
+        if (source.getEntity() instanceof ServerPlayer player) {
             return player;
         }
         sendCommandFailure(source, "command.todolist.not_player_context");
@@ -768,7 +727,7 @@ public final class CommandBootstrap {
     /**
      * 输出一级子命令占位提示，用于标记该能力尚未实现。
      */
-    private static int sendUnimplemented(ServerCommandSource source, String subcommand) {
+    private static int sendUnimplemented(CommandSourceStack source, String subcommand) {
         if ("task".equals(subcommand)) {
             if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
                 return COMMAND_FAILURE;
@@ -794,33 +753,33 @@ public final class CommandBootstrap {
     /**
      * 统一校验命令语义权限并在失败时返回标准拒绝消息。
      */
-    private static int ensureCommandPermission(ServerCommandSource source, CommandPermissionSemantic semantic) {
+    private static int ensureCommandPermission(CommandSourceStack source, CommandPermissionSemantic semantic) {
         return ensureCommandPermission(source, semantic, null);
     }
 
     /**
      * 统一校验命令语义权限（支持 projectId 上下文）并在失败时返回标准拒绝消息。
      */
-    private static int ensureCommandPermission(ServerCommandSource source, CommandPermissionSemantic semantic, String projectId) {
+    private static int ensureCommandPermission(CommandSourceStack source, CommandPermissionSemantic semantic, String projectId) {
         if (hasCommandPermission(source, semantic, projectId)) {
             return COMMAND_SUCCESS;
         }
         return sendCommandFailure(
                 source,
                 PERMISSION_DENIED_TRANSLATION_KEY,
-                Text.translatable(getCommandPermissionTranslationKey(semantic))
+                Component.translatable(getCommandPermissionTranslationKey(semantic))
         );
     }
 
     /**
      * 根据语义和上下文判断命令来源是否具备执行权限。
      */
-    private static boolean hasCommandPermission(ServerCommandSource source, CommandPermissionSemantic semantic, String projectId) {
+    private static boolean hasCommandPermission(CommandSourceStack source, CommandPermissionSemantic semantic, String projectId) {
         if (semantic == CommandPermissionSemantic.ADMIN) {
-            return source.hasPermissionLevel(2);
+            return source.hasPermission(2);
         }
 
-        ServerPlayerEntity player = getPlayerOrNull(source);
+        ServerPlayer player = getPlayerOrNull(source);
         if (player == null) {
             return false;
         }
@@ -843,8 +802,8 @@ public final class CommandBootstrap {
     /**
      * 尝试提取命令来源玩家，不触发任何提示输出。
      */
-    private static ServerPlayerEntity getPlayerOrNull(ServerCommandSource source) {
-        if (source.getEntity() instanceof ServerPlayerEntity player) {
+    private static ServerPlayer getPlayerOrNull(CommandSourceStack source) {
+        if (source.getEntity() instanceof ServerPlayer player) {
             return player;
         }
         return null;
@@ -853,8 +812,8 @@ public final class CommandBootstrap {
     /**
      * 判断玩家是否具备团队项目管理员语义权限（项目经理/负责人/OP）。
      */
-    private static boolean hasProjectAdminPermission(ServerCommandSource source, ServerPlayerEntity player, String projectId) {
-        if (source.hasPermissionLevel(2)) {
+    private static boolean hasProjectAdminPermission(CommandSourceStack source, ServerPlayer player, String projectId) {
+        if (source.hasPermission(2)) {
             return true;
         }
         if (projectId == null || projectId.isBlank()) {
@@ -874,14 +833,14 @@ public final class CommandBootstrap {
     /**
      * 解析玩家在指定项目中的权限角色（与项目权限中心角色模型对齐）。
      */
-    private static Role resolveProjectRole(ServerPlayerEntity player, Project project) {
+    private static Role resolveProjectRole(ServerPlayer player, Project project) {
         if (player == null) {
             return Role.MEMBER;
         }
         if (project == null || project.getScope() != Project.Scope.TEAM) {
             return Role.MEMBER;
         }
-        String playerUuid = player.getUuidAsString();
+        String playerUuid = player.getStringUUID();
         if (playerUuid.equals(project.getOwnerUuid())) {
             return Role.PROJECT_MANAGER;
         }
@@ -895,11 +854,11 @@ public final class CommandBootstrap {
     /**
      * 判断玩家是否属于团队项目成员（含项目经理与负责人）。
      */
-    private static boolean isTeamProjectMember(ServerPlayerEntity player, Project project) {
+    private static boolean isTeamProjectMember(ServerPlayer player, Project project) {
         if (player == null || project == null || project.getScope() != Project.Scope.TEAM) {
             return false;
         }
-        String playerUuid = player.getUuidAsString();
+        String playerUuid = player.getStringUUID();
         if (playerUuid.equals(project.getOwnerUuid())) {
             return true;
         }
@@ -917,12 +876,12 @@ public final class CommandBootstrap {
      * 使用统一模板输出列表：先 summary，再 empty/items，最后 more。
      */
     private static <T> int sendListWithUnifiedTemplate(
-            ServerCommandSource source,
+            CommandSourceStack source,
             List<T> items,
             int maxSummaryCount,
-            Supplier<Text> summaryTextSupplier,
+            Supplier<Component> summaryTextSupplier,
             String emptyTranslationKey,
-            BiFunction<Integer, T, Text> itemTextFactory,
+            BiFunction<Integer, T, Component> itemTextFactory,
             String moreTranslationKey
     ) {
         sendFeedback(source, summaryTextSupplier);
@@ -948,21 +907,21 @@ public final class CommandBootstrap {
     /**
      * 使用统一入口发送普通反馈消息（不广播给管理员）。
      */
-    private static void sendFeedback(ServerCommandSource source, Supplier<Text> textSupplier) {
-        source.sendFeedback(textSupplier, false);
+    private static void sendFeedback(CommandSourceStack source, Supplier<Component> textSupplier) {
+        source.sendSuccess(textSupplier, false);
     }
 
     /**
      * 通过翻译键构造消息并发送到统一反馈入口。
      */
-    private static void sendFeedbackByTranslationKey(ServerCommandSource source, String translationKey, Object... args) {
-        sendFeedback(source, () -> Text.translatable(translationKey, args));
+    private static void sendFeedbackByTranslationKey(CommandSourceStack source, String translationKey, Object... args) {
+        sendFeedback(source, () -> Component.translatable(translationKey, args));
     }
 
     /**
      * 批量按顺序发送翻译键消息，保证传入顺序与输出顺序一致。
      */
-    private static void sendFeedbackBatchByTranslationKeys(ServerCommandSource source, String... translationKeys) {
+    private static void sendFeedbackBatchByTranslationKeys(CommandSourceStack source, String... translationKeys) {
         for (String translationKey : translationKeys) {
             sendFeedbackByTranslationKey(source, translationKey);
         }
@@ -971,21 +930,21 @@ public final class CommandBootstrap {
     /**
      * 使用统一入口发送错误消息。
      */
-    private static void sendError(ServerCommandSource source, Supplier<Text> textSupplier) {
-        source.sendError(textSupplier.get());
+    private static void sendError(CommandSourceStack source, Supplier<Component> textSupplier) {
+        source.sendFailure(textSupplier.get());
     }
 
     /**
      * 通过翻译键构造错误消息并发送到统一错误入口。
      */
-    private static void sendErrorByTranslationKey(ServerCommandSource source, String translationKey, Object... args) {
-        sendError(source, () -> Text.translatable(translationKey, args));
+    private static void sendErrorByTranslationKey(CommandSourceStack source, String translationKey, Object... args) {
+        sendError(source, () -> Component.translatable(translationKey, args));
     }
 
     /**
      * 批量按顺序发送翻译键错误消息，保证传入顺序与输出顺序一致。
      */
-    private static void sendErrorBatchByTranslationKeys(ServerCommandSource source, String... translationKeys) {
+    private static void sendErrorBatchByTranslationKeys(CommandSourceStack source, String... translationKeys) {
         for (String translationKey : translationKeys) {
             sendErrorByTranslationKey(source, translationKey);
         }
@@ -995,7 +954,7 @@ public final class CommandBootstrap {
      * 发送命令成功反馈并返回统一成功状态码，同时显式声明副作用。
      */
     private static int sendCommandSuccess(
-            ServerCommandSource source,
+            CommandSourceStack source,
             int code,
             CommandSideEffect[] sideEffects,
             String translationKey,
@@ -1008,7 +967,7 @@ public final class CommandBootstrap {
     /**
      * 发送无额外消息体的命令成功结果，并显式声明副作用。
      */
-    private static int sendCommandSuccess(ServerCommandSource source, int code, CommandSideEffect... sideEffects) {
+    private static int sendCommandSuccess(CommandSourceStack source, int code, CommandSideEffect... sideEffects) {
         return sendCommandSuccess(source, code, COMMAND_RESULT_MESSAGE_KEY_NONE, sideEffects);
     }
 
@@ -1016,7 +975,7 @@ public final class CommandBootstrap {
      * 发送无额外消息体的命令成功结果，并沉淀可比对三元组日志。
      */
     private static int sendCommandSuccess(
-            ServerCommandSource source,
+            CommandSourceStack source,
             int code,
             String messageKey,
             CommandSideEffect... sideEffects
@@ -1061,7 +1020,7 @@ public final class CommandBootstrap {
     /**
      * 发送命令失败反馈并返回统一失败状态码。
      */
-    private static int sendCommandFailure(ServerCommandSource source, String translationKey, Object... args) {
+    private static int sendCommandFailure(CommandSourceStack source, String translationKey, Object... args) {
         sendErrorByTranslationKey(source, translationKey, args);
         logCommandResultTriplet(COMMAND_FAILURE, translationKey, SIDE_EFFECT_NONE);
         return COMMAND_FAILURE;

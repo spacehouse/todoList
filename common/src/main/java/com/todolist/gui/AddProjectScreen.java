@@ -2,23 +2,23 @@ package com.todolist.gui;
 
 import com.todolist.client.ClientBridge;
 import com.todolist.project.Project;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /**
  * 新建项目界面：输入项目名称并选择个人/团队范围后发送创建请求。
  */
 public class AddProjectScreen extends Screen {
     private final Screen parent;
-    private TextFieldWidget nameField;
+    private EditBox nameField;
     private Project.Scope scope = Project.Scope.PERSONAL;
-    private ButtonWidget scopeButton;
+    private Button scopeButton;
     private boolean teamProjectsEnabled = true;
     private final Random random = new Random();
 
@@ -33,7 +33,7 @@ public class AddProjectScreen extends Screen {
      * 创建新建项目界面，并可指定默认范围。
      */
     public AddProjectScreen(Screen parent, Project.Scope defaultScope) {
-        super(Text.translatable("gui.todolist.add_project.title"));
+        super(Component.translatable("gui.todolist.add_project.title"));
         this.parent = parent;
         if (defaultScope != null) {
             this.scope = defaultScope;
@@ -53,44 +53,44 @@ public class AddProjectScreen extends Screen {
         int y = (height - h) / 2;
 
         // Name Field
-        nameField = new TextFieldWidget(textRenderer, x + 10, y + 35, w - 20, 20, Text.translatable("gui.todolist.project.name"));
+        nameField = new EditBox(font, x + 10, y + 35, w - 20, 20, Component.translatable("gui.todolist.project.name"));
         nameField.setMaxLength(32);
-        addDrawableChild(nameField);
+        addRenderableWidget(nameField);
 
         // Scope Toggle
-        scopeButton = ButtonWidget.builder(getScopeText(), button -> {
+        scopeButton = Button.builder(getScopeText(), button -> {
             if (!teamProjectsEnabled) return;
             scope = (scope == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
             button.setMessage(getScopeText());
-        }).dimensions(x + 10, y + 65, w - 20, 20).build();
+        }).bounds(x + 10, y + 65, w - 20, 20).build();
         scopeButton.active = teamProjectsEnabled;
-        addDrawableChild(scopeButton);
+        addRenderableWidget(scopeButton);
 
         // Create Button
-        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.todolist.create"), button -> createProject())
-                .dimensions(x + 10, y + 110, 85, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.todolist.create"), button -> createProject())
+                .bounds(x + 10, y + 110, 85, 20).build());
 
         // Cancel Button
-        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.todolist.cancel"), button -> close())
-                .dimensions(x + w - 95, y + 110, 85, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.todolist.cancel"), button -> onClose())
+                .bounds(x + w - 95, y + 110, 85, 20).build());
         
         setFocused(nameField);
     }
 
-    private Text getScopeText() {
-        return Text.translatable("gui.todolist.scope", Text.translatable("gui.todolist.scope." + scope.name().toLowerCase()));
+    private Component getScopeText() {
+        return Component.translatable("gui.todolist.scope", Component.translatable("gui.todolist.scope." + scope.name().toLowerCase()));
     }
 
     private void createProject() {
-        String name = nameField.getText().trim();
+        String name = nameField.getValue().trim();
         if (name.isEmpty()) return;
 
         Project project = new Project();
         project.setName(name);
         project.setScope(teamProjectsEnabled ? scope : Project.Scope.PERSONAL);
         // Owner UUID is set by server, but we can set it here for local preview or strictness
-        if (client.player != null) {
-            project.setOwnerUuid(client.player.getUuid().toString());
+        if (minecraft.player != null) {
+            project.setOwnerUuid(minecraft.player.getUUID().toString());
         }
         
         // Random pastel color
@@ -101,12 +101,12 @@ public class AddProjectScreen extends Screen {
         project.setColor(color);
         
         ClientBridge.ops().sendAddProject(project);
-        close();
+        onClose();
     }
 
     @Override
-    public void close() {
-        client.setScreen(parent);
+    public void onClose() {
+        minecraft.setScreen(parent);
     }
     
     @Override
@@ -121,7 +121,7 @@ public class AddProjectScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
         
         int w = 200;
@@ -130,10 +130,10 @@ public class AddProjectScreen extends Screen {
         int y = (height - h) / 2;
         
         context.fill(x, y, x + w, y + h, 0xFF202020);
-        context.drawBorder(x, y, w, h, 0xFFFFFFFF);
+        context.renderOutline(x, y, w, h, 0xFFFFFFFF);
         
-        context.drawText(textRenderer, title, x + 10, y + 10, 0xFFFFFFFF, false);
-        context.drawText(textRenderer, Text.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
+        context.drawString(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
+        context.drawString(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
         
         super.render(context, mouseX, mouseY, delta);
     }

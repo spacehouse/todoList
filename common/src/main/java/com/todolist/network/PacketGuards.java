@@ -1,8 +1,8 @@
 package com.todolist.network;
 
 import com.todolist.TodoConstants;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.network.PacketByteBuf;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 
 /**
  * 网络包读取防护工具：对来自客户端的数据做长度/范围校验并统一抛错。
@@ -20,9 +20,9 @@ public final class PacketGuards {
     /**
      * 从缓冲区读取受限长度的字符串字段。
      */
-    public static String readString(PacketByteBuf buf, String fieldName) {
+    public static String readString(FriendlyByteBuf buf, String fieldName) {
         try {
-            return buf.readString(MAX_STRING_LENGTH);
+            return buf.readUtf(MAX_STRING_LENGTH);
         } catch (RuntimeException ex) {
             throw malformedPacket("Invalid string field: " + fieldName, ex);
         }
@@ -31,7 +31,7 @@ public final class PacketGuards {
     /**
      * 从缓冲区读取列表数量，并限制在 [0, max] 范围内。
      */
-    public static int readBoundedCount(PacketByteBuf buf, int max, String fieldName) {
+    public static int readBoundedCount(FriendlyByteBuf buf, int max, String fieldName) {
         final int count;
         try {
             count = buf.readInt();
@@ -47,7 +47,7 @@ public final class PacketGuards {
     /**
      * 从缓冲区读取布尔字段。
      */
-    public static boolean readBoolean(PacketByteBuf buf, String fieldName) {
+    public static boolean readBoolean(FriendlyByteBuf buf, String fieldName) {
         try {
             return buf.readBoolean();
         } catch (RuntimeException ex) {
@@ -58,9 +58,9 @@ public final class PacketGuards {
     /**
      * 从缓冲区读取 NBT Compound 字段（不允许为 null）。
      */
-    public static NbtCompound readNbt(PacketByteBuf buf, String fieldName) {
+    public static CompoundTag readNbt(FriendlyByteBuf buf, String fieldName) {
         try {
-            NbtCompound nbt = buf.readNbt();
+            CompoundTag nbt = buf.readNbt();
             if (nbt == null) {
                 throw malformedPacket("Missing NBT field: " + fieldName, null);
             }

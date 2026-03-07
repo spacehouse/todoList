@@ -4,8 +4,8 @@ import com.todolist.TodoConstants;
 import com.todolist.bootstrap.CommandBootstrap;
 import com.todolist.bootstrap.EventBootstrap;
 import com.todolist.config.ModConfig;
-import com.todolist.network.ProjectPackets;
-import com.todolist.network.TaskPackets;
+import com.todolist.network.FabricProjectPacketRegistrar;
+import com.todolist.network.FabricTaskPacketRegistrar;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -90,8 +90,8 @@ public class TodoListMod implements ModInitializer {
         }
 
         // Register server-side network packets
-        TaskPackets.registerServerPackets();
-        ProjectPackets.registerServerPackets();
+        FabricTaskPacketRegistrar.register();
+        FabricProjectPacketRegistrar.register();
 
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(CommandBootstrap::register);
 
