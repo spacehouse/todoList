@@ -5,6 +5,7 @@ import com.todolist.TodoConstants;
 import com.todolist.TodoListForge;
 import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.network.ProjectPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -20,14 +21,18 @@ public final class ForgeClientProjectPackets {
 
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
+            if (handler == null) {
+                TodoListForge.LOGGER.info("Skip stale project sync packet with null Forge connection");
+                return;
+            }
             if (handler != client.getConnection()) {
                 TodoListForge.LOGGER.info("Skip stale project sync packet from old Forge connection");
                 return;
             }
             List<Project> projects = ProjectPackets.readProjectList(buf);
-            String namespaceAtReceive = com.todolist.platform.DataPathProvider.getStorageNamespace();
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
             client.execute(() -> {
-                String currentNamespace = com.todolist.platform.DataPathProvider.getStorageNamespace();
+                String currentNamespace = DataPathProvider.getStorageNamespace();
                 if (!namespaceAtReceive.equals(currentNamespace)) {
                     TodoListForge.LOGGER.info("Skip stale project sync write due to namespace switch: {} -> {}",
                             namespaceAtReceive, currentNamespace);
@@ -223,11 +228,6 @@ public final class ForgeClientProjectPackets {
     }
 
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
-        // 如果能发包（服务端安装了模组），优先走网络，即使是 localServer 也要走网络让服务端统一处理
-        if (ForgeNetworkBridge.canSend(channelId)) {
-            return false;
-        }
-        // 不能发包（服务端没装模组），则回退到本地逻辑
-        return true;
+        return !ForgeNetworkBridge.canSend(channelId);
     }
 }

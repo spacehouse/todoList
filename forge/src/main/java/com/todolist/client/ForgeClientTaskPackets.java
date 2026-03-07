@@ -15,6 +15,10 @@ public final class ForgeClientTaskPackets {
 
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
+            if (handler == null) {
+                TodoListForge.LOGGER.info("Skip stale task sync packet with null Forge connection");
+                return;
+            }
             if (handler != client.getConnection()) {
                 TodoListForge.LOGGER.info("Skip stale task sync packet from old Forge connection");
                 return;

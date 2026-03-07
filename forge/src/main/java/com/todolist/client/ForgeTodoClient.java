@@ -28,7 +28,6 @@ public final class ForgeTodoClient {
     private static String activeProjectId;
     private static boolean keyKPressed;
     private static boolean keyHPressed;
-    private static boolean lastConnectionWasRemote;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
 
@@ -67,6 +66,8 @@ public final class ForgeTodoClient {
         Object eventBus = MinecraftForge.EVENT_BUS;
         registerListener(eventBus, "net.minecraftforge.event.TickEvent$ClientTickEvent", ForgeTodoClient::onClientTickEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.RenderGuiOverlayEvent$Post", ForgeTodoClient::onGuiOverlayPostEvent);
+        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingOut", ForgeTodoClient::onClientLoggingOutEvent);
+        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn", ForgeTodoClient::onClientLoggingInEvent);
     }
 
     private static void registerListener(Object eventBus, String eventClassName, java.util.function.Consumer<Object> consumer) {
@@ -87,32 +88,19 @@ public final class ForgeTodoClient {
             keyHPressed = false;
             return;
         }
-
-        ServerData serverData = current.getCurrentServer();
-        boolean remoteServer = serverData != null;
-        boolean localServer = !remoteServer;
-        if (remoteServer && !lastConnectionWasRemote) {
-            pendingRemoteResync = true;
-        }
-        if (!remoteServer) {
+        if (current.getConnection() == null) {
             pendingRemoteResync = false;
+            applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
+        } else if (!current.isLocalServer()) {
+            applyStorageNamespace(resolveStorageNamespace(current));
         }
-        String targetNamespace = resolveStorageNamespace(current, localServer);
-        if (!targetNamespace.equals(lastAppliedStorageNamespace)) {
-            DataPathProvider.setStorageNamespace(targetNamespace);
-            lastAppliedStorageNamespace = targetNamespace;
-            TodoListCommon.reloadProjectsFromStorage();
-            setActiveProjectId(null);
-            teamTaskManager.clearAll();
-        }
-        if (remoteServer && pendingRemoteResync &&
+        if (pendingRemoteResync &&
                 ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
                 ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             ForgeClientProjectPackets.sendRequestSyncProjects();
             ForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
-        lastConnectionWasRemote = remoteServer;
         if (current.player == null) {
             keyKPressed = false;
             keyHPressed = false;
@@ -131,11 +119,24 @@ public final class ForgeTodoClient {
         keyHPressed = nowH;
     }
 
-    /**
-     * 解析当前联机上下文对应的存储域：单人固定 local，多人为 server_<address>。
-     */
-    public static String resolveStorageNamespace(Minecraft client, boolean localServer) {
-        if (localServer) {
+    private static void onClientLoggingOutEvent(Object ignored) {
+        pendingRemoteResync = false;
+        applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
+    }
+
+    private static void onClientLoggingInEvent(Object ignored) {
+        Minecraft current = client != null ? client : Minecraft.getInstance();
+        if (current == null || current.getConnection() == null) {
+            return;
+        }
+        if (!current.isLocalServer()) {
+            applyStorageNamespace(resolveStorageNamespace(current));
+        }
+        pendingRemoteResync = true;
+    }
+
+    private static String resolveStorageNamespace(Minecraft client) {
+        if (client == null || client.isLocalServer()) {
             return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
         }
         ServerData serverData = client.getCurrentServer();
@@ -143,6 +144,20 @@ public final class ForgeTodoClient {
             return "server_unknown";
         }
         return "server_" + serverData.ip;
+    }
+
+    private static void applyStorageNamespace(String namespace) {
+        if (namespace == null || namespace.isEmpty()) {
+            namespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
+        }
+        if (namespace.equals(lastAppliedStorageNamespace)) {
+            return;
+        }
+        DataPathProvider.setStorageNamespace(namespace);
+        lastAppliedStorageNamespace = namespace;
+        TodoListCommon.reloadProjectsFromStorage();
+        setActiveProjectId(null);
+        teamTaskManager.clearAll();
     }
 
     private static void onGuiOverlayPostEvent(Object event) {
@@ -218,14 +233,6 @@ public final class ForgeTodoClient {
 
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
-        if (current == null) {
-            return false;
-        }
-        // 如果能发包（服务端安装了模组），则启用团队项目功能，即使是 localServer
-        if (ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID)) {
-            return true;
-        }
-        // 服务端没装模组，禁用团队项目
-        return false;
+        return current != null && ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }
