@@ -2,6 +2,7 @@ package com.todolist.client;
 
 import com.todolist.TodoListMod;
 import com.todolist.network.TaskPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
@@ -18,7 +19,13 @@ public class ClientTaskPackets {
     public static void registerClientPackets() {
         ClientPlayNetworking.registerGlobalReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
             List<Task> tasks = TaskPackets.readTaskList(buf);
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
             client.execute(() -> {
+                if (!namespaceAtReceive.equals(DataPathProvider.getStorageNamespace())) {
+                    TodoListMod.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
+                            namespaceAtReceive, DataPathProvider.getStorageNamespace());
+                    return;
+                }
                 try {
                     TodoListMod.getTaskStorage().saveTasks(tasks);
                     TodoListMod.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());

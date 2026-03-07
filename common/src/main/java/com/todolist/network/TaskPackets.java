@@ -101,13 +101,14 @@ public class TaskPackets {
                     storage.savePlayerTasks(playerUuid, tasks);
                     TodoConstants.LOGGER.info("Migrated {} tasks from local storage to player file {}", tasks.size(), playerUuid);
                 }
-            } else if (tasks.isEmpty() && !fallback.isEmpty()) {
+            } else if (!fallback.isEmpty()) {
                 long playerLastSaved = storage.getPlayerTasksLastSaved(playerUuid);
                 long localLastSaved = storage.getLocalTasksLastSaved();
                 if (localLastSaved > playerLastSaved) {
                     tasks = fallback;
                     storage.savePlayerTasks(playerUuid, tasks);
-                    TodoConstants.LOGGER.info("Recovered {} tasks from local storage for player file {}", tasks.size(), playerUuid);
+                    TodoConstants.LOGGER.info("Recovered newer local tasks for player file {}, localLastSaved={}, playerLastSaved={}, taskCount={}",
+                            playerUuid, localLastSaved, playerLastSaved, tasks.size());
                 }
             }
             FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());

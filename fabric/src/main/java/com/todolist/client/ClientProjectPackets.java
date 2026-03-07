@@ -174,6 +174,17 @@ public class ClientProjectPackets {
     }
 
     /**
+     * 向服务端请求重新同步项目列表。
+     */
+    public static void sendRequestSyncProjects() {
+        if (!ClientPlayNetworking.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        ClientPlayNetworking.send(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
+    }
+
+    /**
      * 向服务端上报当前激活项目 ID（用于命令默认关联项目等服务端逻辑）。
      *
      * @param projectId 项目 ID，null 表示清空

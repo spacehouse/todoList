@@ -6,6 +6,7 @@ import com.todolist.client.TodoHudRenderer;
 import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -106,6 +107,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private static boolean personalHasUnsavedChanges = false;
     private static boolean teamHasUnsavedChanges = false;
     private static LastGuiState lastGuiState;
+    private String openedStorageNamespace = DataPathProvider.getStorageNamespace();
 
     private static class LastGuiState {
         Project.Scope projectScopeFilter;
@@ -131,6 +133,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     @Override
     protected void init() {
         super.init();
+        openedStorageNamespace = DataPathProvider.getStorageNamespace();
 
         // Initialize task manager and load tasks from storage
         if (personalTaskManager == null) {
@@ -196,6 +199,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             viewMode = ViewMode.PERSONAL;
         }
 
+        syncHudViewForProject(currentProject);
         syncActiveProjectIdWithCurrentProject();
         hasUnsavedChanges = (viewMode == ViewMode.PERSONAL) ? personalHasUnsavedChanges : teamHasUnsavedChanges;
 
@@ -277,7 +281,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (project == null) return;
 
             if (type == ProjectManager.ProjectChangeType.REMOVED) {
-                hardDeleteTasksForDeletedProject(project);
+                if (!TodoListCommon.isProjectSyncInProgress()) {
+                    hardDeleteTasksForDeletedProject(project);
+                }
                 if (currentProject != null && currentProject.getId().equals(project.getId())) {
                     switchProject(resolveFallbackProjectAfterRemoval(project));
                 } else {
@@ -924,6 +930,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
                     return true;
                 }
+                if (selectedTask != null) {
+                    return true;
+                }
                 onAddTask();
                 return true;
             }
@@ -999,12 +1008,42 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public void onClose() {
+        savePersonalTasksOnCloseIfNeeded();
         if (viewMode != ViewMode.PERSONAL && teamHasUnsavedChanges) {
             ClientBridge.ops().requestTeamSync();
             hasUnsavedChanges = false;
             teamHasUnsavedChanges = false;
         }
         this.minecraft.setScreen(parent);
+    }
+
+    /**
+     * 在关闭界面时自动保存个人任务，避免新增后未手动保存导致数据丢失。
+     */
+    private void savePersonalTasksOnCloseIfNeeded() {
+        if (!personalHasUnsavedChanges || personalTaskManager == null) {
+            return;
+        }
+        String currentNamespace = DataPathProvider.getStorageNamespace();
+        if (!openedStorageNamespace.equals(currentNamespace)) {
+            TodoConstants.LOGGER.info("Skip personal auto-save due to storage namespace switch: {} -> {}",
+                    openedStorageNamespace, currentNamespace);
+            personalHasUnsavedChanges = false;
+            if (viewMode == ViewMode.PERSONAL) {
+                hasUnsavedChanges = false;
+            }
+            return;
+        }
+        try {
+            TodoListCommon.getTaskStorage().saveTasks(personalTaskManager.getAllTasks());
+            ClientBridge.ops().sendReplaceAllTasks(personalTaskManager.getAllTasks());
+            personalHasUnsavedChanges = false;
+            if (viewMode == ViewMode.PERSONAL) {
+                hasUnsavedChanges = false;
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to auto-save personal tasks on close", e);
+        }
     }
 
     private void onCancel() {
@@ -1069,9 +1108,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
             }
 
-            titleField.setValue("");
-            descField.setValue("");
-            tagField.setValue("");
+            clearSelectedTask();
             selectedPriority = Task.Priority.MEDIUM;
 
             markUnsaved();
@@ -1674,6 +1711,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return raw;
     }
 
+    private ViewMode parseHudViewMode(String raw) {
+        if (raw == null) {
+            return ViewMode.PERSONAL;
+        }
+        String v = raw.trim().toUpperCase();
+        if ("TEAM_UNASSIGNED".equals(v)) return ViewMode.TEAM_UNASSIGNED;
+        if ("TEAM_ALL".equals(v)) return ViewMode.TEAM_ALL;
+        if ("TEAM_ASSIGNED".equals(v)) return ViewMode.TEAM_ASSIGNED;
+        return ViewMode.PERSONAL;
+    }
+
     private void addNotification(String text) {
         long now = System.currentTimeMillis();
         notifications.add(new Notification(text, now + 2000));
@@ -1738,6 +1786,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void switchView(ViewMode mode) {
         this.viewMode = mode;
         this.selectedTask = null;
+        ModConfig config = ModConfig.getInstance();
+        if (this.viewMode == ViewMode.PERSONAL) {
+            config.setHudDefaultView("PERSONAL");
+        } else {
+            config.setHudDefaultView(this.viewMode.name());
+        }
         updateViewButtonsState();
         rebuildUI();
     }
@@ -1748,7 +1802,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             config.setHudDefaultView("PERSONAL");
             return;
         }
-        config.setHudDefaultView("TEAM_UNASSIGNED");
+        ViewMode configView = parseHudViewMode(config.getHudDefaultView());
+        if (this.viewMode == ViewMode.PERSONAL) {
+            this.viewMode = configView;
+        }
+        if (this.viewMode == ViewMode.PERSONAL) {
+            this.viewMode = ViewMode.TEAM_UNASSIGNED;
+        }
+        config.setHudDefaultView(this.viewMode.name());
     }
     
     private void updateViewButtonsState() {
@@ -1762,12 +1823,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.selectedTask = null;
         this.currentProject = project;
         rememberSelectedProject(project);
-        syncHudViewForProject(project);
 
         if (project == null) {
             this.taskManager = this.personalTaskManager;
             this.viewMode = ViewMode.PERSONAL;
             ClientBridge.ops().setActiveProjectId(null);
+            syncHudViewForProject(null);
             rebuildUI();
             return;
         }
@@ -1788,6 +1849,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 this.viewMode = ViewMode.TEAM_UNASSIGNED;
             }
         }
+        syncHudViewForProject(project);
         
         rebuildUI();
     }

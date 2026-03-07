@@ -1,8 +1,12 @@
 package com.todolist;
 
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectStorage;
+import com.todolist.project.Project;
 import com.todolist.task.TaskStorage;
+
+import java.util.List;
 
 /**
  * 模组通用逻辑类。
@@ -51,6 +55,40 @@ public final class TodoListCommon {
     }
 
     /**
+     * 从磁盘重新加载项目列表，用于在多人/单人切换时恢复本地项目数据。
+     */
+    public static void reloadProjectsFromStorage() {
+        if (projectStorage == null || projectManager == null) {
+            return;
+        }
+        projectManager.clearAll();
+        try {
+            List<Project> personal = projectStorage.loadProjects();
+            boolean hasPersonal = false;
+            for (Project project : personal) {
+                project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
+                projectManager.addProject(project);
+                if (project.getScope() == Project.Scope.PERSONAL) {
+                    hasPersonal = true;
+                }
+            }
+            if (!hasPersonal) {
+                Project defaultPersonal = new Project(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY, Project.Scope.PERSONAL, null);
+                defaultPersonal.setId(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID);
+                projectManager.addProject(defaultPersonal);
+                projectStorage.saveProjects(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
+            }
+            List<Project> team = projectStorage.loadTeamProjects();
+            for (Project project : team) {
+                project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
+                projectManager.addProject(project);
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to reload projects from storage", e);
+        }
+    }
+
+    /**
      * 标记客户端项目同步是否处于进行中，用于避免 GUI 在同步过程中触发兜底创建逻辑。
      */
     public static void setProjectSyncInProgress(boolean syncing) {
@@ -64,5 +102,3 @@ public final class TodoListCommon {
         return projectSyncInProgress;
     }
 }
-
-

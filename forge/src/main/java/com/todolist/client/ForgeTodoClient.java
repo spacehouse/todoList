@@ -1,16 +1,20 @@
 package com.todolist.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.todolist.TodoListCommon;
 import com.todolist.TodoListForge;
 import com.todolist.config.ModConfig;
 import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.gui.ConfigScreen;
 import com.todolist.gui.TodoScreen;
 import com.todolist.network.ProjectPackets;
+import com.todolist.network.TaskPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -24,6 +28,9 @@ public final class ForgeTodoClient {
     private static String activeProjectId;
     private static boolean keyKPressed;
     private static boolean keyHPressed;
+    private static boolean lastConnectionWasRemote;
+    private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
+    private static boolean pendingRemoteResync;
 
     private ForgeTodoClient() {
     }
@@ -75,7 +82,38 @@ public final class ForgeTodoClient {
 
     private static void onClientTickEvent(Object ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
-        if (current == null || current.player == null) {
+        if (current == null) {
+            keyKPressed = false;
+            keyHPressed = false;
+            return;
+        }
+
+        ServerData serverData = current.getCurrentServer();
+        boolean remoteServer = serverData != null;
+        boolean localServer = !remoteServer;
+        if (remoteServer && !lastConnectionWasRemote) {
+            pendingRemoteResync = true;
+        }
+        if (!remoteServer) {
+            pendingRemoteResync = false;
+        }
+        String targetNamespace = resolveStorageNamespace(current, localServer);
+        if (!targetNamespace.equals(lastAppliedStorageNamespace)) {
+            DataPathProvider.setStorageNamespace(targetNamespace);
+            lastAppliedStorageNamespace = targetNamespace;
+            TodoListCommon.reloadProjectsFromStorage();
+            setActiveProjectId(null);
+            teamTaskManager.clearAll();
+        }
+        if (remoteServer && pendingRemoteResync &&
+                ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
+                ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+            ForgeClientProjectPackets.sendRequestSyncProjects();
+            ForgeClientTaskPackets.requestTeamSync();
+            pendingRemoteResync = false;
+        }
+        lastConnectionWasRemote = remoteServer;
+        if (current.player == null) {
             keyKPressed = false;
             keyHPressed = false;
             return;
@@ -91,6 +129,20 @@ public final class ForgeTodoClient {
         }
         keyKPressed = nowK;
         keyHPressed = nowH;
+    }
+
+    /**
+     * 解析当前联机上下文对应的存储域：单人固定 local，多人为 server_<address>。
+     */
+    public static String resolveStorageNamespace(Minecraft client, boolean localServer) {
+        if (localServer) {
+            return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
+        }
+        ServerData serverData = client.getCurrentServer();
+        if (serverData == null || serverData.ip == null || serverData.ip.trim().isEmpty()) {
+            return "server_unknown";
+        }
+        return "server_" + serverData.ip;
     }
 
     private static void onGuiOverlayPostEvent(Object event) {
@@ -169,9 +221,11 @@ public final class ForgeTodoClient {
         if (current == null) {
             return false;
         }
-        if (current.isLocalServer()) {
-            return false;
+        // 如果能发包（服务端安装了模组），则启用团队项目功能，即使是 localServer
+        if (ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID)) {
+            return true;
         }
-        return ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
+        // 服务端没装模组，禁用团队项目
+        return false;
     }
 }

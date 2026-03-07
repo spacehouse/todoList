@@ -11,12 +11,15 @@ import java.util.function.Supplier;
 public final class DataPathProvider {
     /** 模组数据根目录名称 */
     public static final String TODO_FOLDER = "todo";
+    /** 默认本地存储域名称 */
+    public static final String LOCAL_STORAGE_NAMESPACE = "local";
     /** 项目数据目录名称 */
     public static final String PROJECTS_FOLDER = "projects";
     /** 玩家数据目录名称 */
     public static final String PLAYERS_FOLDER = "players";
 
     private static Supplier<Path> gameDirSupplier;
+    private static volatile String storageNamespace = LOCAL_STORAGE_NAMESPACE;
 
     private DataPathProvider() {
     }
@@ -51,7 +54,48 @@ public final class DataPathProvider {
      * @return 模组数据根目录 Path
      */
     public static Path getTodoDataDir() {
-        return getGameDir().resolve(TODO_FOLDER);
+        return getGameDir().resolve(TODO_FOLDER).resolve(storageNamespace);
+    }
+
+    /**
+     * 设置当前存储域名称。
+     *
+     * @param namespace 存储域（如 local 或服务器地址派生值）
+     */
+    public static void setStorageNamespace(String namespace) {
+        storageNamespace = sanitizeNamespace(namespace);
+    }
+
+    /**
+     * 重置为本地存储域。
+     */
+    public static void resetStorageNamespace() {
+        storageNamespace = LOCAL_STORAGE_NAMESPACE;
+    }
+
+    /**
+     * 获取当前存储域名称。
+     */
+    public static String getStorageNamespace() {
+        return storageNamespace;
+    }
+
+    /**
+     * 规范化存储域名称，确保可作为目录名。
+     */
+    private static String sanitizeNamespace(String namespace) {
+        if (namespace == null) {
+            return LOCAL_STORAGE_NAMESPACE;
+        }
+        String trimmed = namespace.trim();
+        if (trimmed.isEmpty()) {
+            return LOCAL_STORAGE_NAMESPACE;
+        }
+        String sanitized = trimmed.replaceAll("[\\\\/:*?\"<>|\\s]+", "_");
+        if (sanitized.isEmpty()) {
+            return LOCAL_STORAGE_NAMESPACE;
+        }
+        return sanitized.toLowerCase();
     }
 
     /**
@@ -81,5 +125,4 @@ public final class DataPathProvider {
         return getTodoDataDir().resolve(PLAYERS_FOLDER);
     }
 }
-
 

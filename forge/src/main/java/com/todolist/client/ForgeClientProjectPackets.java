@@ -20,8 +20,21 @@ public final class ForgeClientProjectPackets {
 
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
+            if (handler != client.getConnection()) {
+                TodoListForge.LOGGER.info("Skip stale project sync packet from old Forge connection");
+                return;
+            }
             List<Project> projects = ProjectPackets.readProjectList(buf);
-            client.execute(() -> handleSyncProjects(projects));
+            String namespaceAtReceive = com.todolist.platform.DataPathProvider.getStorageNamespace();
+            client.execute(() -> {
+                String currentNamespace = com.todolist.platform.DataPathProvider.getStorageNamespace();
+                if (!namespaceAtReceive.equals(currentNamespace)) {
+                    TodoListForge.LOGGER.info("Skip stale project sync write due to namespace switch: {} -> {}",
+                            namespaceAtReceive, currentNamespace);
+                    return;
+                }
+                handleSyncProjects(projects);
+            });
         });
     }
 
@@ -125,6 +138,17 @@ public final class ForgeClientProjectPackets {
     }
 
     /**
+     * 向服务端请求重新同步项目列表。
+     */
+    public static void sendRequestSyncProjects() {
+        if (!ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        ForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
+    }
+
+    /**
      * 向服务端上报当前激活项目 ID（用于命令默认关联项目等服务端逻辑）。
      *
      * @param projectId 项目 ID，null 表示清空
@@ -199,10 +223,11 @@ public final class ForgeClientProjectPackets {
     }
 
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft != null && minecraft.isLocalServer()) {
-            return true;
+        // 如果能发包（服务端安装了模组），优先走网络，即使是 localServer 也要走网络让服务端统一处理
+        if (ForgeNetworkBridge.canSend(channelId)) {
+            return false;
         }
-        return !ForgeNetworkBridge.canSend(channelId);
+        // 不能发包（服务端没装模组），则回退到本地逻辑
+        return true;
     }
 }

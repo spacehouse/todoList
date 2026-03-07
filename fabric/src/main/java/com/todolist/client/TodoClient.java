@@ -1,11 +1,13 @@
 package com.todolist.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.todolist.TodoListCommon;
 import com.todolist.TodoListMod;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreen;
 import com.todolist.network.ProjectPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.fabricmc.api.ClientModInitializer;
@@ -16,6 +18,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -33,6 +36,7 @@ public class TodoClient implements ClientModInitializer {
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
     private static String activeProjectId;
+    private static boolean lastConnectionWasRemote;
 
     /**
      * Fabric 客户端入口点。
@@ -121,9 +125,46 @@ public class TodoClient implements ClientModInitializer {
      */
     private void registerJoinEvent() {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            boolean localServer = client.isLocalServer();
+            applyStorageNamespace(localServer, client);
+            client.execute(() -> {
+                TodoListCommon.reloadProjectsFromStorage();
+                setActiveProjectId(null);
+                teamTaskManager.clearAll();
+                if (!localServer) {
+                    ClientProjectPackets.sendRequestSyncProjects();
+                    ClientTaskPackets.requestTeamSync();
+                }
+            });
+            lastConnectionWasRemote = !localServer;
             TodoListMod.LOGGER.info("Joined server, requesting task sync...");
-            // Request task sync from server (to be implemented in Phase 3)
         });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            boolean wasRemote = lastConnectionWasRemote;
+            lastConnectionWasRemote = false;
+            if (!wasRemote) {
+                return;
+            }
+            client.execute(() -> {
+                DataPathProvider.resetStorageNamespace();
+                TodoListCommon.reloadProjectsFromStorage();
+                setActiveProjectId(null);
+                teamTaskManager.clearAll();
+            });
+        });
+    }
+
+    /**
+     * 根据联机上下文切换存储域：单人使用 local，多人使用 server_<address>。
+     */
+    private void applyStorageNamespace(boolean localServer, Minecraft client) {
+        if (localServer) {
+            DataPathProvider.resetStorageNamespace();
+            return;
+        }
+        ServerData serverData = client.getCurrentServer();
+        String serverKey = serverData == null ? "server_unknown" : ("server_" + serverData.ip);
+        DataPathProvider.setStorageNamespace(serverKey);
     }
 
     /**

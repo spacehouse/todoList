@@ -18,15 +18,17 @@ public class ProjectStorage {
     private static final String PERSONAL_PROJECTS_FILE = "projects.dat";
     private static final String TEAM_PROJECTS_FILE = "team_projects.dat";
 
-    private final Path projectsDir;
-
     public ProjectStorage() {
-        this.projectsDir = DataPathProvider.getProjectsDir();
         ensureDirectoryExists();
+    }
+
+    private Path getProjectsDirectory() {
+        return DataPathProvider.getProjectsDir();
     }
 
     private void ensureDirectoryExists() {
         try {
+            Path projectsDir = getProjectsDirectory();
             if (!Files.exists(projectsDir)) {
                 Files.createDirectories(projectsDir);
             }
@@ -39,6 +41,8 @@ public class ProjectStorage {
      * 加载个人项目列表。
      */
     public List<Project> loadProjects() throws IOException {
+        ensureDirectoryExists();
+        Path projectsDir = getProjectsDirectory();
         Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
         if (!Files.exists(file)) {
             return new ArrayList<>();
@@ -50,6 +54,8 @@ public class ProjectStorage {
      * 加载团队项目列表。
      */
     public List<Project> loadTeamProjects() throws IOException {
+        ensureDirectoryExists();
+        Path projectsDir = getProjectsDirectory();
         Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
         if (!Files.exists(file)) {
             return new ArrayList<>();
@@ -61,6 +67,8 @@ public class ProjectStorage {
      * 保存个人项目列表。
      */
     public void saveProjects(List<Project> projects) throws IOException {
+        ensureDirectoryExists();
+        Path projectsDir = getProjectsDirectory();
         Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
@@ -69,6 +77,8 @@ public class ProjectStorage {
      * 保存团队项目列表。
      */
     public void saveTeamProjects(List<Project> projects) throws IOException {
+        ensureDirectoryExists();
+        Path projectsDir = getProjectsDirectory();
         Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
@@ -77,6 +87,8 @@ public class ProjectStorage {
      * 判断个人项目数据文件是否存在。
      */
     public boolean hasPersonalProjectsFile() {
+        ensureDirectoryExists();
+        Path projectsDir = getProjectsDirectory();
         Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
         return Files.exists(file);
     }
@@ -128,4 +140,3 @@ public class ProjectStorage {
         NbtIo.write(root, file.toFile());
     }
 }
-

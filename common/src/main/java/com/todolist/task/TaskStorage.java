@@ -26,14 +26,12 @@ public class TaskStorage {
     private static final String DATA_FILE = "moddata.dat";
     private static final String TEAM_FILE = "team_tasks.dat";
 
-    private final Path dataDir;
     private boolean loggedNoTaskData;
     private boolean loggedNoTeamTaskData;
     private final Map<Path, Long> lastLoggedLastSavedByFile = new HashMap<>();
     private final Map<Path, Integer> lastLoggedTaskCountByFile = new HashMap<>();
 
     public TaskStorage() {
-        this.dataDir = getDataDirectory();
         ensureDirectoryExists();
     }
 
@@ -41,8 +39,6 @@ public class TaskStorage {
      * Get the data directory path
      */
     private Path getDataDirectory() {
-        Path gameDir = DataPathProvider.getGameDir();
-        TodoConstants.LOGGER.info("Game directory: {}", gameDir);
         return DataPathProvider.getTodoDataDir();
     }
 
@@ -51,6 +47,7 @@ public class TaskStorage {
      */
     private void ensureDirectoryExists() {
         try {
+            Path dataDir = getDataDirectory();
             if (!Files.exists(dataDir)) {
                 Files.createDirectories(dataDir);
                 TodoConstants.LOGGER.info("Created data directory: {}", dataDir);
@@ -71,7 +68,8 @@ public class TaskStorage {
      * Save tasks to local storage (single player)
      */
     public void saveTasks(List<Task> tasks) throws IOException {
-        Path dataFile = dataDir.resolve(DATA_FILE);
+        ensureDirectoryExists();
+        Path dataFile = getDataDirectory().resolve(DATA_FILE);
         saveTasksToFile(tasks, dataFile);
         TodoConstants.LOGGER.info("Saved {} tasks to {}", tasks.size(), dataFile);
     }
@@ -80,6 +78,7 @@ public class TaskStorage {
      * Save tasks for a specific player (multiplayer)
      */
     public void savePlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
+        ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         saveTasksToFile(tasks, playerFile);
@@ -87,7 +86,8 @@ public class TaskStorage {
     }
 
     public void saveTeamTasks(List<Task> tasks) throws IOException {
-        Path teamFile = dataDir.resolve(TEAM_FILE);
+        ensureDirectoryExists();
+        Path teamFile = getDataDirectory().resolve(TEAM_FILE);
         saveTasksToFile(tasks, teamFile);
         TodoConstants.LOGGER.info("Saved {} team tasks to {}", tasks.size(), teamFile);
     }
@@ -126,7 +126,8 @@ public class TaskStorage {
      * Load tasks from local storage (single player)
      */
     public List<Task> loadTasks() throws IOException {
-        Path dataFile = dataDir.resolve(DATA_FILE);
+        ensureDirectoryExists();
+        Path dataFile = getDataDirectory().resolve(DATA_FILE);
         if (!Files.exists(dataFile)) {
             if (!loggedNoTaskData) {
                 loggedNoTaskData = true;
@@ -141,6 +142,7 @@ public class TaskStorage {
      * Load tasks for a specific player (multiplayer)
      */
     public List<Task> loadPlayerTasks(UUID playerUuid) throws IOException {
+        ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         if (!Files.exists(playerFile)) {
@@ -151,7 +153,8 @@ public class TaskStorage {
     }
 
     public List<Task> loadTeamTasks() throws IOException {
-        Path teamFile = dataDir.resolve(TEAM_FILE);
+        ensureDirectoryExists();
+        Path teamFile = getDataDirectory().resolve(TEAM_FILE);
         if (!Files.exists(teamFile)) {
             if (!loggedNoTeamTaskData) {
                 loggedNoTeamTaskData = true;
@@ -193,13 +196,15 @@ public class TaskStorage {
     }
 
     public long getLocalTasksLastSaved() {
-        return readLastSavedSafe(dataDir.resolve(DATA_FILE));
+        ensureDirectoryExists();
+        return readLastSavedSafe(getDataDirectory().resolve(DATA_FILE));
     }
 
     public long getPlayerTasksLastSaved(UUID playerUuid) {
         if (playerUuid == null) {
             return 0L;
         }
+        ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         return readLastSavedSafe(playerFile);
@@ -236,6 +241,7 @@ public class TaskStorage {
      * Delete player data (for server admin or player leaving)
      */
     public void deletePlayerTasks(UUID playerUuid) throws IOException {
+        ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         if (Files.exists(playerFile)) {
@@ -269,6 +275,7 @@ public class TaskStorage {
      * Check if player data exists
      */
     public boolean hasPlayerTasks(UUID playerUuid) {
+        ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         return Files.exists(playerFile);
@@ -278,7 +285,7 @@ public class TaskStorage {
      * Get data directory path (for debugging)
      */
     public Path getDataDirectoryPath() {
-        return dataDir;
+        return getDataDirectory();
     }
 }
 

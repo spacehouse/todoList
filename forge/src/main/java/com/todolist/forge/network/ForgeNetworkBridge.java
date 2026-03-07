@@ -186,8 +186,9 @@ public final class ForgeNetworkBridge {
         if (receiver == null) {
             return;
         }
+        Object connectionSnapshot = client.getConnection();
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(packet.payload()));
-        client.execute(() -> receiver.receive(client, client.getConnection(), buf, NO_OP_SENDER));
+        client.execute(() -> receiver.receive(client, connectionSnapshot, buf, NO_OP_SENDER));
     }
 
     private static void registerPlayerLoginHook() {

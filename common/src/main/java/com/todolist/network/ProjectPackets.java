@@ -43,6 +43,7 @@ public class ProjectPackets {
     public static final ResourceLocation REMOVE_MEMBER_ID = new ResourceLocation(TodoConstants.MOD_ID, "remove_member");
     public static final ResourceLocation UPDATE_MEMBER_ROLE_ID = new ResourceLocation(TodoConstants.MOD_ID, "update_member_role");
     public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_join_project");
+    public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_sync_projects");
     public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
@@ -144,6 +145,13 @@ public class ProjectPackets {
             return;
         }
         server.execute(() -> handleRequestJoinProject(server, player, projectId));
+    }
+
+    /**
+     * 客户端主动请求服务端重新同步项目列表。
+     */
+    public static void onRequestSyncProjectsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        server.execute(() -> syncProjectsToPlayer(player));
     }
 
     /**

@@ -3,6 +3,7 @@ package com.todolist.client;
 import com.todolist.TodoListForge;
 import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.network.TaskPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -14,8 +15,19 @@ public final class ForgeClientTaskPackets {
 
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
+            if (handler != client.getConnection()) {
+                TodoListForge.LOGGER.info("Skip stale task sync packet from old Forge connection");
+                return;
+            }
             List<Task> tasks = TaskPackets.readTaskList(buf);
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
             client.execute(() -> {
+                String currentNamespace = DataPathProvider.getStorageNamespace();
+                if (!namespaceAtReceive.equals(currentNamespace)) {
+                    TodoListForge.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
+                            namespaceAtReceive, currentNamespace);
+                    return;
+                }
                 try {
                     TodoListForge.getTaskStorage().saveTasks(tasks);
                     TodoListForge.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
