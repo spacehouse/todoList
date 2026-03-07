@@ -1,5 +1,6 @@
 package com.todolist.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
@@ -267,11 +268,14 @@ public class TodoHudRenderer {
         int currentY = y;
         int width = config.getHudWidth();
         float opacity = (float) config.getHudOpacity();
-        int alpha = ((int) (opacity * 255)) << 24;
-        int panelColor = alpha | 0x00232323;
+        int panelColor = applyOpacityToColor(0xFF232323, opacity);
         int rowHeight = 12;
         int headerHeight = 14;
         int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         Text title = Text.translatable("hud.todolist.header", viewLabel);
         List<Task> pending = new ArrayList<>();
@@ -305,7 +309,7 @@ public class TodoHudRenderer {
 
         context.fill(x, y, x + width, y + panelHeight, panelColor);
         int headerTextY = y + (headerHeight - client.textRenderer.fontHeight) / 2;
-        context.drawTextWithShadow(client.textRenderer, title, x + 4, headerTextY, 0xFFE0B240);
+        context.drawTextWithShadow(client.textRenderer, title, x + 4, headerTextY, applyOpacityToColor(0xFFE0B240, opacity));
         currentY += headerHeight;
 
         if (!expanded) {
@@ -314,7 +318,7 @@ public class TodoHudRenderer {
                     ? Text.translatable(summaryKey, Integer.toString(pending.size()))
                     : Text.translatable(summaryKey, Integer.toString(pending.size()), Integer.toString(done.size()));
             int summaryY = currentY + (rowHeight - client.textRenderer.fontHeight) / 2;
-            context.drawTextWithShadow(client.textRenderer, summary, x + 4, summaryY, 0xDDDDDD);
+            context.drawTextWithShadow(client.textRenderer, summary, x + 4, summaryY, applyOpacityToColor(0xDDDDDD, opacity));
             return;
         }
 
@@ -323,7 +327,7 @@ public class TodoHudRenderer {
         shownPending = 0;
         for (Task task : pending) {
             if (shownPending >= todoLimit || remainingRows <= 0) break;
-            drawTaskRow(context, x, currentY, width, rowHeight, task);
+            drawTaskRow(context, x, currentY, width, rowHeight, opacity, task);
             currentY += rowHeight;
             shownPending++;
             remainingRows--;
@@ -332,12 +336,12 @@ public class TodoHudRenderer {
         shownDone = 0;
         if (!done.isEmpty() && doneLimit > 0 && remainingRows > 0) {
             int separatorY = currentY + (rowHeight - client.textRenderer.fontHeight) / 2;
-            context.drawTextWithShadow(client.textRenderer, Text.translatable("hud.todolist.separator.completed"), x + 4, separatorY, 0xAAAAAA);
+            context.drawTextWithShadow(client.textRenderer, Text.translatable("hud.todolist.separator.completed"), x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
             currentY += rowHeight;
             remainingRows--;
             for (Task task : done) {
                 if (shownDone >= doneLimit || remainingRows <= 0) break;
-                drawTaskRow(context, x, currentY, width, rowHeight, task);
+                drawTaskRow(context, x, currentY, width, rowHeight, opacity, task);
                 currentY += rowHeight;
                 shownDone++;
                 remainingRows--;
@@ -347,7 +351,7 @@ public class TodoHudRenderer {
         hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
         if (hiddenCount > 0 && remainingRows > 0) {
             int moreY = currentY + (rowHeight - client.textRenderer.fontHeight) / 2;
-            context.drawTextWithShadow(client.textRenderer, Text.translatable("hud.todolist.more_tasks", Integer.toString(hiddenCount)), x + 4, moreY, 0xAAAAAA);
+            context.drawTextWithShadow(client.textRenderer, Text.translatable("hud.todolist.more_tasks", Integer.toString(hiddenCount)), x + 4, moreY, applyOpacityToColor(0xAAAAAA, opacity));
         }
     }
 
@@ -356,9 +360,10 @@ public class TodoHudRenderer {
      * @param context 绘制上下文
      * @param x 行起始 x
      * @param y 行起始 y
+     * @param opacity HUD 透明度（用于同步文本与背景的显示效果）
      * @param task 待绘制任务
      */
-    private void drawTaskRow(DrawContext context, int x, int y, int width, int rowHeight, Task task) {
+    private void drawTaskRow(DrawContext context, int x, int y, int width, int rowHeight, float opacity, Task task) {
         String priorityKey = switch (task.getPriority()) {
             case HIGH -> "hud.todolist.priority.high.icon";
             case MEDIUM -> "hud.todolist.priority.medium.icon";
@@ -380,14 +385,15 @@ public class TodoHudRenderer {
 
         int textY = y + (rowHeight - client.textRenderer.fontHeight) / 2;
         int spaceWidth = client.textRenderer.getWidth(" ");
+        int textColor = applyOpacityToColor(0xFFFFFF, opacity);
 
         Text priorityText = Text.translatable(priorityKey).formatted(priorityColor);
         Text checkboxText = Text.literal(task.isCompleted() ? "☑" : "☐").formatted(task.isCompleted() ? Formatting.DARK_GREEN : Formatting.WHITE);
 
         int cursorX = rowLeft;
-        context.drawTextWithShadow(client.textRenderer, priorityText, cursorX, textY, 0xFFFFFF);
+        context.drawTextWithShadow(client.textRenderer, priorityText, cursorX, textY, textColor);
         cursorX += client.textRenderer.getWidth(priorityText) + spaceWidth;
-        context.drawTextWithShadow(client.textRenderer, checkboxText, cursorX, textY, 0xFFFFFF);
+        context.drawTextWithShadow(client.textRenderer, checkboxText, cursorX, textY, textColor);
         cursorX += client.textRenderer.getWidth(checkboxText) + spaceWidth;
 
         int titleMaxWidth = Math.max(0, titleAreaWidth - (cursorX - rowLeft));
@@ -396,7 +402,7 @@ public class TodoHudRenderer {
                 ? Text.literal(titleCore).formatted(Formatting.GRAY, Formatting.STRIKETHROUGH)
                 : Text.literal(titleCore).formatted(Formatting.WHITE);
         if (!titleCore.isEmpty() && titleMaxWidth > 0) {
-            context.drawTextWithShadow(client.textRenderer, titleText, cursorX, textY, 0xFFFFFF);
+            context.drawTextWithShadow(client.textRenderer, titleText, cursorX, textY, textColor);
         }
 
         String assigneeLabel = resolveAssigneeLabel(task);
@@ -425,8 +431,29 @@ public class TodoHudRenderer {
             int tagRightX = rowRight;
             int tagStartX = Math.max(rowLeft, rowRight - tagAreaWidth);
             int tagX = Math.max(tagStartX, tagRightX - tagTextWidth);
-            context.drawTextWithShadow(client.textRenderer, tagTextObj, tagX, textY, 0xFFFFFF);
+            context.drawTextWithShadow(client.textRenderer, tagTextObj, tagX, textY, textColor);
         }
+    }
+
+    /**
+     * 将输入颜色（RGB 或 ARGB）按指定 HUD 透明度缩放其 alpha 值。
+     * <p>
+     * 配置界面预览通常在 GUI 渲染阶段执行，此时混合已开启；而游戏内 HUD 渲染阶段可能未开启混合，
+     * 导致 alpha 被当作“不透明”处理，从而出现“预览有效但实际 HUD 无效”的错觉。
+     * 这里通过统一开启混合，并将文本颜色与背景颜色都叠加同一透明度，保证一致性。
+     *
+     * @param color 颜色值（0xRRGGBB 或 0xAARRGGBB）
+     * @param opacity 透明度倍率（0.0 ~ 1.0）
+     * @return 叠加透明度后的 ARGB 颜色
+     */
+    private static int applyOpacityToColor(int color, float opacity) {
+        int argb = (color & 0xFF000000) == 0 ? (0xFF000000 | (color & 0x00FFFFFF)) : color;
+        int baseAlpha = (argb >>> 24) & 0xFF;
+        float clamped = Math.max(0.0f, Math.min(1.0f, opacity));
+        int scaledAlpha = Math.round(baseAlpha * clamped);
+        if (scaledAlpha < 0) scaledAlpha = 0;
+        if (scaledAlpha > 255) scaledAlpha = 255;
+        return (scaledAlpha << 24) | (argb & 0x00FFFFFF);
     }
 
     private String resolveAssigneeLabel(Task task) {
