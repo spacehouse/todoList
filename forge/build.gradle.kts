@@ -1,3 +1,6 @@
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.plugins.JavaPluginExtension
+
 plugins {
     id("dev.architectury.loom") version "1.7.435"
     id("maven-publish")
@@ -6,6 +9,7 @@ plugins {
 val archives_name: String by project
 val minecraftVersion = property("minecraft_version") as String
 val loaderVersion = property("loader_version") as String
+val commonProject = project(":common")
 
 base {
     archivesName.set("$archives_name-forge")
@@ -22,6 +26,7 @@ dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
     mappings(loom.officialMojangMappings())
     forge("net.minecraftforge:forge:$minecraftVersion-47.2.0")
+    implementation(project(":common", configuration = "namedElements"))
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
     compileOnly("net.minecraftforge:fmlloader:$minecraftVersion-47.2.0")
     compileOnly("net.minecraftforge:javafmllanguage:$minecraftVersion-47.2.0")
@@ -41,11 +46,13 @@ tasks.named("build") {
     dependsOn("remapJar")
 }
 
-sourceSets {
-    named("main") {
-        java {
-            srcDir(project(":common").file("src/main/java"))
-        }
-        resources.srcDir(project(":common").file("src/main/resources"))
-    }
+val commonMainOutput = commonProject.extensions
+    .getByType(JavaPluginExtension::class.java)
+    .sourceSets
+    .getByName("main")
+    .output
+
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(commonMainOutput)
 }
