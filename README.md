@@ -42,7 +42,7 @@ More details / 更多说明：
 
 ![image-20260308182825917](https://qiniuyun.emptycity.top/typora-img/image-20260308182825917.png)
 
-![image-20260308182952758](C:/Users/Administrator/AppData/Roaming/Typora/typora-user-images/image-20260308182952758.png)
+![image-20260308182952758](https://qiniuyun.emptycity.top/typora-img/image-20260308182952758.png)
 
 ![image-20260308183029983](https://qiniuyun.emptycity.top/typora-img/image-20260308183029983.png)
 
