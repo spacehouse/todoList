@@ -1,12 +1,14 @@
 package com.todolist.client;
 
 import com.todolist.TodoListCommon;
+import com.todolist.TodoConstants;
 import com.todolist.TodoListMod;
 import com.todolist.network.ProjectPackets;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import java.util.HashMap;
 import java.util.List;
@@ -71,7 +73,8 @@ public class ClientProjectPackets {
      * @param project 项目对象
      */
     public static void sendAddProject(Project project) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID)) {
+        if (shouldUseLocalProjectFallback(ProjectPackets.ADD_PROJECT_ID)) {
+            addProjectLocally(project);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -85,7 +88,8 @@ public class ClientProjectPackets {
      * @param project 项目对象
      */
     public static void sendUpdateProject(Project project) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_PROJECT_ID)) {
+        if (shouldUseLocalProjectFallback(ProjectPackets.UPDATE_PROJECT_ID)) {
+            updateProjectLocally(project);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -99,7 +103,8 @@ public class ClientProjectPackets {
      * @param projectId 项目 ID
      */
     public static void sendDeleteProject(String projectId) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.DELETE_PROJECT_ID)) {
+        if (shouldUseLocalProjectFallback(ProjectPackets.DELETE_PROJECT_ID)) {
+            deleteProjectLocally(projectId);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -201,5 +206,64 @@ public class ClientProjectPackets {
             buf.writeUtf(projectId);
         }
         ClientPlayNetworking.send(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
+    }
+
+    private static void addProjectLocally(Project project) {
+        if (project == null) {
+            return;
+        }
+        if (project.getScope() == Project.Scope.TEAM) {
+            project.setScope(Project.Scope.PERSONAL);
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && minecraft.player != null) {
+            String playerUuid = minecraft.player.getStringUUID();
+            project.setOwnerUuid(playerUuid);
+            project.addMember(playerUuid, Project.ProjectRole.PROJECT_MANAGER, minecraft.player.getName().getString());
+        }
+        TodoListMod.getProjectManager().addProject(project);
+        saveProjectsByScope(project.getScope());
+    }
+
+    private static void updateProjectLocally(Project project) {
+        if (project == null) {
+            return;
+        }
+        ProjectManager manager = TodoListMod.getProjectManager();
+        Project existing = manager.getProject(project.getId());
+        if (existing == null) {
+            return;
+        }
+        manager.updateProject(project);
+        saveProjectsByScope(existing.getScope());
+    }
+
+    private static void deleteProjectLocally(String projectId) {
+        if (projectId == null || projectId.isEmpty()) {
+            return;
+        }
+        ProjectManager manager = TodoListMod.getProjectManager();
+        Project existing = manager.getProject(projectId);
+        if (existing == null) {
+            return;
+        }
+        manager.deleteProject(projectId);
+        saveProjectsByScope(existing.getScope());
+    }
+
+    private static void saveProjectsByScope(Project.Scope scope) {
+        try {
+            if (scope == Project.Scope.TEAM) {
+                TodoListCommon.getProjectStorage().saveTeamProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.TEAM));
+            } else {
+                TodoListCommon.getProjectStorage().saveProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.PERSONAL));
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.error("Failed to save projects in local fallback mode", e);
+        }
+    }
+
+    private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
+        return !ClientPlayNetworking.canSend(channelId);
     }
 }
