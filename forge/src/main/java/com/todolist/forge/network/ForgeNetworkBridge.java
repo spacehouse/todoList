@@ -21,6 +21,11 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+/**
+ * Forge 网络桥接类。
+ * 负责处理基于 SimpleChannel 的网络通信，封装了数据包的发送与接收逻辑。
+ * 通过反射与 Forge 网络系统交互，以减少直接依赖。
+ */
 public final class ForgeNetworkBridge {
     @FunctionalInterface
     public interface ServerReceiver {
@@ -49,6 +54,10 @@ public final class ForgeNetworkBridge {
     private ForgeNetworkBridge() {
     }
 
+    /**
+     * 初始化网络桥接。
+     * 创建 SimpleChannel 并注册分发消息。
+     */
     public static synchronized void init() {
         if (initialized) {
             return;
@@ -59,21 +68,33 @@ public final class ForgeNetworkBridge {
         registerPlayerLoginHook();
     }
 
+    /**
+     * 注册服务端接收器。
+     */
     public static void registerServerReceiver(ResourceLocation channelId, ServerReceiver receiver) {
         init();
         SERVER_RECEIVERS.put(channelId.toString(), receiver);
     }
 
+    /**
+     * 注册客户端接收器。
+     */
     public static void registerClientReceiver(ResourceLocation channelId, ClientReceiver receiver) {
         init();
         CLIENT_RECEIVERS.put(channelId.toString(), receiver);
     }
 
+    /**
+     * 注册玩家加入监听器。
+     */
     public static void registerJoinListener(JoinListener listener) {
         init();
         JOIN_LISTENERS.add(listener);
     }
 
+    /**
+     * 检查是否可以发送消息到指定通道（即对方是否注册了该通道）。
+     */
     public static boolean canSend(ResourceLocation channelId) {
         init();
         Minecraft client = Minecraft.getInstance();
@@ -98,11 +119,17 @@ public final class ForgeNetworkBridge {
         }
     }
 
+    /**
+     * 发送数据包到服务端。
+     */
     public static void sendToServer(ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
         invoke(simpleChannel, "sendToServer", new Class<?>[]{Object.class}, new DispatchPacket(channelId.toString(), toByteArray(buf)));
     }
 
+    /**
+     * 发送数据包到客户端（指定玩家）。
+     */
     public static void sendToPlayer(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
         Object packetTarget = createPlayerTarget(player);

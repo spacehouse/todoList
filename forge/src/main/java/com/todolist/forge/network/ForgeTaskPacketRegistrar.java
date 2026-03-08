@@ -2,10 +2,17 @@ package com.todolist.forge.network;
 
 import com.todolist.network.TaskPackets;
 
+/**
+ * Forge 平台任务数据包注册器。
+ * 负责注册任务相关的服务端数据包接收器。
+ */
 public final class ForgeTaskPacketRegistrar {
     private ForgeTaskPacketRegistrar() {
     }
 
+    /**
+     * 注册任务相关的数据包处理器。
+     */
     public static void register() {
         TaskPackets.setServerPacketSender(ForgeNetworkBridge::sendToPlayer);
 

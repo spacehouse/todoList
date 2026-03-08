@@ -15,10 +15,17 @@ import java.util.Map;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.client.Minecraft;
 
+/**
+ * Forge 平台客户端项目相关数据包处理类。
+ * 负责处理项目数据的发送与接收，以及本地单人模式下的回退逻辑。
+ */
 public final class ForgeClientProjectPackets {
     private ForgeClientProjectPackets() {
     }
 
+    /**
+     * 注册客户端接收的数据包处理器。
+     */
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
             if (handler == null) {
@@ -43,6 +50,11 @@ public final class ForgeClientProjectPackets {
         });
     }
 
+    /**
+     * 处理接收到的项目同步数据。
+     *
+     * @param projects 从服务端接收到的项目列表
+     */
     private static void handleSyncProjects(List<Project> projects) {
         TodoListCommon.setProjectSyncInProgress(true);
         ProjectManager manager = TodoListForge.getProjectManager();
@@ -71,6 +83,10 @@ public final class ForgeClientProjectPackets {
         }
     }
 
+    /**
+     * 发送添加项目请求。
+     * 如果服务端不支持该数据包，则尝试本地回退处理。
+     */
     public static void sendAddProject(Project project) {
         if (shouldUseLocalProjectFallback(ProjectPackets.ADD_PROJECT_ID)) {
             addProjectLocally(project);
@@ -81,6 +97,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.ADD_PROJECT_ID, buf);
     }
 
+    /**
+     * 发送更新项目请求。
+     */
     public static void sendUpdateProject(Project project) {
         if (shouldUseLocalProjectFallback(ProjectPackets.UPDATE_PROJECT_ID)) {
             updateProjectLocally(project);
@@ -91,6 +110,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.UPDATE_PROJECT_ID, buf);
     }
 
+    /**
+     * 发送删除项目请求。
+     */
     public static void sendDeleteProject(String projectId) {
         if (shouldUseLocalProjectFallback(ProjectPackets.DELETE_PROJECT_ID)) {
             deleteProjectLocally(projectId);
@@ -101,6 +123,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.DELETE_PROJECT_ID, buf);
     }
 
+    /**
+     * 发送添加成员请求。
+     */
     public static void sendAddMember(String projectId, String memberUuid, String memberName) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.ADD_MEMBER_ID)) {
             return;
@@ -112,6 +137,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.ADD_MEMBER_ID, buf);
     }
 
+    /**
+     * 发送移除成员请求。
+     */
     public static void sendRemoveMember(String projectId, String memberUuid) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.REMOVE_MEMBER_ID)) {
             return;
@@ -122,6 +150,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.REMOVE_MEMBER_ID, buf);
     }
 
+    /**
+     * 发送更新成员角色请求。
+     */
     public static void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
             return;
@@ -133,6 +164,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
     }
 
+    /**
+     * 发送申请加入项目请求。
+     */
     public static void sendRequestJoinProject(String projectId) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
             return;
@@ -172,6 +206,9 @@ public final class ForgeClientProjectPackets {
         ForgeNetworkBridge.sendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
     }
 
+    /**
+     * 本地回退：添加项目。
+     */
     private static void addProjectLocally(Project project) {
         if (project == null) {
             return;
@@ -189,6 +226,9 @@ public final class ForgeClientProjectPackets {
         saveProjectsByScope(project.getScope());
     }
 
+    /**
+     * 本地回退：更新项目。
+     */
     private static void updateProjectLocally(Project project) {
         if (project == null) {
             return;
@@ -202,6 +242,9 @@ public final class ForgeClientProjectPackets {
         saveProjectsByScope(existing.getScope());
     }
 
+    /**
+     * 本地回退：删除项目。
+     */
     private static void deleteProjectLocally(String projectId) {
         if (projectId == null || projectId.isEmpty()) {
             return;

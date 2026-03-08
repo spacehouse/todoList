@@ -7,7 +7,7 @@ modId = "todolist"
 version = "${version}"
 displayTest = "IGNORE_SERVER_VERSION"
 displayName = "Todo List Mod"
-authors = "TodoList Team"
+authors = "spacehouse"
 description = '''
 A simple and powerful todo list mod for Minecraft
 '''

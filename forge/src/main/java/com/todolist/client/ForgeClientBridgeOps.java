@@ -8,6 +8,10 @@ import com.todolist.task.TaskManager;
 
 import java.util.List;
 
+/**
+ * Forge 平台的客户端桥接操作实现。
+ * 负责将通用的客户端操作请求转发到 Forge 特定的实现或网络层。
+ */
 public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
     @Override
     public TaskManager getTeamTaskManager() {

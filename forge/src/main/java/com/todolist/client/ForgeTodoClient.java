@@ -21,6 +21,10 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.ModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
+/**
+ * Forge 平台客户端主类。
+ * 负责客户端初始化、事件监听、快捷键处理、HUD 渲染集成等。
+ */
 public final class ForgeTodoClient {
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
@@ -34,6 +38,10 @@ public final class ForgeTodoClient {
     private ForgeTodoClient() {
     }
 
+    /**
+     * 初始化客户端。
+     * 注册配置屏幕、HUD、网络包、事件监听器等。
+     */
     public static void initialize() {
         client = Minecraft.getInstance();
         registerConfigScreenFactory();

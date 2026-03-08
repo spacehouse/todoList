@@ -5,12 +5,12 @@
   "name": "Todo List Mod",
   "description": "A simple and powerful todo list mod for Minecraft",
   "authors": [
-    "TodoList Team"
+    "spacehouse"
   ],
   "contact": {
-    "homepage": "https://github.com/todolist-mod",
-    "sources": "https://github.com/todolist-mod/todolist-fabric",
-    "issues": "https://github.com/todolist-mod/todolist-fabric/issues"
+    "homepage": "https://github.com/spacehouse",
+    "sources": "https://github.com/spacehouse/todoList",
+    "issues": "https://github.com/spacehouse/todoList/issues"
   },
   "license": "MIT",
   "environment": "*",

@@ -9,10 +9,17 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 
+/**
+ * Forge 平台客户端任务相关数据包处理类。
+ * 负责处理任务数据的发送与接收。
+ */
 public final class ForgeClientTaskPackets {
     private ForgeClientTaskPackets() {
     }
 
+    /**
+     * 注册客户端接收的数据包处理器。
+     */
     public static void registerClientPackets() {
         ForgeNetworkBridge.registerClientReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
             if (handler == null) {
@@ -57,6 +64,9 @@ public final class ForgeClientTaskPackets {
         });
     }
 
+    /**
+     * 发送替换所有个人任务请求。
+     */
     public static void sendReplaceAllTasks(List<Task> tasks) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {
@@ -70,6 +80,9 @@ public final class ForgeClientTaskPackets {
         ForgeNetworkBridge.sendToServer(TaskPackets.REPLACE_TASKS_ID, buf);
     }
 
+    /**
+     * 发送替换团队任务请求。
+     */
     public static void sendReplaceTeamTasks(List<Task> tasks) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {
@@ -83,6 +96,9 @@ public final class ForgeClientTaskPackets {
         ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
     }
 
+    /**
+     * 请求团队任务同步。
+     */
     public static void requestTeamSync() {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {
@@ -95,6 +111,9 @@ public final class ForgeClientTaskPackets {
         ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REQUEST_SYNC_ID, buf);
     }
 
+    /**
+     * 发送更新任务请求。
+     */
     public static void sendUpdateTask(Task task) {
         if (task == null) {
             return;

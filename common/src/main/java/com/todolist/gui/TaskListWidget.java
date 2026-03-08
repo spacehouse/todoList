@@ -39,7 +39,7 @@ public class TaskListWidget implements Renderable {
         this.width = width;
         this.height = height;
         this.taskItemHeight = ModConfig.getInstance().getTaskItemHeight();
-        // 鍒涘缓鐙珛鐨勬粴鍔ㄦ潯缁勪欢锛堝搴?0px锛?
+        // 创建独立的滚动条组件（宽度 10px）
         int barWidth = 10;
         int barX = x + width - barWidth - 1;
         this.scrollBar = new ScrollBar(barX, y, barWidth, height);
@@ -84,17 +84,17 @@ public class TaskListWidget implements Renderable {
     public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
 
-        // 缁樺埗鑳屾櫙
+        // 绘制背景
         context.fill(x, y, x + width, y + height, config.getBackgroundColor());
         context.renderOutline(x, y, width, height, config.getBorderColor());
 
-        // 缁樺埗浠诲姟
+        // 绘制任务
         renderTasks(context, mouseX, mouseY);
 
-        // 缁樺埗婊氬姩鏉★紙濡傛灉闇€瑕侊級
+        // 绘制滚动条（如果需要）
         int totalContentHeight = tasks.size() * taskItemHeight;
         if (totalContentHeight > height) {
-            // 浣跨敤 ScrollBarRenderer 鎺ュ彛閫傞厤 DrawContext
+            // 使用 ScrollBarRenderer 接口适配 DrawContext
             scrollBar.render(mouseX, mouseY, totalContentHeight, new ScrollBar.ScrollBarRenderer() {
                 @Override
                 public void fillRect(int x1, int y1, int x2, int y2, int color) {
@@ -241,7 +241,7 @@ public class TaskListWidget implements Renderable {
                 return true;
             }
 
-            // 妫€鏌ユ槸鍚︾偣鍑诲湪澶嶉€夋涓?
+            // 检查是否点击在复选框上
             int scrollOffset = scrollBar.getValue();
             int index = (int) ((mouseY - y) / taskItemHeight) + scrollOffset;
             if (index >= 0 && index < tasks.size()) {
@@ -249,7 +249,7 @@ public class TaskListWidget implements Renderable {
                 int checkboxX = x + 12;
                 int checkboxY = taskY + (taskItemHeight - 12) / 2;
 
-                // 妫€鏌ョ偣鍑绘槸鍚﹀湪澶嶉€夋鑼冨洿鍐?(12x12)
+                // 检查点击是否在复选框范围内 (12x12)
                 if (mouseX >= checkboxX && mouseX < checkboxX + 12 &&
                     mouseY >= checkboxY && mouseY < checkboxY + 12) {
                     Task clickedTask = tasks.get(index);
@@ -268,7 +268,7 @@ public class TaskListWidget implements Renderable {
     }
 
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        // 婊氬姩鏉℃嫋鎷藉湪 render() 鏂规硶涓鐞?
+        // 滚动条拖拽在 render() 方法中处理
         return scrollBar.isDragging();
     }
 
@@ -388,5 +388,3 @@ public class TaskListWidget implements Renderable {
         return core + "...";
     }
 }
-
-
