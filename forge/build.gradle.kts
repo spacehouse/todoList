@@ -12,7 +12,7 @@ val loaderVersion = property("loader_version") as String
 val commonProject = project(":common")
 
 base {
-    archivesName.set("$archives_name-forge")
+    archivesName.set("$archives_name-forge-$minecraftVersion")
 }
 
 repositories {

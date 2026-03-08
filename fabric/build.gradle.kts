@@ -9,7 +9,8 @@ val archives_name: String by project
 val commonProject = project(":common")
 
 base {
-    archivesName.set("$archives_name-fabric")
+    val minecraftVersion = property("minecraft_version") as String
+    archivesName.set("$archives_name-fabric-$minecraftVersion")
 }
 
 dependencies {
