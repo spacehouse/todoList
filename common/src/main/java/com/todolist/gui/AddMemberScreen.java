@@ -47,12 +47,13 @@ public class AddMemberScreen extends Screen {
         if (minecraft == null || minecraft.getConnection() == null) {
             return;
         }
-        int guiWidth = 200;
+        int guiWidth = Math.max(200, Math.min(320, this.width - 20));
         int x = (this.width - guiWidth) / 2;
-        int topY = this.height / 6;
+        int topY = Math.max(20, this.height / 6);
         int searchHeight = 20;
         rowHeight = 22;
-        visibleRows = 8;
+        int maxRowsByHeight = Math.max(4, (this.height - topY - 70) / rowHeight);
+        visibleRows = Math.min(8, maxRowsByHeight);
         listWidth = guiWidth;
         listX = x;
         listY = topY + searchHeight + 6;

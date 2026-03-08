@@ -25,8 +25,8 @@ public class ConfirmDeleteProjectScreen extends Screen {
 
     @Override
     protected void init() {
-        int w = 220;
-        int h = 120;
+        int w = Math.max(220, Math.min(360, width - 20));
+        int h = Math.max(120, Math.min(180, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
 
@@ -50,8 +50,8 @@ public class ConfirmDeleteProjectScreen extends Screen {
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
 
-        int w = 220;
-        int h = 120;
+        int w = Math.max(220, Math.min(360, width - 20));
+        int h = Math.max(120, Math.min(180, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
 

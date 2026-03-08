@@ -56,8 +56,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         allowMemberCreate = project.isAllowMemberCreate();
         
-        int w = 200;
-        int h = isTeam ? 220 : 150;
+        int w = Math.max(200, Math.min(360, width - 20));
+        int h = isTeam ? Math.max(220, Math.min(320, height - 20)) : Math.max(150, Math.min(220, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
 
@@ -232,8 +232,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
-        int w = 200;
-        int h = isTeam ? 220 : 150;
+        int w = Math.max(200, Math.min(360, width - 20));
+        int h = isTeam ? Math.max(220, Math.min(320, height - 20)) : Math.max(150, Math.min(220, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
         

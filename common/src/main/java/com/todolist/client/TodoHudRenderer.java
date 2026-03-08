@@ -66,10 +66,54 @@ public class TodoHudRenderer {
 
         if (tasks.isEmpty() && !config.isHudShowWhenEmpty()) return;
 
+        // Calculate layout
+        int rowHeight = 12;
+        int headerHeight = 14;
+        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
+        
+        List<Task> pending = new ArrayList<>();
+        List<Task> done = new ArrayList<>();
+        for (Task task : tasks) {
+            if (task.isCompleted()) {
+                done.add(task);
+            } else {
+                pending.add(task);
+            }
+        }
+        Comparator<Task> hudComparator = (a, b) -> {
+            int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
+            if (priority != 0) return priority;
+            return Long.compare(a.getCreatedAt(), b.getCreatedAt());
+        };
+        pending.sort(hudComparator);
+        done.sort(hudComparator);
+
+        int todoLimit = Math.max(0, config.getHudTodoLimit());
+        int doneLimit = Math.max(0, config.getHudDoneLimit());
+        int shownPending = Math.min(pending.size(), Math.min(todoLimit, maxRowsByHeight));
+        int rowsAfterPending = maxRowsByHeight - shownPending;
+        boolean showDoneSection = !done.isEmpty() && doneLimit > 0 && rowsAfterPending > 0;
+        int shownDone = showDoneSection ? Math.min(done.size(), Math.min(doneLimit, rowsAfterPending - 1)) : 0;
+        int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
+        int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
+        boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
+        int totalRows = rowsForSummary + (showMore ? 1 : 0);
+        int panelHeight = headerHeight + totalRows * rowHeight;
+
+        // Clamp coordinates
+        int screenWidth = client.getWindow().getGuiScaledWidth();
+        int screenHeight = client.getWindow().getGuiScaledHeight();
+        int hudWidth = config.getHudWidth();
+        
         int x = config.isHudUseCustomPosition() ? config.getHudCustomX() : 10;
         int y = config.isHudUseCustomPosition() ? config.getHudCustomY() : 10;
+        
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x + hudWidth > screenWidth) x = Math.max(0, screenWidth - hudWidth);
+        if (y + panelHeight > screenHeight) y = Math.max(0, screenHeight - panelHeight);
 
-        renderTaskList(context, x, y, tasks, config, getViewLabel(viewMode));
+        renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, shownPending, shownDone, hiddenCount, config, getViewLabel(viewMode));
     }
 
     /**
@@ -255,56 +299,33 @@ public class TodoHudRenderer {
     }
 
     /**
-     * 绘制任务列表与统计信息，支持待办/已完成分组和数量限制。
+     * 绘制任务列表与统计信息。
      * @param context 绘制上下文
      * @param x HUD 起始 x
      * @param y HUD 起始 y
-     * @param tasks 任务列表
+     * @param width HUD 宽度
+     * @param panelHeight HUD 总高度
+     * @param pending 待办任务列表（已排序）
+     * @param done 已完成任务列表（已排序）
+     * @param shownPending 显示的待办数量
+     * @param shownDone 显示的已完成数量
+     * @param hiddenCount 隐藏任务数
      * @param config 模组配置
      * @param viewLabel 当前视图标签
      */
-    private void renderTaskList(GuiGraphics context, int x, int y, List<Task> tasks, ModConfig config, Component viewLabel) {
+    private void renderTaskList(GuiGraphics context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done, 
+            int shownPending, int shownDone, int hiddenCount, ModConfig config, Component viewLabel) {
         int currentY = y;
-        int width = config.getHudWidth();
         float opacity = (float) config.getHudOpacity();
         int panelColor = applyOpacityToColor(0xFF232323, opacity);
         int rowHeight = 12;
         int headerHeight = 14;
-        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         Component title = Component.translatable("hud.todolist.header", viewLabel);
-        List<Task> pending = new ArrayList<>();
-        List<Task> done = new ArrayList<>();
-        for (Task task : tasks) {
-            if (task.isCompleted()) {
-                done.add(task);
-            } else {
-                pending.add(task);
-            }
-        }
-        Comparator<Task> hudComparator = (a, b) -> {
-            int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
-            if (priority != 0) return priority;
-            return Long.compare(a.getCreatedAt(), b.getCreatedAt());
-        };
-        pending.sort(hudComparator);
-        done.sort(hudComparator);
-
-        int todoLimit = Math.max(0, config.getHudTodoLimit());
-        int doneLimit = Math.max(0, config.getHudDoneLimit());
-        int shownPending = Math.min(pending.size(), Math.min(todoLimit, maxRowsByHeight));
-        int rowsAfterPending = maxRowsByHeight - shownPending;
-        boolean showDoneSection = !done.isEmpty() && doneLimit > 0 && rowsAfterPending > 0;
-        int shownDone = showDoneSection ? Math.min(done.size(), Math.min(doneLimit, rowsAfterPending - 1)) : 0;
-        int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
-        int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
-        boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
-        int totalRows = rowsForSummary + (showMore ? 1 : 0);
-        int panelHeight = headerHeight + totalRows * rowHeight;
 
         context.fill(x, y, x + width, y + panelHeight, panelColor);
         int headerTextY = y + (headerHeight - client.font.lineHeight) / 2;
@@ -321,34 +342,24 @@ public class TodoHudRenderer {
             return;
         }
 
-        int remainingRows = maxRowsByHeight;
-
-        shownPending = 0;
-        for (Task task : pending) {
-            if (shownPending >= todoLimit || remainingRows <= 0) break;
-            drawTaskRow(context, x, currentY, width, rowHeight, opacity, task);
+        int renderedCount = 0;
+        for (int i = 0; i < shownPending; i++) {
+            drawTaskRow(context, x, currentY, width, rowHeight, opacity, pending.get(i));
             currentY += rowHeight;
-            shownPending++;
-            remainingRows--;
+            renderedCount++;
         }
 
-        shownDone = 0;
-        if (!done.isEmpty() && doneLimit > 0 && remainingRows > 0) {
+        if (shownDone > 0) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
             context.drawString(client.font, Component.translatable("hud.todolist.separator.completed"), x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
             currentY += rowHeight;
-            remainingRows--;
-            for (Task task : done) {
-                if (shownDone >= doneLimit || remainingRows <= 0) break;
-                drawTaskRow(context, x, currentY, width, rowHeight, opacity, task);
+            for (int i = 0; i < shownDone; i++) {
+                drawTaskRow(context, x, currentY, width, rowHeight, opacity, done.get(i));
                 currentY += rowHeight;
-                shownDone++;
-                remainingRows--;
             }
         }
 
-        hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
-        if (hiddenCount > 0 && remainingRows > 0) {
+        if (hiddenCount > 0) {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
             context.drawString(client.font, Component.translatable("hud.todolist.more_tasks", Integer.toString(hiddenCount)), x + 4, moreY, applyOpacityToColor(0xAAAAAA, opacity));
         }

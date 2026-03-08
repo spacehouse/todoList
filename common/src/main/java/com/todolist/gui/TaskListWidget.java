@@ -68,7 +68,8 @@ public class TaskListWidget implements Renderable {
     }
 
     private void updateMaxScroll() {
-        int maxScroll = Math.max(0, tasks.size() - height / taskItemHeight);
+        int visibleCount = Math.max(1, height / Math.max(1, taskItemHeight));
+        int maxScroll = Math.max(0, tasks.size() - visibleCount);
         scrollBar.setMaxValue(maxScroll);
     }
 
@@ -107,7 +108,8 @@ public class TaskListWidget implements Renderable {
         Font textRenderer = client.font;
         ModConfig config = ModConfig.getInstance();
         int scrollOffset = scrollBar.getValue();
-        int visibleTasks = Math.min(tasks.size() - scrollOffset, height / taskItemHeight);
+        int visibleCount = Math.max(1, height / Math.max(1, taskItemHeight));
+        int visibleTasks = Math.min(tasks.size() - scrollOffset, visibleCount);
 
         for (int i = 0; i < visibleTasks; i++) {
             int taskIndex = i + scrollOffset;
@@ -141,7 +143,7 @@ public class TaskListWidget implements Renderable {
             int titleX = x + 30;
             int reservedForTags = 100;
             int rightLimit = scrollBar.getBarX() - 2;
-            int maxTitleWidth = rightLimit - reservedForTags - titleX;
+            int maxTitleWidth = Math.max(16, rightLimit - reservedForTags - titleX);
             String truncatedTitle = trimWithEllipsis(textRenderer, title, maxTitleWidth);
             context.drawString(textRenderer, Component.nullToEmpty(truncatedTitle),
                     titleX, taskY + (taskItemHeight - textRenderer.lineHeight) / 2,
@@ -230,9 +232,11 @@ public class TaskListWidget implements Renderable {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (mouseX >= x && mouseX < x + width &&
             mouseY >= y && mouseY < y + height) {
-
-            // 妫€鏌ユ槸鍚︾偣鍑诲湪婊氬姩鏉′笂
-            if (scrollBar.wasMouseOver()) {
+            boolean clickOnScrollBar = button == 0
+                    && scrollBar.getMaxValue() > 0
+                    && mouseX >= scrollBar.getBarX() && mouseX < scrollBar.getBarX() + scrollBar.getBarWidth()
+                    && mouseY >= scrollBar.getBarY() && mouseY < scrollBar.getBarY() + scrollBar.getBarHeight();
+            if (clickOnScrollBar) {
                 scrollBar.setIsDragging(true);
                 return true;
             }
@@ -278,9 +282,12 @@ public class TaskListWidget implements Renderable {
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (mouseX >= x && mouseX < x + width &&
             mouseY >= y && mouseY < y + height) {
-
+            if (verticalAmount == 0 || scrollBar.getMaxValue() <= 0) {
+                return false;
+            }
+            int before = scrollBar.getValue();
             scrollBar.offsetValue(verticalAmount > 0 ? -1 : 1);
-            return true;
+            return scrollBar.getValue() != before;
         }
         return false;
     }

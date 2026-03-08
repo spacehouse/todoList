@@ -47,8 +47,8 @@ public class AddProjectScreen extends Screen {
             scope = Project.Scope.PERSONAL;
         }
 
-        int w = 200;
-        int h = 150;
+        int w = Math.max(180, Math.min(320, width - 20));
+        int h = Math.max(140, Math.min(180, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
 
@@ -124,8 +124,8 @@ public class AddProjectScreen extends Screen {
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         renderBackground(context);
         
-        int w = 200;
-        int h = 150;
+        int w = Math.max(180, Math.min(320, width - 20));
+        int h = Math.max(140, Math.min(180, height - 20));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
         

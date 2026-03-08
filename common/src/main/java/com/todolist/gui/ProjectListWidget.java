@@ -117,7 +117,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     private void clampScrollOffset() {
-        int visibleItems = height / itemHeight;
+        int visibleItems = Math.max(1, height / itemHeight);
         int maxScroll = Math.max(0, projects.size() - visibleItems);
         if (scrollOffset > maxScroll) scrollOffset = maxScroll;
         if (scrollOffset < 0) scrollOffset = 0;
@@ -170,7 +170,8 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
             int nameColor = isSelected ? 0xFFFFFFFF : 0xFFAAAAAA;
             
             // Truncate name if too long
-            String displayName = textRenderer.plainSubstrByWidth(name, width - 28);
+            int nameWidth = Math.max(16, width - 28);
+            String displayName = textRenderer.plainSubstrByWidth(name, nameWidth);
             context.drawString(textRenderer, displayName, x + 12, itemY + (itemHeight - 8) / 2, nameColor, false);
             
             // Scope indicator (Icon or text?)
@@ -214,14 +215,18 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
          if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
-             int visibleItems = height / itemHeight;
+             if (amount == 0) {
+                 return false;
+             }
+             int visibleItems = Math.max(1, height / itemHeight);
              int maxScroll = Math.max(0, projects.size() - visibleItems);
+             int before = scrollOffset;
              if (amount > 0) {
                  scrollOffset = Math.max(0, scrollOffset - 1);
              } else {
                  scrollOffset = Math.min(maxScroll, scrollOffset + 1);
              }
-             return true;
+             return scrollOffset != before;
          }
          return false;
     }

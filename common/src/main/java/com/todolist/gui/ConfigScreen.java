@@ -8,32 +8,28 @@ import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 配置界面：提供 GUI/HUD 外观与行为的本地配置编辑与预览。
+ * 配置界面：提供 HUD 外观与行为的本地配置编辑与预览。
  */
 public class ConfigScreen extends Screen {
+
     private final Screen parent;
 
-    private EditBox guiWidthField;
-    private EditBox guiHeightField;
     private EditBox hudWidthField;
     private EditBox hudMaxHeightField;
-    private EditBox taskItemHeightField;
-    private EditBox backgroundColorField;
-    private EditBox sidebarWidthField;
-    private EditBox sidebarHeightField;
     private IntSliderWidget hudTodoLimitSlider;
     private IntSliderWidget hudDoneLimitSlider;
     private DoubleStepSliderWidget hudOpacitySlider;
     private Button hudExpandedButton;
     private Button hudShowWhenEmptyButton;
-    private Button soundEffectsButton;
-    private Button hudDefaultViewButton;
     private Button hudProjectSourceButton;
 
     private int previewHudX;
@@ -49,11 +45,6 @@ public class ConfigScreen extends Screen {
 
     private boolean hudExpandedValue;
     private boolean hudShowWhenEmptyValue;
-    private boolean soundEffectsValue;
-    private String hudDefaultViewValue;
-    private int hudDefaultViewIndex;
-    private String[] hudDefaultViewOptions = HudViewOptions.VALUES;
-    private boolean lockHudDefaultViewOption;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
 
@@ -68,14 +59,12 @@ public class ConfigScreen extends Screen {
     @Override
     protected void init() {
         ModConfig cfg = ModConfig.getInstance();
-        int guiWidth = 320;
+        int guiWidth = clampInt(this.width - 40, 360, 560);
         int x = (this.width - guiWidth) / 2;
-        int y = this.height / 6 + 20;
+        int y = Math.max(36, this.height / 6 + 10);
         int row = 0;
-        int rowH = 24;
+        int rowH = 25; // 20 (height) + 5 (gap)
         int fieldH = 20;
-        int labelWidth = 160;
-        int fieldWidth = guiWidth - labelWidth;
 
         int twoColGap = 20;
         int colWidth = (guiWidth - twoColGap) / 2;
@@ -88,15 +77,7 @@ public class ConfigScreen extends Screen {
         int rightLabelX = x + colWidth + twoColGap;
         int rightFieldX = rightLabelX + rightLabelWidth;
 
-        guiWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
-        guiWidthField.setValue(Integer.toString(cfg.getGuiWidth()));
-        this.addRenderableWidget(guiWidthField);
-
-        guiHeightField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
-        guiHeightField.setValue(Integer.toString(cfg.getGuiHeight()));
-        this.addRenderableWidget(guiHeightField);
-        row++;
-
+        // Row 1: HUD Width | HUD Max Height
         hudWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
         hudWidthField.setValue(Integer.toString(cfg.getHudWidth()));
         this.addRenderableWidget(hudWidthField);
@@ -106,24 +87,7 @@ public class ConfigScreen extends Screen {
         this.addRenderableWidget(hudMaxHeightField);
         row++;
 
-        taskItemHeightField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
-        taskItemHeightField.setValue(Integer.toString(cfg.getTaskItemHeight()));
-        this.addRenderableWidget(taskItemHeightField);
-
-        backgroundColorField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
-        backgroundColorField.setValue(String.format("%08X", cfg.getBackgroundColor()));
-        this.addRenderableWidget(backgroundColorField);
-        row++;
-
-        sidebarWidthField = new EditBox(this.font, leftFieldX, y + row * rowH, leftFieldWidth, fieldH, Component.empty());
-        sidebarWidthField.setValue(Integer.toString(cfg.getProjectSidebarWidth()));
-        this.addRenderableWidget(sidebarWidthField);
-        
-        sidebarHeightField = new EditBox(this.font, rightFieldX, y + row * rowH, rightFieldWidth, fieldH, Component.empty());
-        sidebarHeightField.setValue(Integer.toString(cfg.getProjectSidebarHeight()));
-        this.addRenderableWidget(sidebarHeightField);
-        row++;
-
+        // Row 2: Todo Limit | Done Limit
         int todoInitial = cfg.getHudTodoLimit();
         int doneInitial = cfg.getHudDoneLimit();
         hudTodoLimitSlider = new IntSliderWidget(leftFieldX, y + row * rowH, leftFieldWidth, fieldH, 0, 30, todoInitial);
@@ -132,16 +96,9 @@ public class ConfigScreen extends Screen {
         this.addRenderableWidget(hudDoneLimitSlider);
         row++;
 
-        int opacityLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_opacity"));
-        int opacitySliderX = x + opacityLabelWidth + 10;
-        int opacitySliderW = guiWidth - (opacitySliderX - x);
-        hudOpacitySlider = new DoubleStepSliderWidget(opacitySliderX, y + row * rowH, opacitySliderW, fieldH, 0.0, 1.0, 0.1, cfg.getHudOpacity());
-        this.addRenderableWidget(hudOpacitySlider);
-        row++;
-
+        // Row 3: Default Expanded | Show When Empty
         hudExpandedValue = cfg.isHudDefaultExpanded();
         hudShowWhenEmptyValue = cfg.isHudShowWhenEmpty();
-        soundEffectsValue = cfg.isEnableSoundEffects();
 
         hudExpandedButton = Button.builder(Component.empty(), b -> {
             hudExpandedValue = !hudExpandedValue;
@@ -156,62 +113,16 @@ public class ConfigScreen extends Screen {
         this.addRenderableWidget(hudShowWhenEmptyButton);
         row++;
 
-        soundEffectsButton = Button.builder(Component.empty(), b -> {
-            soundEffectsValue = !soundEffectsValue;
-            updateSoundEffectsButtonLabel();
-        }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
-        this.addRenderableWidget(soundEffectsButton);
+        // Row 4: HUD Opacity (Left Only)
+        int opacityLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_opacity"));
+        // Align slider with other left fields
+        int opacitySliderX = leftFieldX; 
+        int opacitySliderW = leftFieldWidth;
+        hudOpacitySlider = new DoubleStepSliderWidget(opacitySliderX, y + row * rowH, opacitySliderW, fieldH, 0.0, 1.0, 0.1, cfg.getHudOpacity());
+        this.addRenderableWidget(hudOpacitySlider);
         row++;
 
-        String currentView = cfg.getHudDefaultView();
-        Project.Scope activeScope = resolveActiveProjectScope();
-        boolean singlePlayer = this.minecraft != null && this.minecraft.isLocalServer();
-        if (singlePlayer || activeScope == Project.Scope.PERSONAL) {
-            hudDefaultViewOptions = new String[] { "PERSONAL" };
-            lockHudDefaultViewOption = true;
-        } else if (activeScope == Project.Scope.TEAM) {
-            hudDefaultViewOptions = new String[] { "TEAM_UNASSIGNED", "TEAM_ALL", "TEAM_ASSIGNED" };
-            lockHudDefaultViewOption = false;
-        } else {
-            hudDefaultViewOptions = HudViewOptions.VALUES;
-            lockHudDefaultViewOption = false;
-        }
-        hudDefaultViewIndex = 0;
-        for (int i = 0; i < hudDefaultViewOptions.length; i++) {
-            if (hudDefaultViewOptions[i].equalsIgnoreCase(currentView)) {
-                hudDefaultViewIndex = i;
-                break;
-            }
-        }
-        if (hudDefaultViewOptions.length == 0) {
-            hudDefaultViewOptions = new String[] { "PERSONAL" };
-            hudDefaultViewIndex = 0;
-        }
-        hudDefaultViewValue = hudDefaultViewOptions[Math.max(0, Math.min(hudDefaultViewIndex, hudDefaultViewOptions.length - 1))];
-
-        int defaultViewLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_default_view"));
-        int defaultViewButtonX = x + defaultViewLabelWidth + 10;
-        int defaultViewButtonWidth = guiWidth - (defaultViewButtonX - x);
-
-        hudDefaultViewButton = Button.builder(Component.empty(), b -> {
-            if (lockHudDefaultViewOption || hudDefaultViewOptions.length == 0) {
-                return;
-            }
-            hudDefaultViewIndex = (hudDefaultViewIndex + 1) % hudDefaultViewOptions.length;
-            hudDefaultViewValue = hudDefaultViewOptions[hudDefaultViewIndex];
-            updateHudDefaultViewButtonLabel();
-        }).bounds(defaultViewButtonX, y + row * rowH, defaultViewButtonWidth, fieldH).build();
-        this.addRenderableWidget(hudDefaultViewButton);
-        if (lockHudDefaultViewOption) {
-            hudDefaultViewButton.active = false;
-        }
-
-        updateHudExpandedButtonLabel();
-        updateHudShowWhenEmptyButtonLabel();
-        updateSoundEffectsButtonLabel();
-        updateHudDefaultViewButtonLabel();
-
-        row++;
+        // Row 5: Project Source (Full Width)
         String currentProjectSource = cfg.getHudProjectSource();
         String[] sources = HudProjectSourceOptions.VALUES;
         hudProjectSourceIndex = 0;
@@ -224,8 +135,14 @@ public class ConfigScreen extends Screen {
         hudProjectSourceValue = sources[hudProjectSourceIndex];
 
         int sourceLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_project_source"));
+        // Calculate X to align the button part such that label is to the left?
+        // Standard drawLabelForWidget draws label to the left of widget.
+        // If we want full width widget, we might need to inset it to make room for label, or put label above.
+        // User said: "HUD列表来源可以占整行" (HUD Project Source can take full row).
+        // Let's make the button occupy the remaining width after the label, spanning both columns.
+        // Layout: Label [Button--------------------]
         int sourceButtonX = x + sourceLabelWidth + 10;
-        int sourceButtonWidth = guiWidth - (sourceButtonX - x);
+        int sourceButtonWidth = Math.max(80, guiWidth - (sourceButtonX - x));
 
         hudProjectSourceButton = Button.builder(Component.empty(), b -> {
             hudProjectSourceIndex = (hudProjectSourceIndex + 1) % HudProjectSourceOptions.VALUES.length;
@@ -236,6 +153,16 @@ public class ConfigScreen extends Screen {
         updateHudProjectSourceButtonLabel();
         row++;
 
+        // Note: Default View is not in the user's requested list, but it's part of HUD config.
+        // User list: Width, MaxHeight, TodoLimit, DoneLimit, Opacity, DefaultExpanded, ShowWhenEmpty, ProjectSource.
+        // Default View is missing from user request. I should probably remove it to strictly follow "Only retain...".
+        // Or maybe "HUD列表项目来源" implies view control? No, Project Source is distinct.
+        // I will follow the user's explicit list.
+
+        updateHudExpandedButtonLabel();
+        updateHudShowWhenEmptyButtonLabel();
+
+        // Preview initialization
         previewUseCustom = cfg.isHudUseCustomPosition();
         if (previewUseCustom) {
             previewHudX = cfg.getHudCustomX();
@@ -250,6 +177,12 @@ public class ConfigScreen extends Screen {
         }
         previewHudWidth = cfg.getHudWidth();
         previewHudHeight = 40;
+
+        // Clamp preview position to screen bounds
+        if (previewHudX < 0) previewHudX = 0;
+        if (previewHudY < 0) previewHudY = 0;
+        if (previewHudX + previewHudWidth > this.width) previewHudX = Math.max(0, this.width - previewHudWidth);
+        if (previewHudY + previewHudHeight > this.height) previewHudY = Math.max(0, this.height - previewHudHeight);
 
         int buttonY = y + row * rowH + 30;
         Button save = Button.builder(Component.translatable("gui.todolist.config.save_apply"), b -> {
@@ -266,61 +199,29 @@ public class ConfigScreen extends Screen {
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context);
         super.render(context, mouseX, mouseY, delta);
-        int guiWidth = 320;
+        int guiWidth = clampInt(this.width - 40, 360, 560);
         int x = (this.width - guiWidth) / 2;
-        int yStart = this.height / 6 + 20;
-        int rowH = 24;
-        int fieldH = 20;
+        int yStart = Math.max(36, this.height / 6 + 10);
         int textH = this.font.lineHeight;
+        context.drawString(this.font, title, x, yStart - 36, 0xFFFFFFFF, false);
 
-        int twoColGap = 20;
-        int colWidth = (guiWidth - twoColGap) / 2;
-        int leftLabelX = x;
-        int rightLabelX = x + colWidth + twoColGap;
-
-        int row = 0;
-        int baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.gui_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.gui_height"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_max_height"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.task_item_height"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.background_color"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.sidebar_width"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.sidebar_height"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_todo_limit"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_done_limit"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_opacity"), leftLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_default_expanded"), leftLabelX, baseY, 0xFFFFFF, false);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_show_when_empty"), rightLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("config.todolist.enable_sound_effects"), leftLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_default_view"), leftLabelX, baseY, 0xFFFFFF, false);
-        row++;
-        baseY = yStart + row * rowH + (fieldH - textH) / 2;
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_project_source"), leftLabelX, baseY, 0xFFFFFF, false);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_width"), hudWidthField, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_max_height"), hudMaxHeightField, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_todo_limit"), hudTodoLimitSlider, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_done_limit"), hudDoneLimitSlider, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_default_expanded"), hudExpandedButton, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_show_when_empty"), hudShowWhenEmptyButton, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textH);
 
         int hudX = previewHudX;
         int hudY = previewHudY;
+        // Clamp for rendering safety
         if (hudX < 0) hudX = 0;
         if (hudY < 0) hudY = 0;
-        if (hudX + previewHudWidth > this.width) hudX = this.width - previewHudWidth;
-        if (hudY + previewHudHeight > this.height) hudY = this.height - previewHudHeight;
+        if (hudX + previewHudWidth > this.width) hudX = Math.max(0, this.width - previewHudWidth);
+        if (hudY + previewHudHeight > this.height) hudY = Math.max(0, this.height - previewHudHeight);
+        
         previewRectX = hudX;
         previewRectY = hudY;
         double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
@@ -377,8 +278,8 @@ public class ConfigScreen extends Screen {
             int newY = my - dragOffsetY;
             if (newX < 0) newX = 0;
             if (newY < 0) newY = 0;
-            if (newX + previewHudWidth > this.width) newX = this.width - previewHudWidth;
-            if (newY + previewHudHeight > this.height) newY = this.height - previewHudHeight;
+            if (newX + previewHudWidth > this.width) newX = Math.max(0, this.width - previewHudWidth);
+            if (newY + previewHudHeight > this.height) newY = Math.max(0, this.height - previewHudHeight);
             previewHudX = newX;
             previewHudY = newY;
             return true;
@@ -388,14 +289,8 @@ public class ConfigScreen extends Screen {
 
     private void applyAndReturn() {
         ModConfig cfg = ModConfig.getInstance();
-        cfg.setGuiWidth(parseIntSafe(guiWidthField.getValue(), cfg.getGuiWidth()));
-        cfg.setGuiHeight(parseIntSafe(guiHeightField.getValue(), cfg.getGuiHeight()));
         cfg.setHudWidth(parseIntSafe(hudWidthField.getValue(), cfg.getHudWidth()));
         cfg.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getValue(), cfg.getHudMaxHeight()));
-        cfg.setTaskItemHeight(parseIntSafe(taskItemHeightField.getValue(), cfg.getTaskItemHeight()));
-        cfg.setBackgroundColor(parseColorSafe(backgroundColorField.getValue(), cfg.getBackgroundColor()));
-        cfg.setProjectSidebarWidth(parseIntSafe(sidebarWidthField.getValue(), cfg.getProjectSidebarWidth()));
-        cfg.setProjectSidebarHeight(parseIntSafe(sidebarHeightField.getValue(), cfg.getProjectSidebarHeight()));
         cfg.setHudTodoLimit(hudTodoLimitSlider.getIntValue());
         cfg.setHudDoneLimit(hudDoneLimitSlider.getIntValue());
         if (hudOpacitySlider != null) {
@@ -406,13 +301,10 @@ public class ConfigScreen extends Screen {
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
-        cfg.setEnableSoundEffects(soundEffectsValue);
-        // cfg.setSortByPriority(sortByPriorityValue); // Removed from UI
-        if (this.minecraft != null && this.minecraft.isLocalServer()) {
-            cfg.setHudDefaultView("PERSONAL");
-        } else {
-            cfg.setHudDefaultView(hudDefaultViewValue);
-        }
+        
+        // Note: Default View is not exposed in UI anymore, so we keep current value or default.
+        // cfg.setHudDefaultView(...); 
+        
         cfg.setHudProjectSource(hudProjectSourceValue);
         this.minecraft.setScreen(parent);
     }
@@ -420,18 +312,6 @@ public class ConfigScreen extends Screen {
     private int parseIntSafe(String s, int fallback) {
         try {
             return Integer.parseInt(s.trim());
-        } catch (Exception ignored) {
-            return fallback;
-        }
-    }
-
-    private int parseColorSafe(String s, int fallback) {
-        try {
-            String hex = s.trim();
-            if (hex.startsWith("0x")) hex = hex.substring(2);
-            if (hex.startsWith("#")) hex = hex.substring(1);
-            // Handle signed int parsing for 32-bit hex (ARGB)
-            return (int) Long.parseLong(hex, 16);
         } catch (Exception ignored) {
             return fallback;
         }
@@ -448,39 +328,6 @@ public class ConfigScreen extends Screen {
         if (hudShowWhenEmptyButton != null) {
             String key = hudShowWhenEmptyValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
             hudShowWhenEmptyButton.setMessage(Component.translatable(key));
-        }
-    }
-
-    private void updateSoundEffectsButtonLabel() {
-        if (soundEffectsButton != null) {
-            String key = soundEffectsValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            soundEffectsButton.setMessage(Component.translatable(key));
-        }
-    }
-
-    /*
-    private void updateSortByPriorityButtonLabel() {
-        if (sortByPriorityButton != null) {
-            String key = sortByPriorityValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            sortByPriorityButton.setMessage(Text.translatable(key));
-        }
-    }
-    */
-
-    private void updateHudDefaultViewButtonLabel() {
-        if (hudDefaultViewButton != null) {
-            String view = hudDefaultViewValue == null ? "" : hudDefaultViewValue;
-            String key;
-            if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)) {
-                key = "gui.todolist.view.team_unassigned";
-            } else if ("TEAM_ALL".equalsIgnoreCase(view)) {
-                key = "gui.todolist.view.team_all";
-            } else if ("TEAM_ASSIGNED".equalsIgnoreCase(view)) {
-                key = "gui.todolist.view.team_assigned";
-            } else {
-                key = "gui.todolist.view.personal";
-            }
-            hudDefaultViewButton.setMessage(Component.translatable(key));
         }
     }
 
@@ -508,7 +355,8 @@ public class ConfigScreen extends Screen {
     }
 
     private Project.Scope resolveHudScope() {
-        String view = hudDefaultViewValue == null ? "" : hudDefaultViewValue;
+        // Since we removed the view selector, we rely on the saved config or default
+        String view = ModConfig.getInstance().getHudDefaultView();
         if ("TEAM_UNASSIGNED".equalsIgnoreCase(view) || "TEAM_ALL".equalsIgnoreCase(view) || "TEAM_ASSIGNED".equalsIgnoreCase(view)) {
             return Project.Scope.TEAM;
         }
@@ -523,16 +371,27 @@ public class ConfigScreen extends Screen {
         return ProjectNameFormatter.toDisplayText(project);
     }
 
-    private Project.Scope resolveActiveProjectScope() {
-        Project activeProject = ClientBridge.getActiveProject(TodoListCommon.getProjectManager());
-        if (activeProject == null) {
-            return null;
+    private void drawLabelForWidget(GuiGraphics context, Component label, AbstractWidget widget, int textH) {
+        if (widget == null || !widget.visible) {
+            return;
         }
-        return activeProject.getScope();
+        int y = widget.getY() + (widget.getHeight() - textH) / 2;
+        int labelWidth = this.font.width(label);
+        int x = Math.max(8, widget.getX() - labelWidth - 8);
+        context.drawString(this.font, label, x, y, 0xFFFFFF, false);
     }
 
-    private static class HudViewOptions {
-        static final String[] VALUES = new String[] { "PERSONAL", "TEAM_UNASSIGNED", "TEAM_ALL", "TEAM_ASSIGNED" };
+    private static int clampInt(int value, int min, int max) {
+        if (max < min) {
+            return min;
+        }
+        if (value < min) {
+            return min;
+        }
+        if (value > max) {
+            return max;
+        }
+        return value;
     }
 
     private static class HudProjectSourceOptions {
@@ -628,5 +487,3 @@ public class ConfigScreen extends Screen {
         }
     }
 }
-
-

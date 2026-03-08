@@ -18,7 +18,8 @@
   "gui.todolist.priority.high": "High",
 
   "gui.todolist.input.title": "Task title",
-  "gui.todolist.input.title.placeholder": "Enter task title...",
+  "gui.todolist.input.title.placeholder": "Press Enter to add...",
+  "gui.todolist.input.search.placeholder": "Search...",
   "gui.todolist.input.description": "Description",
   "gui.todolist.input.description.placeholder": "Description (optional)...",
   "gui.todolist.input.tags.placeholder": "Tags (comma-separated, optional)...",
@@ -45,6 +46,8 @@
   "gui.todolist.assign_others": "Assign Out",
 
   "gui.todolist.config.title": "Config",
+  "gui.todolist.config.category.todo": "Todo UI",
+  "gui.todolist.config.category.hud": "HUD List",
   "gui.todolist.config.save_apply": "Save & Apply",
   "gui.todolist.config.gui_width": "GUI Width:",
   "gui.todolist.config.gui_height": "GUI Height:",

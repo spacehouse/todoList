@@ -22,6 +22,22 @@ import java.util.List;
 public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
+    private static final int GUI_WIDTH_MIN = 300;
+    private static final int GUI_WIDTH_MAX = 1600;
+    private static final int GUI_HEIGHT_MIN = 200;
+    private static final int GUI_HEIGHT_MAX = 1200;
+    private static final int TASK_ITEM_HEIGHT_MIN = 18;
+    private static final int TASK_ITEM_HEIGHT_MAX = 48;
+    private static final int SIDEBAR_WIDTH_MIN = 90;
+    private static final int SIDEBAR_WIDTH_MAX = 360;
+    private static final int HUD_WIDTH_MIN = 140;
+    private static final int HUD_WIDTH_MAX = 640;
+    private static final int HUD_HEIGHT_MIN = 120;
+    private static final int HUD_HEIGHT_MAX = 1000;
+    private static final int PADDING_MIN = 4;
+    private static final int PADDING_MAX = 24;
+    private static final int ELEMENT_SPACING_MIN = 2;
+    private static final int ELEMENT_SPACING_MAX = 16;
 
     private static ModConfig instance;
 
@@ -58,7 +74,6 @@ public class ModConfig {
         private int guiHeight = 400;
 
         // Task list
-        private int taskListHeight = 140;
         private int taskListY = 30;
         private int taskItemHeight = 25;
 
@@ -105,7 +120,6 @@ public class ModConfig {
         
         // Project Sidebar
         private int projectSidebarWidth = 100;
-        private int projectSidebarHeight = 200;
     }
 
     /**
@@ -175,6 +189,46 @@ public class ModConfig {
                 gui.hudOpacity = stepped;
                 changed = true;
             }
+        }
+        int normalizedGuiWidth = clamp(gui.guiWidth, GUI_WIDTH_MIN, GUI_WIDTH_MAX);
+        if (normalizedGuiWidth != gui.guiWidth) {
+            gui.guiWidth = normalizedGuiWidth;
+            changed = true;
+        }
+        int normalizedGuiHeight = clamp(gui.guiHeight, GUI_HEIGHT_MIN, GUI_HEIGHT_MAX);
+        if (normalizedGuiHeight != gui.guiHeight) {
+            gui.guiHeight = normalizedGuiHeight;
+            changed = true;
+        }
+        int normalizedTaskItemHeight = clamp(gui.taskItemHeight, TASK_ITEM_HEIGHT_MIN, TASK_ITEM_HEIGHT_MAX);
+        if (normalizedTaskItemHeight != gui.taskItemHeight) {
+            gui.taskItemHeight = normalizedTaskItemHeight;
+            changed = true;
+        }
+        int normalizedSidebarWidth = clamp(gui.projectSidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
+        if (normalizedSidebarWidth != gui.projectSidebarWidth) {
+            gui.projectSidebarWidth = normalizedSidebarWidth;
+            changed = true;
+        }
+        int normalizedHudWidth = clamp(gui.hudWidth, HUD_WIDTH_MIN, HUD_WIDTH_MAX);
+        if (normalizedHudWidth != gui.hudWidth) {
+            gui.hudWidth = normalizedHudWidth;
+            changed = true;
+        }
+        int normalizedHudHeight = clamp(gui.hudMaxHeight, HUD_HEIGHT_MIN, HUD_HEIGHT_MAX);
+        if (normalizedHudHeight != gui.hudMaxHeight) {
+            gui.hudMaxHeight = normalizedHudHeight;
+            changed = true;
+        }
+        int normalizedPadding = clamp(gui.padding, PADDING_MIN, PADDING_MAX);
+        if (normalizedPadding != gui.padding) {
+            gui.padding = normalizedPadding;
+            changed = true;
+        }
+        int normalizedSpacing = clamp(gui.elementSpacing, ELEMENT_SPACING_MIN, ELEMENT_SPACING_MAX);
+        if (normalizedSpacing != gui.elementSpacing) {
+            gui.elementSpacing = normalizedSpacing;
+            changed = true;
         }
         return changed;
     }
@@ -280,19 +334,13 @@ public class ModConfig {
     // GUI configuration getters and setters
     public int getGuiWidth() { return gui.guiWidth; }
     public void setGuiWidth(int width) {
-        gui.guiWidth = width;
+        gui.guiWidth = clamp(width, GUI_WIDTH_MIN, GUI_WIDTH_MAX);
         save();
     }
 
     public int getGuiHeight() { return gui.guiHeight; }
     public void setGuiHeight(int height) {
-        gui.guiHeight = height;
-        save();
-    }
-
-    public int getTaskListHeight() { return gui.taskListHeight; }
-    public void setTaskListHeight(int height) {
-        gui.taskListHeight = height;
+        gui.guiHeight = clamp(height, GUI_HEIGHT_MIN, GUI_HEIGHT_MAX);
         save();
     }
 
@@ -304,7 +352,7 @@ public class ModConfig {
 
     public int getTaskItemHeight() { return gui.taskItemHeight; }
     public void setTaskItemHeight(int height) {
-        gui.taskItemHeight = height;
+        gui.taskItemHeight = clamp(height, TASK_ITEM_HEIGHT_MIN, TASK_ITEM_HEIGHT_MAX);
         save();
     }
 
@@ -376,13 +424,13 @@ public class ModConfig {
 
     public int getPadding() { return gui.padding; }
     public void setPadding(int padding) {
-        gui.padding = padding;
+        gui.padding = clamp(padding, PADDING_MIN, PADDING_MAX);
         save();
     }
 
     public int getElementSpacing() { return gui.elementSpacing; }
     public void setElementSpacing(int spacing) {
-        gui.elementSpacing = spacing;
+        gui.elementSpacing = clamp(spacing, ELEMENT_SPACING_MIN, ELEMENT_SPACING_MAX);
         save();
     }
 
@@ -418,13 +466,13 @@ public class ModConfig {
 
     public int getHudWidth() { return gui.hudWidth; }
     public void setHudWidth(int width) {
-        gui.hudWidth = width;
+        gui.hudWidth = clamp(width, HUD_WIDTH_MIN, HUD_WIDTH_MAX);
         save();
     }
 
     public int getHudMaxHeight() { return gui.hudMaxHeight; }
     public void setHudMaxHeight(int height) {
-        gui.hudMaxHeight = height;
+        gui.hudMaxHeight = clamp(height, HUD_HEIGHT_MIN, HUD_HEIGHT_MAX);
         save();
     }
 
@@ -547,14 +595,21 @@ public class ModConfig {
 
     public int getProjectSidebarWidth() { return gui.projectSidebarWidth; }
     public void setProjectSidebarWidth(int width) {
-        gui.projectSidebarWidth = width;
+        gui.projectSidebarWidth = clamp(width, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
         save();
     }
     
-    public int getProjectSidebarHeight() { return gui.projectSidebarHeight; }
-    public void setProjectSidebarHeight(int height) {
-        gui.projectSidebarHeight = height;
-        save();
+    private static int clamp(int value, int min, int max) {
+        if (max < min) {
+            return min;
+        }
+        if (value < min) {
+            return min;
+        }
+        if (value > max) {
+            return max;
+        }
+        return value;
     }
 }
 
