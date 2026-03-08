@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "id": "todolist",
   "version": "${version}",
-  "name": "Todo List Mod",
+  "name": "TodoList",
   "description": "A simple and powerful todo list mod for Minecraft",
+  "icon": "assets/todolist/icon.png",
   "authors": [
     "spacehouse"
   ],

@@ -52,8 +52,8 @@ More details / 更多说明：
 
 ### Requirements / 要求
 - Minecraft 1.20.1
-- Fabric Loader 0.14.21+
-- Fabric API 0.87.0+
+- **Fabric**: Fabric Loader 0.14.21+ & Fabric API 0.87.0+
+- **Forge**: Forge 47.2.0+
 
 ### Steps / 步骤
 
@@ -83,9 +83,11 @@ More details / 更多说明：
 
 ### Managing Tasks / 管理任务
 - Click on a task to select it / 点击任务选中
-- **Edit** - Modify the task / 编辑任务
-- **Delete** - Remove the task / 删除任务
-- **Complete** - Mark as completed / 标记完成
+- **Complete** - Mark as completed by clicking the checkbox / 点击复选框标记完成
+- **Right-Click Menu** - Right-click a task to open the context menu for more actions: / **右键菜单** - 右键点击任务打开上下文菜单以执行更多操作：
+  - **Edit** - Modify the task / 编辑任务
+  - **Delete** - Remove the task / 删除任务
+  - **Priority** - Change task priority (High/Medium/Low) / 修改优先级（高/中/低）
 - Use filter buttons to show specific tasks / 使用筛选按钮查看特定任务
 - Use the search box to filter by title/description/tags / 使用搜索框按标题、描述、标签过滤任务
 - Use priority buttons (High/Medium/Low) to quickly filter / 使用高/中/低优先级按钮快速筛选
@@ -100,6 +102,7 @@ More details / 更多说明：
 ### HUD Config / HUD 配置
 - Open the todo GUI with **K**, then click the top-right **Config** button to open the config screen / 按 **K** 打开待办界面，点击右上角的 **配置** 按钮进入配置界面
 - Configure HUD width, max height, todo/done limits (0–30), default expanded state, whether to show when empty, default list view, list project source and opacity / 可配置HUD宽度、最大高度、待办/已办显示条数（0–30）、默认展开、无任务时是否显示、默认列表视图、列表项目来源与透明度
+- **Real-time View Sync** - The HUD task list automatically syncs with the current view filter in the main GUI (e.g., Personal/Team views, Priority filters) / **实时视图同步** - HUD 任务列表会根据主界面的当前视图过滤项（如个人/团队视图、优先级筛选）实时同步显示内容
 - In true single-player worlds, the HUD default list view is locked to **Personal** and cannot be changed; HUD team views are hidden / 在真正的单人世界中，HUD默认列表视图固定为**个人**且不可修改，同时HUD中不显示团队视图
 - Drag the HUD preview rectangle to set a custom position; changes apply after clicking **Save & Apply** / 在配置界面中拖动HUD预览矩形设置自定义位置，点击**保存并应用**后生效
 - If you use Mod Menu, you can also open this config screen from the mod’s entry / 如果安装了 Mod Menu，也可以从 Mod Menu 中打开该配置界面
