@@ -45,20 +45,3 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(commonMainOutput)
 }
-
-val clientModsDir = file("E:/MC/cloudSave/mc-mss/version/.minecraft/versions/1.20.1-Fabric 0.15.11/mods")
-val serverModsDir = file("E:/MC/server/fabric-0.15.11-server/mods")
-
-tasks.register<Copy>("copyToClientMods") {
-    from(layout.buildDirectory.dir("libs"))
-    include("*.jar")
-    exclude("*-sources.jar")
-    into(clientModsDir)
-}
-
-tasks.register<Copy>("copyToServerMods") {
-    from(layout.buildDirectory.dir("libs"))
-    include("*.jar")
-    exclude("*-sources.jar")
-    into(serverModsDir)
-}
