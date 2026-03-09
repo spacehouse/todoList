@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   pull_request:
     branches:
-      - main
+      - 1.20.1
   push:
     branches:
-      - main
+      - 1.20.1
 
 jobs:
   precheck:

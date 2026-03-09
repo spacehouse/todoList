@@ -1,4 +1,4 @@
-name: Publish Mod
+name: release
 
 on:
   push:
