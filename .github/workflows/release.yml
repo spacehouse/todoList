@@ -34,27 +34,46 @@ jobs:
         # 它会自动根据当前的 tag 名在 CHANGELOG 中寻找对应部分
 
       # 第二步：一键推送到三大平台
-      - name: Publish to Multiple Platforms
+      # --- 1：专门发布 Fabric 版本 ---
+      - name: Publish Fabric Version
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          # --- 通用配置 ---
-          name: "TodoList-${{ github.ref_name }}-release" # 使用 tag 名作为标题
-          version: "${{ github.ref_name }}"
+          name: "TodoList-${{ github.ref_name }}-Fabric"
+          version: "${{ github.ref_name }}-fabric" # 加上后缀防止 Modrinth 版本号冲突
           changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
           
-          # --- GitHub Release ---
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-tag: ${{ github.ref_name }}
-          files: build/libs/!(*-dev|*-sources|*-javadoc).jar # 排除非运行用的 jar
-
-          # --- CurseForge ---
-          curseforge-id: 1476043 # 你的 CurseForge 项目 ID
+          files: build/libs/*fabric*!(*-dev|*-sources|*-javadoc).jar
+          
+          curseforge-id: 1476043
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           
-          # --- Modrinth ---
-          modrinth-id: RcGBxDyt # 你的 Modrinth 项目 ID
+          modrinth-id: RcGBxDyt
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           
-          # --- 游戏兼容性 (重要) ---
-          game-versions: |
-            1.20.1
+          # 明确指定这是 Fabric
+          loaders: fabric
+          game-versions: 1.20.1
+
+      # --- 2：专门发布 Forge 版本 ---
+      - name: Publish Forge Version
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          name: "TodoList-${{ github.ref_name }}-Forge"
+          version: "${{ github.ref_name }}-forge" # 加上后缀防止 Modrinth 版本号冲突
+          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
+          
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ github.ref_name }}
+          files: build/libs/*forge*!(*-dev|*-sources|*-javadoc).jar
+          
+          curseforge-id: 1476043
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          
+          modrinth-id: RcGBxDyt
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          
+          # 明确指定这是 Forge
+          loaders: forge
+          game-versions: 1.20.1
