@@ -1,0 +1,63 @@
+name: Publish Mod
+
+on:
+  push:
+    tags:
+      - 'v*' # 只有推送 v1.0.0 这种格式的 tag 时才触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 赋予创建 Release 的权限
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17' # 根据你的模组版本调整
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4   # 缓存
+
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+
+      # 第一步：提取 CHANGELOG.md 中对应当前版本的更新内容
+      - name: Extract Release Notes
+        id: extract_changelog
+        uses: ffurrer2/extract-release-notes@v2
+        # 它会自动根据当前的 tag 名在 CHANGELOG 中寻找对应部分
+
+      # 第二步：一键推送到三大平台
+      - name: Publish to Multiple Platforms
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          # --- 通用配置 ---
+          name: "TodoList-${{ github.ref_name }}-release" # 使用 tag 名作为标题
+          version: "${{ github.ref_name }}"
+          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
+          
+          # --- GitHub Release ---
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ github.ref_name }}
+          files: build/libs/!(*-dev|*-sources|*-javadoc).jar # 排除非运行用的 jar
+
+          # --- CurseForge ---
+          curseforge-id: 1476043 # 你的 CurseForge 项目 ID
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          
+          # --- Modrinth ---
+          modrinth-id: RcGBxDyt # 你的 Modrinth 项目 ID
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          
+          # --- 游戏兼容性 (重要) ---
+          loaders: |
+            fabric
+            forge
+          game-versions: |
+            1.20.1

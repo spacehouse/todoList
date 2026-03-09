@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "todolist",
   "version": "${version}",
-  "name": "TodoList",
-  "description": "A simple and powerful todo list mod for Minecraft",
+  "name": "todolist.name",
+  "description": "todolist.description",
   "icon": "assets/todolist/icon.png",
   "authors": [
     "spacehouse"
   ],
   "contact": {
-    "homepage": "https://github.com/spacehouse",
+    "homepage": "https://github.com/spacehouse/todoList",
     "sources": "https://github.com/spacehouse/todoList",
     "issues": "https://github.com/spacehouse/todoList/issues"
   },
@@ -31,10 +31,10 @@
   ],
   "accessWidener": "todolist.accesswidener",
   "depends": {
-    "fabricloader": ">=0.14.21",
-    "minecraft": "~1.20.1",
+    "fabricloader": ">=0.15.0",
+    "minecraft": "1.20.1",
     "java": ">=17",
-    "fabric-api": ">=0.86.1+1.20.1"
+    "fabric-api": "*"
   },
   "suggests": {
     "modmenu": ">=7.0.0"

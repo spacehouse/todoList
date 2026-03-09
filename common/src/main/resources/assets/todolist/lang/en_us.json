@@ -1,10 +1,12 @@
 {
+  "todolist.name": "TeamTasks: TodoList",
+  "todolist.description": "A simple and powerful todo list mod for Minecraft, supporting both single-player and multiplayer.",
   "key.todolist.open": "Open Todo List",
   "key.todolist.togglehud": "Toggle HUD",
-  "category.todolist": "Todo List",
+  "category.todolist": "TodoList",
 
-  "gui.todolist.title": "Todo List",
-  "gui.todolist.title.unsaved": "Todo List - Unsaved*",
+  "gui.todolist.title": "TodoList",
+  "gui.todolist.title.unsaved": "TodoList - Unsaved*",
   "gui.todolist.add": "Add",
   "gui.todolist.edit": "Edit",
   "gui.todolist.delete": "Delete",

@@ -44,7 +44,7 @@ tasks.register<Copy>("distReleaseJars") {
 
     dependsOn(":fabric:build", ":forge:build")
 
-    into(layout.buildDirectory.dir("dist"))
+    into(layout.buildDirectory.dir("libs"))
 
     from(project(":fabric").layout.buildDirectory.dir("libs")) {
         include("todolist-fabric-*.jar")
@@ -54,4 +54,14 @@ tasks.register<Copy>("distReleaseJars") {
         include("todolist-forge-*.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
+}
+
+// 注册根目录 build 任务，并让其触发 distReleaseJars
+tasks.register("build") {
+    dependsOn("distReleaseJars")
+}
+
+// 注册 clean 任务，用于清理根目录 build 文件夹
+tasks.register<Delete>("clean") {
+    delete(layout.buildDirectory)
 }

@@ -6,17 +6,15 @@ license = "MIT"
 modId = "todolist"
 version = "${version}"
 displayTest = "IGNORE_SERVER_VERSION"
-displayName = "TodoList"
+displayName = "todolist.name"
 logoFile = "assets/todolist/icon.png"
 authors = "spacehouse"
-description = '''
-A simple and powerful todo list mod for Minecraft
-'''
+description = "todolist.description"
 
 [[dependencies.todolist]]
 modId = "forge"
 mandatory = true
-versionRange = "[47.2.0,)"
+versionRange = "[47,)"
 ordering = "NONE"
 side = "BOTH"
 
