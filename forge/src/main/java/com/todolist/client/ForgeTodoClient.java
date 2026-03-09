@@ -172,31 +172,9 @@ public final class ForgeTodoClient {
         if (hudRenderer == null || !ModConfig.getInstance().isEnableHud()) {
             return;
         }
-        try {
-            GuiGraphics context;
-            Object contextObj = invokeNoArg(event, "getGuiGraphics");
-            if (contextObj instanceof GuiGraphics direct) {
-                context = direct;
-            } else {
-                contextObj = invokeNoArg(event, "getDrawContext");
-                if (!(contextObj instanceof GuiGraphics fallback)) {
-                    return;
-                }
-                context = fallback;
-            }
-            float tickDelta = 0.0f;
-            Object delta = invokeNoArg(event, "getPartialTick");
-            if (delta instanceof Number number) {
-                tickDelta = number.floatValue();
-            }
-            hudRenderer.render(context, tickDelta);
-        } catch (Exception e) {
-            TodoListForge.LOGGER.debug("Forge HUD render hook ignored: {}", e.getMessage());
+        if (event instanceof net.minecraftforge.client.event.RenderGuiOverlayEvent.Post postEvent) {
+            hudRenderer.render(postEvent.getGuiGraphics(), postEvent.getPartialTick());
         }
-    }
-
-    private static Object invokeNoArg(Object target, String methodName) throws Exception {
-        return target.getClass().getMethod(methodName).invoke(target);
     }
 
     private static void openTodoScreen(Minecraft current) {
