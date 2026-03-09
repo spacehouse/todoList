@@ -63,5 +63,3 @@ local.properties
 
 # Trae
 .trae/
-
-build-with-java17.bat
