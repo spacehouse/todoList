@@ -56,8 +56,5 @@ jobs:
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           
           # --- 游戏兼容性 (重要) ---
-          loaders: |
-            fabric
-            forge
           game-versions: |
             1.20.1
