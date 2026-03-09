@@ -13,9 +13,9 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -173,6 +173,9 @@ public final class ForgeTodoClient {
             return;
         }
         if (event instanceof net.minecraftforge.client.event.RenderGuiOverlayEvent.Post postEvent) {
+            if (!postEvent.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
+                return;
+            }
             hudRenderer.render(postEvent.getGuiGraphics(), postEvent.getPartialTick());
         }
     }

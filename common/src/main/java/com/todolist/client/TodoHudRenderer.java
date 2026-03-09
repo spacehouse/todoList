@@ -38,6 +38,21 @@ public class TodoHudRenderer {
     private List<Task> cachedPersonalTasks = new ArrayList<>();
     private List<Task> cachedTeamTasks = new ArrayList<>();
 
+    // 缓存常用组件
+    private static final Component PRIORITY_HIGH_ICON = Component.translatable("hud.todolist.priority.high.icon").withStyle(ChatFormatting.RED);
+    private static final Component PRIORITY_MEDIUM_ICON = Component.translatable("hud.todolist.priority.medium.icon").withStyle(ChatFormatting.GOLD);
+    private static final Component PRIORITY_LOW_ICON = Component.translatable("hud.todolist.priority.low.icon").withStyle(ChatFormatting.GREEN);
+    private static final Component CHECKBOX_CHECKED = Component.literal("☑").withStyle(ChatFormatting.DARK_GREEN);
+    private static final Component CHECKBOX_UNCHECKED = Component.literal("☐").withStyle(ChatFormatting.WHITE);
+    private static final Component SEPARATOR_COMPLETED = Component.translatable("hud.todolist.separator.completed");
+    private static final Component ELLIPSIS = Component.literal("...");
+    
+    // 缓存视图标签
+    private static final Component LABEL_TEAM_UNASSIGNED = Component.translatable("hud.todolist.view_label.team_unassigned");
+    private static final Component LABEL_TEAM_ALL = Component.translatable("hud.todolist.view_label.team_all");
+    private static final Component LABEL_TEAM_ASSIGNED = Component.translatable("hud.todolist.view_label.team_assigned");
+    private static final Component LABEL_PERSONAL = Component.translatable("hud.todolist.view_label.personal");
+
     /**
      * 创建 HUD 渲染器，并按配置初始化展开状态。
      * @param client Minecraft 客户端实例
@@ -291,10 +306,10 @@ public class TodoHudRenderer {
      */
     private Component getViewLabel(HudViewMode viewMode) {
         return switch (viewMode) {
-            case TEAM_UNASSIGNED -> Component.translatable("hud.todolist.view_label.team_unassigned");
-            case TEAM_ALL -> Component.translatable("hud.todolist.view_label.team_all");
-            case TEAM_ASSIGNED -> Component.translatable("hud.todolist.view_label.team_assigned");
-            case PERSONAL -> Component.translatable("hud.todolist.view_label.personal");
+            case TEAM_UNASSIGNED -> LABEL_TEAM_UNASSIGNED;
+            case TEAM_ALL -> LABEL_TEAM_ALL;
+            case TEAM_ASSIGNED -> LABEL_TEAM_ASSIGNED;
+            case PERSONAL -> LABEL_PERSONAL;
         };
     }
 
@@ -351,7 +366,7 @@ public class TodoHudRenderer {
 
         if (shownDone > 0) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, Component.translatable("hud.todolist.separator.completed"), x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
+            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
             currentY += rowHeight;
             for (int i = 0; i < shownDone; i++) {
                 drawTaskRow(context, x, currentY, width, rowHeight, opacity, done.get(i));
@@ -374,16 +389,13 @@ public class TodoHudRenderer {
      * @param task 待绘制任务
      */
     private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, float opacity, Task task) {
-        String priorityKey = switch (task.getPriority()) {
-            case HIGH -> "hud.todolist.priority.high.icon";
-            case MEDIUM -> "hud.todolist.priority.medium.icon";
-            case LOW -> "hud.todolist.priority.low.icon";
+        Component priorityText = switch (task.getPriority()) {
+            case HIGH -> PRIORITY_HIGH_ICON;
+            case MEDIUM -> PRIORITY_MEDIUM_ICON;
+            case LOW -> PRIORITY_LOW_ICON;
         };
-        ChatFormatting priorityColor = switch (task.getPriority()) {
-            case HIGH -> ChatFormatting.RED;
-            case MEDIUM -> ChatFormatting.GOLD;
-            case LOW -> ChatFormatting.GREEN;
-        };
+
+        Component checkboxText = task.isCompleted() ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED;
 
         int paddingX = 4;
         int rowLeft = x + paddingX;
@@ -396,9 +408,6 @@ public class TodoHudRenderer {
         int textY = y + (rowHeight - client.font.lineHeight) / 2;
         int spaceWidth = client.font.width(" ");
         int textColor = applyOpacityToColor(0xFFFFFF, opacity);
-
-        Component priorityText = Component.translatable(priorityKey).withStyle(priorityColor);
-        Component checkboxText = Component.literal(task.isCompleted() ? "☑" : "☐").withStyle(task.isCompleted() ? ChatFormatting.DARK_GREEN : ChatFormatting.WHITE);
 
         int cursorX = rowLeft;
         context.drawString(client.font, priorityText, cursorX, textY, textColor);
@@ -490,7 +499,7 @@ public class TodoHudRenderer {
         if (client.font.width(text) <= maxWidth) {
             return text;
         }
-        int ellipsisWidth = client.font.width("...");
+        int ellipsisWidth = client.font.width(ELLIPSIS);
         int coreWidth = maxWidth - ellipsisWidth;
         if (coreWidth <= 0) {
             return "...";
