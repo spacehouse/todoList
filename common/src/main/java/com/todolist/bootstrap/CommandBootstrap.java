@@ -89,6 +89,12 @@ public final class CommandBootstrap {
     }
 
     private static final long CLEAR_CONFIRM_WINDOW_MILLIS = 15_000L;
+    private static final List<String> TASK_LIST_STATUS_SUGGESTIONS = List.of(
+            "incomplete", "completed"
+    );
+    private static final List<String> TASK_LIST_PRIORITY_SUGGESTIONS = List.of(
+            "all", "low", "medium", "high"
+    );
     private static final ConcurrentHashMap<String, Long> pendingTaskClearConfirmMap = new ConcurrentHashMap<>();
 
     /**
@@ -119,6 +125,7 @@ public final class CommandBootstrap {
                         .then(Commands.literal("list")
                                 .executes(ctx -> sendTaskList(ctx.getSource(), "all", "all", null))
                                 .then(Commands.argument("status", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestTaskListStatuses)
                                         .executes(ctx -> sendTaskList(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "status"),
@@ -126,6 +133,7 @@ public final class CommandBootstrap {
                                                 null
                                         ))
                                         .then(Commands.argument("priority", StringArgumentType.word())
+                                                .suggests(CommandBootstrap::suggestTaskListPriorities)
                                                 .executes(ctx -> sendTaskList(
                                                         ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "status"),
@@ -283,6 +291,7 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_help",
                 "command.todolist.help.todo_task",
                 "command.todolist.help.todo_task_list",
+                "command.todolist.help.todo_task_list_options",
                 "command.todolist.help.todo_task_add",
                 "command.todolist.help.todo_task_addp",
                 "command.todolist.help.todo_task_clear",
@@ -485,21 +494,21 @@ public final class CommandBootstrap {
     }
 
     private static boolean matchesTaskStatus(Task task, String status) {
-        String normalizedStatus = status == null ? "all" : status.toLowerCase(Locale.ROOT);
+        String normalizedStatus = normalizeTaskListStatus(status);
         if ("all".equals(normalizedStatus)) {
             return true;
         }
-        if ("todo".equals(normalizedStatus) || "incomplete".equals(normalizedStatus)) {
+        if ("incomplete".equals(normalizedStatus)) {
             return !task.isCompleted();
         }
-        if ("done".equals(normalizedStatus) || "completed".equals(normalizedStatus)) {
+        if ("completed".equals(normalizedStatus)) {
             return task.isCompleted();
         }
         return false;
     }
 
     private static boolean matchesTaskPriority(Task task, String priority) {
-        String normalizedPriority = priority == null ? "all" : priority.toLowerCase(Locale.ROOT);
+        String normalizedPriority = normalizeTaskListPriority(priority);
         if ("all".equals(normalizedPriority)) {
             return true;
         }
@@ -508,6 +517,31 @@ public final class CommandBootstrap {
             case "medium" -> task.getPriority() == Task.Priority.MEDIUM;
             case "high" -> task.getPriority() == Task.Priority.HIGH;
             default -> false;
+        };
+    }
+
+    private static String normalizeTaskListStatus(String status) {
+        if (status == null) {
+            return "all";
+        }
+        return switch (status.toLowerCase(Locale.ROOT)) {
+            case "all" -> "all";
+            case "incomplete" -> "incomplete";
+            case "completed" -> "completed";
+            default -> "";
+        };
+    }
+
+    private static String normalizeTaskListPriority(String priority) {
+        if (priority == null) {
+            return "all";
+        }
+        return switch (priority.toLowerCase(Locale.ROOT)) {
+            case "all" -> "all";
+            case "low" -> "low";
+            case "medium" -> "medium";
+            case "high" -> "high";
+            default -> "";
         };
     }
 
@@ -1075,6 +1109,24 @@ public final class CommandBootstrap {
     /**
      * 解析玩家在指定项目中的权限角色（与项目权限中心角色模型对齐）。
      */
+    private static CompletableFuture<Suggestions> suggestTaskListStatuses(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(TASK_LIST_STATUS_SUGGESTIONS, builder);
+    }
+
+    private static CompletableFuture<Suggestions> suggestTaskListPriorities(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(TASK_LIST_PRIORITY_SUGGESTIONS, builder);
+    }
+
+    private static CompletableFuture<Suggestions> suggestWords(List<String> suggestions, SuggestionsBuilder builder) {
+        String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
+        for (String suggestion : suggestions) {
+            if (suggestion.toLowerCase(Locale.ROOT).startsWith(remaining)) {
+                builder.suggest(suggestion);
+            }
+        }
+        return builder.buildFuture();
+    }
+
     private static Role resolveProjectRole(ServerPlayer player, Project project) {
         if (player == null) {
             return Role.MEMBER;

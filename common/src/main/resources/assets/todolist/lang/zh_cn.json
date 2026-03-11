@@ -178,6 +178,7 @@
   "command.todolist.help.todo_help": "/todo help",
   "command.todolist.help.todo_task": "/todo task",
   "command.todolist.help.todo_task_list": "/todo task list [状态] [优先级] [文本]",
+  "command.todolist.help.todo_task_list_options": "  状态取值：incomplete/completed；优先级取值：all/low/medium/high",
   "command.todolist.help.todo_task_add": "/todo task add <标题> [描述] [标签(逗号分隔)]",
   "command.todolist.help.todo_task_addp": "/todo task addp <项目ID> <标题> [描述] [标签(逗号分隔)]",
   "command.todolist.help.todo_task_clear": "/todo task clear",

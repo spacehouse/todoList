@@ -177,6 +177,7 @@
   "command.todolist.help.todo_help": "/todo help",
   "command.todolist.help.todo_task": "/todo task",
   "command.todolist.help.todo_task_list": "/todo task list [status] [priority] [text]",
+  "command.todolist.help.todo_task_list_options": "  status: incomplete/completed; priority: all/low/medium/high",
   "command.todolist.help.todo_task_add": "/todo task add <title> [description] [tags(comma-separated)]",
   "command.todolist.help.todo_task_addp": "/todo task addp <projectId> <title> [description] [tags(comma-separated)]",
   "command.todolist.help.todo_task_clear": "/todo task clear",
