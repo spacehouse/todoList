@@ -3,6 +3,7 @@ package com.todolist.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.todolist.TodoConstants;
+import com.todolist.client.ClientBridge;
 import com.todolist.platform.DataPathProvider;
 
 import java.io.File;
@@ -591,6 +592,7 @@ public class ModConfig {
             gui.hudStarredProjectIds.add(projectId);
         }
         save();
+        ClientBridge.ops().sendHudStarredProjectIds(getHudStarredProjectIds());
     }
 
     public int getProjectSidebarWidth() { return gui.projectSidebarWidth; }

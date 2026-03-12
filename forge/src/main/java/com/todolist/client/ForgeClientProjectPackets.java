@@ -48,6 +48,10 @@ public final class ForgeClientProjectPackets {
                 handleSyncProjects(projects);
             });
         });
+        ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
+            boolean visible = buf.readBoolean();
+            client.execute(() -> ClientBridge.ops().setHudVisible(visible));
+        });
     }
 
     /**
@@ -204,6 +208,19 @@ public final class ForgeClientProjectPackets {
             buf.writeUtf(projectId);
         }
         ForgeNetworkBridge.sendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
+    }
+
+    public static void sendSetHudStarredProjectIds(List<String> projectIds) {
+        if (!ForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        List<String> ids = projectIds == null ? List.of() : projectIds;
+        buf.writeInt(ids.size());
+        for (String projectId : ids) {
+            buf.writeUtf(projectId == null ? "" : projectId);
+        }
+        ForgeNetworkBridge.sendToServer(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf);
     }
 
     /**

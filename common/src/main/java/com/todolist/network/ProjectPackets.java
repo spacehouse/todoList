@@ -45,8 +45,12 @@ public class ProjectPackets {
     public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_join_project");
     public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_sync_projects");
     public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
+    public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
+    public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, List<String>> playerHudStarredProjectIdsMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Boolean> playerHudVisibilityMap = new ConcurrentHashMap<>();
 
     public static void setServerPacketSender(TaskPackets.ServerPacketSender sender) {
         serverPacketSender = sender == null ? (player, channelId, buf) -> { } : sender;
@@ -144,7 +148,7 @@ public class ProjectPackets {
             PacketGuards.logDrop(REQUEST_JOIN_PROJECT_ID.toString(), ex);
             return;
         }
-        server.execute(() -> handleRequestJoinProject(server, player, projectId));
+        server.execute(() -> requestJoinProject(server, player, projectId));
     }
 
     /**
@@ -152,6 +156,25 @@ public class ProjectPackets {
      */
     public static void onRequestSyncProjectsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         server.execute(() -> syncProjectsToPlayer(player));
+    }
+
+    public static void onSetHudStarredProjectIdsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        List<String> projectIds = new ArrayList<>();
+        try {
+            int count = PacketGuards.readBoundedCount(buf, PacketGuards.MAX_PROJECT_LIST_SIZE, "projectIds");
+            for (int i = 0; i < count; i++) {
+                projectIds.add(PacketGuards.readString(buf, "projectId"));
+            }
+        } catch (IllegalArgumentException ex) {
+            PacketGuards.logDrop(SET_HUD_STARRED_PROJECT_IDS_ID.toString(), ex);
+            return;
+        }
+        server.execute(() -> {
+            if (player == null) {
+                return;
+            }
+            playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizeProjectIds(projectIds));
+        });
     }
 
     /**
@@ -193,11 +216,35 @@ public class ProjectPackets {
         return playerActiveProjectIdMap.get(player.getStringUUID());
     }
 
+    public static List<String> getHudStarredProjectIds(ServerPlayer player) {
+        if (player == null) {
+            return List.of();
+        }
+        List<String> ids = playerHudStarredProjectIdsMap.get(player.getStringUUID());
+        return ids == null ? List.of() : new ArrayList<>(ids);
+    }
+
+    public static boolean isHudVisible(ServerPlayer player) {
+        if (player == null) {
+            return true;
+        }
+        return playerHudVisibilityMap.getOrDefault(player.getStringUUID(), true);
+    }
+
+    public static void setHudVisible(ServerPlayer player, boolean visible) {
+        if (player == null) {
+            return;
+        }
+        playerHudVisibilityMap.put(player.getStringUUID(), visible);
+        syncHudVisibilityToPlayer(player, visible);
+    }
+
     public static void onPlayerJoin(MinecraftServer server, ServerPlayer player) {
         server.execute(() -> {
             ensureDefaultTeamProjectOwner(server, player);
             cachePlayerNameForTeamProjects(server, player);
             syncProjectsToPlayer(player);
+            syncHudVisibilityToPlayer(player, isHudVisible(player));
         });
     }
 
@@ -550,7 +597,7 @@ public class ProjectPackets {
         broadcastProjects(server);
     }
 
-    private static void handleRequestJoinProject(MinecraftServer server, ServerPlayer player, String projectId) {
+    public static void requestJoinProject(MinecraftServer server, ServerPlayer player, String projectId) {
         if (server == null || player == null || projectId == null || projectId.isEmpty()) {
             return;
         }
@@ -761,6 +808,33 @@ public class ProjectPackets {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             syncProjectsToPlayer(player);
         }
+    }
+
+    private static List<String> sanitizeProjectIds(List<String> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> sanitized = new ArrayList<>();
+        for (String projectId : projectIds) {
+            if (projectId == null) {
+                continue;
+            }
+            String trimmed = projectId.trim();
+            if (trimmed.isEmpty() || sanitized.contains(trimmed)) {
+                continue;
+            }
+            sanitized.add(trimmed);
+        }
+        return sanitized;
+    }
+
+    private static void syncHudVisibilityToPlayer(ServerPlayer player, boolean visible) {
+        if (player == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeBoolean(visible);
+        serverPacketSender.send(player, SYNC_HUD_VISIBILITY_ID, buf);
     }
 
     // Helper methods

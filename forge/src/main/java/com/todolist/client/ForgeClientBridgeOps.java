@@ -37,6 +37,15 @@ public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
     public void sendSetActiveProjectId(String projectId) {
         ForgeClientProjectPackets.sendSetActiveProjectId(projectId);
     }
+    @Override
+    public boolean isHudVisible() {
+        return ForgeTodoClient.isHudVisible();
+    }
+
+    @Override
+    public void setHudVisible(boolean visible) {
+        ForgeTodoClient.setHudVisible(visible);
+    }
 
     @Override
     public void sendUpdateTask(Task task) {
@@ -61,6 +70,10 @@ public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
     @Override
     public void sendRequestJoinProject(String projectId) {
         ForgeClientProjectPackets.sendRequestJoinProject(projectId);
+    }
+    @Override
+    public void sendHudStarredProjectIds(List<String> projectIds) {
+        ForgeClientProjectPackets.sendSetHudStarredProjectIds(projectIds);
     }
 
     @Override

@@ -36,6 +36,7 @@ public class TodoClient implements ClientModInitializer {
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
     private static String activeProjectId;
+    private static boolean hudVisible = true;
     private static boolean lastConnectionWasRemote;
 
     /**
@@ -54,9 +55,7 @@ public class TodoClient implements ClientModInitializer {
 
         // Register HUD renderer (Phase 2 feature)
         try {
-            if (ModConfig.getInstance().isEnableHud()) {
-                registerHudRenderer();
-            }
+            registerHudRenderer();
         } catch (Exception e) {
             TodoListMod.LOGGER.warn("Failed to initialize HUD renderer", e);
         }
@@ -112,7 +111,7 @@ public class TodoClient implements ClientModInitializer {
         ClientPlatformAdapter.setHudRendererSupplier(() -> hudRenderer);
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
-            if (ModConfig.getInstance().isEnableHud() && client.player != null) {
+            if (client.player != null) {
                 hudRenderer.render(drawContext, tickDelta);
             }
         });
@@ -131,10 +130,12 @@ public class TodoClient implements ClientModInitializer {
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);
                 teamTaskManager.clearAll();
+                hudVisible = true;
                 if (!localServer) {
                     ClientProjectPackets.sendRequestSyncProjects();
                     ClientTaskPackets.requestTeamSync();
                 }
+                ClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             });
             lastConnectionWasRemote = !localServer;
             TodoListMod.LOGGER.info("Joined server, requesting task sync...");
@@ -149,6 +150,7 @@ public class TodoClient implements ClientModInitializer {
                 DataPathProvider.resetStorageNamespace();
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);
+                hudVisible = true;
                 teamTaskManager.clearAll();
             });
         });
@@ -210,6 +212,13 @@ public class TodoClient implements ClientModInitializer {
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
+    }
+    public static boolean isHudVisible() {
+        return hudVisible;
+    }
+
+    public static void setHudVisible(boolean visible) {
+        hudVisible = visible;
     }
 
     /**

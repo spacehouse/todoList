@@ -71,7 +71,7 @@ public class TodoHudRenderer {
         if (client.options.hideGui) return;
 
         ModConfig config = ModConfig.getInstance();
-        if (!config.isEnableHud()) return;
+        if (!config.isEnableHud() || !ClientBridge.ops().isHudVisible()) return;
 
         HudViewMode viewMode = resolveViewMode(config);
         Project.Scope scope = getScopeByView(viewMode);

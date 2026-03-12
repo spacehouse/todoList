@@ -34,6 +34,8 @@ public final class ForgeProjectPacketRegistrar {
                 ProjectPackets.onRequestSyncProjectsPacket(server, player, buf));
         ForgeNetworkBridge.registerServerReceiver(ProjectPackets.SET_ACTIVE_PROJECT_ID, (server, player, handler, buf, responseSender) ->
                 ProjectPackets.onSetActiveProjectPacket(server, player, buf));
+        ForgeNetworkBridge.registerServerReceiver(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, (server, player, handler, buf, responseSender) ->
+                ProjectPackets.onSetHudStarredProjectIdsPacket(server, player, buf));
 
         ForgeNetworkBridge.registerJoinListener((player, sender, server) ->
                 ProjectPackets.onPlayerJoin(server, player));

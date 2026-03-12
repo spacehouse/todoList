@@ -40,6 +40,10 @@ public final class ClientBridge {
          */
         void sendSetActiveProjectId(String projectId);
 
+        boolean isHudVisible();
+
+        void setHudVisible(boolean visible);
+
         /**
          * 发送单条任务更新到服务端。
          */
@@ -64,6 +68,8 @@ public final class ClientBridge {
          * 发送加入指定项目的申请。
          */
         void sendRequestJoinProject(String projectId);
+
+        void sendHudStarredProjectIds(List<String> projectIds);
 
         /**
          * 请求删除指定项目。
@@ -104,6 +110,7 @@ public final class ClientBridge {
     private static final ClientOps NO_OPS = new ClientOps() {
         private final TaskManager teamTaskManager = new TaskManager();
         private String activeProjectId;
+        private boolean hudVisible = true;
 
         @Override
         public TaskManager getTeamTaskManager() {
@@ -127,6 +134,20 @@ public final class ClientBridge {
 
         @Override
         public void sendSetActiveProjectId(String projectId) {
+        }
+
+        @Override
+        public boolean isHudVisible() {
+            return hudVisible;
+        }
+
+        @Override
+        public void setHudVisible(boolean visible) {
+            hudVisible = visible;
+        }
+
+        @Override
+        public void sendHudStarredProjectIds(List<String> projectIds) {
         }
 
         @Override

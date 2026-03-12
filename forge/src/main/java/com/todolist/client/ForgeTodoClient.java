@@ -30,6 +30,7 @@ public final class ForgeTodoClient {
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
     private static String activeProjectId;
+    private static boolean hudVisible = true;
     private static boolean keyKPressed;
     private static boolean keyHPressed;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
@@ -47,9 +48,7 @@ public final class ForgeTodoClient {
         registerConfigScreenFactory();
         ClientBridge.setOps(new ForgeClientBridgeOps());
         try {
-            if (ModConfig.getInstance().isEnableHud()) {
-                registerHudRenderer();
-            }
+            registerHudRenderer();
         } catch (Exception e) {
             TodoListForge.LOGGER.warn("Failed to initialize Forge HUD renderer", e);
         }
@@ -106,6 +105,7 @@ public final class ForgeTodoClient {
                 ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
                 ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             ForgeClientProjectPackets.sendRequestSyncProjects();
+            ForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             ForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
@@ -165,11 +165,12 @@ public final class ForgeTodoClient {
         lastAppliedStorageNamespace = namespace;
         TodoListCommon.reloadProjectsFromStorage();
         setActiveProjectId(null);
+        hudVisible = true;
         teamTaskManager.clearAll();
     }
 
     private static void onGuiOverlayPostEvent(Object event) {
-        if (hudRenderer == null || !ModConfig.getInstance().isEnableHud()) {
+        if (hudRenderer == null) {
             return;
         }
         if (event instanceof net.minecraftforge.client.event.RenderGuiOverlayEvent.Post postEvent) {
@@ -211,6 +212,13 @@ public final class ForgeTodoClient {
 
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
+    }
+    public static boolean isHudVisible() {
+        return hudVisible;
+    }
+
+    public static void setHudVisible(boolean visible) {
+        hudVisible = visible;
     }
 
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {

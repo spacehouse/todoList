@@ -62,6 +62,15 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
     public void sendSetActiveProjectId(String projectId) {
         ClientProjectPackets.sendSetActiveProjectId(projectId);
     }
+    @Override
+    public boolean isHudVisible() {
+        return TodoClient.isHudVisible();
+    }
+
+    @Override
+    public void setHudVisible(boolean visible) {
+        TodoClient.setHudVisible(visible);
+    }
 
     /**
      * 发送更新任务请求（个人任务）。
@@ -109,6 +118,10 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
     @Override
     public void sendRequestJoinProject(String projectId) {
         ClientProjectPackets.sendRequestJoinProject(projectId);
+    }
+    @Override
+    public void sendHudStarredProjectIds(List<String> projectIds) {
+        ClientProjectPackets.sendSetHudStarredProjectIds(projectIds);
     }
 
     /**
