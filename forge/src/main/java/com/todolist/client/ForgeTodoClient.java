@@ -34,6 +34,7 @@ public final class ForgeTodoClient {
     private static boolean hudVisible = true;
     private static boolean keyKPressed;
     private static boolean keyHPressed;
+    private static boolean keyJPressed;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
 
@@ -94,6 +95,7 @@ public final class ForgeTodoClient {
         if (current == null) {
             keyKPressed = false;
             keyHPressed = false;
+            keyJPressed = false;
             return;
         }
         if (current.getConnection() == null) {
@@ -113,19 +115,25 @@ public final class ForgeTodoClient {
         if (current.player == null) {
             keyKPressed = false;
             keyHPressed = false;
+            keyJPressed = false;
             return;
         }
         long handle = current.getWindow().getWindow();
         boolean nowK = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_K);
         boolean nowH = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_H);
+        boolean nowJ = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_J);
         if (nowK && !keyKPressed) {
             openTodoScreen(current);
         }
         if (nowH && !keyHPressed) {
             toggleHud();
         }
+        if (nowJ && !keyJPressed) {
+            toggleHudVisibility();
+        }
         keyKPressed = nowK;
         keyHPressed = nowH;
+        keyJPressed = nowJ;
     }
 
     private static void onClientLoggingOutEvent(Object ignored) {
@@ -213,6 +221,11 @@ public final class ForgeTodoClient {
         if (hudRenderer != null) {
             hudRenderer.toggleExpanded();
         }
+    }
+
+    private static void toggleHudVisibility() {
+        boolean nextVisible = !ClientBridge.ops().isHudVisible();
+        ClientBridge.ops().setHudVisible(nextVisible);
     }
 
     public static TaskManager getTeamTaskManager() {

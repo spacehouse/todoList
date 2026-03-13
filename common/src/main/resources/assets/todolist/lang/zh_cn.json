@@ -3,6 +3,7 @@
   "todolist.description": "一个简单而强大的 Minecraft 待办事项模组，支持单人和多人模式。",
   "key.todolist.open": "打开待办事项列表",
   "key.todolist.togglehud": "展开/收起HUD",
+  "key.todolist.togglehudvisibility": "切换HUD显示",
   "category.todolist": "待办列表",
   "gui.todolist.title": "待办事项列表",
   "gui.todolist.title.unsaved": "待办事项列表-未保存*",

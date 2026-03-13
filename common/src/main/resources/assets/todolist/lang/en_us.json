@@ -3,6 +3,7 @@
   "todolist.description": "A simple and powerful todo list mod for Minecraft, supporting both single-player and multiplayer.",
   "key.todolist.open": "Open Todo List",
   "key.todolist.togglehud": "Toggle HUD",
+  "key.todolist.togglehudvisibility": "Toggle HUD visibility",
   "category.todolist": "TodoList",
   "gui.todolist.title": "TodoList",
   "gui.todolist.title.unsaved": "TodoList - Unsaved*",

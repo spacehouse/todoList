@@ -28,7 +28,6 @@ public class ConfigScreen extends Screen {
     private IntSliderWidget hudTodoLimitSlider;
     private IntSliderWidget hudDoneLimitSlider;
     private DoubleStepSliderWidget hudOpacitySlider;
-    private Button hudExpandedButton;
     private Button hudShowWhenEmptyButton;
     private Button hudProjectSourceButton;
 
@@ -43,7 +42,6 @@ public class ConfigScreen extends Screen {
     private int dragOffsetX;
     private int dragOffsetY;
 
-    private boolean hudExpandedValue;
     private boolean hudShowWhenEmptyValue;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
@@ -96,20 +94,13 @@ public class ConfigScreen extends Screen {
         this.addRenderableWidget(hudDoneLimitSlider);
         row++;
 
-        // Row 3: Default Expanded | Show When Empty
-        hudExpandedValue = cfg.isHudDefaultExpanded();
+        // Row 3: Show When Empty
         hudShowWhenEmptyValue = cfg.isHudShowWhenEmpty();
-
-        hudExpandedButton = Button.builder(Component.empty(), b -> {
-            hudExpandedValue = !hudExpandedValue;
-            updateHudExpandedButtonLabel();
-        }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
-        this.addRenderableWidget(hudExpandedButton);
 
         hudShowWhenEmptyButton = Button.builder(Component.empty(), b -> {
             hudShowWhenEmptyValue = !hudShowWhenEmptyValue;
             updateHudShowWhenEmptyButtonLabel();
-        }).bounds(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
+        }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
         this.addRenderableWidget(hudShowWhenEmptyButton);
         row++;
 
@@ -159,7 +150,6 @@ public class ConfigScreen extends Screen {
         // Or maybe "HUD列表项目来源" implies view control? No, Project Source is distinct.
         // I will follow the user's explicit list.
 
-        updateHudExpandedButtonLabel();
         updateHudShowWhenEmptyButtonLabel();
 
         // Preview initialization
@@ -209,7 +199,6 @@ public class ConfigScreen extends Screen {
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_max_height"), hudMaxHeightField, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_todo_limit"), hudTodoLimitSlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_done_limit"), hudDoneLimitSlider, textH);
-        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_default_expanded"), hudExpandedButton, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_show_when_empty"), hudShowWhenEmptyButton, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textH);
@@ -296,7 +285,6 @@ public class ConfigScreen extends Screen {
         if (hudOpacitySlider != null) {
             cfg.setHudOpacity(hudOpacitySlider.getDoubleValue());
         }
-        cfg.setHudDefaultExpanded(hudExpandedValue);
         cfg.setHudUseCustomPosition(previewUseCustom);
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
@@ -314,13 +302,6 @@ public class ConfigScreen extends Screen {
             return Integer.parseInt(s.trim());
         } catch (Exception ignored) {
             return fallback;
-        }
-    }
-
-    private void updateHudExpandedButtonLabel() {
-        if (hudExpandedButton != null) {
-            String key = hudExpandedValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
-            hudExpandedButton.setMessage(Component.translatable(key));
         }
     }
 

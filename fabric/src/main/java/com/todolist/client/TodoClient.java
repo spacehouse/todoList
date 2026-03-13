@@ -33,6 +33,7 @@ import org.lwjgl.glfw.GLFW;
 public class TodoClient implements ClientModInitializer {
     private static KeyMapping openTodoKeyBinding;
     private static KeyMapping toggleHudKeyBinding;
+    private static KeyMapping toggleHudVisibilityKeyBinding;
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
@@ -90,6 +91,13 @@ public class TodoClient implements ClientModInitializer {
                 "category.todolist"
         ));
 
+        toggleHudVisibilityKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.todolist.togglehudvisibility",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_J,
+                "category.todolist"
+        ));
+
         // Register key press handler
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openTodoKeyBinding.consumeClick()) {
@@ -98,9 +106,12 @@ public class TodoClient implements ClientModInitializer {
             while (toggleHudKeyBinding.consumeClick()) {
                 toggleHud();
             }
+            while (toggleHudVisibilityKeyBinding.consumeClick()) {
+                toggleHudVisibility();
+            }
         });
 
-        TodoListMod.LOGGER.info("Registered key bindings: K key (open), H key (toggle HUD)");
+        TodoListMod.LOGGER.info("Registered key bindings: K key (open), H key (toggle HUD expanded), J key (toggle HUD visibility)");
     }
 
     /**
@@ -210,6 +221,11 @@ public class TodoClient implements ClientModInitializer {
         if (hudRenderer != null) {
             hudRenderer.toggleExpanded();
         }
+    }
+
+    private void toggleHudVisibility() {
+        boolean nextVisible = !ClientBridge.ops().isHudVisible();
+        ClientBridge.ops().setHudVisible(nextVisible);
     }
 
     /**

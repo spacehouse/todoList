@@ -30,8 +30,8 @@ public class ClientProjectPackets {
             client.execute(() -> handleSyncProjects(projects));
         });
         ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
-            boolean visible = buf.readBoolean();
-            client.execute(() -> ClientBridge.ops().setHudVisible(visible));
+            // HUD 可见性改为客户端本地控制，服务端不再作为权威来源
+            buf.readBoolean();
         });
         ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
             boolean present = buf.readBoolean();
