@@ -309,6 +309,13 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "projectId")
                                         ))))
+                        .then(Commands.literal("select")
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .executes(ctx -> executeProjectSelect(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId")
+                                        ))))
                         .then(Commands.literal("list")
                                 .then(Commands.argument("mode", StringArgumentType.word())
                                         .suggests(CommandBootstrap::suggestProjectListModes)
@@ -407,6 +414,7 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_project_create",
                 "command.todolist.help.todo_project_remove",
                 "command.todolist.help.todo_project_list",
+                "command.todolist.help.todo_project_select",
                 "command.todolist.help.todo_hud_toggle",
                 "command.todolist.help.todo_join_project",
                 "command.todolist.help.todo_join_accept",
@@ -780,7 +788,7 @@ public final class CommandBootstrap {
                 matchAllPersonalTasks = true;
                 projectIds.addAll(projectManager.getAllProjects().stream()
                         .filter(project -> project != null && project.getScope() == Project.Scope.PERSONAL)
-                        .filter(project -> isProjectVisibleToPlayer(project, playerUuid))
+                        .filter(project -> isProjectVisibleToPlayer(project, playerUuid, source.getServer()))
                         .map(Project::getId)
                         .filter(projectId -> projectId != null && !projectId.isBlank())
                         .sorted()
@@ -788,7 +796,7 @@ public final class CommandBootstrap {
             } else if ("current".equals(normalizedProjectSelector)) {
                 String activeProjectId = ProjectPackets.getActiveProjectId(player);
                 Project project = activeProjectId == null ? null : projectManager.getProject(activeProjectId);
-                if (project == null || project.getScope() != Project.Scope.PERSONAL || !isProjectVisibleToPlayer(project, playerUuid)) {
+                if (project == null || project.getScope() != Project.Scope.PERSONAL || !isProjectVisibleToPlayer(project, playerUuid, source.getServer())) {
                     if (sendErrors) {
                         sendCommandFailure(source, "command.todolist.task.clean.current_project_invalid");
                     }
@@ -799,7 +807,7 @@ public final class CommandBootstrap {
                 projectIds.addAll(ProjectPackets.getHudStarredProjectIds(player).stream()
                         .map(projectManager::getProject)
                         .filter(project -> project != null && project.getScope() == Project.Scope.PERSONAL)
-                        .filter(project -> isProjectVisibleToPlayer(project, playerUuid))
+                        .filter(project -> isProjectVisibleToPlayer(project, playerUuid, source.getServer()))
                         .map(Project::getId)
                         .distinct()
                         .sorted()
@@ -985,6 +993,36 @@ public final class CommandBootstrap {
         return Component.translatable("command.todolist.status." + status);
     }
 
+    private static int executeProjectSelect(CommandSourceStack source, String projectId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.select.not_found", projectId);
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null || !isProjectVisibleToPlayer(project, player.getStringUUID(), player.getServer())) {
+            return sendCommandFailure(source, "command.todolist.project.select.not_found", normalizedProjectId);
+        }
+        if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(source.getServer())) {
+            return sendCommandFailure(source, "command.todolist.project.select.singleplayer_team_forbidden");
+        }
+        ProjectPackets.setActiveProjectId(player, normalizedProjectId);
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_NONE,
+                "command.todolist.project.select.success",
+                buildProjectNameComponent(project)
+        );
+    }
+
+
     private static int sendProjectList(CommandSourceStack source, String mode) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
@@ -1024,7 +1062,7 @@ public final class CommandBootstrap {
         if ("current".equals(mode)) {
             String activeProjectId = ProjectPackets.getActiveProjectId(player);
             Project project = activeProjectId == null ? null : projectManager.getProject(activeProjectId);
-            if (project == null || !isProjectVisibleToPlayer(project, playerUuid)) {
+            if (project == null || !isProjectVisibleToPlayer(project, playerUuid, player.getServer())) {
                 return List.of();
             }
             return List.of(project);
@@ -1032,13 +1070,13 @@ public final class CommandBootstrap {
         if ("star".equals(mode)) {
             return ProjectPackets.getHudStarredProjectIds(player).stream()
                     .map(projectManager::getProject)
-                    .filter(project -> project != null && isProjectVisibleToPlayer(project, playerUuid))
+                    .filter(project -> project != null && isProjectVisibleToPlayer(project, playerUuid, player.getServer()))
                     .distinct()
                     .sorted(buildProjectSummaryComparator())
                     .toList();
         }
         return projectManager.getAllProjects().stream()
-                .filter(project -> isProjectVisibleToPlayer(project, playerUuid))
+                .filter(project -> isProjectVisibleToPlayer(project, playerUuid, player.getServer()))
                 .sorted(buildProjectSummaryComparator())
                 .toList();
     }
@@ -1061,6 +1099,9 @@ public final class CommandBootstrap {
         }
 
         Project.Scope projectScope = "team".equals(normalizedScope) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
+        if (projectScope == Project.Scope.TEAM && isSingleplayerServer(source.getServer())) {
+            return sendCommandFailure(source, "command.todolist.project.create.singleplayer_forbidden");
+        }
         Project project = new Project(normalizedName, projectScope, player.getStringUUID());
         project.addMember(player.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, player.getName().getString());
         TodoListCommon.getProjectManager().addProject(project);
@@ -1071,7 +1112,7 @@ public final class CommandBootstrap {
                 COMMAND_SUCCESS,
                 SIDE_EFFECT_PERSIST_DATA,
                 "command.todolist.project.create.success",
-                getProjectDisplayName(project, project.getId()),
+                buildProjectNameComponent(project),
                 getProjectScopeText(project)
         );
     }
@@ -1254,11 +1295,24 @@ public final class CommandBootstrap {
         ProjectPackets.onPlayerJoin(server, actor);
     }
 
-    private static boolean isProjectVisibleToPlayer(Project project, String playerUuid) {
+    private static boolean isSingleplayerServer(MinecraftServer server) {
+        if (server == null) {
+            return false;
+        }
+        if (server.isDedicatedServer()) {
+            return false;
+        }
+        return server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1;
+    }
+
+    private static boolean isProjectVisibleToPlayer(Project project, String playerUuid, MinecraftServer server) {
         if (project == null) {
             return false;
         }
         if (project.getScope() == Project.Scope.TEAM) {
+            if (server != null && isSingleplayerServer(server)) {
+                return false;
+            }
             return true;
         }
         String ownerUuid = project.getOwnerUuid();
@@ -1559,7 +1613,7 @@ public final class CommandBootstrap {
             return hasProjectAdminPermission(source, player, projectId);
         }
         if (semantic == CommandPermissionSemantic.HUD_CONTROL) {
-            return op;
+            return accessMode != ModConfig.CommandAccessMode.OP_ONLY || op;
         }
         if (semantic == CommandPermissionSemantic.VIEW) {
             return accessMode != ModConfig.CommandAccessMode.OP_ONLY || op;
@@ -1588,13 +1642,19 @@ public final class CommandBootstrap {
         if (normalizedProjectId.isEmpty()) {
             return sendCommandFailure(source, "command.todolist.task.add.invalid_project");
         }
-        if (!isProjectBindableForPlayer(normalizedProjectId, player)) {
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null) {
+            return sendCommandFailure(source, "command.todolist.task.add.invalid_project");
+        }
+        if (!canAddTaskToProject(player, project)) {
+            if (project.getScope() == Project.Scope.TEAM) {
+                return sendCommandFailure(source, "command.todolist.task.add.no_permission_team");
+            }
             return sendCommandFailure(source, "command.todolist.task.add.invalid_project");
         }
         UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
             String normalizedTitle = title == null ? "" : title.trim();
             if (normalizedTitle.isEmpty()) {
                 return sendCommandFailure(source, "command.todolist.task.add.invalid_title");
@@ -1607,9 +1667,19 @@ public final class CommandBootstrap {
             }
             newTask.setCreatorUuid(playerUuid.toString());
             newTask.setProjectId(normalizedProjectId);
-            tasks.add(newTask);
-            storage.savePlayerTasks(playerUuid, tasks);
-            syncTasksToPlayer(source.getServer(), player);
+            if (project.getScope() == Project.Scope.TEAM) {
+                newTask.setScope(Task.Scope.TEAM);
+                List<Task> tasks = storage.loadTeamTasks();
+                tasks.add(newTask);
+                storage.saveTeamTasks(tasks);
+                TaskPackets.broadcastTeamTasks(source.getServer());
+            } else {
+                newTask.setScope(Task.Scope.PERSONAL);
+                List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+                tasks.add(newTask);
+                storage.savePlayerTasks(playerUuid, tasks);
+                syncTasksToPlayer(source.getServer(), player);
+            }
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -1626,6 +1696,24 @@ public final class CommandBootstrap {
     /**
      * 判断指定项目是否允许被当前玩家用于任务关联。
      */
+    private static boolean canAddTaskToProject(ServerPlayer player, Project project) {
+        if (player == null || project == null) {
+            return false;
+        }
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            String ownerUuid = project.getOwnerUuid();
+            return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(player.getStringUUID());
+        }
+        if (player.hasPermissions(2)) {
+            return true;
+        }
+        boolean projectMember = isTeamProjectMember(player, project);
+        Role role = resolveProjectRole(player, project);
+        boolean allowMemberCreate = project.isAllowMemberCreate();
+        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, false, false, projectMember, allowMemberCreate);
+        return PermissionCenter.canPerform(Operation.ADD_TASK, role, ctx);
+    }
+
     private static boolean isProjectBindableForPlayer(String projectId, ServerPlayer player) {
         if (player == null || projectId == null || projectId.isBlank()) {
             return false;
@@ -1666,7 +1754,7 @@ public final class CommandBootstrap {
             if (projectId == null || projectId.isBlank()) {
                 continue;
             }
-            if (!isProjectBindableForPlayer(projectId, player)) {
+            if (!canAddTaskToProject(player, project)) {
                 continue;
             }
             builder.suggest(projectId);
@@ -1734,6 +1822,26 @@ public final class CommandBootstrap {
 
     private static CompletableFuture<Suggestions> suggestProjectListModes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(PROJECT_LIST_MODE_SUGGESTIONS, builder);
+    }
+
+    private static CompletableFuture<Suggestions> suggestSelectableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player == null) {
+            return builder.buildFuture();
+        }
+        String playerUuid = player.getStringUUID();
+        MinecraftServer server = source.getServer();
+        for (Project project : TodoListCommon.getProjectManager().getAllProjects()) {
+            if (project == null || project.getId() == null || project.getId().isBlank()) {
+                continue;
+            }
+            if (!isProjectVisibleToPlayer(project, playerUuid, server)) {
+                continue;
+            }
+            builder.suggest(project.getId());
+        }
+        return builder.buildFuture();
     }
 
     private static CompletableFuture<Suggestions> suggestRemovableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {

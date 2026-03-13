@@ -2,18 +2,25 @@ package com.todolist.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
 import com.todolist.TodoConstants;
 import com.todolist.client.ClientBridge;
 import com.todolist.platform.DataPathProvider;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Locale;
 
 /**
  * Mod configuration
@@ -23,6 +30,22 @@ import java.util.List;
 public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
+    private static final String COMMAND_ACCESS_MODE_KEY = "\"commandAccessMode\"";
+    private static final String LANG_ASSET_DIR = "assets/todolist/lang/";
+    private static final String LANG_ZH_CN = "zh_cn";
+    private static final String LANG_EN_US = "en_us";
+    private static final String[] COMMAND_ACCESS_MODE_COMMENT_KEYS = new String[] {
+            "config.todolist.command_access_mode.comment.title",
+            "config.todolist.command_access_mode.comment.op_only",
+            "config.todolist.command_access_mode.comment.view_only",
+            "config.todolist.command_access_mode.comment.full"
+    };
+    private static final String[] COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN = new String[] {
+            "commandAccessMode notes:",
+            "OP_ONLY: only OP can use all commands",
+            "VIEW_ONLY: non-OP can use view commands, edit still requires OP",
+            "FULL: non-OP can use view/edit commands (not recommended for public servers)"
+    };
     private static final int GUI_WIDTH_MIN = 300;
     private static final int GUI_WIDTH_MAX = 1600;
     private static final int GUI_HEIGHT_MIN = 200;
@@ -64,6 +87,10 @@ public class ModConfig {
     private String defaultPriority = "MEDIUM";
     private boolean enableTaskRewards = false;
     private boolean defaultPersonalProjectInitialized = false;
+    // 配置项：commandAccessMode（服务端命令权限）
+    // OP_ONLY：仅 OP 可使用所有命令
+    // VIEW_ONLY：普通玩家仅可使用查看类命令，编辑类命令仍需 OP
+    // FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器）
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
 
     // GUI settings
@@ -118,6 +145,7 @@ public class ModConfig {
         private String hudDefaultView = "PERSONAL";
         private String hudProjectSource = "ALL";
         private List<String> hudStarredProjectIds = new ArrayList<>();
+        private Map<String, String> lastActiveProjectIdsByNamespace = new HashMap<>();
         
         // Project Sidebar
         private int projectSidebarWidth = 100;
@@ -128,8 +156,10 @@ public class ModConfig {
      */
     public static void load() {
         if (Files.exists(CONFIG_PATH)) {
-            try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
-                instance = GSON.fromJson(reader, ModConfig.class);
+            try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
+                JsonReader jsonReader = new JsonReader(reader);
+                jsonReader.setLenient(true);
+                instance = GSON.fromJson(jsonReader, ModConfig.class);
                 TodoConstants.LOGGER.info("Loaded configuration from {}", CONFIG_PATH);
                 boolean changed = instance == null || instance.normalize();
                 if (instance == null) {
@@ -178,6 +208,10 @@ public class ModConfig {
         }
         if (gui.hudStarredProjectIds == null) {
             gui.hudStarredProjectIds = new ArrayList<>();
+            changed = true;
+        }
+        if (gui.lastActiveProjectIdsByNamespace == null) {
+            gui.lastActiveProjectIdsByNamespace = new HashMap<>();
             changed = true;
         }
         if (gui.hudOpacity == null) {
@@ -240,13 +274,94 @@ public class ModConfig {
     public static void save() {
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
-            try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
-                GSON.toJson(instance, writer);
+            try (java.io.Writer writer = Files.newBufferedWriter(CONFIG_PATH, StandardCharsets.UTF_8)) {
+                String json = GSON.toJson(instance);
+                writer.write(addCommandAccessModeComment(json));
                 TodoConstants.LOGGER.info("Saved configuration to {}", CONFIG_PATH);
             }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save configuration", e);
         }
+    }
+
+    private static String addCommandAccessModeComment(String json) {
+        if (json == null || json.isEmpty()) {
+            return json;
+        }
+        String[] comments = buildCommandAccessModeComments();
+        String[] lines = json.split("\n", -1);
+        StringBuilder builder = new StringBuilder(json.length() + 256);
+        boolean inserted = false;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (!inserted && line.contains(COMMAND_ACCESS_MODE_KEY)) {
+                int keyIndex = line.indexOf(COMMAND_ACCESS_MODE_KEY);
+                String indent = keyIndex <= 0 ? "" : line.substring(0, keyIndex);
+                for (String comment : comments) {
+                    builder.append(indent).append("// ").append(comment).append("\n");
+                }
+                inserted = true;
+            }
+            builder.append(line);
+            if (i < lines.length - 1) {
+                builder.append("\n");
+            }
+        }
+        return builder.toString();
+    }
+
+    private static String[] buildCommandAccessModeComments() {
+        String langCode = resolveLangCode();
+        Map<String, String> primary = loadLangMap(langCode);
+        Map<String, String> fallback = LANG_EN_US.equals(langCode) ? primary : loadLangMap(LANG_EN_US);
+        String[] comments = new String[COMMAND_ACCESS_MODE_COMMENT_KEYS.length];
+        for (int i = 0; i < COMMAND_ACCESS_MODE_COMMENT_KEYS.length; i++) {
+            String key = COMMAND_ACCESS_MODE_COMMENT_KEYS[i];
+            String fallbackText = i < COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN.length
+                    ? COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN[i]
+                    : key;
+            comments[i] = translateWithFallback(primary, fallback, key, fallbackText);
+        }
+        return comments;
+    }
+
+    private static String resolveLangCode() {
+        Locale locale = Locale.getDefault();
+        String language = locale == null ? "" : locale.getLanguage();
+        if (language != null && language.toLowerCase(Locale.ROOT).startsWith("zh")) {
+            return LANG_ZH_CN;
+        }
+        return LANG_EN_US;
+    }
+
+    private static Map<String, String> loadLangMap(String langCode) {
+        if (langCode == null || langCode.isEmpty()) {
+            return new HashMap<>();
+        }
+        String resourcePath = LANG_ASSET_DIR + langCode + ".json";
+        try (InputStream input = ModConfig.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                return new HashMap<>();
+            }
+            try (InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+                Type type = new TypeToken<Map<String, String>>() {}.getType();
+                Map<String, String> map = GSON.fromJson(reader, type);
+                return map == null ? new HashMap<>() : map;
+            }
+        } catch (IOException e) {
+            return new HashMap<>();
+        }
+    }
+
+    private static String translateWithFallback(Map<String, String> primary, Map<String, String> fallback, String key, String defaultValue) {
+        String value = primary == null ? null : primary.get(key);
+        if (value == null || value.isBlank()) {
+            value = fallback == null ? null : fallback.get(key);
+        }
+        if (value == null || value.isBlank()) {
+            return defaultValue == null ? "" : defaultValue;
+        }
+        return value;
     }
 
     /**
@@ -593,6 +708,46 @@ public class ModConfig {
         }
         save();
         ClientBridge.ops().sendHudStarredProjectIds(getHudStarredProjectIds());
+    }
+
+    public String getLastActiveProjectId() {
+        return getLastActiveProjectId(DataPathProvider.getStorageNamespace());
+    }
+
+    public String getLastActiveProjectId(String namespace) {
+        if (gui.lastActiveProjectIdsByNamespace == null) {
+            return null;
+        }
+        String key = normalizeNamespaceKey(namespace);
+        return gui.lastActiveProjectIdsByNamespace.get(key);
+    }
+
+    public void setLastActiveProjectId(String projectId) {
+        setLastActiveProjectId(DataPathProvider.getStorageNamespace(), projectId);
+    }
+
+    public void setLastActiveProjectId(String namespace, String projectId) {
+        if (gui.lastActiveProjectIdsByNamespace == null) {
+            gui.lastActiveProjectIdsByNamespace = new HashMap<>();
+        }
+        String key = normalizeNamespaceKey(namespace);
+        if (projectId == null || projectId.trim().isEmpty()) {
+            gui.lastActiveProjectIdsByNamespace.remove(key);
+        } else {
+            gui.lastActiveProjectIdsByNamespace.put(key, projectId.trim());
+        }
+        save();
+    }
+
+    private String normalizeNamespaceKey(String namespace) {
+        if (namespace == null) {
+            return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
+        }
+        String trimmed = namespace.trim();
+        if (trimmed.isEmpty()) {
+            return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
+        }
+        return trimmed.toLowerCase();
     }
 
     public int getProjectSidebarWidth() { return gui.projectSidebarWidth; }

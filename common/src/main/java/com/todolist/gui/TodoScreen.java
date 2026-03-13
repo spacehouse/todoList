@@ -338,6 +338,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (currentProject == null || projectManager == null) {
             ClientBridge.ops().setActiveProjectId(null);
             ClientBridge.ops().sendSetActiveProjectId(null);
+            ClientBridge.saveLastActiveProjectId(null);
             return;
         }
         Project fresh = projectManager.getProject(currentProject.getId());
@@ -345,11 +346,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             currentProject = null;
             ClientBridge.ops().setActiveProjectId(null);
             ClientBridge.ops().sendSetActiveProjectId(null);
+            ClientBridge.saveLastActiveProjectId(null);
             return;
         }
         currentProject = fresh;
         ClientBridge.ops().setActiveProjectId(currentProject.getId());
         ClientBridge.ops().sendSetActiveProjectId(currentProject.getId());
+        ClientBridge.saveLastActiveProjectId(currentProject.getId());
     }
 
     /**
@@ -1917,6 +1920,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             this.taskManager = this.personalTaskManager;
             this.viewMode = ViewMode.PERSONAL;
             ClientBridge.ops().setActiveProjectId(null);
+            ClientBridge.ops().sendSetActiveProjectId(null);
+            ClientBridge.saveLastActiveProjectId(null);
             syncHudViewForProject(null);
             rebuildUI();
             return;
@@ -1928,6 +1933,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         projectScopeFilter = project.getScope();
         ClientBridge.ops().setActiveProjectId(project.getId());
+        ClientBridge.ops().sendSetActiveProjectId(project.getId());
+        ClientBridge.saveLastActiveProjectId(project.getId());
         
         if (project.getScope() == Project.Scope.PERSONAL) {
             this.taskManager = this.personalTaskManager;

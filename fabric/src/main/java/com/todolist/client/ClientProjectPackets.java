@@ -3,6 +3,7 @@ package com.todolist.client;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListMod;
+import com.todolist.config.ModConfig;
 import com.todolist.network.ProjectPackets;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
@@ -31,6 +32,28 @@ public class ClientProjectPackets {
         ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
             boolean visible = buf.readBoolean();
             client.execute(() -> ClientBridge.ops().setHudVisible(visible));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
+            boolean present = buf.readBoolean();
+            String projectId = present ? buf.readUtf() : null;
+            client.execute(() -> {
+                ProjectManager manager = TodoListMod.getProjectManager();
+                String resolvedProjectId = projectId;
+                boolean shouldResend = false;
+                if (!present) {
+                    String fallback = resolveLocalActiveProjectId(manager);
+                    if (fallback != null && !fallback.isBlank()) {
+                        resolvedProjectId = fallback;
+                        shouldResend = true;
+                    }
+                }
+                ClientBridge.ops().setActiveProjectId(resolvedProjectId);
+                ClientBridge.saveLastActiveProjectId(resolvedProjectId);
+                ClientBridge.syncHudViewForProject(resolvedProjectId == null ? null : manager.getProject(resolvedProjectId));
+                if (shouldResend) {
+                    sendSetActiveProjectId(resolvedProjectId);
+                }
+            });
         });
     }
 
@@ -63,10 +86,37 @@ public class ClientProjectPackets {
                 }
             }
             ClientBridge.getActiveProject(manager);
+            if (ClientBridge.ops().getActiveProjectId() == null || ClientBridge.ops().getActiveProjectId().isEmpty()) {
+                String fallback = resolveLocalActiveProjectId(manager);
+                if (fallback != null && !fallback.isBlank()) {
+                    ClientBridge.ops().setActiveProjectId(fallback);
+                    ClientBridge.saveLastActiveProjectId(fallback);
+                    ClientBridge.syncHudViewForProject(manager.getProject(fallback));
+                    sendSetActiveProjectId(fallback);
+                }
+            }
             TodoListMod.LOGGER.info("Client: Synced {} projects from server", projects.size());
         } finally {
             TodoListCommon.setProjectSyncInProgress(false);
         }
+    }
+
+    private static String resolveLocalActiveProjectId(ProjectManager manager) {
+        if (manager == null) {
+            return null;
+        }
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive == null || lastActive.isBlank()) {
+            return null;
+        }
+        Project project = manager.getProject(lastActive);
+        if (project == null) {
+            return null;
+        }
+        if (project.getScope() == Project.Scope.TEAM && !ClientBridge.ops().isTeamProjectsEnabled()) {
+            return null;
+        }
+        return project.getId();
     }
 
     // Sender methods

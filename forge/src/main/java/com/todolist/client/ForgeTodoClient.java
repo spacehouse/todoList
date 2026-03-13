@@ -9,6 +9,7 @@ import com.todolist.gui.ConfigScreen;
 import com.todolist.gui.TodoScreen;
 import com.todolist.network.ProjectPackets;
 import com.todolist.network.TaskPackets;
+import com.todolist.project.Project;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
@@ -167,6 +168,18 @@ public final class ForgeTodoClient {
         setActiveProjectId(null);
         hudVisible = true;
         teamTaskManager.clearAll();
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive != null && !lastActive.isBlank()) {
+            Project p = TodoListForge.getProjectManager().getProject(lastActive);
+            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                p = null;
+            }
+            if (p != null) {
+                setActiveProjectId(p.getId());
+                ClientBridge.syncHudViewForProject(p);
+                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+            }
+        }
     }
 
     private static void onGuiOverlayPostEvent(Object event) {
@@ -223,6 +236,18 @@ public final class ForgeTodoClient {
 
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive != null && !lastActive.isBlank()) {
+            Project p = TodoListForge.getProjectManager().getProject(lastActive);
+            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                p = null;
+            }
+            if (p != null) {
+                setActiveProjectId(p.getId());
+                ClientBridge.syncHudViewForProject(p);
+                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+            }
+        }
         for (Task task : tasks) {
             teamTaskManager.addTask(task);
         }
@@ -230,6 +255,13 @@ public final class ForgeTodoClient {
 
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
-        return current != null && ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
+        if (current == null) return false;
+        if (current.isLocalServer()) {
+            var server = current.getSingleplayerServer();
+            if (server != null && server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
+                return false;
+            }
+        }
+        return ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }

@@ -45,6 +45,7 @@ public class ProjectPackets {
     public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_join_project");
     public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_sync_projects");
     public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
+    public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_active_project");
     public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
     public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
@@ -199,16 +200,41 @@ public class ProjectPackets {
             }
             String uuid = player.getStringUUID();
             if (!present || finalProjectId == null || finalProjectId.isBlank()) {
-                playerActiveProjectIdMap.remove(uuid);
+                setActiveProjectId(player, null);
                 return;
             }
-            playerActiveProjectIdMap.put(uuid, finalProjectId.trim());
+            setActiveProjectId(player, finalProjectId.trim());
         });
     }
 
     /**
      * 获取服务端记录的玩家当前激活项目 ID（可能为 null）。
      */
+    public static void setActiveProjectId(ServerPlayer player, String projectId) {
+        if (player == null) {
+            return;
+        }
+        String uuid = player.getStringUUID();
+        if (projectId == null || projectId.isBlank()) {
+            playerActiveProjectIdMap.remove(uuid);
+            syncActiveProjectIdToPlayer(player, null);
+            return;
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(projectId.trim());
+        if (project == null) {
+            playerActiveProjectIdMap.remove(uuid);
+            syncActiveProjectIdToPlayer(player, null);
+            return;
+        }
+        if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(player.getServer())) {
+            playerActiveProjectIdMap.remove(uuid);
+            syncActiveProjectIdToPlayer(player, null);
+            return;
+        }
+        playerActiveProjectIdMap.put(uuid, projectId.trim());
+        syncActiveProjectIdToPlayer(player, projectId.trim());
+    }
+
     public static String getActiveProjectId(ServerPlayer player) {
         if (player == null) {
             return null;
@@ -245,11 +271,25 @@ public class ProjectPackets {
             cachePlayerNameForTeamProjects(server, player);
             syncProjectsToPlayer(player);
             syncHudVisibilityToPlayer(player, isHudVisible(player));
+            syncActiveProjectIdToPlayer(player, playerActiveProjectIdMap.get(player.getStringUUID()));
         });
+    }
+
+    private static boolean isSingleplayerServer(MinecraftServer server) {
+        if (server == null) {
+            return false;
+        }
+        if (server.isDedicatedServer()) {
+            return false;
+        }
+        return server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1;
     }
 
     private static void ensureDefaultTeamProjectOwner(MinecraftServer server, ServerPlayer player) {
         if (server == null || player == null) {
+            return;
+        }
+        if (isSingleplayerServer(server)) {
             return;
         }
         if (!player.hasPermissions(2)) {
@@ -681,7 +721,8 @@ public class ProjectPackets {
         }
 
         if (notified) {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.sent"), false);
+            MutableComponent copyName = applyCopyStyle(projectName.copy().withStyle(s -> s.withColor(ChatFormatting.GOLD).withBold(true)), projectId, Component.translatable("message.todolist.project.join.copy_hint", projectId));
+            player.displayClientMessage(Component.translatable("message.todolist.project.join.sent_named", copyName), false);
         } else {
             player.displayClientMessage(Component.translatable("message.todolist.project.join.no_reviewer_online"), false);
         }
@@ -747,6 +788,14 @@ public class ProjectPackets {
 
     private static MutableComponent getProjectDisplayName(Project project) {
         return ProjectNameFormatter.toDisplayText(project);
+    }
+
+    private static MutableComponent applyCopyStyle(MutableComponent component, String copyValue, Component hoverText) {
+        String safeCopyValue = copyValue == null ? "" : copyValue;
+        return component.withStyle(style -> style
+                .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, safeCopyValue))
+                .withInsertion(safeCopyValue)
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText)));
     }
 
     private static Role getRole(ServerPlayer player, Project project) {
@@ -826,6 +875,20 @@ public class ProjectPackets {
             sanitized.add(trimmed);
         }
         return sanitized;
+    }
+
+    private static void syncActiveProjectIdToPlayer(ServerPlayer player, String projectId) {
+        if (player == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        if (projectId == null || projectId.isBlank()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeUtf(projectId);
+        }
+        serverPacketSender.send(player, SYNC_ACTIVE_PROJECT_ID, buf);
     }
 
     private static void syncHudVisibilityToPlayer(ServerPlayer player, boolean visible) {

@@ -3,6 +3,7 @@ package com.todolist.client;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListForge;
+import com.todolist.config.ModConfig;
 import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.network.ProjectPackets;
 import com.todolist.platform.DataPathProvider;
@@ -52,6 +53,28 @@ public final class ForgeClientProjectPackets {
             boolean visible = buf.readBoolean();
             client.execute(() -> ClientBridge.ops().setHudVisible(visible));
         });
+        ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
+            boolean present = buf.readBoolean();
+            String projectId = present ? buf.readUtf() : null;
+            client.execute(() -> {
+                ProjectManager manager = TodoListForge.getProjectManager();
+                String resolvedProjectId = projectId;
+                boolean shouldResend = false;
+                if (!present) {
+                    String fallback = resolveLocalActiveProjectId(manager);
+                    if (fallback != null && !fallback.isBlank()) {
+                        resolvedProjectId = fallback;
+                        shouldResend = true;
+                    }
+                }
+                ClientBridge.ops().setActiveProjectId(resolvedProjectId);
+                ClientBridge.saveLastActiveProjectId(resolvedProjectId);
+                ClientBridge.syncHudViewForProject(resolvedProjectId == null ? null : manager.getProject(resolvedProjectId));
+                if (shouldResend) {
+                    sendSetActiveProjectId(resolvedProjectId);
+                }
+            });
+        });
     }
 
     /**
@@ -81,6 +104,15 @@ public final class ForgeClientProjectPackets {
                 }
             }
             ClientBridge.getActiveProject(manager);
+            if (ClientBridge.ops().getActiveProjectId() == null || ClientBridge.ops().getActiveProjectId().isEmpty()) {
+                String fallback = resolveLocalActiveProjectId(manager);
+                if (fallback != null && !fallback.isBlank()) {
+                    ClientBridge.ops().setActiveProjectId(fallback);
+                    ClientBridge.saveLastActiveProjectId(fallback);
+                    ClientBridge.syncHudViewForProject(manager.getProject(fallback));
+                    sendSetActiveProjectId(fallback);
+                }
+            }
             TodoListForge.LOGGER.info("Forge client synced {} projects from server", projects.size());
         } finally {
             TodoListCommon.setProjectSyncInProgress(false);
@@ -91,6 +123,24 @@ public final class ForgeClientProjectPackets {
      * 发送添加项目请求。
      * 如果服务端不支持该数据包，则尝试本地回退处理。
      */
+    private static String resolveLocalActiveProjectId(ProjectManager manager) {
+        if (manager == null) {
+            return null;
+        }
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive == null || lastActive.isBlank()) {
+            return null;
+        }
+        Project project = manager.getProject(lastActive);
+        if (project == null) {
+            return null;
+        }
+        if (project.getScope() == Project.Scope.TEAM && !ClientBridge.ops().isTeamProjectsEnabled()) {
+            return null;
+        }
+        return project.getId();
+    }
+
     public static void sendAddProject(Project project) {
         if (shouldUseLocalProjectFallback(ProjectPackets.ADD_PROJECT_ID)) {
             addProjectLocally(project);

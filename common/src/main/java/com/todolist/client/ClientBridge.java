@@ -1,5 +1,6 @@
 package com.todolist.client;
 
+import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.task.Task;
@@ -217,6 +218,22 @@ public final class ClientBridge {
      */
     public static ClientOps ops() {
         return ops;
+    }
+
+    public static void saveLastActiveProjectId(String projectId) {
+        ModConfig.getInstance().setLastActiveProjectId(projectId);
+    }
+
+    public static void syncHudViewForProject(Project project) {
+        ModConfig config = ModConfig.getInstance();
+        if (project == null || project.getScope() == Project.Scope.PERSONAL || !ops().isTeamProjectsEnabled()) {
+            config.setHudDefaultView("PERSONAL");
+            return;
+        }
+        String currentView = config.getHudDefaultView();
+        if (currentView == null || currentView.isBlank() || "PERSONAL".equalsIgnoreCase(currentView)) {
+            config.setHudDefaultView("TEAM_UNASSIGNED");
+        }
     }
 
     /**

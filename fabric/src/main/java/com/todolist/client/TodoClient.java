@@ -7,6 +7,7 @@ import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreen;
 import com.todolist.network.ProjectPackets;
+import com.todolist.project.Project;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
@@ -131,6 +132,18 @@ public class TodoClient implements ClientModInitializer {
                 setActiveProjectId(null);
                 teamTaskManager.clearAll();
                 hudVisible = true;
+                String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+                if (lastActive != null && !lastActive.isBlank()) {
+                    Project p = TodoListMod.getProjectManager().getProject(lastActive);
+                    if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                        p = null;
+                    }
+                    if (p != null) {
+                        setActiveProjectId(p.getId());
+                        ClientBridge.syncHudViewForProject(p);
+                        ClientProjectPackets.sendSetActiveProjectId(p.getId());
+                    }
+                }
                 if (!localServer) {
                     ClientProjectPackets.sendRequestSyncProjects();
                     ClientTaskPackets.requestTeamSync();
@@ -151,6 +164,18 @@ public class TodoClient implements ClientModInitializer {
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);
                 hudVisible = true;
+                String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+                if (lastActive != null && !lastActive.isBlank()) {
+                    Project p = TodoListMod.getProjectManager().getProject(lastActive);
+                    if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                        p = null;
+                    }
+                    if (p != null) {
+                        setActiveProjectId(p.getId());
+                        ClientBridge.syncHudViewForProject(p);
+                        ClientProjectPackets.sendSetActiveProjectId(p.getId());
+                    }
+                }
                 teamTaskManager.clearAll();
             });
         });
@@ -259,7 +284,12 @@ public class TodoClient implements ClientModInitializer {
     public static boolean isTeamProjectsEnabled() {
         Minecraft c = client != null ? client : Minecraft.getInstance();
         if (c == null) return false;
-        if (c.isLocalServer()) return false;
+        if (c.isLocalServer()) {
+            var server = c.getSingleplayerServer();
+            if (server != null && server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
+                return false;
+            }
+        }
         return ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }
