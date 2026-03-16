@@ -193,25 +193,25 @@ public class AddMemberScreen extends Screen {
     }
     
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
             if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
                 int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
-                if (amount < 0 && scrollOffset < maxOffset) {
+                if (verticalAmount < 0 && scrollOffset < maxOffset) {
                     scrollOffset++;
                     updatePlayerButtons();
-                } else if (amount > 0 && scrollOffset > 0) {
+                } else if (verticalAmount > 0 && scrollOffset > 0) {
                     scrollOffset--;
                     updatePlayerButtons();
                 }
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, amount);
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         
         context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
         context.drawString(font, Component.translatable("gui.todolist.label.member_name"), listX, searchField.getY() - 10, 0xFFAAAAAA, false);

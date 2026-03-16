@@ -122,7 +122,7 @@ public class AddProjectScreen extends Screen {
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         
         int w = Math.max(180, Math.min(320, width - 20));
         int h = Math.max(140, Math.min(180, height - 20));

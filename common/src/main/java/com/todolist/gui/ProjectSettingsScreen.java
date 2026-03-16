@@ -85,8 +85,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
             int listTop = y + 110;
             int listBottom = y + h - 40;
-            memberList = new MemberListWidget(minecraft, w - 20, listBottom - listTop, listTop, listBottom, 20);
-            memberList.setLeftPos(x + 10);
+            memberList = new MemberListWidget(minecraft, w - 20, listBottom - listTop, listTop, 20);
+            memberList.setX(x + 10);
             addRenderableWidget(memberList);
 
             addMemberBtn = Button.builder(Component.translatable("gui.todolist.add_member"), button -> {
@@ -230,7 +230,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         int w = Math.max(200, Math.min(360, width - 20));
         int h = isTeam ? Math.max(220, Math.min(320, height - 20)) : Math.max(150, Math.min(220, height - 20));
@@ -251,12 +251,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     private class MemberListWidget extends ContainerObjectSelectionList<MemberListWidget.MemberEntry> {
-        public MemberListWidget(Minecraft client, int width, int height, int top, int bottom, int itemHeight) {
-            super(client, width, height, top, bottom, itemHeight);
-            
-            this.setRenderBackground(false);
-            this.setRenderHeader(false, 0);
-            
+        public MemberListWidget(Minecraft client, int width, int height, int top, int itemHeight) {
+            super(client, width, height, top, itemHeight);
             updateEntries("");
         }
 
@@ -315,52 +311,13 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
         
         @Override
-        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-             // Access fields directly. In Yarn/Fabric 1.20.1, these are protected in EntryListWidget
-             // width, height, top, bottom, left, right
-             
-             // Draw background
-             context.fill(this.x0, this.y0, this.x1, this.y1, 0xFF101010);
-             
-             // Scissor
-             double scale = minecraft.getWindow().getGuiScale();
-             com.mojang.blaze3d.systems.RenderSystem.enableScissor(
-                 (int)(this.x0 * scale), 
-                 (int)((minecraft.getWindow().getGuiScaledHeight() - this.y1) * scale), 
-                 (int)(this.width * scale), 
-                 (int)(this.height * scale)
-             );
-             
-             // Render list
-             int itemHeight = this.itemHeight;
-             
-             for (int i = 0; i < this.children().size(); i++) {
-                 int entryTop = this.getRowTop(i);
-                 int entryBottom = entryTop + itemHeight;
-                 
-                 if (entryBottom >= this.y0 && entryTop <= this.y1) {
-                     MemberEntry entry = this.children().get(i);
-                     int rowLeft = this.x0 + (this.width - getRowWidth()) / 2;
-                     entry.render(context, i, entryTop, rowLeft, getRowWidth(), itemHeight, mouseX, mouseY, isMouseOver(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom, delta);
-                 }
-             }
-             
-             com.mojang.blaze3d.systems.RenderSystem.disableScissor();
-        }
-        
-        @Override
-        protected void renderBackground(GuiGraphics context) {
-            // Do nothing
-        }
-        
-        @Override
         public int getRowWidth() {
-            return this.width - 10;
+            return this.getWidth() - 10;
         }
 
         @Override
         protected int getScrollbarPosition() {
-            return this.x0 + this.width + 6;
+            return this.getX() + this.getWidth() + 6;
         }
 
         public class MemberEntry extends ContainerObjectSelectionList.Entry<MemberEntry> {

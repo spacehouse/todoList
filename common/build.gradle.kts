@@ -1,7 +1,7 @@
 import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
-    id("dev.architectury.loom") version "1.7.435"
+    id("dev.architectury.loom")
 }
 
 val archives_name: String by project

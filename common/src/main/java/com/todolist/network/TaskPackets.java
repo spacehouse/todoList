@@ -18,18 +18,18 @@ import java.util.UUID;
  * 任务同步相关的网络包定义与服务端处理逻辑。
  */
 public class TaskPackets {
-    public static final ResourceLocation SYNC_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_tasks");
-    public static final ResourceLocation TEAM_SYNC_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_sync_tasks");
-    public static final ResourceLocation TASK_CONFIRMED_ID = new ResourceLocation(TodoConstants.MOD_ID, "task_confirmed");
-    public static final ResourceLocation REPLACE_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "replace_tasks");
-    public static final ResourceLocation TEAM_REPLACE_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_replace_tasks");
-    public static final ResourceLocation TEAM_REQUEST_SYNC_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_request_sync");
-    public static final ResourceLocation ADD_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "add_task");
-    public static final ResourceLocation UPDATE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "update_task");
-    public static final ResourceLocation DELETE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "delete_task");
-    public static final ResourceLocation TOGGLE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "toggle_task");
-    public static final ResourceLocation TEAM_TOGGLE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_toggle_task");
-    public static final ResourceLocation TEAM_ASSIGN_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_assign_task");
+    public static final ResourceLocation SYNC_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_tasks");
+    public static final ResourceLocation TEAM_SYNC_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_sync_tasks");
+    public static final ResourceLocation TASK_CONFIRMED_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "task_confirmed");
+    public static final ResourceLocation REPLACE_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "replace_tasks");
+    public static final ResourceLocation TEAM_REPLACE_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_replace_tasks");
+    public static final ResourceLocation TEAM_REQUEST_SYNC_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_request_sync");
+    public static final ResourceLocation ADD_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_task");
+    public static final ResourceLocation UPDATE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_task");
+    public static final ResourceLocation DELETE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_task");
+    public static final ResourceLocation TOGGLE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "toggle_task");
+    public static final ResourceLocation TEAM_TOGGLE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_toggle_task");
+    public static final ResourceLocation TEAM_ASSIGN_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_assign_task");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
 
     public static void setServerPacketSender(ServerPacketSender sender) {

@@ -20,6 +20,10 @@ subprojects {
             url = uri("https://maven.fabricmc.net/")
         }
         maven {
+            name = "NeoForged"
+            url = uri("https://maven.neoforged.net/releases/")
+        }
+        maven {
             name = "Terraformers"
             url = uri("https://maven.terraformersmc.com/releases/")
         }
@@ -27,12 +31,12 @@ subprojects {
 
     tasks.withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.release.set(17)
+        options.release.set(21)
     }
 
     configure<JavaPluginExtension> {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(17))
+            languageVersion.set(JavaLanguageVersion.of(21))
         }
         withSourcesJar()
     }
@@ -42,7 +46,7 @@ tasks.register<Copy>("distReleaseJars") {
     group = "distribution"
     description = "Collect release-ready loader jars into root build/dist (exclude sources/dev)."
 
-    dependsOn(":fabric:build", ":forge:build")
+    dependsOn(":fabric:build", ":forge:build", ":neoforge:build")
 
     into(layout.buildDirectory.dir("libs"))
 
@@ -52,6 +56,10 @@ tasks.register<Copy>("distReleaseJars") {
     }
     from(project(":forge").layout.buildDirectory.dir("libs")) {
         include("todolist-forge-*.jar")
+        exclude("*-sources.jar", "*-dev.jar")
+    }
+    from(project(":neoforge").layout.buildDirectory.dir("libs")) {
+        include("todolist-neoforge-*.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
 }

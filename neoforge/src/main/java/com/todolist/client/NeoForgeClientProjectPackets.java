@@ -1,90 +1,102 @@
 package com.todolist.client;
 
-import com.todolist.TodoListCommon;
 import com.todolist.TodoConstants;
-import com.todolist.TodoListMod;
+import com.todolist.TodoListCommon;
+import com.todolist.TodoListNeoForge;
 import com.todolist.config.ModConfig;
-import com.todolist.network.FabricProjectPayload;
+import com.todolist.neoforge.network.NeoForgeNetworkBridge;
 import com.todolist.network.ProjectPackets;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.FriendlyByteBuf;
 
 /**
- * Client-side packet handling for projects
+ * NeoForge 平台客户端项目数据包处理类。
+ * 负责处理项目数据的发送、接收与本地回退逻辑。
  */
-public class ClientProjectPackets {
+public final class NeoForgeClientProjectPackets {
+    /**
+     * 私有构造函数，禁止实例化。
+     */
+    private NeoForgeClientProjectPackets() {
+    }
 
     /**
-     * 注册客户端接收的项目相关网络包处理器。
+     * 注册客户端接收的项目数据包。
      */
     public static void registerClientPackets() {
-        ClientPlayNetworking.registerGlobalReceiver(FabricProjectPayload.TYPE, (payload, context) -> {
-            ResourceLocation channelId = payload.channel();
-            FriendlyByteBuf buf = payload.toBuf();
-            Minecraft client = context.client();
-            if (channelId.equals(ProjectPackets.SYNC_PROJECTS_ID)) {
-                List<Project> projects = ProjectPackets.readProjectList(buf);
-                client.execute(() -> handleSyncProjects(projects));
+        NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
+            if (handler == null) {
+                TodoListNeoForge.LOGGER.info("Skip stale project sync packet with null NeoForge connection");
                 return;
             }
-            if (channelId.equals(ProjectPackets.SYNC_HUD_VISIBILITY_ID)) {
-                buf.readBoolean();
+            if (handler != client.getConnection()) {
+                TodoListNeoForge.LOGGER.info("Skip stale project sync packet from old NeoForge connection");
                 return;
             }
-            if (channelId.equals(ProjectPackets.SYNC_ACTIVE_PROJECT_ID)) {
-                boolean present = buf.readBoolean();
-                String projectId = present ? buf.readUtf() : null;
-                client.execute(() -> {
-                    ProjectManager manager = TodoListMod.getProjectManager();
-                    String resolvedProjectId = projectId;
-                    boolean shouldResend = false;
-                    if (!present) {
-                        String fallback = resolveLocalActiveProjectId(manager);
-                        if (fallback != null && !fallback.isBlank()) {
-                            resolvedProjectId = fallback;
-                            shouldResend = true;
-                        }
+            List<Project> projects = ProjectPackets.readProjectList(buf);
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
+            client.execute(() -> {
+                String currentNamespace = DataPathProvider.getStorageNamespace();
+                if (!namespaceAtReceive.equals(currentNamespace)) {
+                    TodoListNeoForge.LOGGER.info("Skip stale project sync write due to namespace switch: {} -> {}",
+                            namespaceAtReceive, currentNamespace);
+                    return;
+                }
+                handleSyncProjects(projects);
+            });
+        });
+        NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
+            buf.readBoolean();
+        });
+        NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
+            boolean present = buf.readBoolean();
+            String projectId = present ? buf.readUtf() : null;
+            client.execute(() -> {
+                ProjectManager manager = TodoListNeoForge.getProjectManager();
+                String resolvedProjectId = projectId;
+                boolean shouldResend = false;
+                if (!present) {
+                    String fallback = resolveLocalActiveProjectId(manager);
+                    if (fallback != null && !fallback.isBlank()) {
+                        resolvedProjectId = fallback;
+                        shouldResend = true;
                     }
-                    ClientBridge.ops().setActiveProjectId(resolvedProjectId);
-                    ClientBridge.saveLastActiveProjectId(resolvedProjectId);
-                    ClientBridge.syncHudViewForProject(resolvedProjectId == null ? null : manager.getProject(resolvedProjectId));
-                    if (shouldResend) {
-                        sendSetActiveProjectId(resolvedProjectId);
-                    }
-                });
-            }
+                }
+                ClientBridge.ops().setActiveProjectId(resolvedProjectId);
+                ClientBridge.saveLastActiveProjectId(resolvedProjectId);
+                ClientBridge.syncHudViewForProject(resolvedProjectId == null ? null : manager.getProject(resolvedProjectId));
+                if (shouldResend) {
+                    sendSetActiveProjectId(resolvedProjectId);
+                }
+            });
         });
     }
 
     /**
-     * 将服务端下发的项目列表同步到客户端项目管理器。
-     *
-     * @param projects 服务端项目列表
+     * 处理来自服务端的项目同步数据。
+     * @param projects 项目列表
      */
     private static void handleSyncProjects(List<Project> projects) {
         TodoListCommon.setProjectSyncInProgress(true);
-        ProjectManager manager = TodoListMod.getProjectManager();
+        ProjectManager manager = TodoListNeoForge.getProjectManager();
         try {
             Map<String, Project> incoming = new HashMap<>();
             for (Project p : projects) {
                 p.setName(ProjectNameFormatter.normalizeDefaultName(p.getName(), p.getScope()));
                 incoming.put(p.getId(), p);
             }
-
             for (Project existing : manager.getAllProjects()) {
                 if (!incoming.containsKey(existing.getId())) {
                     manager.deleteProject(existing.getId());
                 }
             }
-
             for (Project project : projects) {
                 if (manager.getProject(project.getId()) == null) {
                     manager.addProject(project);
@@ -102,12 +114,17 @@ public class ClientProjectPackets {
                     sendSetActiveProjectId(fallback);
                 }
             }
-            TodoListMod.LOGGER.info("Client: Synced {} projects from server", projects.size());
+            TodoListNeoForge.LOGGER.info("NeoForge client synced {} projects from server", projects.size());
         } finally {
             TodoListCommon.setProjectSyncInProgress(false);
         }
     }
 
+    /**
+     * 解析本地可用的活动项目 ID。
+     * @param manager 项目管理器
+     * @return 项目 ID
+     */
     private static String resolveLocalActiveProjectId(ProjectManager manager) {
         if (manager == null) {
             return null;
@@ -126,12 +143,9 @@ public class ClientProjectPackets {
         return project.getId();
     }
 
-    // Sender methods
-
     /**
-     * 向服务端发送新增项目请求。
-     *
-     * @param project 项目对象
+     * 发送添加项目请求。
+     * @param project 项目
      */
     public static void sendAddProject(Project project) {
         if (shouldUseLocalProjectFallback(ProjectPackets.ADD_PROJECT_ID)) {
@@ -140,13 +154,12 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.ADD_PROJECT_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.ADD_PROJECT_ID, buf);
     }
 
     /**
-     * 向服务端发送更新项目请求。
-     *
-     * @param project 项目对象
+     * 发送更新项目请求。
+     * @param project 项目
      */
     public static void sendUpdateProject(Project project) {
         if (shouldUseLocalProjectFallback(ProjectPackets.UPDATE_PROJECT_ID)) {
@@ -155,12 +168,11 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.UPDATE_PROJECT_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.UPDATE_PROJECT_ID, buf);
     }
 
     /**
-     * 向服务端发送删除项目请求。
-     *
+     * 发送删除项目请求。
      * @param projectId 项目 ID
      */
     public static void sendDeleteProject(String projectId) {
@@ -170,93 +182,88 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.DELETE_PROJECT_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.DELETE_PROJECT_ID, buf);
     }
 
     /**
-     * 向服务端发送添加成员请求。
-     *
-     * @param projectId   项目 ID
-     * @param memberUuid  成员 UUID
-     * @param memberName  成员名称
+     * 发送添加成员请求。
+     * @param projectId 项目 ID
+     * @param memberUuid 成员 UUID
+     * @param memberName 成员名称
      */
     public static void sendAddMember(String projectId, String memberUuid, String memberName) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.ADD_MEMBER_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
         buf.writeUtf(memberName);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.ADD_MEMBER_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.ADD_MEMBER_ID, buf);
     }
 
     /**
-     * 向服务端发送移除成员请求。
-     *
-     * @param projectId  项目 ID
+     * 发送移除成员请求。
+     * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      */
     public static void sendRemoveMember(String projectId, String memberUuid) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.REMOVE_MEMBER_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.REMOVE_MEMBER_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.REMOVE_MEMBER_ID, buf);
     }
 
     /**
-     * 向服务端发送更新成员角色请求。
-     *
-     * @param projectId  项目 ID
+     * 发送更新成员角色请求。
+     * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
-     * @param role       新角色
+     * @param role 角色
      */
     public static void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
         buf.writeUtf(role.name());
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
     }
 
     /**
-     * 向服务端发送申请加入项目请求。
-     *
+     * 发送请求加入项目。
      * @param projectId 项目 ID
      */
     public static void sendRequestJoinProject(String projectId) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf);
     }
 
     /**
-     * 向服务端请求重新同步项目列表。
+     * 请求重新同步项目列表。
      */
     public static void sendRequestSyncProjects() {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
     }
 
     /**
-     * 向服务端上报当前激活项目 ID（用于命令默认关联项目等服务端逻辑）。
-     *
+     * 上报当前活动项目 ID。
      * @param projectId 项目 ID，null 表示清空
      */
     public static void sendSetActiveProjectId(String projectId) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -266,11 +273,15 @@ public class ClientProjectPackets {
             buf.writeBoolean(true);
             buf.writeUtf(projectId);
         }
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
     }
 
+    /**
+     * 发送 HUD 星标项目 ID 列表。
+     * @param projectIds 项目 ID 列表
+     */
     public static void sendSetHudStarredProjectIds(List<String> projectIds) {
-        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -279,9 +290,13 @@ public class ClientProjectPackets {
         for (String projectId : ids) {
             buf.writeUtf(projectId == null ? "" : projectId);
         }
-        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf));
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf);
     }
 
+    /**
+     * 本地回退：添加项目。
+     * @param project 项目
+     */
     private static void addProjectLocally(Project project) {
         if (project == null) {
             return;
@@ -295,15 +310,19 @@ public class ClientProjectPackets {
             project.setOwnerUuid(playerUuid);
             project.addMember(playerUuid, Project.ProjectRole.PROJECT_MANAGER, minecraft.player.getName().getString());
         }
-        TodoListMod.getProjectManager().addProject(project);
+        TodoListNeoForge.getProjectManager().addProject(project);
         saveProjectsByScope(project.getScope());
     }
 
+    /**
+     * 本地回退：更新项目。
+     * @param project 项目
+     */
     private static void updateProjectLocally(Project project) {
         if (project == null) {
             return;
         }
-        ProjectManager manager = TodoListMod.getProjectManager();
+        ProjectManager manager = TodoListNeoForge.getProjectManager();
         Project existing = manager.getProject(project.getId());
         if (existing == null) {
             return;
@@ -312,11 +331,15 @@ public class ClientProjectPackets {
         saveProjectsByScope(existing.getScope());
     }
 
+    /**
+     * 本地回退：删除项目。
+     * @param projectId 项目 ID
+     */
     private static void deleteProjectLocally(String projectId) {
         if (projectId == null || projectId.isEmpty()) {
             return;
         }
-        ProjectManager manager = TodoListMod.getProjectManager();
+        ProjectManager manager = TodoListNeoForge.getProjectManager();
         Project existing = manager.getProject(projectId);
         if (existing == null) {
             return;
@@ -325,19 +348,28 @@ public class ClientProjectPackets {
         saveProjectsByScope(existing.getScope());
     }
 
+    /**
+     * 按范围保存项目数据。
+     * @param scope 项目范围
+     */
     private static void saveProjectsByScope(Project.Scope scope) {
         try {
             if (scope == Project.Scope.TEAM) {
-                TodoListCommon.getProjectStorage().saveTeamProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.TEAM));
+                TodoListCommon.getProjectStorage().saveTeamProjects(TodoListNeoForge.getProjectManager().getProjectsByScope(Project.Scope.TEAM));
             } else {
-                TodoListCommon.getProjectStorage().saveProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.PERSONAL));
+                TodoListCommon.getProjectStorage().saveProjects(TodoListNeoForge.getProjectManager().getProjectsByScope(Project.Scope.PERSONAL));
             }
         } catch (Exception e) {
             TodoConstants.LOGGER.error("Failed to save projects in local fallback mode", e);
         }
     }
 
+    /**
+     * 判断是否需要走本地回退逻辑。
+     * @param channelId 通道 ID
+     * @return 是否回退
+     */
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
-        return !ClientPlayNetworking.canSend(FabricProjectPayload.TYPE);
+        return !NeoForgeNetworkBridge.canSend(channelId);
     }
 }

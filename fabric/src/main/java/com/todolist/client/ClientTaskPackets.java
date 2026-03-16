@@ -1,12 +1,14 @@
 package com.todolist.client;
 
 import com.todolist.TodoListMod;
+import com.todolist.network.FabricTaskPayload;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 
 /**
@@ -17,40 +19,43 @@ public class ClientTaskPackets {
      * 注册客户端接收的任务相关网络包处理器。
      */
     public static void registerClientPackets() {
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
-            List<Task> tasks = TaskPackets.readTaskList(buf);
-            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
-            client.execute(() -> {
-                if (!namespaceAtReceive.equals(DataPathProvider.getStorageNamespace())) {
-                    TodoListMod.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
-                            namespaceAtReceive, DataPathProvider.getStorageNamespace());
-                    return;
-                }
-                try {
-                    TodoListMod.getTaskStorage().saveTasks(tasks);
-                    TodoListMod.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
-                } catch (Exception e) {
-                    TodoListMod.LOGGER.error("Failed to save synced tasks on client", e);
-                }
-            });
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TEAM_SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
-            List<Task> tasks = TaskPackets.readTaskList(buf);
-            client.execute(() -> {
-                TodoClient.updateTeamTasksFromServer(tasks);
-                TodoListMod.LOGGER.info("Received {} team tasks from server", tasks.size());
-            });
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TASK_CONFIRMED_ID, (client, handler, buf, responseSender) -> {
-            String action = buf.readUtf();
-            String taskId = buf.readUtf();
-            boolean success = buf.readBoolean();
-
-            client.execute(() -> {
-                TodoListMod.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId);
-            });
+        ClientPlayNetworking.registerGlobalReceiver(FabricTaskPayload.TYPE, (payload, context) -> {
+            ResourceLocation channelId = payload.channel();
+            FriendlyByteBuf buf = payload.toBuf();
+            Minecraft client = context.client();
+            if (channelId.equals(TaskPackets.SYNC_TASKS_ID)) {
+                List<Task> tasks = TaskPackets.readTaskList(buf);
+                String namespaceAtReceive = DataPathProvider.getStorageNamespace();
+                client.execute(() -> {
+                    if (!namespaceAtReceive.equals(DataPathProvider.getStorageNamespace())) {
+                        TodoListMod.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
+                                namespaceAtReceive, DataPathProvider.getStorageNamespace());
+                        return;
+                    }
+                    try {
+                        TodoListMod.getTaskStorage().saveTasks(tasks);
+                        TodoListMod.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
+                    } catch (Exception e) {
+                        TodoListMod.LOGGER.error("Failed to save synced tasks on client", e);
+                    }
+                });
+                return;
+            }
+            if (channelId.equals(TaskPackets.TEAM_SYNC_TASKS_ID)) {
+                List<Task> tasks = TaskPackets.readTaskList(buf);
+                client.execute(() -> {
+                    TodoClient.updateTeamTasksFromServer(tasks);
+                    TodoListMod.LOGGER.info("Received {} team tasks from server", tasks.size());
+                });
+                return;
+            }
+            if (channelId.equals(TaskPackets.TASK_CONFIRMED_ID)) {
+                String action = buf.readUtf();
+                String taskId = buf.readUtf();
+                boolean success = buf.readBoolean();
+                client.execute(() ->
+                        TodoListMod.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId));
+            }
         });
     }
 
@@ -64,12 +69,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.REPLACE_TASKS_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
-        ClientPlayNetworking.send(TaskPackets.REPLACE_TASKS_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.REPLACE_TASKS_ID, buf));
     }
 
     /**
@@ -82,12 +87,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
-        ClientPlayNetworking.send(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_REPLACE_TASKS_ID, buf));
     }
 
     /**
@@ -98,11 +103,11 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        ClientPlayNetworking.send(TaskPackets.TEAM_REQUEST_SYNC_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_REQUEST_SYNC_ID, buf));
     }
 
     /**
@@ -118,12 +123,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.ADD_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
-        ClientPlayNetworking.send(TaskPackets.ADD_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.ADD_TASK_ID, buf));
     }
 
     /**
@@ -139,12 +144,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.UPDATE_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
-        ClientPlayNetworking.send(TaskPackets.UPDATE_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.UPDATE_TASK_ID, buf));
     }
 
     /**
@@ -157,12 +162,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.DELETE_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(taskId);
-        ClientPlayNetworking.send(TaskPackets.DELETE_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.DELETE_TASK_ID, buf));
     }
 
     /**
@@ -175,12 +180,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.TOGGLE_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(taskId);
-        ClientPlayNetworking.send(TaskPackets.TOGGLE_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TOGGLE_TASK_ID, buf));
     }
 
     /**
@@ -193,12 +198,12 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_TOGGLE_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(taskId);
-        ClientPlayNetworking.send(TaskPackets.TEAM_TOGGLE_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_TOGGLE_TASK_ID, buf));
     }
 
     /**
@@ -212,7 +217,7 @@ public class ClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ClientPlayNetworking.canSend(TaskPackets.TEAM_ASSIGN_TASK_ID)) {
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -223,6 +228,6 @@ public class ClientTaskPackets {
             buf.writeBoolean(true);
             buf.writeUtf(assigneeUuid);
         }
-        ClientPlayNetworking.send(TaskPackets.TEAM_ASSIGN_TASK_ID, buf);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_ASSIGN_TASK_ID, buf));
     }
 }

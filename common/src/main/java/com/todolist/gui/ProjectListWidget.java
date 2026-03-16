@@ -213,15 +213,15 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
          if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
-             if (amount == 0) {
+             if (verticalAmount == 0) {
                  return false;
              }
              int visibleItems = Math.max(1, height / itemHeight);
              int maxScroll = Math.max(0, projects.size() - visibleItems);
              int before = scrollOffset;
-             if (amount > 0) {
+             if (verticalAmount > 0) {
                  scrollOffset = Math.max(0, scrollOffset - 1);
              } else {
                  scrollOffset = Math.min(maxScroll, scrollOffset + 1);

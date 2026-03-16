@@ -1,41 +1,32 @@
 package com.todolist.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
-import com.todolist.TodoListForge;
+import com.todolist.TodoListNeoForge;
 import com.todolist.config.ModConfig;
-import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.gui.ConfigScreen;
 import com.todolist.gui.TodoScreen;
+import com.todolist.neoforge.network.NeoForgeNetworkBridge;
 import com.todolist.network.ProjectPackets;
 import com.todolist.network.TaskPackets;
-import com.todolist.project.Project;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
-import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.LayeredDraw;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.client.ConfigScreenHandler;
-import net.minecraftforge.client.event.AddGuiOverlayLayersEvent;
-import net.minecraftforge.client.gui.overlay.ForgeLayeredDraw;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Forge 平台客户端主类。
- * 负责客户端初始化、事件监听、快捷键处理与 HUD 渲染。
+ * NeoForge 平台客户端主类。
+ * 负责客户端初始化、事件监听与 HUD 渲染等处理。
  */
-public final class ForgeTodoClient {
-    private static final ResourceLocation HUD_OVERLAY_ID =
-            ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "todo_hud");
+public final class NeoForgeTodoClient {
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
@@ -48,29 +39,27 @@ public final class ForgeTodoClient {
     private static boolean pendingRemoteResync;
 
     /**
-     * 私有构造函数，避免外部实例化。
+     * 私有构造函数，禁止实例化。
      */
-    private ForgeTodoClient() {
+    private NeoForgeTodoClient() {
     }
 
     /**
-     * 初始化客户端。
-     * 注册配置屏幕、HUD、网络包与事件监听器。
+     * 初始化 NeoForge 客户端逻辑。
      */
     public static void initialize() {
         client = Minecraft.getInstance();
         registerConfigScreenFactory();
-        ClientBridge.setOps(new ForgeClientBridgeOps());
+        ClientBridge.setOps(new NeoForgeClientBridgeOps());
         try {
             registerHudRenderer();
-            registerHudOverlayLayer();
         } catch (Exception e) {
-            TodoListForge.LOGGER.warn("Failed to initialize Forge HUD renderer", e);
+            TodoListNeoForge.LOGGER.warn("Failed to initialize NeoForge HUD renderer", e);
         }
-        ForgeClientTaskPackets.registerClientPackets();
-        ForgeClientProjectPackets.registerClientPackets();
+        NeoForgeClientTaskPackets.registerClientPackets();
+        NeoForgeClientProjectPackets.registerClientPackets();
         registerReflectiveListeners();
-        TodoListForge.LOGGER.info("Todo List Mod Forge client initialized");
+        TodoListNeoForge.LOGGER.info("Todo List Mod NeoForge client initialized");
     }
 
     /**
@@ -79,65 +68,31 @@ public final class ForgeTodoClient {
     private static void registerConfigScreenFactory() {
         try {
             ModLoadingContext.get().registerExtensionPoint(
-                    ConfigScreenHandler.ConfigScreenFactory.class,
-                    () -> new ConfigScreenHandler.ConfigScreenFactory((minecraft, parent) -> new ConfigScreen(parent))
+                    IConfigScreenFactory.class,
+                    () -> (modContainer, parent) -> new ConfigScreen(parent)
             );
         } catch (Exception e) {
-            TodoListForge.LOGGER.warn("Failed to register Forge config screen factory", e);
+            TodoListNeoForge.LOGGER.warn("Failed to register NeoForge config screen factory", e);
         }
     }
 
     /**
-     * 注册 HUD 图层到新的叠加层系统。
-     */
-    private static void registerHudOverlayLayer() {
-        try {
-            FMLJavaModLoadingContext.get().getModEventBus()
-                    .addListener(ForgeTodoClient::onAddGuiOverlayLayersEvent);
-        } catch (Exception e) {
-            TodoListForge.LOGGER.warn("Failed to register Forge HUD overlay layer", e);
-        }
-    }
-
-    /**
-     * 处理叠加层注册事件，将 HUD 插入到热键栏层之上。
-     *
-     * @param event 叠加层注册事件
-     */
-    private static void onAddGuiOverlayLayersEvent(AddGuiOverlayLayersEvent event) {
-        event.getLayeredDraw().addAbove(ForgeLayeredDraw.HOTBAR, HUD_OVERLAY_ID, ForgeTodoClient::renderHudLayer);
-    }
-
-    /**
-     * 渲染 HUD 图层。
-     *
-     * @param guiGraphics GUI 绘制上下文
-     * @param deltaTracker 帧间隔计算器
-     */
-    private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
-        if (hudRenderer == null) {
-            return;
-        }
-        float partialTick = deltaTracker != null ? deltaTracker.getGameTimeDeltaPartialTick(true) : 0.0f;
-        hudRenderer.render(guiGraphics, partialTick);
-    }
-
-    /**
-     * 通过反射注册客户端事件监听器，降低 API 变动的影响。
+     * 通过反射注册客户端事件监听器。
      */
     private static void registerReflectiveListeners() {
-        Object eventBus = MinecraftForge.EVENT_BUS;
-        registerListener(eventBus, "net.minecraftforge.event.TickEvent$ClientTickEvent", ForgeTodoClient::onClientTickEvent);
-        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingOut", ForgeTodoClient::onClientLoggingOutEvent);
-        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn", ForgeTodoClient::onClientLoggingInEvent);
+        Object eventBus = NeoForge.EVENT_BUS;
+        registerListener(eventBus, "net.neoforged.neoforge.event.TickEvent$ClientTickEvent", NeoForgeTodoClient::onClientTickEvent);
+        registerListener(eventBus, "net.neoforged.neoforge.client.event.RenderGuiEvent$Post", NeoForgeTodoClient::onRenderGuiPostEvent);
+        registerListener(eventBus, "net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingOut", NeoForgeTodoClient::onClientLoggingOutEvent);
+        registerListener(eventBus, "net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingIn", NeoForgeTodoClient::onClientLoggingInEvent);
     }
 
     /**
-     * 使用反射向事件总线注册监听器。
+     * 注册指定事件监听器。
      *
-     * @param eventBus 事件总线实例
+     * @param eventBus 事件总线
      * @param eventClassName 事件类名
-     * @param consumer 事件处理器
+     * @param consumer 处理函数
      */
     private static void registerListener(Object eventBus, String eventClassName, java.util.function.Consumer<Object> consumer) {
         try {
@@ -146,12 +101,14 @@ public final class ForgeTodoClient {
                     .getMethod("addListener", EventPriority.class, boolean.class, Class.class, java.util.function.Consumer.class)
                     .invoke(eventBus, EventPriority.NORMAL, false, eventClass, consumer);
         } catch (Exception e) {
-            TodoListForge.LOGGER.warn("Failed to register Forge client listener for {}", eventClassName, e);
+            TodoListNeoForge.LOGGER.warn("Failed to register NeoForge client listener for {}", eventClassName, e);
         }
     }
 
     /**
-     * 处理客户端 Tick 事件，响应快捷键并维护状态同步。
+     * 客户端 Tick 事件处理。
+     *
+     * @param ignored 事件对象
      */
     private static void onClientTickEvent(Object ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -168,11 +125,11 @@ public final class ForgeTodoClient {
             applyStorageNamespace(resolveStorageNamespace(current));
         }
         if (pendingRemoteResync &&
-                ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
-                ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
-            ForgeClientProjectPackets.sendRequestSyncProjects();
-            ForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
-            ForgeClientTaskPackets.requestTeamSync();
+                NeoForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
+                NeoForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+            NeoForgeClientProjectPackets.sendRequestSyncProjects();
+            NeoForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
+            NeoForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
         if (current.player == null) {
@@ -200,7 +157,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 处理客户端退出事件，重置远端同步标记。
+     * 客户端登出事件处理。
+     *
+     * @param ignored 事件对象
      */
     private static void onClientLoggingOutEvent(Object ignored) {
         pendingRemoteResync = false;
@@ -208,7 +167,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 处理客户端登录事件，准备远端同步。
+     * 客户端登录事件处理。
+     *
+     * @param ignored 事件对象
      */
     private static void onClientLoggingInEvent(Object ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -222,10 +183,10 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 解析当前服务器的存储命名空间。
+     * 根据服务器信息生成存储命名空间。
      *
-     * @param client Minecraft 客户端实例
-     * @return 存储命名空间
+     * @param client 客户端实例
+     * @return 命名空间
      */
     private static String resolveStorageNamespace(Minecraft client) {
         if (client == null || client.isLocalServer()) {
@@ -239,9 +200,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 应用新的存储命名空间并同步 HUD 状态。
+     * 应用新的存储命名空间。
      *
-     * @param namespace 存储命名空间
+     * @param namespace 命名空间
      */
     private static void applyStorageNamespace(String namespace) {
         if (namespace == null || namespace.isEmpty()) {
@@ -258,22 +219,39 @@ public final class ForgeTodoClient {
         teamTaskManager.clearAll();
         String lastActive = ModConfig.getInstance().getLastActiveProjectId();
         if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListForge.getProjectManager().getProject(lastActive);
+            Project p = TodoListNeoForge.getProjectManager().getProject(lastActive);
             if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
                 p = null;
             }
             if (p != null) {
                 setActiveProjectId(p.getId());
                 ClientBridge.syncHudViewForProject(p);
-                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+                NeoForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
             }
         }
     }
 
     /**
-     * 打开 Todo 列表界面。
+     * 渲染 HUD 覆盖层。
      *
-     * @param current 当前 Minecraft 客户端
+     * @param event 事件对象
+     */
+    private static void onRenderGuiPostEvent(Object event) {
+        if (hudRenderer == null) {
+            return;
+        }
+        if (event instanceof RenderGuiEvent.Post postEvent) {
+            float partialTick = postEvent.getPartialTick() != null
+                    ? postEvent.getPartialTick().getGameTimeDeltaPartialTick(true)
+                    : 0.0f;
+            hudRenderer.render(postEvent.getGuiGraphics(), partialTick);
+        }
+    }
+
+    /**
+     * 打开任务列表界面。
+     *
+     * @param current 客户端实例
      */
     private static void openTodoScreen(Minecraft current) {
         if (current.screen == null) {
@@ -282,7 +260,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 初始化 HUD 渲染器并注册到平台适配层。
+     * 注册 HUD 渲染器。
      */
     private static void registerHudRenderer() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -294,7 +272,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 切换 HUD 展开/收起状态。
+     * 切换 HUD 展开状态。
      */
     private static void toggleHud() {
         if (hudRenderer != null) {
@@ -320,18 +298,18 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 获取当前激活项目 ID。
+     * 获取当前活动项目 ID。
      *
-     * @return 激活项目 ID
+     * @return 项目 ID
      */
     public static String getActiveProjectId() {
         return activeProjectId;
     }
 
     /**
-     * 设置当前激活项目 ID。
+     * 设置当前活动项目 ID。
      *
-     * @param projectId 激活项目 ID
+     * @param projectId 项目 ID
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
@@ -347,7 +325,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 设置 HUD 可见状态。
+     * 设置 HUD 可见性。
      *
      * @param visible 是否可见
      */
@@ -358,20 +336,20 @@ public final class ForgeTodoClient {
     /**
      * 从服务端更新团队任务列表。
      *
-     * @param tasks 团队任务列表
+     * @param tasks 任务列表
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
         String lastActive = ModConfig.getInstance().getLastActiveProjectId();
         if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListForge.getProjectManager().getProject(lastActive);
+            Project p = TodoListNeoForge.getProjectManager().getProject(lastActive);
             if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
                 p = null;
             }
             if (p != null) {
                 setActiveProjectId(p.getId());
                 ClientBridge.syncHudViewForProject(p);
-                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+                NeoForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
             }
         }
         for (Task task : tasks) {
@@ -380,7 +358,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 判断团队项目功能是否可用。
+     * 判断是否启用团队项目功能。
      *
      * @return 是否启用
      */
@@ -395,6 +373,6 @@ public final class ForgeTodoClient {
                 return false;
             }
         }
-        return ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
+        return NeoForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
 }

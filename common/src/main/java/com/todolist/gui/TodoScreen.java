@@ -930,16 +930,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         boolean handled = false;
         if (taskListWidget != null) {
-            handled = taskListWidget.mouseScrolled(mouseX, mouseY, 0, amount);
+            handled = taskListWidget.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         if (!handled && projectListWidget != null) {
-            handled = projectListWidget.mouseScrolled(mouseX, mouseY, amount);
+            handled = projectListWidget.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         if (!handled) {
-            handled = super.mouseScrolled(mouseX, mouseY, amount);
+            handled = super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         return handled;
     }
@@ -2236,25 +2236,25 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
             if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
                 if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
                     int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
-                    if (amount < 0 && scrollOffset < maxOffset) {
+                    if (verticalAmount < 0 && scrollOffset < maxOffset) {
                         scrollOffset++;
                         updatePlayerButtons();
-                    } else if (amount > 0 && scrollOffset > 0) {
+                    } else if (verticalAmount > 0 && scrollOffset > 0) {
                         scrollOffset--;
                         updatePlayerButtons();
                     }
                 }
             }
-            return super.mouseScrolled(mouseX, mouseY, amount);
+            return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
 
         @Override
         public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-            this.renderBackground(context);
+            this.renderBackground(context, mouseX, mouseY, delta);
             super.render(context, mouseX, mouseY, delta);
         }
     }

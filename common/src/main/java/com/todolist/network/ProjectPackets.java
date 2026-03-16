@@ -35,19 +35,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ProjectPackets {
     // Packet IDs
-    public static final ResourceLocation SYNC_PROJECTS_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_projects");
-    public static final ResourceLocation ADD_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "add_project");
-    public static final ResourceLocation UPDATE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "update_project");
-    public static final ResourceLocation DELETE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "delete_project");
-    public static final ResourceLocation ADD_MEMBER_ID = new ResourceLocation(TodoConstants.MOD_ID, "add_member");
-    public static final ResourceLocation REMOVE_MEMBER_ID = new ResourceLocation(TodoConstants.MOD_ID, "remove_member");
-    public static final ResourceLocation UPDATE_MEMBER_ROLE_ID = new ResourceLocation(TodoConstants.MOD_ID, "update_member_role");
-    public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_join_project");
-    public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = new ResourceLocation(TodoConstants.MOD_ID, "request_sync_projects");
-    public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
-    public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_active_project");
-    public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
-    public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_hud_visibility");
+    public static final ResourceLocation SYNC_PROJECTS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_projects");
+    public static final ResourceLocation ADD_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_project");
+    public static final ResourceLocation UPDATE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_project");
+    public static final ResourceLocation DELETE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_project");
+    public static final ResourceLocation ADD_MEMBER_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_member");
+    public static final ResourceLocation REMOVE_MEMBER_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "remove_member");
+    public static final ResourceLocation UPDATE_MEMBER_ROLE_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_member_role");
+    public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_join_project");
+    public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_sync_projects");
+    public static final ResourceLocation SET_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_active_project");
+    public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_active_project");
+    public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
+    public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<String>> playerHudStarredProjectIdsMap = new ConcurrentHashMap<>();
@@ -571,20 +571,18 @@ public class ProjectPackets {
             return;
         }
 
-        server.getProfileCache().getAsync(memberName, optionalProfile -> {
-            optionalProfile.ifPresent(profile -> {
-                server.execute(() -> {
-                    String uuid = profile.getId().toString();
-                    if (project.getMembers().containsKey(uuid)) return;
+        server.getProfileCache().getAsync(memberName).thenAccept(optionalProfile -> {
+            optionalProfile.ifPresent(profile -> server.execute(() -> {
+                String uuid = profile.getId().toString();
+                if (project.getMembers().containsKey(uuid)) return;
 
-                    project.addMember(uuid, Project.ProjectRole.MEMBER, profile.getName());
-                    manager.updateProject(project);
-                    saveProjects(server, project.getScope());
-                    broadcastProjects(server);
+                project.addMember(uuid, Project.ProjectRole.MEMBER, profile.getName());
+                manager.updateProject(project);
+                saveProjects(server, project.getScope());
+                broadcastProjects(server);
 
-                    TodoConstants.LOGGER.info("Added member {} to project {}", memberName, project.getName());
-                });
-            });
+                TodoConstants.LOGGER.info("Added member {} to project {}", memberName, project.getName());
+            }));
         });
     }
 

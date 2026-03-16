@@ -95,7 +95,7 @@ public class ProjectStorage {
 
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
-        CompoundTag root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIo.read(file);
         boolean dirty = false;
         if (root != null && root.contains("projects", 9)) {
             ListTag list = root.getList("projects", 10);
@@ -137,6 +137,6 @@ public class ProjectStorage {
             list.add(project.toNbt());
         }
         root.put("projects", list);
-        NbtIo.write(root, file.toFile());
+        NbtIo.write(root, file);
     }
 }

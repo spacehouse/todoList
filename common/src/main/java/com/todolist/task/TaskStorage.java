@@ -107,7 +107,7 @@ public class TaskStorage {
         root.put("tasks", taskList);
 
         // Write to file
-        NbtIo.write(root, file.toFile());
+        NbtIo.write(root, file);
     }
 
     /**
@@ -169,7 +169,7 @@ public class TaskStorage {
      * Load tasks from a specific file
      */
     private List<Task> loadTasksFromFile(Path file) throws IOException {
-        CompoundTag root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIo.read(file);
         if (root == null) {
             TodoConstants.LOGGER.warn("Failed to read task data from {}", file);
             return new ArrayList<>();
@@ -215,7 +215,7 @@ public class TaskStorage {
             return 0L;
         }
         try {
-            CompoundTag root = NbtIo.read(file.toFile());
+            CompoundTag root = NbtIo.read(file);
             if (root == null) {
                 return 0L;
             }

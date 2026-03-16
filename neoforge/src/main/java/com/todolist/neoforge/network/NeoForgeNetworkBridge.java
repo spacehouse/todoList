@@ -1,15 +1,24 @@
-package com.todolist.forge.network;
+package com.todolist.neoforge.network;
 
 import com.todolist.TodoConstants;
 import io.netty.buffer.Unpooled;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.EventPriority;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.common.extensions.ICommonPacketListener;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -22,11 +31,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Forge 网络桥接类。
- * 负责处理基于 SimpleChannel 的网络通信，封装数据包的发送与接收逻辑。
- * 通过反射与 Forge 网络系统交互，以减少直接依赖。
+ * NeoForge 网络桥接类。
+ * 负责封装自定义载荷的注册、发送与分发逻辑。
  */
-public final class ForgeNetworkBridge {
+public final class NeoForgeNetworkBridge {
     /**
      * 服务端接收器回调。
      */
@@ -41,7 +49,8 @@ public final class ForgeNetworkBridge {
          * @param buf 数据缓冲
          * @param responseSender 回包发送器
          */
-        void receive(MinecraftServer server, ServerPlayer player, ServerGamePacketListenerImpl handler, FriendlyByteBuf buf, ForgePacketSender responseSender);
+        void receive(MinecraftServer server, ServerPlayer player, ServerGamePacketListenerImpl handler,
+                     FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
@@ -57,7 +66,7 @@ public final class ForgeNetworkBridge {
          * @param buf 数据缓冲
          * @param responseSender 回包发送器
          */
-        void receive(Minecraft client, Object handler, FriendlyByteBuf buf, ForgePacketSender responseSender);
+        void receive(Minecraft client, Object handler, FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
@@ -72,35 +81,31 @@ public final class ForgeNetworkBridge {
          * @param sender 回包发送器
          * @param server 当前服务端
          */
-        void onJoin(ServerPlayer player, ForgePacketSender sender, MinecraftServer server);
+        void onJoin(ServerPlayer player, NeoForgePacketSender sender, MinecraftServer server);
     }
 
-    private static final ForgePacketSender NO_OP_SENDER = (channelId, buf) -> { };
+    private static final NeoForgePacketSender NO_OP_SENDER = (channelId, buf) -> { };
     private static final String PROTOCOL = "1";
-    private static final int DISPATCH_ID = 0;
     private static final Map<String, ServerReceiver> SERVER_RECEIVERS = new ConcurrentHashMap<>();
     private static final Map<String, ClientReceiver> CLIENT_RECEIVERS = new ConcurrentHashMap<>();
     private static final List<JoinListener> JOIN_LISTENERS = new CopyOnWriteArrayList<>();
     private static volatile boolean initialized;
-    private static Object simpleChannel;
 
     /**
      * 私有构造函数，避免外部实例化。
      */
-    private ForgeNetworkBridge() {
+    private NeoForgeNetworkBridge() {
     }
 
     /**
-     * 初始化网络桥接。
-     * 创建 SimpleChannel 并注册分发消息。
+     * 初始化网络桥接并注册载荷处理器。
      */
     public static synchronized void init() {
         if (initialized) {
             return;
         }
         initialized = true;
-        simpleChannel = createChannel();
-        registerDispatchMessages(simpleChannel);
+        registerPayloadHandlers();
         registerPlayerLoginHook();
     }
 
@@ -137,7 +142,7 @@ public final class ForgeNetworkBridge {
     }
 
     /**
-     * 检查是否可以发送消息到指定通道（对端是否已注册）。
+     * 检查是否可以发送消息到指定通道。
      *
      * @param channelId 通道 ID
      * @return 是否可发送
@@ -151,19 +156,19 @@ public final class ForgeNetworkBridge {
         if (client.isLocalServer()) {
             return false;
         }
-        Object connection = resolveNettyConnection(client.getConnection());
-        if (connection == null) {
-            return false;
+        Object listenerObj = client.getConnection();
+        if (listenerObj instanceof ICommonPacketListener listener) {
+            return listener.hasChannel(NeoForgeDispatchPayload.TYPE);
         }
-        try {
-            Object remotePresent = invoke(simpleChannel, "isRemotePresent", new Class<?>[]{connection.getClass()}, connection);
-            if (remotePresent instanceof Boolean available) {
-                return available;
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
+        Object connection = resolveNettyConnection(listenerObj);
+        if (connection instanceof net.minecraft.network.Connection) {
+            return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel(
+                    (net.minecraft.network.Connection) connection,
+                    ConnectionProtocol.PLAY,
+                    NeoForgeDispatchPayload.TYPE.id()
+            );
         }
+        return false;
     }
 
     /**
@@ -174,7 +179,7 @@ public final class ForgeNetworkBridge {
      */
     public static void sendToServer(ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
-        invoke(simpleChannel, "sendToServer", new Class<?>[]{Object.class}, new DispatchPacket(channelId.toString(), toByteArray(buf)));
+        PacketDistributor.sendToServer(new NeoForgeDispatchPayload(channelId.toString(), toByteArray(buf)));
     }
 
     /**
@@ -186,85 +191,63 @@ public final class ForgeNetworkBridge {
      */
     public static void sendToPlayer(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
-        Object packetTarget = createPlayerTarget(player);
-        invoke(simpleChannel, "send", new Class<?>[]{packetTarget.getClass(), Object.class}, packetTarget, new DispatchPacket(channelId.toString(), toByteArray(buf)));
+        PacketDistributor.sendToPlayer(player, new NeoForgeDispatchPayload(channelId.toString(), toByteArray(buf)));
     }
 
     /**
-     * 创建 SimpleChannel 实例。
-     *
-     * @return SimpleChannel 实例
+     * 注册载荷处理器事件监听。
      */
-    private static Object createChannel() {
+    private static void registerPayloadHandlers() {
         try {
-            Class<?> networkRegistryClass = Class.forName("net.minecraftforge.network.NetworkRegistry");
-            Method factory = findMethod(networkRegistryClass, "newSimpleChannel", 4);
-            return factory.invoke(
-                    null,
-                    ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "bridge"),
-                    (Supplier<String>) () -> PROTOCOL,
-                    (java.util.function.Predicate<String>) ForgeNetworkBridge::acceptRemoteVersion,
-                    (java.util.function.Predicate<String>) ForgeNetworkBridge::acceptRemoteVersion
-            );
+            IEventBus modEventBus = ModLoadingContext.get().getActiveContainer().getEventBus();
+            modEventBus.addListener(NeoForgeNetworkBridge::onRegisterPayloadHandlers);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to create Forge channel", e);
+            throw new IllegalStateException("Failed to register NeoForge payload handlers", e);
         }
     }
 
     /**
-     * 注册分发消息，用于在单通道内传递自定义数据包。
+     * 注册载荷编解码与处理逻辑。
      *
-     * @param channel SimpleChannel 实例
+     * @param event 载荷注册事件
      */
-    private static void registerDispatchMessages(Object channel) {
-        BiConsumer<DispatchPacket, Object> encoder = (packet, bufferObj) -> {
-            FriendlyByteBuf buffer = (FriendlyByteBuf) bufferObj;
-            buffer.writeUtf(packet.channelId());
-            buffer.writeByteArray(packet.payload());
-        };
-        Function<Object, DispatchPacket> decoder = bufferObj -> {
-            FriendlyByteBuf buffer = (FriendlyByteBuf) bufferObj;
-            String channelId = buffer.readUtf();
-            byte[] payload = buffer.readByteArray();
-            return new DispatchPacket(channelId, payload);
-        };
-        BiConsumer<DispatchPacket, Supplier<Object>> dispatcher = (packet, contextSupplier) -> {
-            Object context = contextSupplier.get();
-            Runnable work = () -> dispatchPacketBySide(packet, context);
-            invoke(context, "enqueueWork", new Class<?>[]{Runnable.class}, work);
-            invoke(context, "setPacketHandled", new Class<?>[]{boolean.class}, true);
-        };
-        invoke(channel, "registerMessage", new Class<?>[]{int.class, Class.class, BiConsumer.class, Function.class, BiConsumer.class}, DISPATCH_ID, DispatchPacket.class, encoder, decoder, dispatcher);
+    private static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar(TodoConstants.MOD_ID).versioned(PROTOCOL);
+        registrar.playBidirectional(NeoForgeDispatchPayload.TYPE, NeoForgeDispatchPayload.CODEC, NeoForgeNetworkBridge::handleDispatchPayload);
     }
 
     /**
-     * 按侧分发数据包。
+     * 处理载荷并分派到对应侧。
      *
-     * @param packet 数据包
-     * @param context 包上下文
+     * @param payload 载荷
+     * @param context 载荷上下文
      */
-    private static void dispatchPacketBySide(DispatchPacket packet, Object context) {
-        Object senderObj = null;
-        try {
-            senderObj = invoke(context, "getSender", new Class<?>[]{});
-        } catch (Exception ignored) {
-        }
-        if (senderObj instanceof ServerPlayer) {
-            dispatchServerPacket(packet, context);
+    private static void handleDispatchPayload(NeoForgeDispatchPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> dispatchPacketBySide(payload, context));
+    }
+
+    /**
+     * 按侧分发载荷。
+     *
+     * @param payload 载荷
+     * @param context 载荷上下文
+     */
+    private static void dispatchPacketBySide(NeoForgeDispatchPayload payload, IPayloadContext context) {
+        if (context.flow() == PacketFlow.SERVERBOUND) {
+            dispatchServerPacket(payload, context);
             return;
         }
-        dispatchClientPacket(packet);
+        dispatchClientPacket(payload);
     }
 
     /**
-     * 处理服务端数据包。
+     * 处理服务端载荷。
      *
-     * @param packet 数据包
-     * @param context 包上下文
+     * @param payload 载荷
+     * @param context 载荷上下文
      */
-    private static void dispatchServerPacket(DispatchPacket packet, Object context) {
-        Object senderObj = invoke(context, "getSender", new Class<?>[]{});
-        if (!(senderObj instanceof ServerPlayer player)) {
+    private static void dispatchServerPacket(NeoForgeDispatchPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) {
             return;
         }
         MinecraftServer server = player.getServer();
@@ -272,30 +255,30 @@ public final class ForgeNetworkBridge {
             return;
         }
         ServerGamePacketListenerImpl handler = getServerNetworkHandler(player);
-        ServerReceiver receiver = SERVER_RECEIVERS.get(packet.channelId());
+        ServerReceiver receiver = SERVER_RECEIVERS.get(payload.channelId());
         if (receiver == null) {
             return;
         }
-        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(packet.payload()));
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(payload.payload()));
         receiver.receive(server, player, handler, buf, NO_OP_SENDER);
     }
 
     /**
-     * 处理客户端数据包。
+     * 处理客户端载荷。
      *
-     * @param packet 数据包
+     * @param payload 载荷
      */
-    private static void dispatchClientPacket(DispatchPacket packet) {
+    private static void dispatchClientPacket(NeoForgeDispatchPayload payload) {
         Minecraft client = Minecraft.getInstance();
         if (client == null) {
             return;
         }
-        ClientReceiver receiver = CLIENT_RECEIVERS.get(packet.channelId());
+        ClientReceiver receiver = CLIENT_RECEIVERS.get(payload.channelId());
         if (receiver == null) {
             return;
         }
         Object connectionSnapshot = client.getConnection();
-        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(packet.payload()));
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(payload.payload()));
         client.execute(() -> receiver.receive(client, connectionSnapshot, buf, NO_OP_SENDER));
     }
 
@@ -304,9 +287,10 @@ public final class ForgeNetworkBridge {
      */
     private static void registerPlayerLoginHook() {
         try {
-            Object eventBus = MinecraftForge.EVENT_BUS;
-            Class<?> loginEventClass = Class.forName("net.minecraftforge.event.entity.player.PlayerEvent$PlayerLoggedInEvent");
-            Method addListener = eventBus.getClass().getMethod("addListener", EventPriority.class, boolean.class, Class.class, java.util.function.Consumer.class);
+            Object eventBus = NeoForge.EVENT_BUS;
+            Class<?> loginEventClass = Class.forName("net.neoforged.neoforge.event.entity.player.PlayerEvent$PlayerLoggedInEvent");
+            Method addListener = eventBus.getClass().getMethod("addListener", EventPriority.class, boolean.class,
+                    Class.class, java.util.function.Consumer.class);
             java.util.function.Consumer<Object> consumer = event -> {
                 Object playerObj = invoke(event, "getEntity", new Class<?>[]{});
                 if (!(playerObj instanceof ServerPlayer player)) {
@@ -322,35 +306,7 @@ public final class ForgeNetworkBridge {
             };
             addListener.invoke(eventBus, EventPriority.NORMAL, false, loginEventClass, consumer);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to register Forge player login hook", e);
-        }
-    }
-
-    /**
-     * 判断协议是否可兼容。
-     *
-     * @param version 对端协议版本
-     * @return 是否接受
-     */
-    private static boolean acceptRemoteVersion(String version) {
-        return true;
-    }
-
-    /**
-     * 创建玩家目标分发器。
-     *
-     * @param player 目标玩家
-     * @return 分发器对象
-     */
-    private static Object createPlayerTarget(ServerPlayer player) {
-        try {
-            Class<?> distributorClass = Class.forName("net.minecraftforge.network.PacketDistributor");
-            Field playerField = distributorClass.getField("PLAYER");
-            Object distributor = playerField.get(null);
-            Method withMethod = distributor.getClass().getMethod("with", Supplier.class);
-            return withMethod.invoke(distributor, (Supplier<Object>) () -> player);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to create packet target", e);
+            throw new IllegalStateException("Failed to register NeoForge player login hook", e);
         }
     }
 
@@ -452,14 +408,5 @@ public final class ForgeNetworkBridge {
         } catch (Exception e) {
             throw new IllegalStateException("Invocation failed: " + target.getClass().getName() + "#" + name, e);
         }
-    }
-
-    /**
-     * 分发数据包封装。
-     *
-     * @param channelId 通道 ID
-     * @param payload 数据内容
-     */
-    private record DispatchPacket(String channelId, byte[] payload) {
     }
 }
