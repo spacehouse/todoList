@@ -9,8 +9,10 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -21,6 +23,13 @@ import net.minecraft.network.chat.Component;
  * 负责在 HUD 上渲染待办任务列表。
  */
 public class TodoHudRenderer {
+    private static final long HUD_MODEL_REFRESH_INTERVAL_MS = 250L;
+    private static final Comparator<Task> HUD_TASK_COMPARATOR = (a, b) -> {
+        int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
+        if (priority != 0) return priority;
+        return Long.compare(a.getCreatedAt(), b.getCreatedAt());
+    };
+
     /**
      * HUD 视图模式，和配置项中的字符串一一对应。
      */
@@ -35,8 +44,20 @@ public class TodoHudRenderer {
     private boolean expanded;
     private long lastPersonalReloadMs;
     private long lastTeamReloadMs;
+    private long cachedPersonalLastSavedMs = -1L;
+    private long lastHudModelRefreshMs;
+    private int cachedLayoutHudWidth = -1;
+    private double cachedGuiScale = -1D;
     private List<Task> cachedPersonalTasks = new ArrayList<>();
     private List<Task> cachedTeamTasks = new ArrayList<>();
+    private List<Task> cachedPendingTasks = new ArrayList<>();
+    private List<Task> cachedDoneTasks = new ArrayList<>();
+    private final Map<String, RowRenderCache> rowRenderCacheByTaskId = new HashMap<>();
+    private HudViewMode cachedHudViewMode = HudViewMode.PERSONAL;
+    private Project.Scope cachedHudScope = Project.Scope.PERSONAL;
+    private String cachedProjectSourceMode = "";
+    private String cachedActiveProjectId = "";
+    private String cachedPlayerUuid = "";
 
     // 缓存常用组件
     private static final Component PRIORITY_HIGH_ICON = Component.translatable("hud.todolist.priority.high.icon").withStyle(ChatFormatting.RED);
@@ -52,6 +73,29 @@ public class TodoHudRenderer {
     private static final Component LABEL_TEAM_ALL = Component.translatable("hud.todolist.view_label.team_all");
     private static final Component LABEL_TEAM_ASSIGNED = Component.translatable("hud.todolist.view_label.team_assigned");
     private static final Component LABEL_PERSONAL = Component.translatable("hud.todolist.view_label.personal");
+
+    private static class RowRenderCache {
+        private final String taskId;
+        private final Component priorityText;
+        private final Component checkboxText;
+        private final int checkboxOffset;
+        private final int titleOffset;
+        private final Component titleText;
+        private final Component tagText;
+        private final int tagXOffset;
+
+        private RowRenderCache(String taskId, Component priorityText, Component checkboxText, int checkboxOffset,
+                               int titleOffset, Component titleText, Component tagText, int tagXOffset) {
+            this.taskId = taskId;
+            this.priorityText = priorityText;
+            this.checkboxText = checkboxText;
+            this.checkboxOffset = checkboxOffset;
+            this.titleOffset = titleOffset;
+            this.titleText = titleText;
+            this.tagText = tagText;
+            this.tagXOffset = tagXOffset;
+        }
+    }
 
     /**
      * 创建 HUD 渲染器，并按配置初始化展开状态。
@@ -75,33 +119,17 @@ public class TodoHudRenderer {
 
         HudViewMode viewMode = resolveViewMode(config);
         Project.Scope scope = getScopeByView(viewMode);
-        List<Task> tasks = loadTasksByScope(scope);
-        tasks = filterByViewMode(tasks, viewMode);
-        tasks = filterByProjectSource(tasks, scope, config);
+        refreshHudModelIfNeeded(config, viewMode, scope);
 
-        if (tasks.isEmpty() && !config.isHudShowWhenEmpty()) return;
+        if (cachedPendingTasks.isEmpty() && cachedDoneTasks.isEmpty() && !config.isHudShowWhenEmpty()) return;
 
         // Calculate layout
         int rowHeight = 12;
         int headerHeight = 14;
         int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
         
-        List<Task> pending = new ArrayList<>();
-        List<Task> done = new ArrayList<>();
-        for (Task task : tasks) {
-            if (task.isCompleted()) {
-                done.add(task);
-            } else {
-                pending.add(task);
-            }
-        }
-        Comparator<Task> hudComparator = (a, b) -> {
-            int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
-            if (priority != 0) return priority;
-            return Long.compare(a.getCreatedAt(), b.getCreatedAt());
-        };
-        pending.sort(hudComparator);
-        done.sort(hudComparator);
+        List<Task> pending = cachedPendingTasks;
+        List<Task> done = cachedDoneTasks;
 
         int todoLimit = Math.max(0, config.getHudTodoLimit());
         int doneLimit = Math.max(0, config.getHudDoneLimit());
@@ -129,6 +157,54 @@ public class TodoHudRenderer {
         if (y + panelHeight > screenHeight) y = Math.max(0, screenHeight - panelHeight);
 
         renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, shownPending, shownDone, hiddenCount, config, getViewLabel(viewMode));
+    }
+
+    private void refreshHudModelIfNeeded(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
+        long now = System.currentTimeMillis();
+        String sourceMode = config.getHudProjectSource();
+        String activeProjectId = ClientBridge.ops().getActiveProjectId();
+        String playerUuid = client.player == null ? "" : client.player.getStringUUID();
+        int hudWidth = config.getHudWidth();
+        double guiScale = client.getWindow().getGuiScale();
+        boolean shouldRefresh = now - lastHudModelRefreshMs >= HUD_MODEL_REFRESH_INTERVAL_MS
+                || viewMode != cachedHudViewMode
+                || scope != cachedHudScope
+                || !sourceMode.equals(cachedProjectSourceMode)
+                || !valueOrEmpty(activeProjectId).equals(cachedActiveProjectId)
+                || !playerUuid.equals(cachedPlayerUuid)
+                || hudWidth != cachedLayoutHudWidth
+                || Double.compare(guiScale, cachedGuiScale) != 0;
+        if (!shouldRefresh) {
+            return;
+        }
+
+        List<Task> tasks = loadTasksByScope(scope);
+        tasks = filterByViewMode(tasks, viewMode);
+        tasks = filterByProjectSource(tasks, scope, config);
+
+        List<Task> pending = new ArrayList<>();
+        List<Task> done = new ArrayList<>();
+        for (Task task : tasks) {
+            if (task.isCompleted()) {
+                done.add(task);
+            } else {
+                pending.add(task);
+            }
+        }
+        pending.sort(HUD_TASK_COMPARATOR);
+        done.sort(HUD_TASK_COMPARATOR);
+
+        cachedPendingTasks = pending;
+        cachedDoneTasks = done;
+        rebuildRowRenderCache(pending, done, hudWidth);
+        cachedHudViewMode = viewMode;
+        cachedHudScope = scope;
+        cachedProjectSourceMode = sourceMode;
+        cachedActiveProjectId = valueOrEmpty(activeProjectId);
+        cachedPlayerUuid = playerUuid;
+        cachedLayoutHudWidth = hudWidth;
+        cachedGuiScale = guiScale;
+        lastHudModelRefreshMs = now;
     }
 
     /**
@@ -168,8 +244,13 @@ public class TodoHudRenderer {
         long now = System.currentTimeMillis();
         long reloadIntervalMs = 1000L;
         if (scope == Project.Scope.PERSONAL) {
-            if (now - lastPersonalReloadMs >= reloadIntervalMs) {
+            long localLastSaved = TodoListCommon.getTaskStorage().getLocalTasksLastSaved();
+            boolean shouldReload = cachedPersonalTasks.isEmpty()
+                    || localLastSaved != cachedPersonalLastSavedMs
+                    || (now - lastPersonalReloadMs >= reloadIntervalMs && localLastSaved == 0L && cachedPersonalLastSavedMs == 0L);
+            if (shouldReload) {
                 cachedPersonalTasks = TodoListCommon.getTaskStorage().loadTasksSafe();
+                cachedPersonalLastSavedMs = localLastSaved;
                 lastPersonalReloadMs = now;
             }
             return new ArrayList<>(cachedPersonalTasks);
@@ -190,7 +271,7 @@ public class TodoHudRenderer {
      */
     private List<Task> filterByViewMode(List<Task> source, HudViewMode viewMode) {
         if (viewMode == HudViewMode.PERSONAL) {
-            return new ArrayList<>(source);
+            return source;
         }
         List<Task> result = new ArrayList<>();
         String myUuid = client.player == null ? null : client.player.getStringUUID();
@@ -389,69 +470,102 @@ public class TodoHudRenderer {
      * @param task 待绘制任务
      */
     private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, float opacity, Task task) {
-        Component priorityText = switch (task.getPriority()) {
-            case HIGH -> PRIORITY_HIGH_ICON;
-            case MEDIUM -> PRIORITY_MEDIUM_ICON;
-            case LOW -> PRIORITY_LOW_ICON;
-        };
-
-        Component checkboxText = task.isCompleted() ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED;
+        RowRenderCache rowCache = rowRenderCacheByTaskId.get(task.getId());
+        if (rowCache == null) {
+            rowCache = buildRowRenderCache(task, width);
+        }
 
         int paddingX = 4;
         int rowLeft = x + paddingX;
         int rowRight = x + width - paddingX;
         int rowWidth = Math.max(0, rowRight - rowLeft);
+
+        int textY = y + (rowHeight - client.font.lineHeight) / 2;
+        int textColor = applyOpacityToColor(0xFFFFFF, opacity);
+
+        context.drawString(client.font, rowCache.priorityText, rowLeft, textY, textColor);
+        context.drawString(client.font, rowCache.checkboxText, rowLeft + rowCache.checkboxOffset, textY, textColor);
+
+        if (rowCache.titleText != null) {
+            context.drawString(client.font, rowCache.titleText, rowLeft + rowCache.titleOffset, textY, textColor);
+        }
+
+        if (rowCache.tagText != null) {
+            int tagX = rowLeft + Math.min(rowWidth, Math.max(0, rowCache.tagXOffset));
+            context.drawString(client.font, rowCache.tagText, tagX, textY, textColor);
+        }
+    }
+
+    private void rebuildRowRenderCache(List<Task> pending, List<Task> done, int hudWidth) {
+        rowRenderCacheByTaskId.clear();
+        for (Task task : pending) {
+            RowRenderCache cache = buildRowRenderCache(task, hudWidth);
+            rowRenderCacheByTaskId.put(cache.taskId, cache);
+        }
+        for (Task task : done) {
+            RowRenderCache cache = buildRowRenderCache(task, hudWidth);
+            rowRenderCacheByTaskId.put(cache.taskId, cache);
+        }
+    }
+
+    private RowRenderCache buildRowRenderCache(Task task, int hudWidth) {
+        String taskId = valueOrEmpty(task.getId());
+        Component priorityText = switch (task.getPriority()) {
+            case HIGH -> PRIORITY_HIGH_ICON;
+            case MEDIUM -> PRIORITY_MEDIUM_ICON;
+            case LOW -> PRIORITY_LOW_ICON;
+        };
+        Component checkboxText = task.isCompleted() ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED;
+        int spaceWidth = client.font.width(" ");
+        int priorityWidth = client.font.width(priorityText);
+        int checkboxWidth = client.font.width(checkboxText);
+        int checkboxOffset = priorityWidth + spaceWidth;
+
+        int rowWidth = Math.max(0, hudWidth - 8);
         int tagAreaWidth = Math.max(60, Math.min(120, rowWidth / 3));
         int tagGap = 6;
         int titleAreaWidth = Math.max(0, rowWidth - tagAreaWidth - tagGap);
+        int titleOffset = checkboxOffset + checkboxWidth + spaceWidth;
+        int titleMaxWidth = Math.max(0, titleAreaWidth - titleOffset);
 
-        int textY = y + (rowHeight - client.font.lineHeight) / 2;
-        int spaceWidth = client.font.width(" ");
-        int textColor = applyOpacityToColor(0xFFFFFF, opacity);
-
-        int cursorX = rowLeft;
-        context.drawString(client.font, priorityText, cursorX, textY, textColor);
-        cursorX += client.font.width(priorityText) + spaceWidth;
-        context.drawString(client.font, checkboxText, cursorX, textY, textColor);
-        cursorX += client.font.width(checkboxText) + spaceWidth;
-
-        int titleMaxWidth = Math.max(0, titleAreaWidth - (cursorX - rowLeft));
-        String titleCore = trimWithEllipsis(task.getTitle(), titleMaxWidth);
-        Component titleText = task.isCompleted()
+        String title = valueOrEmpty(task.getTitle());
+        String titleCore = trimWithEllipsis(title, titleMaxWidth);
+        Component titleText = titleCore.isEmpty()
+                ? null
+                : (task.isCompleted()
                 ? Component.literal(titleCore).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
-                : Component.literal(titleCore).withStyle(ChatFormatting.WHITE);
-        if (!titleCore.isEmpty() && titleMaxWidth > 0) {
-            context.drawString(client.font, titleText, cursorX, textY, textColor);
-        }
+                : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
 
+        boolean completed = task.isCompleted();
         String assigneeLabel = resolveAssigneeLabel(task);
+        String mergedTagText = assigneeLabel.isEmpty() ? buildTagText(task) : "[" + assigneeLabel + "]" + buildTagText(task);
+        String trimmedTagText = trimWithEllipsis(mergedTagText, tagAreaWidth);
+        Component tagText = trimmedTagText.isEmpty() ? null : Component.literal(trimmedTagText).withStyle(ChatFormatting.DARK_AQUA);
+        int tagTextWidth = trimmedTagText.isEmpty() ? 0 : client.font.width(trimmedTagText);
+        int tagXOffset = Math.max(0, Math.max(rowWidth - tagAreaWidth, rowWidth - tagTextWidth));
+
+        return new RowRenderCache(taskId, priorityText, checkboxText, checkboxOffset, titleOffset, titleText, tagText, tagXOffset);
+    }
+
+    private String buildTagText(Task task) {
         Set<String> tags = task.getTags();
-        if ((!assigneeLabel.isEmpty() || !tags.isEmpty()) && tagAreaWidth > 0) {
-            StringBuilder rightBuilder = new StringBuilder();
-            if (!assigneeLabel.isEmpty()) {
-                rightBuilder.append('[').append(assigneeLabel).append(']');
-            }
-            List<String> sortedTags = new ArrayList<>(tags);
-            sortedTags.sort(String::compareToIgnoreCase);
-            for (String tag : sortedTags) {
-                if (tag == null) {
-                    continue;
-                }
-                String trimmed = tag.trim();
-                if (trimmed.isEmpty()) {
-                    continue;
-                }
-                rightBuilder.append('[').append(trimmed).append(']');
-            }
-            String tagText = rightBuilder.toString();
-            String trimmedTagText = trimWithEllipsis(tagText, tagAreaWidth);
-            Component tagTextObj = Component.literal(trimmedTagText).withStyle(ChatFormatting.DARK_AQUA);
-            int tagTextWidth = client.font.width(trimmedTagText);
-            int tagRightX = rowRight;
-            int tagStartX = Math.max(rowLeft, rowRight - tagAreaWidth);
-            int tagX = Math.max(tagStartX, tagRightX - tagTextWidth);
-            context.drawString(client.font, tagTextObj, tagX, textY, textColor);
+        if (tags.isEmpty()) {
+            return "";
         }
+        List<String> sortedTags = new ArrayList<>(tags);
+        sortedTags.sort(String::compareToIgnoreCase);
+        StringBuilder builder = new StringBuilder();
+        for (String tag : sortedTags) {
+            if (tag == null) {
+                continue;
+            }
+            String trimmed = tag.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            builder.append('[').append(trimmed).append(']');
+        }
+        return builder.toString();
     }
 
     /**
@@ -514,6 +628,17 @@ public class TodoHudRenderer {
     public void forceRefreshTasks() {
         lastPersonalReloadMs = 0L;
         lastTeamReloadMs = 0L;
+        cachedPersonalLastSavedMs = -1L;
+        lastHudModelRefreshMs = 0L;
+        cachedLayoutHudWidth = -1;
+        cachedGuiScale = -1D;
+        cachedPendingTasks = new ArrayList<>();
+        cachedDoneTasks = new ArrayList<>();
+        rowRenderCacheByTaskId.clear();
+    }
+
+    private String valueOrEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     /**

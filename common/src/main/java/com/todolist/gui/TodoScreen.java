@@ -952,7 +952,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public void onClose() {
-        savePersonalTasksOnCloseIfNeeded();
+        discardPersonalTasksOnCloseIfNeeded();
         if (viewMode != ViewMode.PERSONAL && teamHasUnsavedChanges) {
             ClientBridge.ops().requestTeamSync();
             hasUnsavedChanges = false;
@@ -962,31 +962,24 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 在关闭界面时自动保存个人任务，避免新增后未手动保存导致数据丢失。
+     * 在关闭界面时丢弃未保存的个人任务改动，保持“仅保存按钮落盘”语义。
      */
-    private void savePersonalTasksOnCloseIfNeeded() {
+    private void discardPersonalTasksOnCloseIfNeeded() {
         if (!personalHasUnsavedChanges || personalTaskManager == null) {
             return;
         }
-        String currentNamespace = DataPathProvider.getStorageNamespace();
-        if (!openedStorageNamespace.equals(currentNamespace)) {
-            TodoConstants.LOGGER.info("Skip personal auto-save due to storage namespace switch: {} -> {}",
-                    openedStorageNamespace, currentNamespace);
-            personalHasUnsavedChanges = false;
-            if (viewMode == ViewMode.PERSONAL) {
-                hasUnsavedChanges = false;
-            }
-            return;
-        }
         try {
-            TodoListCommon.getTaskStorage().saveTasks(personalTaskManager.getAllTasks());
-            ClientBridge.ops().sendReplaceAllTasks(personalTaskManager.getAllTasks());
+            List<Task> persistedTasks = TodoListCommon.getTaskStorage().loadTasksSafe();
+            personalTaskManager.clearAll();
+            for (Task task : persistedTasks) {
+                personalTaskManager.addTask(task);
+            }
             personalHasUnsavedChanges = false;
             if (viewMode == ViewMode.PERSONAL) {
                 hasUnsavedChanges = false;
             }
         } catch (Exception e) {
-            TodoConstants.LOGGER.error("Failed to auto-save personal tasks on close", e);
+            TodoConstants.LOGGER.error("Failed to discard unsaved personal tasks on close", e);
         }
     }
 
@@ -1352,6 +1345,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         } else {
             teamHasUnsavedChanges = true;
         }
+    }
+
+    public static boolean hasPersonalUnsavedChanges() {
+        return personalHasUnsavedChanges;
     }
 
     private boolean canEditTask(Task task) {

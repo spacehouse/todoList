@@ -29,6 +29,7 @@ public class ConfigScreen extends Screen {
     private IntSliderWidget hudDoneLimitSlider;
     private DoubleStepSliderWidget hudOpacitySlider;
     private Button hudShowWhenEmptyButton;
+    private Button hudVisibilityButton;
     private Button hudProjectSourceButton;
 
     private int previewHudX;
@@ -43,6 +44,7 @@ public class ConfigScreen extends Screen {
     private int dragOffsetY;
 
     private boolean hudShowWhenEmptyValue;
+    private boolean hudVisibleValue;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
 
@@ -102,6 +104,14 @@ public class ConfigScreen extends Screen {
             updateHudShowWhenEmptyButtonLabel();
         }).bounds(leftFieldX, y + row * rowH, leftFieldWidth, fieldH).build();
         this.addRenderableWidget(hudShowWhenEmptyButton);
+
+        hudVisibleValue = ClientBridge.ops().isHudVisible();
+        hudVisibilityButton = Button.builder(Component.empty(), b -> {
+            hudVisibleValue = !hudVisibleValue;
+            ClientBridge.ops().setHudVisible(hudVisibleValue);
+            updateHudVisibilityButtonLabel();
+        }).bounds(rightFieldX, y + row * rowH, rightFieldWidth, fieldH).build();
+        this.addRenderableWidget(hudVisibilityButton);
         row++;
 
         // Row 4: HUD Opacity (Left Only)
@@ -151,6 +161,7 @@ public class ConfigScreen extends Screen {
         // I will follow the user's explicit list.
 
         updateHudShowWhenEmptyButtonLabel();
+        updateHudVisibilityButtonLabel();
 
         // Preview initialization
         previewUseCustom = cfg.isHudUseCustomPosition();
@@ -200,6 +211,7 @@ public class ConfigScreen extends Screen {
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_todo_limit"), hudTodoLimitSlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_done_limit"), hudDoneLimitSlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_show_when_empty"), hudShowWhenEmptyButton, textH);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_visibility"), hudVisibilityButton, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textH);
 
@@ -289,6 +301,7 @@ public class ConfigScreen extends Screen {
         cfg.setHudCustomX(previewHudX);
         cfg.setHudCustomY(previewHudY);
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
+        ClientBridge.ops().setHudVisible(hudVisibleValue);
         
         // Note: Default View is not exposed in UI anymore, so we keep current value or default.
         // cfg.setHudDefaultView(...); 
@@ -309,6 +322,13 @@ public class ConfigScreen extends Screen {
         if (hudShowWhenEmptyButton != null) {
             String key = hudShowWhenEmptyValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
             hudShowWhenEmptyButton.setMessage(Component.translatable(key));
+        }
+    }
+
+    private void updateHudVisibilityButtonLabel() {
+        if (hudVisibilityButton != null) {
+            String key = hudVisibleValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+            hudVisibilityButton.setMessage(Component.translatable(key));
         }
     }
 

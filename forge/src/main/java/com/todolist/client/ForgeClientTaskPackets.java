@@ -1,6 +1,7 @@
 package com.todolist.client;
 
 import com.todolist.TodoListForge;
+import com.todolist.gui.TodoScreen;
 import com.todolist.forge.network.ForgeNetworkBridge;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
@@ -37,6 +38,10 @@ public final class ForgeClientTaskPackets {
                 if (!namespaceAtReceive.equals(currentNamespace)) {
                     TodoListForge.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
                             namespaceAtReceive, currentNamespace);
+                    return;
+                }
+                if (hasPersonalUnsavedChanges()) {
+                    TodoListForge.LOGGER.info("Skip Forge personal task sync write because local personal tasks are unsaved");
                     return;
                 }
                 try {
@@ -128,5 +133,9 @@ public final class ForgeClientTaskPackets {
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
         ForgeNetworkBridge.sendToServer(TaskPackets.UPDATE_TASK_ID, buf);
+    }
+
+    private static boolean hasPersonalUnsavedChanges() {
+        return TodoScreen.hasPersonalUnsavedChanges();
     }
 }
