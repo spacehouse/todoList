@@ -1,6 +1,5 @@
 package com.todolist.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoListForge;
@@ -16,16 +15,19 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.LayeredDraw;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.AddGuiOverlayLayersEvent;
 import net.minecraftforge.client.gui.overlay.ForgeLayeredDraw;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
@@ -39,11 +41,11 @@ public final class ForgeTodoClient {
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
+    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", GLFW.GLFW_KEY_K, "category.todolist");
+    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", GLFW.GLFW_KEY_H, "category.todolist");
+    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", GLFW.GLFW_KEY_J, "category.todolist");
     private static String activeProjectId;
     private static boolean hudVisible = true;
-    private static boolean keyKPressed;
-    private static boolean keyHPressed;
-    private static boolean keyJPressed;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
 
@@ -130,6 +132,7 @@ public final class ForgeTodoClient {
         registerListener(eventBus, "net.minecraftforge.event.TickEvent$ClientTickEvent", ForgeTodoClient::onClientTickEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingOut", ForgeTodoClient::onClientLoggingOutEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn", ForgeTodoClient::onClientLoggingInEvent);
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(ForgeTodoClient::onRegisterKeyMappingsEvent);
     }
 
     /**
@@ -156,9 +159,6 @@ public final class ForgeTodoClient {
     private static void onClientTickEvent(Object ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) {
-            keyKPressed = false;
-            keyHPressed = false;
-            keyJPressed = false;
             return;
         }
         if (current.getConnection() == null) {
@@ -176,27 +176,23 @@ public final class ForgeTodoClient {
             pendingRemoteResync = false;
         }
         if (current.player == null) {
-            keyKPressed = false;
-            keyHPressed = false;
-            keyJPressed = false;
             return;
         }
-        long handle = current.getWindow().getWindow();
-        boolean nowK = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_K);
-        boolean nowH = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_H);
-        boolean nowJ = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_J);
-        if (nowK && !keyKPressed) {
+        while (OPEN_TODO_KEY.consumeClick()) {
             openTodoScreen(current);
         }
-        if (nowH && !keyHPressed) {
+        while (TOGGLE_HUD_KEY.consumeClick()) {
             toggleHud();
         }
-        if (nowJ && !keyJPressed) {
+        while (TOGGLE_HUD_VISIBILITY_KEY.consumeClick()) {
             toggleHudVisibility();
         }
-        keyKPressed = nowK;
-        keyHPressed = nowH;
-        keyJPressed = nowJ;
+    }
+
+    private static void onRegisterKeyMappingsEvent(RegisterKeyMappingsEvent event) {
+        event.register(OPEN_TODO_KEY);
+        event.register(TOGGLE_HUD_KEY);
+        event.register(TOGGLE_HUD_VISIBILITY_KEY);
     }
 
     /**
@@ -264,7 +260,6 @@ public final class ForgeTodoClient {
             }
             if (p != null) {
                 setActiveProjectId(p.getId());
-                ClientBridge.syncHudViewForProject(p);
                 ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
             }
         }
@@ -362,18 +357,6 @@ public final class ForgeTodoClient {
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
-        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
-        if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListForge.getProjectManager().getProject(lastActive);
-            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
-                p = null;
-            }
-            if (p != null) {
-                setActiveProjectId(p.getId());
-                ClientBridge.syncHudViewForProject(p);
-                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
-            }
-        }
         for (Task task : tasks) {
             teamTaskManager.addTask(task);
         }

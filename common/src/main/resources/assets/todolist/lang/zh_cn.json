@@ -73,6 +73,7 @@
   "gui.todolist.config.hud_custom_x": "自定义X坐标:",
   "gui.todolist.config.hud_custom_y": "自定义Y坐标:",
   "gui.todolist.config.hud_show_when_empty": "无任务仍显示HUD:",
+  "gui.todolist.config.hud_visibility": "HUD显示:",
   "gui.todolist.config.hud_default_view": "HUD列表默认视图:",
   "gui.todolist.config.hud_project_source": "HUD列表项目来源:",
   "gui.todolist.hud.project_source.current": "当前选中",
