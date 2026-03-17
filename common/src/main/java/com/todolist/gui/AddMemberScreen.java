@@ -2,6 +2,7 @@ package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import org.lwjgl.glfw.GLFW;
 
@@ -210,8 +211,13 @@ public class AddMemberScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
+    @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
         
         context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
         context.drawString(font, Component.translatable("gui.todolist.label.member_name"), listX, searchField.getY() - 10, 0xFFAAAAAA, false);

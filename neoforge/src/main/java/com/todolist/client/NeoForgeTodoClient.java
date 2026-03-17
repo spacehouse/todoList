@@ -1,6 +1,5 @@
 package com.todolist.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoListNeoForge;
 import com.todolist.config.ModConfig;
@@ -14,38 +13,42 @@ import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.multiplayer.ServerData;
-import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * NeoForge 平台客户端主类。
- * 负责客户端初始化、事件监听与 HUD 渲染等处理。
+ * NeoForge 楠炲啿褰寸€广垺鍩涚粩顖欏瘜缁眹鈧?
+ * 鐠愮喕鐭楃€广垺鍩涚粩顖氬灥婵瀵查妴浣风皑娴犲墎娲冮崥顑跨瑢 HUD 濞撳弶鐓嬬粵澶婎槱閻炲棎鈧?
  */
 public final class NeoForgeTodoClient {
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
+    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", GLFW.GLFW_KEY_K, "category.todolist");
+    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", GLFW.GLFW_KEY_H, "category.todolist");
+    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", GLFW.GLFW_KEY_J, "category.todolist");
     private static String activeProjectId;
     private static boolean hudVisible = true;
-    private static boolean keyKPressed;
-    private static boolean keyHPressed;
-    private static boolean keyJPressed;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
 
     /**
-     * 私有构造函数，禁止实例化。
+     * 缁変焦婀侀弸鍕偓鐘插毐閺佸府绱濈粋浣诡剾鐎圭偘绶ラ崠鏍モ偓?
      */
     private NeoForgeTodoClient() {
     }
 
     /**
-     * 初始化 NeoForge 客户端逻辑。
+     * 閸掓繂顫愰崠?NeoForge 鐎广垺鍩涚粩顖炩偓鏄忕帆閵?
      */
     public static void initialize() {
         client = Minecraft.getInstance();
@@ -58,12 +61,12 @@ public final class NeoForgeTodoClient {
         }
         NeoForgeClientTaskPackets.registerClientPackets();
         NeoForgeClientProjectPackets.registerClientPackets();
-        registerReflectiveListeners();
+        registerClientListeners();
         TodoListNeoForge.LOGGER.info("Todo List Mod NeoForge client initialized");
     }
 
     /**
-     * 注册配置界面工厂。
+     * 濞夈劌鍞介柊宥囩枂閻ｅ矂娼板銉ュ范閵?
      */
     private static void registerConfigScreenFactory() {
         try {
@@ -77,45 +80,36 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 通过反射注册客户端事件监听器。
+     * 闁俺绻冮崣宥呯殸濞夈劌鍞界€广垺鍩涚粩顖欑皑娴犲墎娲冮崥顒€娅掗妴?
      */
-    private static void registerReflectiveListeners() {
-        Object eventBus = NeoForge.EVENT_BUS;
-        registerListener(eventBus, "net.neoforged.neoforge.event.TickEvent$ClientTickEvent", NeoForgeTodoClient::onClientTickEvent);
-        registerListener(eventBus, "net.neoforged.neoforge.client.event.RenderGuiEvent$Post", NeoForgeTodoClient::onRenderGuiPostEvent);
-        registerListener(eventBus, "net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingOut", NeoForgeTodoClient::onClientLoggingOutEvent);
-        registerListener(eventBus, "net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent$LoggingIn", NeoForgeTodoClient::onClientLoggingInEvent);
+    private static void registerClientListeners() {
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientTickEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onRenderGuiPostEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingOutEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingInEvent);
+        IEventBus modEventBus = ModLoadingContext.get().getActiveContainer().getEventBus();
+        modEventBus.addListener(NeoForgeTodoClient::onRegisterKeyMappingsEvent);
     }
 
     /**
-     * 注册指定事件监听器。
+     * Registers NeoForge key mappings on the mod event bus.
      *
-     * @param eventBus 事件总线
-     * @param eventClassName 事件类名
-     * @param consumer 处理函数
+     * @param event key mapping registration event
      */
-    private static void registerListener(Object eventBus, String eventClassName, java.util.function.Consumer<Object> consumer) {
-        try {
-            Class<?> eventClass = Class.forName(eventClassName);
-            eventBus.getClass()
-                    .getMethod("addListener", EventPriority.class, boolean.class, Class.class, java.util.function.Consumer.class)
-                    .invoke(eventBus, EventPriority.NORMAL, false, eventClass, consumer);
-        } catch (Exception e) {
-            TodoListNeoForge.LOGGER.warn("Failed to register NeoForge client listener for {}", eventClassName, e);
-        }
+    private static void onRegisterKeyMappingsEvent(RegisterKeyMappingsEvent event) {
+        event.register(OPEN_TODO_KEY);
+        event.register(TOGGLE_HUD_KEY);
+        event.register(TOGGLE_HUD_VISIBILITY_KEY);
     }
 
     /**
-     * 客户端 Tick 事件处理。
+     * 鐎广垺鍩涚粩?Tick 娴滃娆㈡径鍕倞閵?
      *
-     * @param ignored 事件对象
+     * @param ignored 娴滃娆㈢€电钖?
      */
-    private static void onClientTickEvent(Object ignored) {
+    private static void onClientTickEvent(ClientTickEvent.Post ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) {
-            keyKPressed = false;
-            keyHPressed = false;
-            keyJPressed = false;
             return;
         }
         if (current.getConnection() == null) {
@@ -133,45 +127,35 @@ public final class NeoForgeTodoClient {
             pendingRemoteResync = false;
         }
         if (current.player == null) {
-            keyKPressed = false;
-            keyHPressed = false;
-            keyJPressed = false;
             return;
         }
-        long handle = current.getWindow().getWindow();
-        boolean nowK = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_K);
-        boolean nowH = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_H);
-        boolean nowJ = InputConstants.isKeyDown(handle, GLFW.GLFW_KEY_J);
-        if (nowK && !keyKPressed) {
+        while (OPEN_TODO_KEY.consumeClick()) {
             openTodoScreen(current);
         }
-        if (nowH && !keyHPressed) {
+        while (TOGGLE_HUD_KEY.consumeClick()) {
             toggleHud();
         }
-        if (nowJ && !keyJPressed) {
+        while (TOGGLE_HUD_VISIBILITY_KEY.consumeClick()) {
             toggleHudVisibility();
         }
-        keyKPressed = nowK;
-        keyHPressed = nowH;
-        keyJPressed = nowJ;
     }
 
     /**
-     * 客户端登出事件处理。
+     * 鐎广垺鍩涚粩顖滄閸戣桨绨ㄦ禒璺侯槱閻炲棎鈧?
      *
-     * @param ignored 事件对象
+     * @param ignored 娴滃娆㈢€电钖?
      */
-    private static void onClientLoggingOutEvent(Object ignored) {
+    private static void onClientLoggingOutEvent(ClientPlayerNetworkEvent.LoggingOut ignored) {
         pendingRemoteResync = false;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
     /**
-     * 客户端登录事件处理。
+     * 鐎广垺鍩涚粩顖滄瑜版洑绨ㄦ禒璺侯槱閻炲棎鈧?
      *
-     * @param ignored 事件对象
+     * @param ignored 娴滃娆㈢€电钖?
      */
-    private static void onClientLoggingInEvent(Object ignored) {
+    private static void onClientLoggingInEvent(ClientPlayerNetworkEvent.LoggingIn ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null || current.getConnection() == null) {
             return;
@@ -183,10 +167,10 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 根据服务器信息生成存储命名空间。
+     * 閺嶈宓侀張宥呭閸ｃ劋淇婇幁顖滄晸閹存劕鐡ㄩ崒銊ユ嚒閸氬秶鈹栭梻娣偓?
      *
-     * @param client 客户端实例
-     * @return 命名空间
+     * @param client 鐎广垺鍩涚粩顖氱杽娓?
+     * @return 閸涜棄鎮曠粚娲？
      */
     private static String resolveStorageNamespace(Minecraft client) {
         if (client == null || client.isLocalServer()) {
@@ -200,9 +184,9 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 应用新的存储命名空间。
+     * 鎼存梻鏁ら弬鎵畱鐎涙ê鍋嶉崨钘夋倳缁屾椽妫块妴?
      *
-     * @param namespace 命名空间
+     * @param namespace 閸涜棄鎮曠粚娲？
      */
     private static void applyStorageNamespace(String namespace) {
         if (namespace == null || namespace.isEmpty()) {
@@ -232,26 +216,24 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 渲染 HUD 覆盖层。
+     * 濞撳弶鐓?HUD 鐟曞棛娲婄仦鍌樷偓?
      *
-     * @param event 事件对象
+     * @param event 娴滃娆㈢€电钖?
      */
-    private static void onRenderGuiPostEvent(Object event) {
+    private static void onRenderGuiPostEvent(RenderGuiEvent.Post event) {
         if (hudRenderer == null) {
             return;
         }
-        if (event instanceof RenderGuiEvent.Post postEvent) {
-            float partialTick = postEvent.getPartialTick() != null
-                    ? postEvent.getPartialTick().getGameTimeDeltaPartialTick(true)
-                    : 0.0f;
-            hudRenderer.render(postEvent.getGuiGraphics(), partialTick);
-        }
+        float partialTick = event.getPartialTick() != null
+                ? event.getPartialTick().getGameTimeDeltaPartialTick(true)
+                : 0.0f;
+        hudRenderer.render(event.getGuiGraphics(), partialTick);
     }
 
     /**
-     * 打开任务列表界面。
+     * 閹垫挸绱戞禒璇插閸掓銆冮悾宀勬桨閵?
      *
-     * @param current 客户端实例
+     * @param current 鐎广垺鍩涚粩顖氱杽娓?
      */
     private static void openTodoScreen(Minecraft current) {
         if (current.screen == null) {
@@ -260,7 +242,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 注册 HUD 渲染器。
+     * 濞夈劌鍞?HUD 濞撳弶鐓嬮崳銊ｂ偓?
      */
     private static void registerHudRenderer() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -272,7 +254,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 切换 HUD 展开状态。
+     * 閸掑洦宕?HUD 鐏炴洖绱戦悩鑸碘偓浣碘偓?
      */
     private static void toggleHud() {
         if (hudRenderer != null) {
@@ -281,7 +263,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 切换 HUD 可见性。
+     * 閸掑洦宕?HUD 閸欘垵顫嗛幀褋鈧?
      */
     private static void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
@@ -289,54 +271,54 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 获取团队任务管理器。
+     * 閼惧嘲褰囬崶銏ゆЕ娴犺濮熺粻锛勬倞閸ｃ劊鈧?
      *
-     * @return 团队任务管理器
+     * @return 閸ャ垽妲︽禒璇插缁狅紕鎮婇崳?
      */
     public static TaskManager getTeamTaskManager() {
         return teamTaskManager;
     }
 
     /**
-     * 获取当前活动项目 ID。
+     * 閼惧嘲褰囪ぐ鎾冲濞茶濮╂い鍦窗 ID閵?
      *
-     * @return 项目 ID
+     * @return 妞ゅ湱娲?ID
      */
     public static String getActiveProjectId() {
         return activeProjectId;
     }
 
     /**
-     * 设置当前活动项目 ID。
+     * 鐠佸墽鐤嗚ぐ鎾冲濞茶濮╂い鍦窗 ID閵?
      *
-     * @param projectId 项目 ID
+     * @param projectId 妞ゅ湱娲?ID
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
     }
 
     /**
-     * 判断 HUD 是否可见。
+     * 閸掋倖鏌?HUD 閺勵垰鎯侀崣顖濐潌閵?
      *
-     * @return 是否可见
+     * @return 閺勵垰鎯侀崣顖濐潌
      */
     public static boolean isHudVisible() {
         return hudVisible;
     }
 
     /**
-     * 设置 HUD 可见性。
+     * 鐠佸墽鐤?HUD 閸欘垵顫嗛幀褋鈧?
      *
-     * @param visible 是否可见
+     * @param visible 閺勵垰鎯侀崣顖濐潌
      */
     public static void setHudVisible(boolean visible) {
         hudVisible = visible;
     }
 
     /**
-     * 从服务端更新团队任务列表。
+     * 娴犲孩婀囬崝锛勵伂閺囧瓨鏌婇崶銏ゆЕ娴犺濮熼崚妤勩€冮妴?
      *
-     * @param tasks 任务列表
+     * @param tasks 娴犺濮熼崚妤勩€?
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
@@ -358,9 +340,9 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 判断是否启用团队项目功能。
+     * 閸掋倖鏌囬弰顖氭儊閸氼垳鏁ら崶銏ゆЕ妞ゅ湱娲伴崝鐔诲厴閵?
      *
-     * @return 是否启用
+     * @return 閺勵垰鎯侀崥顖滄暏
      */
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();

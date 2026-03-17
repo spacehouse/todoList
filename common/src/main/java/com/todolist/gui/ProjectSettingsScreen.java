@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.client.ClientBridge;
+import com.todolist.config.ModConfig;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -229,8 +230,13 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
+    @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         int w = Math.max(200, Math.min(360, width - 20));
         int h = isTeam ? Math.max(220, Math.min(320, height - 20)) : Math.max(150, Math.min(220, height - 20));

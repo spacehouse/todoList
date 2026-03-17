@@ -1,5 +1,6 @@
 package com.todolist.gui;
 
+import com.todolist.config.ModConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -47,8 +48,13 @@ public class ConfirmDeleteProjectScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
+    @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
         int w = Math.max(220, Math.min(360, width - 20));
         int h = Math.max(120, Math.min(180, height - 20));

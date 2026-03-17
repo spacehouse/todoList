@@ -17,23 +17,22 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.LayeredDraw;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.client.ConfigScreenHandler;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.AddGuiOverlayLayersEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.gui.overlay.ForgeLayeredDraw;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Forge 平台客户端主类。
- * 负责客户端初始化、事件监听、快捷键处理与 HUD 渲染。
+ * Forge 骞冲彴瀹㈡埛绔富绫汇€?
+ * 璐熻矗瀹㈡埛绔垵濮嬪寲銆佷簨浠剁洃鍚€佸揩鎹烽敭澶勭悊涓?HUD 娓叉煋銆?
  */
 public final class ForgeTodoClient {
     private static final ResourceLocation HUD_OVERLAY_ID =
@@ -50,14 +49,14 @@ public final class ForgeTodoClient {
     private static boolean pendingRemoteResync;
 
     /**
-     * 私有构造函数，避免外部实例化。
+     * 绉佹湁鏋勯€犲嚱鏁帮紝閬垮厤澶栭儴瀹炰緥鍖栥€?
      */
     private ForgeTodoClient() {
     }
 
     /**
-     * 初始化客户端。
-     * 注册配置屏幕、HUD、网络包与事件监听器。
+     * 鍒濆鍖栧鎴风銆?
+     * 娉ㄥ唽閰嶇疆灞忓箷銆丠UD銆佺綉缁滃寘涓庝簨浠剁洃鍚櫒銆?
      */
     public static void initialize() {
         client = Minecraft.getInstance();
@@ -71,13 +70,14 @@ public final class ForgeTodoClient {
         }
         ForgeClientTaskPackets.registerClientPackets();
         ForgeClientProjectPackets.registerClientPackets();
-        registerReflectiveListeners();
+        registerClientListeners();
         TodoListForge.LOGGER.info("Todo List Mod Forge client initialized");
     }
 
     /**
-     * 注册配置界面工厂。
+     * 娉ㄥ唽閰嶇疆鐣岄潰宸ュ巶銆?
      */
+    @SuppressWarnings("removal")
     private static void registerConfigScreenFactory() {
         try {
             ModLoadingContext.get().registerExtensionPoint(
@@ -90,8 +90,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 注册 HUD 图层到新的叠加层系统。
+     * 娉ㄥ唽 HUD 鍥惧眰鍒版柊鐨勫彔鍔犲眰绯荤粺銆?
      */
+    @SuppressWarnings("removal")
     private static void registerHudOverlayLayer() {
         try {
             FMLJavaModLoadingContext.get().getModEventBus()
@@ -102,19 +103,24 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 处理叠加层注册事件，将 HUD 插入到热键栏层之上。
+     * 澶勭悊鍙犲姞灞傛敞鍐屼簨浠讹紝灏?HUD 鎻掑叆鍒扮儹閿爮灞備箣涓娿€?
      *
-     * @param event 叠加层注册事件
+     * @param event 鍙犲姞灞傛敞鍐屼簨浠?
      */
     private static void onAddGuiOverlayLayersEvent(AddGuiOverlayLayersEvent event) {
-        event.getLayeredDraw().addAbove(ForgeLayeredDraw.HOTBAR, HUD_OVERLAY_ID, ForgeTodoClient::renderHudLayer);
+        event.getLayeredDraw().addAbove(
+                ForgeLayeredDraw.PRE_SLEEP_STACK,
+                HUD_OVERLAY_ID,
+                ForgeLayeredDraw.HOTBAR,
+                ForgeTodoClient::renderHudLayer
+        );
     }
 
     /**
-     * 渲染 HUD 图层。
+     * 娓叉煋 HUD 鍥惧眰銆?
      *
-     * @param guiGraphics GUI 绘制上下文
-     * @param deltaTracker 帧间隔计算器
+     * @param guiGraphics GUI 缁樺埗涓婁笅鏂?
+     * @param deltaTracker 甯ч棿闅旇绠楀櫒
      */
     private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (hudRenderer == null) {
@@ -125,38 +131,20 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 通过反射注册客户端事件监听器，降低 API 变动的影响。
+     * 閫氳繃鍙嶅皠娉ㄥ唽瀹㈡埛绔簨浠剁洃鍚櫒锛岄檷浣?API 鍙樺姩鐨勫奖鍝嶃€?
      */
-    private static void registerReflectiveListeners() {
-        Object eventBus = MinecraftForge.EVENT_BUS;
-        registerListener(eventBus, "net.minecraftforge.event.TickEvent$ClientTickEvent", ForgeTodoClient::onClientTickEvent);
-        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingOut", ForgeTodoClient::onClientLoggingOutEvent);
-        registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn", ForgeTodoClient::onClientLoggingInEvent);
+    @SuppressWarnings("removal")
+    private static void registerClientListeners() {
+        MinecraftForge.EVENT_BUS.addListener(ForgeTodoClient::onClientTickEvent);
+        MinecraftForge.EVENT_BUS.addListener(ForgeTodoClient::onClientLoggingOutEvent);
+        MinecraftForge.EVENT_BUS.addListener(ForgeTodoClient::onClientLoggingInEvent);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(ForgeTodoClient::onRegisterKeyMappingsEvent);
     }
 
     /**
-     * 使用反射向事件总线注册监听器。
-     *
-     * @param eventBus 事件总线实例
-     * @param eventClassName 事件类名
-     * @param consumer 事件处理器
+     * 澶勭悊瀹㈡埛绔?Tick 浜嬩欢锛屽搷搴斿揩鎹烽敭骞剁淮鎶ょ姸鎬佸悓姝ャ€?
      */
-    private static void registerListener(Object eventBus, String eventClassName, java.util.function.Consumer<Object> consumer) {
-        try {
-            Class<?> eventClass = Class.forName(eventClassName);
-            eventBus.getClass()
-                    .getMethod("addListener", EventPriority.class, boolean.class, Class.class, java.util.function.Consumer.class)
-                    .invoke(eventBus, EventPriority.NORMAL, false, eventClass, consumer);
-        } catch (Exception e) {
-            TodoListForge.LOGGER.warn("Failed to register Forge client listener for {}", eventClassName, e);
-        }
-    }
-
-    /**
-     * 处理客户端 Tick 事件，响应快捷键并维护状态同步。
-     */
-    private static void onClientTickEvent(Object ignored) {
+    private static void onClientTickEvent(TickEvent.ClientTickEvent.Post ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) {
             return;
@@ -189,6 +177,11 @@ public final class ForgeTodoClient {
         }
     }
 
+    /**
+     * Registers key mappings on the Forge mod event bus.
+     *
+     * @param event key mapping registration event
+     */
     private static void onRegisterKeyMappingsEvent(RegisterKeyMappingsEvent event) {
         event.register(OPEN_TODO_KEY);
         event.register(TOGGLE_HUD_KEY);
@@ -196,17 +189,17 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 处理客户端退出事件，重置远端同步标记。
+     * 澶勭悊瀹㈡埛绔€€鍑轰簨浠讹紝閲嶇疆杩滅鍚屾鏍囪銆?
      */
-    private static void onClientLoggingOutEvent(Object ignored) {
+    private static void onClientLoggingOutEvent(ClientPlayerNetworkEvent.LoggingOut ignored) {
         pendingRemoteResync = false;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
     /**
-     * 处理客户端登录事件，准备远端同步。
+     * 澶勭悊瀹㈡埛绔櫥褰曚簨浠讹紝鍑嗗杩滅鍚屾銆?
      */
-    private static void onClientLoggingInEvent(Object ignored) {
+    private static void onClientLoggingInEvent(ClientPlayerNetworkEvent.LoggingIn ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null || current.getConnection() == null) {
             return;
@@ -218,10 +211,10 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 解析当前服务器的存储命名空间。
+     * 瑙ｆ瀽褰撳墠鏈嶅姟鍣ㄧ殑瀛樺偍鍛藉悕绌洪棿銆?
      *
-     * @param client Minecraft 客户端实例
-     * @return 存储命名空间
+     * @param client Minecraft 瀹㈡埛绔疄渚?
+     * @return 瀛樺偍鍛藉悕绌洪棿
      */
     private static String resolveStorageNamespace(Minecraft client) {
         if (client == null || client.isLocalServer()) {
@@ -235,9 +228,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 应用新的存储命名空间并同步 HUD 状态。
+     * 搴旂敤鏂扮殑瀛樺偍鍛藉悕绌洪棿骞跺悓姝?HUD 鐘舵€併€?
      *
-     * @param namespace 存储命名空间
+     * @param namespace 瀛樺偍鍛藉悕绌洪棿
      */
     private static void applyStorageNamespace(String namespace) {
         if (namespace == null || namespace.isEmpty()) {
@@ -266,9 +259,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 打开 Todo 列表界面。
+     * 鎵撳紑 Todo 鍒楄〃鐣岄潰銆?
      *
-     * @param current 当前 Minecraft 客户端
+     * @param current 褰撳墠 Minecraft 瀹㈡埛绔?
      */
     private static void openTodoScreen(Minecraft current) {
         if (current.screen == null) {
@@ -277,7 +270,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 初始化 HUD 渲染器并注册到平台适配层。
+     * 鍒濆鍖?HUD 娓叉煋鍣ㄥ苟娉ㄥ唽鍒板钩鍙伴€傞厤灞傘€?
      */
     private static void registerHudRenderer() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -289,7 +282,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 切换 HUD 展开/收起状态。
+     * 鍒囨崲 HUD 灞曞紑/鏀惰捣鐘舵€併€?
      */
     private static void toggleHud() {
         if (hudRenderer != null) {
@@ -298,7 +291,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 切换 HUD 可见性。
+     * 鍒囨崲 HUD 鍙鎬с€?
      */
     private static void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
@@ -306,54 +299,54 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 获取团队任务管理器。
+     * 鑾峰彇鍥㈤槦浠诲姟绠＄悊鍣ㄣ€?
      *
-     * @return 团队任务管理器
+     * @return 鍥㈤槦浠诲姟绠＄悊鍣?
      */
     public static TaskManager getTeamTaskManager() {
         return teamTaskManager;
     }
 
     /**
-     * 获取当前激活项目 ID。
+     * 鑾峰彇褰撳墠婵€娲婚」鐩?ID銆?
      *
-     * @return 激活项目 ID
+     * @return 婵€娲婚」鐩?ID
      */
     public static String getActiveProjectId() {
         return activeProjectId;
     }
 
     /**
-     * 设置当前激活项目 ID。
+     * 璁剧疆褰撳墠婵€娲婚」鐩?ID銆?
      *
-     * @param projectId 激活项目 ID
+     * @param projectId 婵€娲婚」鐩?ID
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
     }
 
     /**
-     * 判断 HUD 是否可见。
+     * 鍒ゆ柇 HUD 鏄惁鍙銆?
      *
-     * @return 是否可见
+     * @return 鏄惁鍙
      */
     public static boolean isHudVisible() {
         return hudVisible;
     }
 
     /**
-     * 设置 HUD 可见状态。
+     * 璁剧疆 HUD 鍙鐘舵€併€?
      *
-     * @param visible 是否可见
+     * @param visible 鏄惁鍙
      */
     public static void setHudVisible(boolean visible) {
         hudVisible = visible;
     }
 
     /**
-     * 从服务端更新团队任务列表。
+     * 浠庢湇鍔＄鏇存柊鍥㈤槦浠诲姟鍒楄〃銆?
      *
-     * @param tasks 团队任务列表
+     * @param tasks 鍥㈤槦浠诲姟鍒楄〃
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
@@ -363,9 +356,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 判断团队项目功能是否可用。
+     * 鍒ゆ柇鍥㈤槦椤圭洰鍔熻兘鏄惁鍙敤銆?
      *
-     * @return 是否启用
+     * @return 鏄惁鍚敤
      */
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();

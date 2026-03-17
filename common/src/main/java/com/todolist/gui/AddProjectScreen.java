@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.client.ClientBridge;
+import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import org.lwjgl.glfw.GLFW;
 
@@ -121,8 +122,13 @@ public class AddProjectScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
+    @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
         
         int w = Math.max(180, Math.min(320, width - 20));
         int h = Math.max(140, Math.min(180, height - 20));

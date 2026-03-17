@@ -2,6 +2,7 @@ package com.todolist;
 
 import com.todolist.bootstrap.CommandBootstrap;
 import com.todolist.bootstrap.EventBootstrap;
+import com.todolist.client.NeoForgeTodoClient;
 import com.todolist.config.ModConfig;
 import com.todolist.neoforge.network.NeoForgeNetworkBridge;
 import com.todolist.neoforge.network.NeoForgeProjectPacketRegistrar;
@@ -32,8 +33,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Todo List Mod - NeoForge 入口类。
- * 负责 NeoForge 侧初始化、命令注册与服务端生命周期处理。
+ * Todo List Mod - NeoForge 鍏ュ彛绫汇€?
+ * 璐熻矗 NeoForge 渚у垵濮嬪寲銆佸懡浠ゆ敞鍐屼笌鏈嶅姟绔敓鍛藉懆鏈熷鐞嗐€?
  */
 @Mod(TodoListNeoForge.MOD_ID)
 public class TodoListNeoForge {
@@ -45,7 +46,7 @@ public class TodoListNeoForge {
     private static ProjectManager projectManager;
 
     /**
-     * NeoForge 模块构造函数，执行平台初始化与注册。
+     * NeoForge 妯″潡鏋勯€犲嚱鏁帮紝鎵ц骞冲彴鍒濆鍖栦笌娉ㄥ唽銆?
      */
     public TodoListNeoForge() {
         LOGGER.info("Initializing Todo List Mod (NeoForge)...");
@@ -90,29 +91,24 @@ public class TodoListNeoForge {
     }
 
     /**
-     * NeoForge 1.21.1 移除了 DisplayTest 扩展点，这里保留空实现以保持结构一致。
+     * NeoForge 1.21.1 绉婚櫎浜?DisplayTest 鎵╁睍鐐癸紝杩欓噷淇濈暀绌哄疄鐜颁互淇濇寔缁撴瀯涓€鑷淬€?
      */
     private void registerDisplayTest() {
-        // NeoForge 新版不需要 DisplayTest，保留占位避免改动过大。
+        // NeoForge 鏂扮増涓嶉渶瑕?DisplayTest锛屼繚鐣欏崰浣嶉伩鍏嶆敼鍔ㄨ繃澶с€?
     }
 
     /**
-     * 在客户端环境下初始化客户端逻辑。
+     * 鍦ㄥ鎴风鐜涓嬪垵濮嬪寲瀹㈡埛绔€昏緫銆?
      */
     private void runClientInitIfNeeded() {
         if (FMLEnvironment.dist != Dist.CLIENT) {
             return;
         }
-        try {
-            Class<?> clientClass = Class.forName("com.todolist.client.NeoForgeTodoClient");
-            clientClass.getMethod("initialize").invoke(null);
-        } catch (Exception e) {
-            LOGGER.warn("Failed to initialize NeoForge client", e);
-        }
+        NeoForgeTodoClient.initialize();
     }
 
     /**
-     * 执行项目与任务的迁移逻辑，保证默认项目与旧数据兼容。
+     * 鎵ц椤圭洰涓庝换鍔＄殑杩佺Щ閫昏緫锛屼繚璇侀粯璁ら」鐩笌鏃ф暟鎹吋瀹广€?
      */
     private void performMigration() {
         String defaultPersonalName = ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY;
@@ -189,10 +185,10 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 清理非法项目绑定的任务，避免旧数据残留。
+     * 娓呯悊闈炴硶椤圭洰缁戝畾鐨勪换鍔★紝閬垮厤鏃ф暟鎹畫鐣欍€?
      *
-     * @param validPersonalProjectIds 有效个人项目 ID 集合
-     * @param validTeamProjectIds 有效团队项目 ID 集合
+     * @param validPersonalProjectIds 鏈夋晥涓汉椤圭洰 ID 闆嗗悎
+     * @param validTeamProjectIds 鏈夋晥鍥㈤槦椤圭洰 ID 闆嗗悎
      */
     private void migrateTasks(Set<String> validPersonalProjectIds, Set<String> validTeamProjectIds) {
         try {
@@ -221,10 +217,10 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 收集当前范围下可用的项目 ID。
+     * 鏀堕泦褰撳墠鑼冨洿涓嬪彲鐢ㄧ殑椤圭洰 ID銆?
      *
-     * @param scope 项目范围
-     * @return 有效项目 ID 集合
+     * @param scope 椤圭洰鑼冨洿
+     * @return 鏈夋晥椤圭洰 ID 闆嗗悎
      */
     private Set<String> collectValidProjectIds(Project.Scope scope) {
         Set<String> ids = new HashSet<>();
@@ -241,11 +237,11 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 判断任务是否因项目绑定非法而需删除。
+     * 鍒ゆ柇浠诲姟鏄惁鍥犻」鐩粦瀹氶潪娉曡€岄渶鍒犻櫎銆?
      *
-     * @param task 任务对象
-     * @param validProjectIds 有效项目 ID 集合
-     * @return true 表示需删除
+     * @param task 浠诲姟瀵硅薄
+     * @param validProjectIds 鏈夋晥椤圭洰 ID 闆嗗悎
+     * @return true 琛ㄧず闇€鍒犻櫎
      */
     private boolean shouldRemoveTaskByProjectBinding(Task task, Set<String> validProjectIds) {
         if (task == null) {
@@ -259,38 +255,23 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 处理 NeoForge 命令注册事件。
+     * 澶勭悊 NeoForge 鍛戒护娉ㄥ唽浜嬩欢銆?
      *
-     * @param event 命令注册事件
+     * @param event 鍛戒护娉ㄥ唽浜嬩欢
      */
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        Object dispatcher = invokeNoArg(event, "getDispatcher");
-        Object buildContext = invokeNoArg(event, "getBuildContext");
-        Object commandSelection = invokeNoArg(event, "getCommandSelection");
-        CommandBootstrap.registerReflective(dispatcher, buildContext, commandSelection);
+        CommandBootstrap.registerReflective(
+                event.getDispatcher(),
+                event.getBuildContext(),
+                event.getCommandSelection()
+        );
     }
 
     /**
-     * 反射调用无参方法以兼容不同版本 API。
+     * NeoForge 鏈嶅姟绔惎鍔ㄤ簨浠跺鐞嗐€?
      *
-     * @param target 目标对象
-     * @param methodName 方法名
-     * @return 调用结果或 null
-     */
-    private Object invokeNoArg(Object target, String methodName) {
-        try {
-            return target.getClass().getMethod(methodName).invoke(target);
-        } catch (Exception e) {
-            LOGGER.error("Failed to invoke {} reflectively", methodName, e);
-            return null;
-        }
-    }
-
-    /**
-     * NeoForge 服务端启动事件处理。
-     *
-     * @param event 启动事件
+     * @param event 鍚姩浜嬩欢
      */
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
@@ -298,9 +279,9 @@ public class TodoListNeoForge {
     }
 
     /**
-     * NeoForge 服务端停止事件处理。
+     * NeoForge 鏈嶅姟绔仠姝簨浠跺鐞嗐€?
      *
-     * @param event 停止事件
+     * @param event 鍋滄浜嬩欢
      */
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
@@ -308,18 +289,18 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 服务端启动时的自定义逻辑。
+     * 鏈嶅姟绔惎鍔ㄦ椂鐨勮嚜瀹氫箟閫昏緫銆?
      *
-     * @param server MinecraftServer 实例
+     * @param server MinecraftServer 瀹炰緥
      */
     private void serverStarting(MinecraftServer server) {
         LOGGER.info("Todo List Mod (NeoForge): Server starting...");
     }
 
     /**
-     * 服务端停止时的自定义逻辑。
+     * 鏈嶅姟绔仠姝㈡椂鐨勮嚜瀹氫箟閫昏緫銆?
      *
-     * @param server MinecraftServer 实例
+     * @param server MinecraftServer 瀹炰緥
      */
     private void serverStopped(MinecraftServer server) {
         LOGGER.info("Todo List Mod (NeoForge): Server stopped, saving data...");
@@ -327,27 +308,27 @@ public class TodoListNeoForge {
     }
 
     /**
-     * 获取任务存储实例。
+     * 鑾峰彇浠诲姟瀛樺偍瀹炰緥銆?
      *
-     * @return 任务存储
+     * @return 浠诲姟瀛樺偍
      */
     public static TaskStorage getTaskStorage() {
         return taskStorage;
     }
 
     /**
-     * 获取项目存储实例。
+     * 鑾峰彇椤圭洰瀛樺偍瀹炰緥銆?
      *
-     * @return 项目存储
+     * @return 椤圭洰瀛樺偍
      */
     public static ProjectStorage getProjectStorage() {
         return projectStorage;
     }
 
     /**
-     * 获取项目管理器实例。
+     * 鑾峰彇椤圭洰绠＄悊鍣ㄥ疄渚嬨€?
      *
-     * @return 项目管理器
+     * @return 椤圭洰绠＄悊鍣?
      */
     public static ProjectManager getProjectManager() {
         return projectManager;

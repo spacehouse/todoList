@@ -745,6 +745,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
+    @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
@@ -2250,8 +2255,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         @Override
+        public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+            // Background is drawn manually in render to keep cross-loader consistency.
+        }
+
+        @Override
         public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-            this.renderBackground(context, mouseX, mouseY, delta);
+            context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
             super.render(context, mouseX, mouseY, delta);
         }
     }

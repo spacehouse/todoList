@@ -36,8 +36,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Todo List Mod - Forge 入口类
- * 负责 Forge 端的模组初始化、命令注册及服务端生命周期事件监听。
+ * Todo List Mod - Forge 鍏ュ彛绫?
+ * 璐熻矗 Forge 绔殑妯＄粍鍒濆鍖栥€佸懡浠ゆ敞鍐屽強鏈嶅姟绔敓鍛藉懆鏈熶簨浠剁洃鍚€?
  */
 @Mod(TodoListForge.MOD_ID)
 public class TodoListForge {
@@ -49,7 +49,7 @@ public class TodoListForge {
     private static ProjectManager projectManager;
 
     /**
-     * 模组构造函数，初始化通用逻辑与平台特定配置。
+     * 妯＄粍鏋勯€犲嚱鏁帮紝鍒濆鍖栭€氱敤閫昏緫涓庡钩鍙扮壒瀹氶厤缃€?
      */
     public TodoListForge() {
         LOGGER.info("Initializing Todo List Mod (Forge)...");
@@ -95,6 +95,7 @@ public class TodoListForge {
         LOGGER.info("Todo List Mod (Forge) initialized!");
     }
 
+    @SuppressWarnings("removal")
     private void registerDisplayTest() {
         try {
             ModLoadingContext.get().registerExtensionPoint(
@@ -110,7 +111,7 @@ public class TodoListForge {
     }
 
     /**
-     * 执行项目与任务的数据迁移，确保旧版本数据能够适配新的项目模型。
+     * 鎵ц椤圭洰涓庝换鍔＄殑鏁版嵁杩佺Щ锛岀‘淇濇棫鐗堟湰鏁版嵁鑳藉閫傞厤鏂扮殑椤圭洰妯″瀷銆?
      */
     private void performMigration() {
         String defaultPersonalName = ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY;
@@ -187,10 +188,10 @@ public class TodoListForge {
     }
 
     /**
-     * 收敛旧任务中的非法项目引用，仅保留仍然关联到现有项目的任务。
+     * 鏀舵暃鏃т换鍔′腑鐨勯潪娉曢」鐩紩鐢紝浠呬繚鐣欎粛鐒跺叧鑱斿埌鐜版湁椤圭洰鐨勪换鍔°€?
      *
-     * @param validPersonalProjectIds 当前有效的个人项目 ID 集合
-     * @param validTeamProjectIds 当前有效的团队项目 ID 集合
+     * @param validPersonalProjectIds 褰撳墠鏈夋晥鐨勪釜浜洪」鐩?ID 闆嗗悎
+     * @param validTeamProjectIds 褰撳墠鏈夋晥鐨勫洟闃熼」鐩?ID 闆嗗悎
      */
     private void migrateTasks(Set<String> validPersonalProjectIds, Set<String> validTeamProjectIds) {
         try {
@@ -219,10 +220,10 @@ public class TodoListForge {
     }
 
     /**
-     * 收集指定范围下全部有效项目 ID。
+     * 鏀堕泦鎸囧畾鑼冨洿涓嬪叏閮ㄦ湁鏁堥」鐩?ID銆?
      *
-     * @param scope 项目范围
-     * @return 有效项目 ID 集合
+     * @param scope 椤圭洰鑼冨洿
+     * @return 鏈夋晥椤圭洰 ID 闆嗗悎
      */
     private Set<String> collectValidProjectIds(Project.Scope scope) {
         Set<String> ids = new HashSet<>();
@@ -239,11 +240,11 @@ public class TodoListForge {
     }
 
     /**
-     * 判断任务是否应因项目绑定非法而在迁移中删除。
+     * 鍒ゆ柇浠诲姟鏄惁搴斿洜椤圭洰缁戝畾闈炴硶鑰屽湪杩佺Щ涓垹闄ゃ€?
      *
-     * @param task 任务对象
-     * @param validProjectIds 当前范围的有效项目 ID 集合
-     * @return true 表示应删除
+     * @param task 浠诲姟瀵硅薄
+     * @param validProjectIds 褰撳墠鑼冨洿鐨勬湁鏁堥」鐩?ID 闆嗗悎
+     * @return true 琛ㄧず搴斿垹闄?
      */
     private boolean shouldRemoveTaskByProjectBinding(Task task, Set<String> validProjectIds) {
         if (task == null) {
@@ -257,35 +258,21 @@ public class TodoListForge {
     }
 
     /**
-     * 监听 Forge 命令注册事件，对接通用的 CommandBootstrap 进行命令注册。
-     * @param event 命令注册事件
+     * 鐩戝惉 Forge 鍛戒护娉ㄥ唽浜嬩欢锛屽鎺ラ€氱敤鐨?CommandBootstrap 杩涜鍛戒护娉ㄥ唽銆?
+     * @param event 鍛戒护娉ㄥ唽浜嬩欢
      */
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        Object dispatcher = invokeNoArg(event, "getDispatcher");
-        Object buildContext = invokeNoArg(event, "getBuildContext");
-        Object commandSelection = invokeNoArg(event, "getCommandSelection");
-        CommandBootstrap.registerReflective(dispatcher, buildContext, commandSelection);
+        CommandBootstrap.registerReflective(
+                event.getDispatcher(),
+                event.getBuildContext(),
+                event.getCommandSelection()
+        );
     }
 
     /**
-     * 通过反射调用目标对象的无参方法，用于兼容不同 Forge/Minecraft 版本的 API 差异。
-     * @param target 目标对象
-     * @param methodName 方法名
-     * @return 反射调用返回值；失败时返回 null
-     */
-    private Object invokeNoArg(Object target, String methodName) {
-        try {
-            return target.getClass().getMethod(methodName).invoke(target);
-        } catch (Exception e) {
-            LOGGER.error("Failed to invoke {} reflectively", methodName, e);
-            return null;
-        }
-    }
-
-    /**
-     * 监听服务端启动事件，对接通用的 EventBootstrap。
-     * @param event 服务端启动事件
+     * 鐩戝惉鏈嶅姟绔惎鍔ㄤ簨浠讹紝瀵规帴閫氱敤鐨?EventBootstrap銆?
+     * @param event 鏈嶅姟绔惎鍔ㄤ簨浠?
      */
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
@@ -293,8 +280,8 @@ public class TodoListForge {
     }
 
     /**
-     * 监听服务端停止事件，对接通用的 EventBootstrap，并确保未保存的项目数据被刷新到磁盘。
-     * @param event 服务端停止事件
+     * 鐩戝惉鏈嶅姟绔仠姝簨浠讹紝瀵规帴閫氱敤鐨?EventBootstrap锛屽苟纭繚鏈繚瀛樼殑椤圭洰鏁版嵁琚埛鏂板埌纾佺洏銆?
+     * @param event 鏈嶅姟绔仠姝簨浠?
      */
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
@@ -302,16 +289,16 @@ public class TodoListForge {
     }
 
     /**
-     * 服务端启动时的内部处理逻辑。
-     * @param server MinecraftServer 实例
+     * 鏈嶅姟绔惎鍔ㄦ椂鐨勫唴閮ㄥ鐞嗛€昏緫銆?
+     * @param server MinecraftServer 瀹炰緥
      */
     private void serverStarting(MinecraftServer server) {
         LOGGER.info("Todo List Mod (Forge): Server starting...");
     }
 
     /**
-     * 服务端停止时的内部处理逻辑，负责持久化数据。
-     * @param server MinecraftServer 实例
+     * 鏈嶅姟绔仠姝㈡椂鐨勫唴閮ㄥ鐞嗛€昏緫锛岃礋璐ｆ寔涔呭寲鏁版嵁銆?
+     * @param server MinecraftServer 瀹炰緥
      */
     private void serverStopped(MinecraftServer server) {
         LOGGER.info("Todo List Mod (Forge): Server stopped, saving data...");

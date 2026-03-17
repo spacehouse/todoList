@@ -10,7 +10,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.neoforge.common.NeoForge;
@@ -19,67 +18,63 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
- * NeoForge 网络桥接类。
- * 负责封装自定义载荷的注册、发送与分发逻辑。
+ * NeoForge 缃戠粶妗ユ帴绫汇€?
+ * 璐熻矗灏佽鑷畾涔夎浇鑽风殑娉ㄥ唽銆佸彂閫佷笌鍒嗗彂閫昏緫銆?
  */
 public final class NeoForgeNetworkBridge {
     /**
-     * 服务端接收器回调。
+     * 鏈嶅姟绔帴鏀跺櫒鍥炶皟銆?
      */
     @FunctionalInterface
     public interface ServerReceiver {
         /**
-         * 处理服务端收到的数据包。
+         * 澶勭悊鏈嶅姟绔敹鍒扮殑鏁版嵁鍖呫€?
          *
-         * @param server 当前服务端
-         * @param player 发送玩家
-         * @param handler 网络处理器
-         * @param buf 数据缓冲
-         * @param responseSender 回包发送器
+         * @param server 褰撳墠鏈嶅姟绔?
+         * @param player 鍙戦€佺帺瀹?
+         * @param handler 缃戠粶澶勭悊鍣?
+         * @param buf 鏁版嵁缂撳啿
+         * @param responseSender 鍥炲寘鍙戦€佸櫒
          */
         void receive(MinecraftServer server, ServerPlayer player, ServerGamePacketListenerImpl handler,
                      FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
-     * 客户端接收器回调。
+     * 瀹㈡埛绔帴鏀跺櫒鍥炶皟銆?
      */
     @FunctionalInterface
     public interface ClientReceiver {
         /**
-         * 处理客户端收到的数据包。
+         * 澶勭悊瀹㈡埛绔敹鍒扮殑鏁版嵁鍖呫€?
          *
-         * @param client 当前客户端
-         * @param handler 网络处理器
-         * @param buf 数据缓冲
-         * @param responseSender 回包发送器
+         * @param client 褰撳墠瀹㈡埛绔?
+         * @param handler 缃戠粶澶勭悊鍣?
+         * @param buf 鏁版嵁缂撳啿
+         * @param responseSender 鍥炲寘鍙戦€佸櫒
          */
         void receive(Minecraft client, Object handler, FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
-     * 玩家加入监听器。
+     * 鐜╁鍔犲叆鐩戝惉鍣ㄣ€?
      */
     @FunctionalInterface
     public interface JoinListener {
         /**
-         * 处理玩家加入事件。
+         * 澶勭悊鐜╁鍔犲叆浜嬩欢銆?
          *
-         * @param player 加入玩家
-         * @param sender 回包发送器
-         * @param server 当前服务端
+         * @param player 鍔犲叆鐜╁
+         * @param sender 鍥炲寘鍙戦€佸櫒
+         * @param server 褰撳墠鏈嶅姟绔?
          */
         void onJoin(ServerPlayer player, NeoForgePacketSender sender, MinecraftServer server);
     }
@@ -92,13 +87,13 @@ public final class NeoForgeNetworkBridge {
     private static volatile boolean initialized;
 
     /**
-     * 私有构造函数，避免外部实例化。
+     * 绉佹湁鏋勯€犲嚱鏁帮紝閬垮厤澶栭儴瀹炰緥鍖栥€?
      */
     private NeoForgeNetworkBridge() {
     }
 
     /**
-     * 初始化网络桥接并注册载荷处理器。
+     * 鍒濆鍖栫綉缁滄ˉ鎺ュ苟娉ㄥ唽杞借嵎澶勭悊鍣ㄣ€?
      */
     public static synchronized void init() {
         if (initialized) {
@@ -110,10 +105,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册服务端接收器。
+     * 娉ㄥ唽鏈嶅姟绔帴鏀跺櫒銆?
      *
-     * @param channelId 通道 ID
-     * @param receiver 接收器
+     * @param channelId 閫氶亾 ID
+     * @param receiver 鎺ユ敹鍣?
      */
     public static void registerServerReceiver(ResourceLocation channelId, ServerReceiver receiver) {
         init();
@@ -121,10 +116,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册客户端接收器。
+     * 娉ㄥ唽瀹㈡埛绔帴鏀跺櫒銆?
      *
-     * @param channelId 通道 ID
-     * @param receiver 接收器
+     * @param channelId 閫氶亾 ID
+     * @param receiver 鎺ユ敹鍣?
      */
     public static void registerClientReceiver(ResourceLocation channelId, ClientReceiver receiver) {
         init();
@@ -132,9 +127,9 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册玩家加入监听器。
+     * 娉ㄥ唽鐜╁鍔犲叆鐩戝惉鍣ㄣ€?
      *
-     * @param listener 监听器
+     * @param listener 鐩戝惉鍣?
      */
     public static void registerJoinListener(JoinListener listener) {
         init();
@@ -142,10 +137,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 检查是否可以发送消息到指定通道。
+     * 妫€鏌ユ槸鍚﹀彲浠ュ彂閫佹秷鎭埌鎸囧畾閫氶亾銆?
      *
-     * @param channelId 通道 ID
-     * @return 是否可发送
+     * @param channelId 閫氶亾 ID
+     * @return 鏄惁鍙彂閫?
      */
     public static boolean canSend(ResourceLocation channelId) {
         init();
@@ -156,26 +151,22 @@ public final class NeoForgeNetworkBridge {
         if (client.isLocalServer()) {
             return false;
         }
-        Object listenerObj = client.getConnection();
-        if (listenerObj instanceof ICommonPacketListener listener) {
+        if (client.getConnection() instanceof ICommonPacketListener listener) {
             return listener.hasChannel(NeoForgeDispatchPayload.TYPE);
         }
-        Object connection = resolveNettyConnection(listenerObj);
-        if (connection instanceof net.minecraft.network.Connection) {
-            return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel(
-                    (net.minecraft.network.Connection) connection,
-                    ConnectionProtocol.PLAY,
-                    NeoForgeDispatchPayload.TYPE.id()
-            );
-        }
-        return false;
+        var connection = client.getConnection().getConnection();
+        return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel(
+                connection,
+                ConnectionProtocol.PLAY,
+                NeoForgeDispatchPayload.TYPE.id()
+        );
     }
 
     /**
-     * 发送数据包到服务端。
+     * 鍙戦€佹暟鎹寘鍒版湇鍔＄銆?
      *
-     * @param channelId 通道 ID
-     * @param buf 数据缓冲
+     * @param channelId 閫氶亾 ID
+     * @param buf 鏁版嵁缂撳啿
      */
     public static void sendToServer(ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
@@ -183,11 +174,11 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 发送数据包到客户端（指定玩家）。
+     * 鍙戦€佹暟鎹寘鍒板鎴风锛堟寚瀹氱帺瀹讹級銆?
      *
-     * @param player 目标玩家
-     * @param channelId 通道 ID
-     * @param buf 数据缓冲
+     * @param player 鐩爣鐜╁
+     * @param channelId 閫氶亾 ID
+     * @param buf 鏁版嵁缂撳啿
      */
     public static void sendToPlayer(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
@@ -195,7 +186,7 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册载荷处理器事件监听。
+     * 娉ㄥ唽杞借嵎澶勭悊鍣ㄤ簨浠剁洃鍚€?
      */
     private static void registerPayloadHandlers() {
         try {
@@ -207,9 +198,9 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册载荷编解码与处理逻辑。
+     * 娉ㄥ唽杞借嵎缂栬В鐮佷笌澶勭悊閫昏緫銆?
      *
-     * @param event 载荷注册事件
+     * @param event 杞借嵎娉ㄥ唽浜嬩欢
      */
     private static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(TodoConstants.MOD_ID).versioned(PROTOCOL);
@@ -217,20 +208,20 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 处理载荷并分派到对应侧。
+     * 澶勭悊杞借嵎骞跺垎娲惧埌瀵瑰簲渚с€?
      *
-     * @param payload 载荷
-     * @param context 载荷上下文
+     * @param payload 杞借嵎
+     * @param context 杞借嵎涓婁笅鏂?
      */
     private static void handleDispatchPayload(NeoForgeDispatchPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> dispatchPacketBySide(payload, context));
     }
 
     /**
-     * 按侧分发载荷。
+     * 鎸変晶鍒嗗彂杞借嵎銆?
      *
-     * @param payload 载荷
-     * @param context 载荷上下文
+     * @param payload 杞借嵎
+     * @param context 杞借嵎涓婁笅鏂?
      */
     private static void dispatchPacketBySide(NeoForgeDispatchPayload payload, IPayloadContext context) {
         if (context.flow() == PacketFlow.SERVERBOUND) {
@@ -241,10 +232,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 处理服务端载荷。
+     * 澶勭悊鏈嶅姟绔浇鑽枫€?
      *
-     * @param payload 载荷
-     * @param context 载荷上下文
+     * @param payload 杞借嵎
+     * @param context 杞借嵎涓婁笅鏂?
      */
     private static void dispatchServerPacket(NeoForgeDispatchPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) {
@@ -264,9 +255,9 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 处理客户端载荷。
+     * 澶勭悊瀹㈡埛绔浇鑽枫€?
      *
-     * @param payload 载荷
+     * @param payload 杞借嵎
      */
     private static void dispatchClientPacket(NeoForgeDispatchPayload payload) {
         Minecraft client = Minecraft.getInstance();
@@ -283,83 +274,49 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 注册玩家登录监听，用于触发加入回调。
+     * 娉ㄥ唽鐜╁鐧诲綍鐩戝惉锛岀敤浜庤Е鍙戝姞鍏ュ洖璋冦€?
      */
     private static void registerPlayerLoginHook() {
         try {
-            Object eventBus = NeoForge.EVENT_BUS;
-            Class<?> loginEventClass = Class.forName("net.neoforged.neoforge.event.entity.player.PlayerEvent$PlayerLoggedInEvent");
-            Method addListener = eventBus.getClass().getMethod("addListener", EventPriority.class, boolean.class,
-                    Class.class, java.util.function.Consumer.class);
-            java.util.function.Consumer<Object> consumer = event -> {
-                Object playerObj = invoke(event, "getEntity", new Class<?>[]{});
-                if (!(playerObj instanceof ServerPlayer player)) {
-                    return;
-                }
-                MinecraftServer server = player.getServer();
-                if (server == null) {
-                    return;
-                }
-                for (JoinListener listener : JOIN_LISTENERS) {
-                    listener.onJoin(player, NO_OP_SENDER, server);
-                }
-            };
-            addListener.invoke(eventBus, EventPriority.NORMAL, false, loginEventClass, consumer);
+            NeoForge.EVENT_BUS.addListener(NeoForgeNetworkBridge::onPlayerLoggedIn);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to register NeoForge player login hook", e);
         }
     }
 
     /**
-     * 解析客户端连接对象。
+     * Handles player login event and dispatches join listeners.
      *
-     * @param clientPacketListener 客户端监听器
-     * @return 连接对象
+     * @param event player login event
      */
-    private static Object resolveNettyConnection(Object clientPacketListener) {
-        if (clientPacketListener == null) {
-            return null;
+    private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
         }
-        try {
-            return invoke(clientPacketListener, "getConnection", new Class<?>[]{});
-        } catch (Exception ignored) {
+        MinecraftServer server = player.getServer();
+        if (server == null) {
+            return;
         }
-        try {
-            Class<?> connectionType = Class.forName("net.minecraft.network.Connection");
-            for (Field field : clientPacketListener.getClass().getDeclaredFields()) {
-                if (connectionType.isAssignableFrom(field.getType())) {
-                    field.setAccessible(true);
-                    return field.get(clientPacketListener);
-                }
-            }
-        } catch (Exception ignored) {
+        for (JoinListener listener : JOIN_LISTENERS) {
+            listener.onJoin(player, NO_OP_SENDER, server);
         }
-        return null;
     }
 
     /**
-     * 获取服务端网络处理器。
+     * 鑾峰彇鏈嶅姟绔綉缁滃鐞嗗櫒銆?
      *
-     * @param player 目标玩家
-     * @return 服务端网络处理器
+     * @param player 鐩爣鐜╁
+     * @return 鏈嶅姟绔綉缁滃鐞嗗櫒
      */
     private static ServerGamePacketListenerImpl getServerNetworkHandler(ServerPlayer player) {
-        try {
-            Field field = player.getClass().getField("networkHandler");
-            Object value = field.get(player);
-            if (value instanceof ServerGamePacketListenerImpl handler) {
-                return handler;
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
+        return player.connection;
     }
 
     /**
-     * 将缓冲区内容复制为字节数组。
+     * 灏嗙紦鍐插尯鍐呭澶嶅埗涓哄瓧鑺傛暟缁勩€?
      *
-     * @param source 原始缓冲
-     * @return 字节数组
+     * @param source 鍘熷缂撳啿
+     * @return 瀛楄妭鏁扮粍
      */
     private static byte[] toByteArray(FriendlyByteBuf source) {
         FriendlyByteBuf copy = new FriendlyByteBuf(source.copy());
@@ -368,45 +325,4 @@ public final class NeoForgeNetworkBridge {
         return bytes;
     }
 
-    /**
-     * 在指定类型上查找指定名称和参数数量的方法。
-     *
-     * @param type 目标类型
-     * @param name 方法名
-     * @param paramCount 参数数量
-     * @return 匹配的方法
-     */
-    private static Method findMethod(Class<?> type, String name, int paramCount) {
-        for (Method method : type.getMethods()) {
-            if (method.getName().equals(name) && method.getParameterCount() == paramCount) {
-                return method;
-            }
-        }
-        throw new IllegalStateException("Method not found: " + type.getName() + "#" + name + "/" + paramCount);
-    }
-
-    /**
-     * 通过反射调用方法，必要时尝试降级匹配。
-     *
-     * @param target 调用目标
-     * @param name 方法名
-     * @param parameterTypes 参数类型
-     * @param args 参数
-     * @return 调用结果
-     */
-    private static Object invoke(Object target, String name, Class<?>[] parameterTypes, Object... args) {
-        try {
-            Method method = target.getClass().getMethod(name, parameterTypes);
-            return method.invoke(target, args);
-        } catch (NoSuchMethodException ex) {
-            Method fallback = findMethod(target.getClass(), name, parameterTypes.length);
-            try {
-                return fallback.invoke(target, args);
-            } catch (Exception e) {
-                throw new IllegalStateException("Invocation failed: " + target.getClass().getName() + "#" + name, e);
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("Invocation failed: " + target.getClass().getName() + "#" + name, e);
-        }
-    }
 }
