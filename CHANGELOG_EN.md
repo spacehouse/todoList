@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
-## [1.1.2] - 2026-03-10
+## [1.1.2] - 2026-03-17
 
 ### Improvements & Fixes
 - **[forge] Key Binding Fix**: Fixed Forge key mappings not being registered on the mod event bus. `K/H/J` now appear correctly in Controls and can be remapped.
