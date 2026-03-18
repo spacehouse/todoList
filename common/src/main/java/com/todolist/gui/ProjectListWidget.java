@@ -75,6 +75,21 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         return selectedProject;
     }
 
+    /**
+     * 鑾峰彇褰撳墠椤圭洰鍒楄〃婊氬姩鍋忕Щ閲忥紙鎸夎锛夈€?
+     */
+    public int getScrollOffset() {
+        return scrollOffset;
+    }
+
+    /**
+     * 璁剧疆椤圭洰鍒楄〃婊氬姩鍋忕Щ閲忥紙鎸夎锛夛紝骞舵墽琛岃竟鐣屽す鍙栥€?
+     */
+    public void setScrollOffset(int scrollOffset) {
+        this.scrollOffset = scrollOffset;
+        clampScrollOffset();
+    }
+
     private void rebuildProjects() {
         ModConfig config = ModConfig.getInstance();
         List<Project> starred = new ArrayList<>();

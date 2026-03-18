@@ -6,7 +6,6 @@ import com.todolist.TodoListMod;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreen;
-import com.todolist.network.ProjectPackets;
 import com.todolist.project.Project;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
@@ -306,6 +305,6 @@ public class TodoClient implements ClientModInitializer {
                 return false;
             }
         }
-        return ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID);
+        return ClientPlayNetworking.canSend(com.todolist.network.FabricProjectPayload.TYPE);
     }
 }

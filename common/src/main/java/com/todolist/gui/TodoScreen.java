@@ -698,19 +698,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         // Listeners
         titleField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
+            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
                 selectedTask.setTitle(text);
                 markUnsaved();
             }
         });
         descField.setValueListener(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
+            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
                 selectedTask.setDescription(text);
                 markUnsaved();
             }
         });
         tagField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
+            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
                 String value = getFieldValue(tagField, "");
                 if (value.isEmpty()) selectedTask.clearTags();
                 else {
@@ -1086,10 +1086,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         taskListWidget.setSelectedTask(task);
         updateButtonStates();
-        boolean editable = canEditTask(task);
-        titleField.setEditable(editable);
-        descField.active = editable;
-        tagField.setEditable(editable);
+        updateTaskEditorEditableState(task);
     }
 
     private void clearSelectedTask() {
@@ -1099,16 +1096,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (titleField != null) {
             titleField.setValue("");
-            titleField.setEditable(true);
         }
         if (descField != null) {
             descField.setValue("");
-            descField.active = true;
         }
         if (tagField != null) {
             tagField.setValue("");
-            tagField.setEditable(true);
         }
+        updateTaskEditorEditableState(null);
         updateButtonStates();
     }
 
@@ -1174,7 +1169,27 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             boolean canAssignOthers = showAssignOthers && hasSelection;
             assignOthersButton.active = canAssignOthers;
         }
+        updateTaskEditorEditableState(selectedTask);
         rebuildContextMenuIfNeeded();
+    }
+
+    /**
+     * 统一更新任务编辑区（标题/描述/标签）的可编辑状态。
+     */
+    private void updateTaskEditorEditableState(Task task) {
+        boolean editable = task == null || canEditTask(task);
+        if (titleField != null) {
+            titleField.setEditable(editable);
+        }
+        if (descField != null) {
+            descField.active = editable;
+            if (!editable && getFocused() == descField) {
+                setFocused(null);
+            }
+        }
+        if (tagField != null) {
+            tagField.setEditable(editable);
+        }
     }
 
     private void setSelectedPriority(Task.Priority priority) {
@@ -1914,6 +1929,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     
     private void switchProject(Project project) {
+        int previousProjectScrollOffset = projectListWidget == null ? 0 : projectListWidget.getScrollOffset();
         this.selectedTask = null;
         this.currentProject = project;
         rememberSelectedProject(project);
@@ -1926,6 +1942,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             ClientBridge.saveLastActiveProjectId(null);
             syncHudViewForProject(null);
             rebuildUI();
+            restoreProjectListScrollOffset(previousProjectScrollOffset);
             return;
         }
 
@@ -1950,6 +1967,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         syncHudViewForProject(project);
         
         rebuildUI();
+        restoreProjectListScrollOffset(previousProjectScrollOffset);
+    }
+
+    /**
+     * 鍦?UI 閲嶅缓鍚庢仮澶嶉」鐩垪琛ㄦ粴鍔ㄤ綅缃紝閬垮厤鐐瑰嚮椤圭洰鍚庡洖鍒伴《閮ㄣ€?
+     *
+     * @param scrollOffset 閲嶅缓鍓嶇殑婊氬姩鍋忕Щ閲?
+     */
+    private void restoreProjectListScrollOffset(int scrollOffset) {
+        if (projectListWidget == null) {
+            return;
+        }
+        projectListWidget.setScrollOffset(scrollOffset);
     }
 
     /**

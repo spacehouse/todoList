@@ -1,6 +1,6 @@
 package com.todolist.client;
 
-import com.todolist.network.ProjectPackets;
+import com.todolist.network.FabricProjectPayload;
 import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
@@ -196,6 +196,6 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
      */
     @Override
     public boolean canSendUpdateMemberRole() {
-        return ClientPlayNetworking.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID);
+        return ClientPlayNetworking.canSend(FabricProjectPayload.TYPE);
     }
 }
