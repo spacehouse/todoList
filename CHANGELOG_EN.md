@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.2.0] - 2026-03-19
+
+### New Features
+- **Platform Support Upgrade**: Officially supports Minecraft `1.21.1` client/server release and runtime on Fabric, Forge, and NeoForge.
+
+### Improvements & Fixes
+- **Forge Network Load Fix**: Fixed the `Failed to create Forge channel` startup failure by improving channel creation compatibility and diagnostic logging.
+- **Fabric GUI Readability Fix**: Unified task/project related screens to use clear solid backgrounds, removing blurred overlays that reduced text readability.
+- **NeoForge Key Binding Fix**: Restored `H/J/K` registration and trigger flow on NeoForge so bindings are visible in Controls and actions work in-game.
+- **Release Pipeline Upgrade**: Added NeoForge publishing, updated Fabric/Forge game versions to `1.21.1`, unified GitHub release title to `TodoList-vX.Y.Z-release`, and fixed tag-based release note extraction from `CHANGELOG.md`.
+
 ## [1.1.2] - 2026-03-17
 
 ### Improvements & Fixes

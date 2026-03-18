@@ -3,14 +3,14 @@ name: release
 on:
   push:
     tags:
-      - 'v*' # 只有推送 v1.0.0 这种格式的 tag 时才触发
+      - 'v*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 赋予创建 Release 的权限
-    
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -18,62 +18,106 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # 根据你的模组版本调整
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4   # 缓存
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
         run: ./gradlew build --stacktrace
 
-      # 第一步：提取 CHANGELOG.md 中对应当前版本的更新内容
+      - name: Prepare Release Metadata
+        id: meta
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_name=TodoList-v${VERSION}-release" >> "$GITHUB_OUTPUT"
+
       - name: Extract Release Notes
         id: extract_changelog
-        uses: ffurrer2/extract-release-notes@v2
-        # 它会自动根据当前的 tag 名在 CHANGELOG 中寻找对应部分
+        shell: bash
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTES="$(awk -v v="$VERSION" '
+            BEGIN { in_section = 0 }
+            $0 ~ "^## \\\\?\\[" v "\\]([[:space:]]*-.*)?$" { in_section = 1; next }
+            in_section && $0 ~ "^## " { exit }
+            in_section { print }
+          ' CHANGELOG.md)"
+          NOTES="$(printf "%s\n" "$NOTES" | sed '/./,$!d')"
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $VERSION"
+          fi
+          {
+            echo "release_notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      # 第二步：一键推送到三大平台
-      # --- 1：专门发布 Fabric 版本 ---
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.meta.outputs.release_name }}
+          tag_name: ${{ github.ref_name }}
+          body: ${{ steps.extract_changelog.outputs.release_notes }}
+          files: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-javadoc.jar
+            !build/libs/*-dev.jar
+
       - name: Publish Fabric Version
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           name: "TodoList-${{ github.ref_name }}-Fabric"
-          version: "${{ github.ref_name }}-fabric" # 加上后缀防止 Modrinth 版本号冲突
+          version: "${{ github.ref_name }}-fabric"
           changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
-          
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-tag: ${{ github.ref_name }}
+
           files: build/libs/*fabric*!(*-dev|*-sources|*-javadoc).jar
-          
+
           curseforge-id: 1476043
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          
+
           modrinth-id: RcGBxDyt
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          
-          # 明确指定这是 Fabric
-          loaders: fabric
-          game-versions: 1.20.1
 
-      # --- 2：专门发布 Forge 版本 ---
+          loaders: fabric
+          game-versions: 1.21.1
+
       - name: Publish Forge Version
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           name: "TodoList-${{ github.ref_name }}-Forge"
-          version: "${{ github.ref_name }}-forge" # 加上后缀防止 Modrinth 版本号冲突
+          version: "${{ github.ref_name }}-forge"
           changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
-          
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-tag: ${{ github.ref_name }}
+
           files: build/libs/*forge*!(*-dev|*-sources|*-javadoc).jar
-          
+
           curseforge-id: 1476043
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          
+
           modrinth-id: RcGBxDyt
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          
-          # 明确指定这是 Forge
+
           loaders: forge
-          game-versions: 1.20.1
+          game-versions: 1.21.1
+
+      - name: Publish NeoForge Version
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          name: "TodoList-${{ github.ref_name }}-NeoForge"
+          version: "${{ github.ref_name }}-neoforge"
+          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
+
+          files: build/libs/*neoforge*!(*-dev|*-sources|*-javadoc).jar
+
+          curseforge-id: 1476043
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+
+          modrinth-id: RcGBxDyt
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+
+          loaders: neoforge
+          game-versions: 1.21.1

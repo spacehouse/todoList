@@ -4,6 +4,19 @@
 
 日期格式：`YYYY-MM-DD`
 
+## \[1.2.0] - 2026-03-19
+
+### 新增功能
+
+- **平台支持升级**：正式支持 Minecraft `1.21.1` 的 Fabric / Forge / NeoForge 三端客户端与服务端发布和运行。
+
+### 优化与修复
+
+- **Forge 网络加载修复**：修复了 `Failed to create Forge channel` 导致的初始化失败，改进通道创建兼容与错误诊断日志。
+- **Fabric GUI 可读性修复**：统一任务与项目相关页面背景渲染为清晰实底，修复背景模糊导致文字难以辨认的问题。
+- **NeoForge 按键绑定修复**：补齐 `H/J/K` 在 NeoForge 下的按键注册与触发链路，控制设置可见且可正常触发 HUD/GUI 行为。
+- **发布流程增强**：发布工作流新增 NeoForge 发布，Fabric/Forge 适配版本更新为 `1.21.1`，GitHub Release 标题统一为 `TodoList-vX.Y.Z-release`，并修复按 tag 从 `CHANGELOG.md` 提取发布说明。
+
 ## \[1.1.2] - 2026-03-17
 
 ### 优化与修复
