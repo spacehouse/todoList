@@ -6,7 +6,8 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.0.0 Capability Overview / 1.0.0 版本能力概览
+### v1.2.0 Capability Overview / 1.2.0 版本能力概览
+- ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
 - ✅ In-game GUI task management: CRUD, priority, tags, filter & search / 游戏内GUI任务管理：增删改查、优先级、标签、筛选与搜索
 - ✅ HUD todo list: expand/collapse, view header, configurable size/position/opacity / HUD待办列表：展开/收起、视图标题、可配置尺寸/位置/透明度
 - ✅ Multiplayer & team collaboration: team tasks, view semantics, server-side permission checks and audit logs / 多人团队协作：团队任务、视图语义、服务端权限校验与操作审计日志
@@ -51,9 +52,11 @@ More details / 更多说明：
 ## 🚀 Installation / 安装
 
 ### Requirements / 要求
-- Minecraft 1.20.1
-- **Fabric**: Fabric Loader 0.14.21+ & Fabric API 0.87.0+
-- **Forge**: Forge 47.2.0+
+- Minecraft 1.21.1
+- Java 21+
+- **Fabric**: Fabric Loader `0.18.1+` & Fabric API `0.116.9+1.21.1`
+- **Forge**: Forge `52.1.10+`
+- **NeoForge**: NeoForge `21.1.219+`
 
 ### Steps / 步骤
 
@@ -67,6 +70,7 @@ More details / 更多说明：
 ### Key Bindings / 按键绑定
 - **K** - Open Todo List / 打开待办列表
 - **H** - Toggle HUD (expand/collapse) / 展开或收起HUD
+- **J** - Toggle HUD visibility / 显示或隐藏HUD
 
 ### Projects / 项目
 - The todo GUI is project-based: tasks you create belong to the currently selected project in the left sidebar. / 待办界面以“项目”为维度：你创建的任务会归属到左侧侧边栏当前选中的项目。
@@ -155,7 +159,7 @@ The mod implements a unified server-side Permission Center that evaluates operat
 
 ### Build from Source / 从源码构建
 
-Requires Java 17+ / 需要 Java 17+（仓库提供 `build-with-java17.bat` 便于在 Windows 上构建）
+Requires Java 21+ / 需要 Java 21+（仓库提供 `build-with-java21.bat` 便于在 Windows 上构建）
 
 ```bash
 # Clone the repository / 克隆仓库
@@ -163,53 +167,21 @@ git clone https://github.com/spacehouse/todoList.git
 cd todoList
 
 # Build the mod / 构建模组
-./build-with-java17.bat build
+./build-with-java21.bat clean build
 
 # The JAR will be in build/libs/ / JAR文件位于build/libs/目录
 ```
 
 ### Project Structure / 项目结构
 
-```
+```text
 todoList/
-├── src/main/java/com/todolist/
-│   ├── TodoListMod.java              # Main mod class / 主类
-│   ├── client/
-│   │   ├── TodoClient.java           # Client initialization & key bindings / 客户端初始化与按键绑定
-│   │   ├── TodoHudRenderer.java      # HUD renderer / HUD渲染
-│   │   ├── ClientProjectPackets.java # Client-side project networking / 客户端项目网络辅助
-│   │   ├── ClientTaskPackets.java    # Client-side network helpers / 客户端网络辅助
-│   │   └── ModMenuIntegration.java   # Mod Menu config integration / Mod Menu配置集成
-│   ├── config/
-│   │   └── ModConfig.java            # Configuration handling / 配置处理
-│   ├── gui/
-│   │   ├── AddProjectScreen.java     # Create project screen / 新建项目界面
-│   │   ├── ProjectSettingsScreen.java# Project settings & members / 项目设置与成员管理
-│   │   ├── AddMemberScreen.java      # Add member screen / 新增成员界面
-│   │   ├── ConfirmDeleteProjectScreen.java # Project delete confirm / 删除项目确认
-│   │   ├── ProjectListWidget.java    # Project sidebar list / 项目侧边栏列表
-│   │   ├── TodoScreen.java           # Main GUI / 主界面
-│   │   ├── TaskListWidget.java       # Task list widget / 任务列表组件
-│   │   ├── ScrollBar.java            # Scroll bar widget / 滚动条组件
-│   │   └── ConfigScreen.java         # HUD config GUI / HUD配置界面
-│   ├── network/
-│   │   ├── TaskPackets.java          # Task networking / 任务网络包
-│   │   └── ProjectPackets.java       # Project networking / 项目网络包
-│   ├── permission/
-│   │   └── PermissionCenter.java     # Permission center / 权限中心
-│   ├── project/
-│   │   ├── Project.java              # Project model / 项目模型
-│   │   ├── ProjectManager.java       # Project manager / 项目管理器
-│   │   ├── ProjectStorage.java       # Project persistence / 项目持久化
-│   │   └── ProjectSaveDebouncer.java # Batched saves / 合并写入
-│   └── task/
-│       ├── Task.java                 # Task entity / 任务实体
-│       ├── TaskManager.java          # Task manager / 任务管理器
-│       └── TaskStorage.java          # Data persistence / 数据持久化
-└── src/main/resources/
-    ├── assets/todolist/
-    │   └── lang/                     # Language files / 语言文件
-    └── fabric.mod.json               # Mod metadata / 模组元数据
+├── common/          # Shared game logic, GUI, data models, permissions / 通用逻辑、界面、数据与权限
+├── fabric/          # Fabric bootstrap and networking adapter / Fabric 启动与网络适配
+├── forge/           # Forge bootstrap and networking adapter / Forge 启动与网络适配
+├── neoforge/        # NeoForge bootstrap and networking adapter / NeoForge 启动与网络适配
+├── build.gradle     # Multi-loader build entry / 多加载器构建入口
+└── gradle.properties
 ```
 
 ## 📝 Roadmap / 开发路线
@@ -245,4 +217,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by the TodoList Mod Team
+Made with ❤️ by spacehouse
