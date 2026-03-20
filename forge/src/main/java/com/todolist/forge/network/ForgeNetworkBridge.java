@@ -156,7 +156,8 @@ public final class ForgeNetworkBridge {
             return false;
         }
         if (client.isLocalServer()) {
-            return false;
+            var server = client.getSingleplayerServer();
+            return server != null && server.isPublished();
         }
         Connection connection = client.getConnection().getConnection();
         if (connection == null) {

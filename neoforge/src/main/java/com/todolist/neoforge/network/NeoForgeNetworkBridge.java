@@ -149,7 +149,8 @@ public final class NeoForgeNetworkBridge {
             return false;
         }
         if (client.isLocalServer()) {
-            return false;
+            var server = client.getSingleplayerServer();
+            return server != null && server.isPublished();
         }
         if (client.getConnection() instanceof ICommonPacketListener listener) {
             return listener.hasChannel(NeoForgeDispatchPayload.TYPE);

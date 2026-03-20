@@ -351,9 +351,7 @@ public final class NeoForgeTodoClient {
         }
         if (current.isLocalServer()) {
             var server = current.getSingleplayerServer();
-            if (server != null && server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
-                return false;
-            }
+            return server != null && server.isPublished();
         }
         return NeoForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
