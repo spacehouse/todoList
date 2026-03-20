@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.2.1] - 2026-03-21
+
+### Improvements & Fixes
+- **Team Project Availability Fix**: Corrected the team project availability check logic on local single-player servers to ensure project states and permissions are displayed and handled correctly.
+
 ## [1.2.0] - 2026-03-19
 
 ### New Features
