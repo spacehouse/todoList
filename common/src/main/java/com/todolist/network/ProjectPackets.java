@@ -275,6 +275,10 @@ public class ProjectPackets {
         });
     }
 
+    /**
+     * 判断当前服务端是否处于“团队项目不可用”的本地单人状态。
+     * 专用服务器始终可用；本地集成服仅在未发布局域网时不可用。
+     */
     private static boolean isSingleplayerServer(MinecraftServer server) {
         if (server == null) {
             return false;
@@ -282,7 +286,7 @@ public class ProjectPackets {
         if (server.isDedicatedServer()) {
             return false;
         }
-        return server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1;
+        return !server.isPublished();
     }
 
     private static void ensureDefaultTeamProjectOwner(MinecraftServer server, ServerPlayer player) {

@@ -249,14 +249,16 @@ public final class ForgeTodoClient {
         }
     }
 
+    /**
+     * 判断当前环境是否允许使用团队项目能力。
+     * 本地集成服仅在已发布局域网后启用，远程服按网络能力判定。
+     */
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) return false;
         if (current.isLocalServer()) {
             var server = current.getSingleplayerServer();
-            if (server != null && server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
-                return false;
-            }
+            return server != null && server.isPublished();
         }
         return ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
     }

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.1.3] - 2026-03-21
+
+### Improvements & Fixes
+- **LAN Team Availability (Fabric/Forge)**: Team projects now become available immediately after the host publishes a LAN world, even before a second player joins.
+- **Singleplayer Safety Preserved**: In pure local singleplayer (LAN not published), team projects remain disabled to keep previous singleplayer behavior unchanged.
+- **Unified Server-side Rule**: Team project create/select/visibility/active-project sync now consistently follow `!dedicated && !published` as the singleplayer-disabled rule.
+- **Forge Host Networking Fix**: On Forge, local host packet capability checks no longer hard-fail in LAN mode, preventing host-side fallback behavior that blocked team project workflow.
+
 ## [1.1.2] - 2026-03-17
 
 ### Improvements & Fixes

@@ -302,9 +302,7 @@ public class TodoClient implements ClientModInitializer {
         if (c == null) return false;
         if (c.isLocalServer()) {
             var server = c.getSingleplayerServer();
-            if (server != null && server.getPlayerList() != null && server.getPlayerList().getPlayerCount() == 1) {
-                return false;
-            }
+            return server != null && server.isPublished();
         }
         return ClientPlayNetworking.canSend(ProjectPackets.ADD_PROJECT_ID);
     }
