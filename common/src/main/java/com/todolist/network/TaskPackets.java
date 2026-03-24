@@ -91,24 +91,27 @@ public class TaskPackets {
         }
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
+            MinecraftServer server = player.getServer();
             java.util.UUID playerUuid = player.getUUID();
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
-            boolean playerFileExists = storage.hasPlayerTasks(playerUuid);
-            List<Task> fallback = storage.loadTasks();
-            if (!playerFileExists) {
-                if (!fallback.isEmpty()) {
-                    tasks = fallback;
-                    storage.savePlayerTasks(playerUuid, tasks);
-                    TodoConstants.LOGGER.info("Migrated {} tasks from local storage to player file {}", tasks.size(), playerUuid);
-                }
-            } else if (!fallback.isEmpty()) {
-                long playerLastSaved = storage.getPlayerTasksLastSaved(playerUuid);
-                long localLastSaved = storage.getLocalTasksLastSaved();
-                if (localLastSaved > playerLastSaved) {
-                    tasks = fallback;
-                    storage.savePlayerTasks(playerUuid, tasks);
-                    TodoConstants.LOGGER.info("Recovered newer local tasks for player file {}, localLastSaved={}, playerLastSaved={}, taskCount={}",
-                            playerUuid, localLastSaved, playerLastSaved, tasks.size());
+            List<Task> tasks = storage.loadPersonalTasks(server, playerUuid);
+            if (!storage.shouldUseLocalPersonalStorage(server)) {
+                boolean playerFileExists = storage.hasPlayerTasks(playerUuid);
+                List<Task> fallback = storage.loadTasks();
+                if (!playerFileExists) {
+                    if (!fallback.isEmpty()) {
+                        tasks = fallback;
+                        storage.savePlayerTasks(playerUuid, tasks);
+                        TodoConstants.LOGGER.info("Migrated {} tasks from local storage to player file {}", tasks.size(), playerUuid);
+                    }
+                } else if (!fallback.isEmpty()) {
+                    long playerLastSaved = storage.getPersonalTasksLastSaved(server, playerUuid);
+                    long localLastSaved = storage.getLocalTasksLastSaved();
+                    if (localLastSaved > playerLastSaved) {
+                        tasks = fallback;
+                        storage.savePlayerTasks(playerUuid, tasks);
+                        TodoConstants.LOGGER.info("Recovered newer local tasks for player file {}, localLastSaved={}, playerLastSaved={}, taskCount={}",
+                                playerUuid, localLastSaved, playerLastSaved, tasks.size());
+                    }
                 }
             }
             FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -137,7 +140,7 @@ public class TaskPackets {
     private static void handleReplaceTasks(ServerPlayer player, List<Task> tasks) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            storage.savePlayerTasks(player.getUUID(), tasks);
+            storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
         }

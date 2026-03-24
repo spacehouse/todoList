@@ -470,7 +470,7 @@ public final class CommandBootstrap {
         TaskStorage storage = TodoListCommon.getTaskStorage();
 
         try {
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
             int totalCount = tasks.size();
             int completedCount = (int) tasks.stream().filter(Task::isCompleted).count();
 
@@ -511,7 +511,7 @@ public final class CommandBootstrap {
         UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
             String normalizedTitle = title == null ? "" : title.trim();
             if (normalizedTitle.isEmpty()) {
                 return sendCommandFailure(source, "command.todolist.task.add.invalid_title");
@@ -528,7 +528,7 @@ public final class CommandBootstrap {
                 newTask.setProjectId(resolvedProjectId);
             }
             tasks.add(newTask);
-            storage.savePlayerTasks(playerUuid, tasks);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
             syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
@@ -573,6 +573,20 @@ public final class CommandBootstrap {
                 .map(String::trim)
                 .filter(tag -> !tag.isEmpty())
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * 按命令执行所在服务端的运行模式读取个人任务，保证与单人 GUI 使用同一份数据。
+     */
+    private static List<Task> loadPersonalTasksForCommand(MinecraftServer server, TaskStorage storage, UUID playerUuid) throws IOException {
+        return storage.loadPersonalTasks(server, playerUuid);
+    }
+
+    /**
+     * 按命令执行所在服务端的运行模式保存个人任务，避免单人模式写入到错误的玩家文件。
+     */
+    private static void savePersonalTasksForCommand(MinecraftServer server, TaskStorage storage, UUID playerUuid, List<Task> tasks) throws IOException {
+        storage.savePersonalTasks(server, playerUuid, tasks);
     }
 
     /**
@@ -875,7 +889,7 @@ public final class CommandBootstrap {
             TaskStorage storage = TodoListCommon.getTaskStorage();
             List<Task> tasks = "team".equals(normalizedScope)
                     ? storage.loadTeamTasks()
-                    : storage.loadPlayerTasks(player.getUUID());
+                    : loadPersonalTasksForCommand(source.getServer(), storage, player.getUUID());
             ResolvedTaskCleanRequest provisional = new ResolvedTaskCleanRequest(
                     normalizedScope,
                     normalizedProjectSelector,
@@ -937,11 +951,11 @@ public final class CommandBootstrap {
                 storage.saveTeamTasks(tasks);
                 TaskPackets.broadcastTeamTasks(source.getServer());
             } else {
-                List<Task> tasks = new ArrayList<>(storage.loadPlayerTasks(player.getUUID()));
+                List<Task> tasks = new ArrayList<>(loadPersonalTasksForCommand(source.getServer(), storage, player.getUUID()));
                 int before = tasks.size();
                 tasks.removeIf(task -> matchesTaskCleanRequest(task, request));
                 removedCount = before - tasks.size();
-                storage.savePlayerTasks(player.getUUID(), tasks);
+                savePersonalTasksForCommand(source.getServer(), storage, player.getUUID(), tasks);
                 syncTasksToPlayer(source.getServer(), player);
             }
             return sendCommandSuccess(
@@ -1451,7 +1465,7 @@ public final class CommandBootstrap {
         UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
             Task task = findTaskById(tasks, taskId);
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
@@ -1468,7 +1482,7 @@ public final class CommandBootstrap {
             }
 
             task.setCompleted(true);
-            storage.savePlayerTasks(playerUuid, tasks);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
             syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
@@ -1497,14 +1511,14 @@ public final class CommandBootstrap {
         UUID playerUuid = player.getUUID();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
             Task task = findTaskById(tasks, taskId);
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.remove.not_found", taskId);
             }
 
             tasks.remove(task);
-            storage.savePlayerTasks(playerUuid, tasks);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
             syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
@@ -1679,9 +1693,9 @@ public final class CommandBootstrap {
                 TaskPackets.broadcastTeamTasks(source.getServer());
             } else {
                 newTask.setScope(Task.Scope.PERSONAL);
-                List<Task> tasks = storage.loadPlayerTasks(playerUuid);
+                List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
                 tasks.add(newTask);
-                storage.savePlayerTasks(playerUuid, tasks);
+                savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
                 syncTasksToPlayer(source.getServer(), player);
             }
             return sendCommandSuccess(

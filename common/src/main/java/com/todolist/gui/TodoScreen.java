@@ -2,9 +2,10 @@ package com.todolist.gui;
 
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
-import com.todolist.client.TodoHudRenderer;
 import com.todolist.client.ClientBridge;
+import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.ClientPlatformAdapter;
+import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
@@ -155,7 +156,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (personalTaskManager == null) {
             personalTaskManager = new TaskManager();
             try {
-                List<Task> loadedTasks = TodoListCommon.getTaskStorage().loadTasks();
+                List<Task> loadedTasks = ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft);
                 for (Task task : loadedTasks) {
                     personalTaskManager.addTask(task);
                 }
@@ -820,7 +821,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void onSaveTasks() {
         try {
             if (viewMode == ViewMode.PERSONAL) {
-                TodoListCommon.getTaskStorage().saveTasks(taskManager.getAllTasks());
+                ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft, taskManager.getAllTasks());
                 TodoConstants.LOGGER.info("Tasks saved");
                 if (ClientBridge.ops() != null) {
                     ClientBridge.ops().sendReplaceAllTasks(taskManager.getAllTasks());
@@ -969,7 +970,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         try {
-            List<Task> persistedTasks = TodoListCommon.getTaskStorage().loadTasksSafe();
+            List<Task> persistedTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), this.minecraft);
             personalTaskManager.clearAll();
             for (Task task : persistedTasks) {
                 personalTaskManager.addTask(task);

@@ -45,7 +45,7 @@ public final class ForgeClientTaskPackets {
                     return;
                 }
                 try {
-                    TodoListForge.getTaskStorage().saveTasks(tasks);
+                    ClientTaskStorageHelper.savePersonalTasks(TodoListForge.getTaskStorage(), client, tasks);
                     TodoListForge.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
                 } catch (Exception e) {
                     TodoListForge.LOGGER.error("Failed to save synced tasks on Forge client", e);

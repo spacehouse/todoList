@@ -5,6 +5,7 @@ import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.server.MinecraftServer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,6 +86,17 @@ public class TaskStorage {
         TodoConstants.LOGGER.info("Saved {} tasks for player {}", tasks.size(), playerUuid);
     }
 
+    /**
+     * 按当前服务端运行模式保存个人任务，单人本地模式写入单文件，其余模式写入玩家文件。
+     */
+    public void savePersonalTasks(MinecraftServer server, UUID playerUuid, List<Task> tasks) throws IOException {
+        if (shouldUseLocalPersonalStorage(server)) {
+            saveTasks(tasks);
+            return;
+        }
+        savePlayerTasks(playerUuid, tasks);
+    }
+
     public void saveTeamTasks(List<Task> tasks) throws IOException {
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
@@ -152,6 +164,16 @@ public class TaskStorage {
         return loadTasksFromFile(playerFile);
     }
 
+    /**
+     * 按当前服务端运行模式读取个人任务，单人本地模式优先使用单文件，其余模式读取玩家文件。
+     */
+    public List<Task> loadPersonalTasks(MinecraftServer server, UUID playerUuid) throws IOException {
+        if (shouldUseLocalPersonalStorage(server)) {
+            return loadTasks();
+        }
+        return loadPlayerTasks(playerUuid);
+    }
+
     public List<Task> loadTeamTasks() throws IOException {
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
@@ -208,6 +230,16 @@ public class TaskStorage {
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
         return readLastSavedSafe(playerFile);
+    }
+
+    /**
+     * 按当前服务端运行模式读取个人任务文件的最后保存时间戳。
+     */
+    public long getPersonalTasksLastSaved(MinecraftServer server, UUID playerUuid) {
+        if (shouldUseLocalPersonalStorage(server)) {
+            return getLocalTasksLastSaved();
+        }
+        return getPlayerTasksLastSaved(playerUuid);
     }
 
     private long readLastSavedSafe(Path file) {
@@ -282,10 +314,34 @@ public class TaskStorage {
     }
 
     /**
+     * 按当前服务端运行模式判断个人任务文件是否已存在。
+     */
+    public boolean hasPersonalTasks(MinecraftServer server, UUID playerUuid) {
+        if (shouldUseLocalPersonalStorage(server)) {
+            ensureDirectoryExists();
+            return Files.exists(getDataDirectory().resolve(DATA_FILE));
+        }
+        return hasPlayerTasks(playerUuid);
+    }
+
+    /**
      * Get data directory path (for debugging)
      */
     public Path getDataDirectoryPath() {
         return getDataDirectory();
+    }
+
+    /**
+     * 判断当前服务端是否应使用单人本地个人任务文件。
+     */
+    public boolean shouldUseLocalPersonalStorage(MinecraftServer server) {
+        if (server == null) {
+            return false;
+        }
+        if (server.isDedicatedServer()) {
+            return false;
+        }
+        return !server.isPublished();
     }
 }
 
