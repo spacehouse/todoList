@@ -3,6 +3,8 @@ package com.todolist.gui;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.client.ClientPlatformAdapter;
+import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
@@ -34,6 +36,10 @@ public class ConfigScreen extends Screen {
 
     private int previewHudX;
     private int previewHudY;
+    private ModConfig.HudHorizontalAnchor previewHorizontalAnchor;
+    private ModConfig.HudVerticalAnchor previewVerticalAnchor;
+    private int previewHorizontalMargin;
+    private int previewVerticalMargin;
     private int previewHudWidth;
     private int previewHudHeight;
     private int previewRectX;
@@ -165,25 +171,9 @@ public class ConfigScreen extends Screen {
 
         // Preview initialization
         previewUseCustom = cfg.isHudUseCustomPosition();
-        if (previewUseCustom) {
-            previewHudX = cfg.getHudCustomX();
-            previewHudY = cfg.getHudCustomY();
-        } else {
-            previewHudWidth = cfg.getHudWidth();
-            previewHudHeight = 40;
-            int margin = 10;
-            previewHudX = this.width - previewHudWidth - margin;
-            if (previewHudX < 0) previewHudX = 0;
-            previewHudY = margin;
-        }
         previewHudWidth = cfg.getHudWidth();
         previewHudHeight = 40;
-
-        // Clamp preview position to screen bounds
-        if (previewHudX < 0) previewHudX = 0;
-        if (previewHudY < 0) previewHudY = 0;
-        if (previewHudX + previewHudWidth > this.width) previewHudX = Math.max(0, this.width - previewHudWidth);
-        if (previewHudY + previewHudHeight > this.height) previewHudY = Math.max(0, this.height - previewHudHeight);
+        syncPreviewPositionFromConfig(cfg);
 
         int buttonY = y + row * rowH + 30;
         Button save = Button.builder(Component.translatable("gui.todolist.config.save_apply"), b -> {
@@ -215,26 +205,26 @@ public class ConfigScreen extends Screen {
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textH);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textH);
 
-        int hudX = previewHudX;
-        int hudY = previewHudY;
-        // Clamp for rendering safety
-        if (hudX < 0) hudX = 0;
-        if (hudY < 0) hudY = 0;
-        if (hudX + previewHudWidth > this.width) hudX = Math.max(0, this.width - previewHudWidth);
-        if (hudY + previewHudHeight > this.height) hudY = Math.max(0, this.height - previewHudHeight);
-        
-        previewRectX = hudX;
-        previewRectY = hudY;
+        previewHudWidth = Math.max(1, parseIntSafe(hudWidthField.getValue(), ModConfig.getInstance().getHudWidth()));
+        previewHudHeight = 40;
+        if (previewUseCustom) {
+            applyPreviewAnchorsToAbsolutePosition();
+        } else {
+            syncPreviewPositionFromConfig(ModConfig.getInstance());
+        }
+
+        previewRectX = previewHudX;
+        previewRectY = previewHudY;
         double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
         int a = (int) Math.round(Math.max(0.0, Math.min(1.0, opacity)) * 255.0);
-        context.fill(hudX, hudY, hudX + previewHudWidth, hudY + previewHudHeight, (a << 24));
-        context.renderOutline(hudX, hudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
+        context.fill(previewHudX, previewHudY, previewHudX + previewHudWidth, previewHudY + previewHudHeight, (a << 24));
+        context.renderOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
         Component line1 = Component.translatable("gui.todolist.config.hud_preview.title");
         Component line2 = Component.translatable("gui.todolist.config.hud_preview.hint");
         int line1Width = this.font.width(line1);
         int line2Width = this.font.width(line2);
-        int centerX = hudX + previewHudWidth / 2;
-        int centerY = hudY + previewHudHeight / 2;
+        int centerX = previewHudX + previewHudWidth / 2;
+        int centerY = previewHudY + previewHudHeight / 2;
         int lineSpacing = 2;
         int totalTextHeight = textH * 2 + lineSpacing;
         int startY = centerY - totalTextHeight / 2;
@@ -254,6 +244,9 @@ public class ConfigScreen extends Screen {
                 draggingHud = true;
                 dragOffsetX = mx - previewRectX;
                 dragOffsetY = my - previewRectY;
+                if (!previewUseCustom) {
+                    updatePreviewAnchorsFromAbsolutePosition();
+                }
                 previewUseCustom = true;
                 return true;
             }
@@ -283,6 +276,7 @@ public class ConfigScreen extends Screen {
             if (newY + previewHudHeight > this.height) newY = Math.max(0, this.height - previewHudHeight);
             previewHudX = newX;
             previewHudY = newY;
+            updatePreviewAnchorsFromAbsolutePosition();
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
@@ -294,20 +288,145 @@ public class ConfigScreen extends Screen {
         cfg.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getValue(), cfg.getHudMaxHeight()));
         cfg.setHudTodoLimit(hudTodoLimitSlider.getIntValue());
         cfg.setHudDoneLimit(hudDoneLimitSlider.getIntValue());
+        cfg.setHudProjectSource(hudProjectSourceValue);
+        previewHudWidth = cfg.getHudWidth();
+        previewHudHeight = resolveActualHudHeight();
         if (hudOpacitySlider != null) {
             cfg.setHudOpacity(hudOpacitySlider.getDoubleValue());
         }
-        cfg.setHudUseCustomPosition(previewUseCustom);
-        cfg.setHudCustomX(previewHudX);
-        cfg.setHudCustomY(previewHudY);
+        if (previewUseCustom) {
+            cfg.updateHudCustomPosition(previewHudX, previewHudY, this.width, this.height, previewHudWidth, previewHudHeight);
+        } else {
+            cfg.setHudUseCustomPosition(false);
+        }
         cfg.setHudShowWhenEmpty(hudShowWhenEmptyValue);
         ClientBridge.ops().setHudVisible(hudVisibleValue);
         
         // Note: Default View is not exposed in UI anymore, so we keep current value or default.
         // cfg.setHudDefaultView(...); 
-        
-        cfg.setHudProjectSource(hudProjectSourceValue);
         this.minecraft.setScreen(parent);
+    }
+
+    /**
+     * 根据当前配置同步预览框位置。
+     *
+     * @param cfg 当前模组配置
+     */
+    private void syncPreviewPositionFromConfig(ModConfig cfg) {
+        previewHudWidth = Math.max(1, previewHudWidth);
+        previewHudHeight = Math.max(1, previewHudHeight);
+        if (previewUseCustom) {
+            if (cfg.hasHudCustomAnchors()) {
+                previewHorizontalAnchor = cfg.getHudCustomHorizontalAnchor();
+                previewVerticalAnchor = cfg.getHudCustomVerticalAnchor();
+                previewHorizontalMargin = cfg.getHudCustomHorizontalMargin();
+                previewVerticalMargin = cfg.getHudCustomVerticalMargin();
+                applyPreviewAnchorsToAbsolutePosition();
+            } else {
+                previewHudX = resolveLegacyPreviewCoordinate(cfg.getHudCustomX(), cfg.getHudCustomXRatio(),
+                        cfg.hasHudCustomPositionRatios(), this.width, previewHudWidth);
+                previewHudY = resolveLegacyPreviewCoordinate(cfg.getHudCustomY(), cfg.getHudCustomYRatio(),
+                        cfg.hasHudCustomPositionRatios(), this.height, previewHudHeight);
+                updatePreviewAnchorsFromAbsolutePosition();
+            }
+        } else {
+            ModConfig.HudPlacement placement = cfg.resolveHudPlacement(this.width, this.height, previewHudWidth, previewHudHeight);
+            previewHudX = placement.getX();
+            previewHudY = placement.getY();
+            updatePreviewAnchorsFromAbsolutePosition();
+        }
+    }
+
+    /**
+     * 解析当前配置下 HUD 的真实面板高度。
+     *
+     * @return HUD 面板高度
+     */
+    private int resolveActualHudHeight() {
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            return Math.max(1, renderer.getCurrentPanelHeight());
+        }
+        return Math.max(1, previewHudHeight);
+    }
+
+    /**
+     * 在不改写配置对象的前提下解析旧版预览坐标。
+     *
+     * @param absoluteCoordinate 旧版绝对坐标
+     * @param ratioCoordinate 旧版比例坐标
+     * @param preferRatio true 表示优先使用比例坐标
+     * @param screenSize 当前屏幕尺寸
+     * @param hudSize 当前 HUD 尺寸
+     * @return 预览使用的绝对坐标
+     */
+    private int resolveLegacyPreviewCoordinate(int absoluteCoordinate, double ratioCoordinate, boolean preferRatio,
+                                               int screenSize, int hudSize) {
+        if (preferRatio) {
+            int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+            return clampPreviewCoordinate((int) Math.round(clampRatio(ratioCoordinate) * maxCoordinate), screenSize, hudSize);
+        }
+        return clampPreviewCoordinate(absoluteCoordinate, screenSize, hudSize);
+    }
+
+    /**
+     * 裁剪比例值到合法区间。
+     *
+     * @param ratio 原始比例值
+     * @return 0.0 到 1.0 之间的比例值
+     */
+    private static double clampRatio(double ratio) {
+        if (ratio < 0.0D) {
+            return 0.0D;
+        }
+        if (ratio > 1.0D) {
+            return 1.0D;
+        }
+        return ratio;
+    }
+
+    /**
+     * 根据当前预览绝对坐标刷新锚点和边距。
+     */
+    private void updatePreviewAnchorsFromAbsolutePosition() {
+        int clampedX = clampPreviewCoordinate(previewHudX, this.width, previewHudWidth);
+        int clampedY = clampPreviewCoordinate(previewHudY, this.height, previewHudHeight);
+        previewHudX = clampedX;
+        previewHudY = clampedY;
+
+        int leftMargin = clampedX;
+        int rightMargin = Math.max(0, this.width - Math.max(0, previewHudWidth) - clampedX);
+        if (leftMargin <= rightMargin) {
+            previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.LEFT;
+            previewHorizontalMargin = leftMargin;
+        } else {
+            previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.RIGHT;
+            previewHorizontalMargin = rightMargin;
+        }
+
+        int topMargin = clampedY;
+        int bottomMargin = Math.max(0, this.height - Math.max(0, previewHudHeight) - clampedY);
+        if (topMargin <= bottomMargin) {
+            previewVerticalAnchor = ModConfig.HudVerticalAnchor.TOP;
+            previewVerticalMargin = topMargin;
+        } else {
+            previewVerticalAnchor = ModConfig.HudVerticalAnchor.BOTTOM;
+            previewVerticalMargin = bottomMargin;
+        }
+    }
+
+    /**
+     * 根据当前预览锚点和边距恢复绝对坐标。
+     */
+    private void applyPreviewAnchorsToAbsolutePosition() {
+        int resolvedX = previewHorizontalAnchor == ModConfig.HudHorizontalAnchor.LEFT
+                ? previewHorizontalMargin
+                : this.width - Math.max(0, previewHudWidth) - previewHorizontalMargin;
+        int resolvedY = previewVerticalAnchor == ModConfig.HudVerticalAnchor.TOP
+                ? previewVerticalMargin
+                : this.height - Math.max(0, previewHudHeight) - previewVerticalMargin;
+        previewHudX = clampPreviewCoordinate(resolvedX, this.width, previewHudWidth);
+        previewHudY = clampPreviewCoordinate(resolvedY, this.height, previewHudHeight);
     }
 
     private int parseIntSafe(String s, int fallback) {
@@ -393,6 +512,25 @@ public class ConfigScreen extends Screen {
             return max;
         }
         return value;
+    }
+
+    /**
+     * 将预览坐标裁剪到可视范围内。
+     *
+     * @param coordinate 原始坐标
+     * @param screenSize 当前屏幕尺寸
+     * @param hudSize 预览 HUD 尺寸
+     * @return 合法的预览坐标
+     */
+    private static int clampPreviewCoordinate(int coordinate, int screenSize, int hudSize) {
+        int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+        if (coordinate < 0) {
+            return 0;
+        }
+        if (coordinate > maxCoordinate) {
+            return maxCoordinate;
+        }
+        return coordinate;
     }
 
     private static class HudProjectSourceOptions {

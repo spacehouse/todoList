@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Forge 平台客户端项目相关数据包处理类。
@@ -248,6 +249,7 @@ public final class ForgeClientProjectPackets {
      */
     public static void sendSetActiveProjectId(String projectId) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
+            applyLocalActiveProjectId(projectId);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -262,6 +264,7 @@ public final class ForgeClientProjectPackets {
 
     public static void sendSetHudStarredProjectIds(List<String> projectIds) {
         if (!ForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
+            applyLocalHudStarredProjectIds(projectIds);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -335,6 +338,52 @@ public final class ForgeClientProjectPackets {
         } catch (Exception e) {
             TodoConstants.LOGGER.error("Failed to save projects in local fallback mode", e);
         }
+    }
+
+    /**
+     * 在本地单人模式下直接把当前激活项目写入集成服务端，保证命令系统可读取到最新状态。
+     */
+    private static void applyLocalActiveProjectId(String projectId) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setActiveProjectId(serverPlayer, projectId));
+    }
+
+    /**
+     * 在本地单人模式下直接把 HUD 星标项目写入集成服务端，避免命令侧读取到空状态。
+     */
+    private static void applyLocalHudStarredProjectIds(List<String> projectIds) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        List<String> ids = projectIds == null ? List.of() : List.copyOf(projectIds);
+        server.execute(() -> ProjectPackets.setHudStarredProjectIds(serverPlayer, ids));
+    }
+
+    /**
+     * 解析当前本地单人环境对应的服务端玩家对象，用于无网络能力时的本地回退。
+     */
+    private static ServerPlayer resolveLocalServerPlayer() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.player == null || !minecraft.isLocalServer()) {
+            return null;
+        }
+        var server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            return null;
+        }
+        return server.getPlayerList().getPlayer(minecraft.player.getUUID());
     }
 
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {

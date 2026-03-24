@@ -58,6 +58,7 @@ public class ModConfig {
     private static final int HUD_WIDTH_MAX = 640;
     private static final int HUD_HEIGHT_MIN = 120;
     private static final int HUD_HEIGHT_MAX = 1000;
+    private static final int HUD_DEFAULT_MARGIN = 10;
     private static final int PADDING_MIN = 4;
     private static final int PADDING_MAX = 24;
     private static final int ELEMENT_SPACING_MIN = 2;
@@ -141,6 +142,12 @@ public class ModConfig {
         private boolean hudUseCustomPosition = false;
         private int hudCustomX = 10;
         private int hudCustomY = 10;
+        private Double hudCustomXRatio;
+        private Double hudCustomYRatio;
+        private HudHorizontalAnchor hudCustomHorizontalAnchor;
+        private HudVerticalAnchor hudCustomVerticalAnchor;
+        private Integer hudCustomHorizontalMargin;
+        private Integer hudCustomVerticalMargin;
         private boolean hudShowWhenEmpty = false;
         private String hudDefaultView = "PERSONAL";
         private String hudProjectSource = "ALL";
@@ -149,6 +156,59 @@ public class ModConfig {
         
         // Project Sidebar
         private int projectSidebarWidth = 100;
+    }
+
+    /**
+     * HUD 水平方向锚点。
+     */
+    public enum HudHorizontalAnchor {
+        LEFT,
+        RIGHT
+    }
+
+    /**
+     * HUD 垂直方向锚点。
+     */
+    public enum HudVerticalAnchor {
+        TOP,
+        BOTTOM
+    }
+
+    /**
+     * HUD 最终落点信息。
+     */
+    public static class HudPlacement {
+        private final int x;
+        private final int y;
+
+        /**
+         * 创建 HUD 落点对象。
+         *
+         * @param x HUD 左上角 X 坐标
+         * @param y HUD 左上角 Y 坐标
+         */
+        public HudPlacement(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        /**
+         * 获取 HUD 左上角 X 坐标。
+         *
+         * @return HUD X 坐标
+         */
+        public int getX() {
+            return x;
+        }
+
+        /**
+         * 获取 HUD 左上角 Y 坐标。
+         *
+         * @return HUD Y 坐标
+         */
+        public int getY() {
+            return y;
+        }
     }
 
     /**
@@ -224,6 +284,28 @@ public class ModConfig {
                 gui.hudOpacity = stepped;
                 changed = true;
             }
+        }
+        if (gui.hudCustomXRatio != null) {
+            double normalizedRatio = clampRatio(gui.hudCustomXRatio);
+            if (Double.compare(normalizedRatio, gui.hudCustomXRatio) != 0) {
+                gui.hudCustomXRatio = normalizedRatio;
+                changed = true;
+            }
+        }
+        if (gui.hudCustomYRatio != null) {
+            double normalizedRatio = clampRatio(gui.hudCustomYRatio);
+            if (Double.compare(normalizedRatio, gui.hudCustomYRatio) != 0) {
+                gui.hudCustomYRatio = normalizedRatio;
+                changed = true;
+            }
+        }
+        if (gui.hudCustomHorizontalMargin != null && gui.hudCustomHorizontalMargin < 0) {
+            gui.hudCustomHorizontalMargin = 0;
+            changed = true;
+        }
+        if (gui.hudCustomVerticalMargin != null && gui.hudCustomVerticalMargin < 0) {
+            gui.hudCustomVerticalMargin = 0;
+            changed = true;
         }
         int normalizedGuiWidth = clamp(gui.guiWidth, GUI_WIDTH_MIN, GUI_WIDTH_MAX);
         if (normalizedGuiWidth != gui.guiWidth) {
@@ -628,20 +710,176 @@ public class ModConfig {
     }
 
     public boolean isHudUseCustomPosition() { return gui.hudUseCustomPosition; }
+
+    /**
+     * 设置 HUD 是否使用自定义位置。
+     *
+     * @param useCustom true 表示启用自定义位置
+     */
     public void setHudUseCustomPosition(boolean useCustom) {
         gui.hudUseCustomPosition = useCustom;
         save();
     }
 
     public int getHudCustomX() { return gui.hudCustomX; }
+
+    /**
+     * 设置 HUD 自定义 X 坐标（兼容旧配置的绝对像素值）。
+     *
+     * @param x HUD 自定义 X 坐标
+     */
     public void setHudCustomX(int x) {
         gui.hudCustomX = x;
         save();
     }
 
     public int getHudCustomY() { return gui.hudCustomY; }
+
+    /**
+     * 设置 HUD 自定义 Y 坐标（兼容旧配置的绝对像素值）。
+     *
+     * @param y HUD 自定义 Y 坐标
+     */
     public void setHudCustomY(int y) {
         gui.hudCustomY = y;
+        save();
+    }
+
+    /**
+     * 判断 HUD 是否已持久化比例坐标。
+     *
+     * @return true 表示存在比例坐标
+     */
+    public boolean hasHudCustomPositionRatios() {
+        return gui.hudCustomXRatio != null && gui.hudCustomYRatio != null;
+    }
+
+    /**
+     * 判断 HUD 是否已持久化锚点和边距。
+     *
+     * @return true 表示存在完整锚点信息
+     */
+    public boolean hasHudCustomAnchors() {
+        return gui.hudCustomHorizontalAnchor != null
+                && gui.hudCustomVerticalAnchor != null
+                && gui.hudCustomHorizontalMargin != null
+                && gui.hudCustomVerticalMargin != null;
+    }
+
+    /**
+     * 获取 HUD 自定义 X 比例坐标。
+     *
+     * @return 0.0 ~ 1.0 的 X 比例
+     */
+    public double getHudCustomXRatio() {
+        return gui.hudCustomXRatio == null ? 0.0 : clampRatio(gui.hudCustomXRatio);
+    }
+
+    /**
+     * 获取 HUD 自定义 Y 比例坐标。
+     *
+     * @return 0.0 ~ 1.0 的 Y 比例
+     */
+    public double getHudCustomYRatio() {
+        return gui.hudCustomYRatio == null ? 0.0 : clampRatio(gui.hudCustomYRatio);
+    }
+
+    /**
+     * 获取 HUD 水平锚点。
+     *
+     * @return HUD 水平锚点
+     */
+    public HudHorizontalAnchor getHudCustomHorizontalAnchor() {
+        return gui.hudCustomHorizontalAnchor == null ? HudHorizontalAnchor.RIGHT : gui.hudCustomHorizontalAnchor;
+    }
+
+    /**
+     * 获取 HUD 垂直锚点。
+     *
+     * @return HUD 垂直锚点
+     */
+    public HudVerticalAnchor getHudCustomVerticalAnchor() {
+        return gui.hudCustomVerticalAnchor == null ? HudVerticalAnchor.TOP : gui.hudCustomVerticalAnchor;
+    }
+
+    /**
+     * 获取 HUD 水平边距。
+     *
+     * @return HUD 水平边距
+     */
+    public int getHudCustomHorizontalMargin() {
+        return gui.hudCustomHorizontalMargin == null ? HUD_DEFAULT_MARGIN : Math.max(0, gui.hudCustomHorizontalMargin);
+    }
+
+    /**
+     * 获取 HUD 垂直边距。
+     *
+     * @return HUD 垂直边距
+     */
+    public int getHudCustomVerticalMargin() {
+        return gui.hudCustomVerticalMargin == null ? HUD_DEFAULT_MARGIN : Math.max(0, gui.hudCustomVerticalMargin);
+    }
+
+    /**
+     * 在仅存在旧版绝对像素坐标或比例坐标时，推导 HUD 锚点和边距。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @param hudWidth HUD 宽度
+     * @param hudHeight HUD 高度
+     */
+    public void ensureHudCustomAnchors(int screenWidth, int screenHeight, int hudWidth, int hudHeight) {
+        if (!gui.hudUseCustomPosition || hasHudCustomAnchors()) {
+            return;
+        }
+        int absoluteX;
+        int absoluteY;
+        if (hasHudCustomPositionRatios()) {
+            absoluteX = resolveHudCoordinate(getHudCustomXRatio(), screenWidth, hudWidth);
+            absoluteY = resolveHudCoordinate(getHudCustomYRatio(), screenHeight, hudHeight);
+        } else {
+            absoluteX = clampHudCoordinate(gui.hudCustomX, screenWidth, hudWidth);
+            absoluteY = clampHudCoordinate(gui.hudCustomY, screenHeight, hudHeight);
+        }
+        updateHudCustomAnchorState(absoluteX, absoluteY, screenWidth, screenHeight, hudWidth, hudHeight);
+        gui.hudCustomXRatio = null;
+        gui.hudCustomYRatio = null;
+    }
+
+    /**
+     * 根据当前配置解析 HUD 最终坐标。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @param hudWidth HUD 宽度
+     * @param hudHeight HUD 高度
+     * @return HUD 最终落点
+     */
+    public HudPlacement resolveHudPlacement(int screenWidth, int screenHeight, int hudWidth, int hudHeight) {
+        if (!gui.hudUseCustomPosition) {
+            return resolveDefaultHudPlacement(screenWidth, screenHeight, hudWidth, hudHeight);
+        }
+        ensureHudCustomAnchors(screenWidth, screenHeight, hudWidth, hudHeight);
+        int resolvedX = resolveHudXByAnchor(screenWidth, hudWidth, getHudCustomHorizontalAnchor(), getHudCustomHorizontalMargin());
+        int resolvedY = resolveHudYByAnchor(screenHeight, hudHeight, getHudCustomVerticalAnchor(), getHudCustomVerticalMargin());
+        return new HudPlacement(resolvedX, resolvedY);
+    }
+
+    /**
+     * 使用绝对坐标更新 HUD 自定义位置，并同步刷新兼容像素值与比例值。
+     *
+     * @param absoluteX HUD 当前绝对 X 坐标
+     * @param absoluteY HUD 当前绝对 Y 坐标
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @param hudWidth HUD 宽度
+     * @param hudHeight HUD 高度
+     */
+    public void updateHudCustomPosition(int absoluteX, int absoluteY, int screenWidth, int screenHeight, int hudWidth, int hudHeight) {
+        gui.hudUseCustomPosition = true;
+        updateHudCustomAnchorState(absoluteX, absoluteY, screenWidth, screenHeight, hudWidth, hudHeight);
+        gui.hudCustomXRatio = null;
+        gui.hudCustomYRatio = null;
         save();
     }
 
@@ -754,6 +992,160 @@ public class ModConfig {
     public void setProjectSidebarWidth(int width) {
         gui.projectSidebarWidth = clamp(width, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
         save();
+    }
+
+    /**
+     * 解析默认 HUD 的右上角落点。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @param hudWidth HUD 宽度
+     * @param hudHeight HUD 高度
+     * @return 默认 HUD 落点
+     */
+    private HudPlacement resolveDefaultHudPlacement(int screenWidth, int screenHeight, int hudWidth, int hudHeight) {
+        int maxX = Math.max(0, screenWidth - Math.max(0, hudWidth));
+        int maxY = Math.max(0, screenHeight - Math.max(0, hudHeight));
+        int resolvedX = Math.max(0, maxX - HUD_DEFAULT_MARGIN);
+        int resolvedY = Math.min(HUD_DEFAULT_MARGIN, maxY);
+        return new HudPlacement(resolvedX, resolvedY);
+    }
+
+    /**
+     * 按绝对坐标刷新 HUD 锚点和边距状态。
+     *
+     * @param absoluteX HUD 绝对 X 坐标
+     * @param absoluteY HUD 绝对 Y 坐标
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @param hudWidth HUD 宽度
+     * @param hudHeight HUD 高度
+     */
+    private void updateHudCustomAnchorState(int absoluteX, int absoluteY, int screenWidth, int screenHeight, int hudWidth, int hudHeight) {
+        int clampedX = clampHudCoordinate(absoluteX, screenWidth, hudWidth);
+        int clampedY = clampHudCoordinate(absoluteY, screenHeight, hudHeight);
+        gui.hudCustomX = clampedX;
+        gui.hudCustomY = clampedY;
+
+        int leftMargin = clampedX;
+        int rightMargin = Math.max(0, screenWidth - Math.max(0, hudWidth) - clampedX);
+        if (leftMargin <= rightMargin) {
+            gui.hudCustomHorizontalAnchor = HudHorizontalAnchor.LEFT;
+            gui.hudCustomHorizontalMargin = leftMargin;
+        } else {
+            gui.hudCustomHorizontalAnchor = HudHorizontalAnchor.RIGHT;
+            gui.hudCustomHorizontalMargin = rightMargin;
+        }
+
+        int topMargin = clampedY;
+        int bottomMargin = Math.max(0, screenHeight - Math.max(0, hudHeight) - clampedY);
+        if (topMargin <= bottomMargin) {
+            gui.hudCustomVerticalAnchor = HudVerticalAnchor.TOP;
+            gui.hudCustomVerticalMargin = topMargin;
+        } else {
+            gui.hudCustomVerticalAnchor = HudVerticalAnchor.BOTTOM;
+            gui.hudCustomVerticalMargin = bottomMargin;
+        }
+    }
+
+    /**
+     * 根据绝对像素值推导比例坐标。
+     *
+     * @param absoluteCoordinate 当前绝对坐标
+     * @param screenSize 当前屏幕尺寸
+     * @param hudSize HUD 尺寸
+     * @return 0.0 ~ 1.0 的比例值
+     */
+    private static double deriveHudPositionRatio(int absoluteCoordinate, int screenSize, int hudSize) {
+        int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+        if (maxCoordinate <= 0) {
+            return 0.0;
+        }
+        int clampedCoordinate = clampHudCoordinate(absoluteCoordinate, screenSize, hudSize);
+        return clampRatio((double) clampedCoordinate / (double) maxCoordinate);
+    }
+
+    /**
+     * 根据比例坐标解析绝对像素坐标。
+     *
+     * @param ratio 0.0 ~ 1.0 的比例值
+     * @param screenSize 当前屏幕尺寸
+     * @param hudSize HUD 尺寸
+     * @return HUD 绝对坐标
+     */
+    private static int resolveHudCoordinate(double ratio, int screenSize, int hudSize) {
+        int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+        if (maxCoordinate <= 0) {
+            return 0;
+        }
+        return clampHudCoordinate((int) Math.round(clampRatio(ratio) * maxCoordinate), screenSize, hudSize);
+    }
+
+    /**
+     * 根据水平锚点和边距解析 HUD X 坐标。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param hudWidth HUD 宽度
+     * @param anchor 水平锚点
+     * @param margin 水平边距
+     * @return HUD X 坐标
+     */
+    private static int resolveHudXByAnchor(int screenWidth, int hudWidth, HudHorizontalAnchor anchor, int margin) {
+        int resolved = anchor == HudHorizontalAnchor.LEFT
+                ? Math.max(0, margin)
+                : screenWidth - Math.max(0, hudWidth) - Math.max(0, margin);
+        return clampHudCoordinate(resolved, screenWidth, hudWidth);
+    }
+
+    /**
+     * 根据垂直锚点和边距解析 HUD Y 坐标。
+     *
+     * @param screenHeight 当前屏幕高度
+     * @param hudHeight HUD 高度
+     * @param anchor 垂直锚点
+     * @param margin 垂直边距
+     * @return HUD Y 坐标
+     */
+    private static int resolveHudYByAnchor(int screenHeight, int hudHeight, HudVerticalAnchor anchor, int margin) {
+        int resolved = anchor == HudVerticalAnchor.TOP
+                ? Math.max(0, margin)
+                : screenHeight - Math.max(0, hudHeight) - Math.max(0, margin);
+        return clampHudCoordinate(resolved, screenHeight, hudHeight);
+    }
+
+    /**
+     * 将 HUD 坐标裁剪到当前可视区域内。
+     *
+     * @param coordinate 原始坐标
+     * @param screenSize 当前屏幕尺寸
+     * @param hudSize HUD 尺寸
+     * @return 裁剪后的坐标
+     */
+    private static int clampHudCoordinate(int coordinate, int screenSize, int hudSize) {
+        int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+        if (coordinate < 0) {
+            return 0;
+        }
+        if (coordinate > maxCoordinate) {
+            return maxCoordinate;
+        }
+        return coordinate;
+    }
+
+    /**
+     * 裁剪 HUD 比例坐标。
+     *
+     * @param ratio 原始比例值
+     * @return 0.0 ~ 1.0 的合法比例
+     */
+    private static double clampRatio(double ratio) {
+        if (ratio < 0.0) {
+            return 0.0;
+        }
+        if (ratio > 1.0) {
+            return 1.0;
+        }
+        return ratio;
     }
     
     private static int clamp(int value, int min, int max) {

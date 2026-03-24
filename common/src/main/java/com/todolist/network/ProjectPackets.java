@@ -174,7 +174,7 @@ public class ProjectPackets {
             if (player == null) {
                 return;
             }
-            playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizeProjectIds(projectIds));
+            setHudStarredProjectIds(player, projectIds);
         });
     }
 
@@ -248,6 +248,16 @@ public class ProjectPackets {
         }
         List<String> ids = playerHudStarredProjectIdsMap.get(player.getStringUUID());
         return ids == null ? List.of() : new ArrayList<>(ids);
+    }
+
+    /**
+     * 设置服务端记录的玩家 HUD 星标项目列表，并执行与网络包处理一致的净化逻辑。
+     */
+    public static void setHudStarredProjectIds(ServerPlayer player, List<String> projectIds) {
+        if (player == null) {
+            return;
+        }
+        playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizeProjectIds(projectIds));
     }
 
     public static boolean isHudVisible(ServerPlayer player) {

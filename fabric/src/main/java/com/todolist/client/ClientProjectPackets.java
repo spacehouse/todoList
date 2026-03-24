@@ -1,7 +1,7 @@
 package com.todolist.client;
 
-import com.todolist.TodoListCommon;
 import com.todolist.TodoConstants;
+import com.todolist.TodoListCommon;
 import com.todolist.TodoListMod;
 import com.todolist.config.ModConfig;
 import com.todolist.network.FabricProjectPayload;
@@ -13,12 +13,14 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Client-side packet handling for projects
+ * 处理 Fabric 客户端侧项目相关网络包的接收、发送与本地回退逻辑。
  */
 public class ClientProjectPackets {
 
@@ -74,9 +76,9 @@ public class ClientProjectPackets {
         ProjectManager manager = TodoListMod.getProjectManager();
         try {
             Map<String, Project> incoming = new HashMap<>();
-            for (Project p : projects) {
-                p.setName(ProjectNameFormatter.normalizeDefaultName(p.getName(), p.getScope()));
-                incoming.put(p.getId(), p);
+            for (Project project : projects) {
+                project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
+                incoming.put(project.getId(), project);
             }
 
             for (Project existing : manager.getAllProjects()) {
@@ -108,6 +110,12 @@ public class ClientProjectPackets {
         }
     }
 
+    /**
+     * 从本地配置与项目状态中解析出可回退的激活项目 ID。
+     *
+     * @param manager 当前项目管理器
+     * @return 可用的项目 ID，不存在则返回 null
+     */
     private static String resolveLocalActiveProjectId(ProjectManager manager) {
         if (manager == null) {
             return null;
@@ -125,8 +133,6 @@ public class ClientProjectPackets {
         }
         return project.getId();
     }
-
-    // Sender methods
 
     /**
      * 向服务端发送新增项目请求。
@@ -176,9 +182,9 @@ public class ClientProjectPackets {
     /**
      * 向服务端发送添加成员请求。
      *
-     * @param projectId   项目 ID
-     * @param memberUuid  成员 UUID
-     * @param memberName  成员名称
+     * @param projectId 项目 ID
+     * @param memberUuid 成员 UUID
+     * @param memberName 成员名称
      */
     public static void sendAddMember(String projectId, String memberUuid, String memberName) {
         if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
@@ -194,7 +200,7 @@ public class ClientProjectPackets {
     /**
      * 向服务端发送移除成员请求。
      *
-     * @param projectId  项目 ID
+     * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      */
     public static void sendRemoveMember(String projectId, String memberUuid) {
@@ -210,9 +216,9 @@ public class ClientProjectPackets {
     /**
      * 向服务端发送更新成员角色请求。
      *
-     * @param projectId  项目 ID
+     * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
-     * @param role       新角色
+     * @param role 新角色
      */
     public static void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
         if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
@@ -251,12 +257,13 @@ public class ClientProjectPackets {
     }
 
     /**
-     * 向服务端上报当前激活项目 ID（用于命令默认关联项目等服务端逻辑）。
+     * 向服务端上报当前激活项目 ID。
      *
      * @param projectId 项目 ID，null 表示清空
      */
     public static void sendSetActiveProjectId(String projectId) {
         if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+            applyLocalActiveProjectId(projectId);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -269,8 +276,14 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf));
     }
 
+    /**
+     * 向服务端上报 HUD 星标项目列表。
+     *
+     * @param projectIds 星标项目 ID 列表
+     */
     public static void sendSetHudStarredProjectIds(List<String> projectIds) {
         if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+            applyLocalHudStarredProjectIds(projectIds);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -282,6 +295,11 @@ public class ClientProjectPackets {
         ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf));
     }
 
+    /**
+     * 在本地回退模式下直接新增项目并写入对应作用域存储。
+     *
+     * @param project 待新增项目
+     */
     private static void addProjectLocally(Project project) {
         if (project == null) {
             return;
@@ -299,6 +317,11 @@ public class ClientProjectPackets {
         saveProjectsByScope(project.getScope());
     }
 
+    /**
+     * 在本地回退模式下直接更新项目并保存对应作用域数据。
+     *
+     * @param project 待更新项目
+     */
     private static void updateProjectLocally(Project project) {
         if (project == null) {
             return;
@@ -312,6 +335,11 @@ public class ClientProjectPackets {
         saveProjectsByScope(existing.getScope());
     }
 
+    /**
+     * 在本地回退模式下直接删除项目并保存对应作用域数据。
+     *
+     * @param projectId 待删除项目 ID
+     */
     private static void deleteProjectLocally(String projectId) {
         if (projectId == null || projectId.isEmpty()) {
             return;
@@ -325,19 +353,84 @@ public class ClientProjectPackets {
         saveProjectsByScope(existing.getScope());
     }
 
+    /**
+     * 按项目作用域保存当前本地项目列表。
+     *
+     * @param scope 需要写回的项目作用域
+     */
     private static void saveProjectsByScope(Project.Scope scope) {
         try {
             if (scope == Project.Scope.TEAM) {
-                TodoListCommon.getProjectStorage().saveTeamProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.TEAM));
+                TodoListCommon.getProjectStorage().saveTeamProjects(
+                        TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.TEAM));
             } else {
-                TodoListCommon.getProjectStorage().saveProjects(TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.PERSONAL));
+                TodoListCommon.getProjectStorage().saveProjects(
+                        TodoListMod.getProjectManager().getProjectsByScope(Project.Scope.PERSONAL));
             }
         } catch (Exception e) {
             TodoConstants.LOGGER.error("Failed to save projects in local fallback mode", e);
         }
     }
 
-    private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
+    /**
+     * 在本地单人模式下直接把当前激活项目写入集成服务端。
+     *
+     * @param projectId 当前激活项目 ID
+     */
+    private static void applyLocalActiveProjectId(String projectId) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setActiveProjectId(serverPlayer, projectId));
+    }
+
+    /**
+     * 在本地单人模式下直接把 HUD 星标项目写入集成服务端。
+     *
+     * @param projectIds 星标项目 ID 列表
+     */
+    private static void applyLocalHudStarredProjectIds(List<String> projectIds) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        List<String> ids = projectIds == null ? List.of() : List.copyOf(projectIds);
+        server.execute(() -> ProjectPackets.setHudStarredProjectIds(serverPlayer, ids));
+    }
+
+    /**
+     * 解析当前本地单人环境对应的服务端玩家对象。
+     *
+     * @return 当前集成服务端玩家对象，不存在则返回 null
+     */
+    private static ServerPlayer resolveLocalServerPlayer() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.player == null || !minecraft.isLocalServer()) {
+            return null;
+        }
+        var server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            return null;
+        }
+        return server.getPlayerList().getPlayer(minecraft.player.getUUID());
+    }
+
+    /**
+     * 判断当前项目操作是否需要走本地回退逻辑。
+     *
+     * @param channelId 目标业务频道 ID
+     * @return 无法发送网络包时返回 true
+     */
+    private static boolean shouldUseLocalProjectFallback(ResourceLocation channelId) {
         return !ClientPlayNetworking.canSend(FabricProjectPayload.TYPE);
     }
 }

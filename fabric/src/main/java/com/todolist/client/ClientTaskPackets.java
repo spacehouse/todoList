@@ -9,10 +9,11 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+
 import java.util.List;
 
 /**
- * Fabric 客户端侧任务相关网络包处理与发送工具类。
+ * 处理 Fabric 客户端侧任务相关网络包的接收与发送。
  */
 public class ClientTaskPackets {
     /**
@@ -33,7 +34,7 @@ public class ClientTaskPackets {
                         return;
                     }
                     try {
-                        TodoListMod.getTaskStorage().saveTasks(tasks);
+                        ClientTaskStorageHelper.savePersonalTasks(TodoListMod.getTaskStorage(), client, tasks);
                         TodoListMod.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
                     } catch (Exception e) {
                         TodoListMod.LOGGER.error("Failed to save synced tasks on client", e);
@@ -111,7 +112,7 @@ public class ClientTaskPackets {
     }
 
     /**
-     * 向服务端发送新增任务请求（个人任务）。
+     * 向服务端发送新增任务请求。
      *
      * @param task 需要新增的任务
      */
@@ -132,7 +133,7 @@ public class ClientTaskPackets {
     }
 
     /**
-     * 向服务端发送更新任务请求（个人任务）。
+     * 向服务端发送更新任务请求。
      *
      * @param task 需要更新的任务
      */
@@ -153,7 +154,7 @@ public class ClientTaskPackets {
     }
 
     /**
-     * 向服务端发送删除任务请求（个人任务）。
+     * 向服务端发送删除任务请求。
      *
      * @param taskId 任务 ID
      */
@@ -171,7 +172,7 @@ public class ClientTaskPackets {
     }
 
     /**
-     * 向服务端发送切换任务完成状态请求（个人任务）。
+     * 向服务端发送切换任务完成状态请求。
      *
      * @param taskId 任务 ID
      */
@@ -189,7 +190,7 @@ public class ClientTaskPackets {
     }
 
     /**
-     * 向服务端发送切换任务完成状态请求（团队任务）。
+     * 向服务端发送切换团队任务完成状态请求。
      *
      * @param taskId 团队任务 ID
      */
@@ -209,8 +210,8 @@ public class ClientTaskPackets {
     /**
      * 向服务端发送指派团队任务请求。
      *
-     * @param taskId        团队任务 ID
-     * @param assigneeUuid  被指派玩家 UUID，为空表示取消指派
+     * @param taskId 团队任务 ID
+     * @param assigneeUuid 被指派玩家 UUID，为空表示取消指派
      */
     public static void sendAssignTeamTask(String taskId, String assigneeUuid) {
         Minecraft client = Minecraft.getInstance();

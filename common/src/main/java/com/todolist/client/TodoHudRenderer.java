@@ -67,6 +67,8 @@ public class TodoHudRenderer {
     private static final Component CHECKBOX_UNCHECKED = Component.literal("☐").withStyle(ChatFormatting.WHITE);
     private static final Component SEPARATOR_COMPLETED = Component.translatable("hud.todolist.separator.completed");
     private static final Component ELLIPSIS = Component.literal("...");
+    private static final float HUD_LABEL_SCALE = 0.85F;
+    private static final int HUD_LABEL_MAX_CHARS = 8;
     
     // 缓存视图标签
     private static final Component LABEL_TEAM_UNASSIGNED = Component.translatable("hud.todolist.view_label.team_unassigned");
@@ -76,24 +78,31 @@ public class TodoHudRenderer {
 
     private static class RowRenderCache {
         private final String taskId;
+        private final String layoutKey;
         private final Component priorityText;
-        private final Component checkboxText;
-        private final int checkboxOffset;
+        private final String assigneeText;
+        private final String tagText;
+        private final int assigneeOffset;
+        private final int tagOffset;
         private final int titleOffset;
         private final Component titleText;
-        private final Component tagText;
-        private final int tagXOffset;
+        private final int hudWidth;
+        private final double guiScale;
 
-        private RowRenderCache(String taskId, Component priorityText, Component checkboxText, int checkboxOffset,
-                               int titleOffset, Component titleText, Component tagText, int tagXOffset) {
+        private RowRenderCache(String taskId, String layoutKey, Component priorityText, String assigneeText, String tagText,
+                               int assigneeOffset, int tagOffset, int titleOffset, Component titleText,
+                               int hudWidth, double guiScale) {
             this.taskId = taskId;
+            this.layoutKey = layoutKey;
             this.priorityText = priorityText;
-            this.checkboxText = checkboxText;
-            this.checkboxOffset = checkboxOffset;
+            this.assigneeText = assigneeText;
+            this.tagText = tagText;
+            this.assigneeOffset = assigneeOffset;
+            this.tagOffset = tagOffset;
             this.titleOffset = titleOffset;
             this.titleText = titleText;
-            this.tagText = tagText;
-            this.tagXOffset = tagXOffset;
+            this.hudWidth = hudWidth;
+            this.guiScale = guiScale;
         }
     }
 
@@ -140,21 +149,16 @@ public class TodoHudRenderer {
         int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
         int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
         boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
-        int totalRows = rowsForSummary + (showMore ? 1 : 0);
-        int panelHeight = headerHeight + totalRows * rowHeight;
+        int panelHeight = calculatePanelHeight(config, pending, done);
 
         // Clamp coordinates
         int screenWidth = client.getWindow().getGuiScaledWidth();
         int screenHeight = client.getWindow().getGuiScaledHeight();
         int hudWidth = config.getHudWidth();
         
-        int x = config.isHudUseCustomPosition() ? config.getHudCustomX() : 10;
-        int y = config.isHudUseCustomPosition() ? config.getHudCustomY() : 10;
-        
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-        if (x + hudWidth > screenWidth) x = Math.max(0, screenWidth - hudWidth);
-        if (y + panelHeight > screenHeight) y = Math.max(0, screenHeight - panelHeight);
+        ModConfig.HudPlacement placement = config.resolveHudPlacement(screenWidth, screenHeight, hudWidth, panelHeight);
+        int x = placement.getX();
+        int y = placement.getY();
 
         renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, shownPending, shownDone, hiddenCount, config, getViewLabel(viewMode));
     }
@@ -244,12 +248,12 @@ public class TodoHudRenderer {
         long now = System.currentTimeMillis();
         long reloadIntervalMs = 1000L;
         if (scope == Project.Scope.PERSONAL) {
-            long localLastSaved = TodoListCommon.getTaskStorage().getLocalTasksLastSaved();
+            long localLastSaved = ClientTaskStorageHelper.getPersonalTasksLastSaved(TodoListCommon.getTaskStorage(), client);
             boolean shouldReload = cachedPersonalTasks.isEmpty()
                     || localLastSaved != cachedPersonalLastSavedMs
                     || (now - lastPersonalReloadMs >= reloadIntervalMs && localLastSaved == 0L && cachedPersonalLastSavedMs == 0L);
             if (shouldReload) {
-                cachedPersonalTasks = TodoListCommon.getTaskStorage().loadTasksSafe();
+                cachedPersonalTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), client);
                 cachedPersonalLastSavedMs = localLastSaved;
                 lastPersonalReloadMs = now;
             }
@@ -471,31 +475,38 @@ public class TodoHudRenderer {
      */
     private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, float opacity, Task task) {
         RowRenderCache rowCache = rowRenderCacheByTaskId.get(task.getId());
-        if (rowCache == null) {
+        if (!isRowRenderCacheValid(rowCache, task, width)) {
             rowCache = buildRowRenderCache(task, width);
+            rowRenderCacheByTaskId.put(rowCache.taskId, rowCache);
         }
 
-        int paddingX = 4;
-        int rowLeft = x + paddingX;
-        int rowRight = x + width - paddingX;
-        int rowWidth = Math.max(0, rowRight - rowLeft);
-
-        int textY = y + (rowHeight - client.font.lineHeight) / 2;
+        int rowLeft = x + 4;
+        int titleTextY = y + (rowHeight - client.font.lineHeight) / 2;
+        int labelLineHeight = Math.max(1, Math.round(client.font.lineHeight * HUD_LABEL_SCALE));
+        int labelTextY = y + (rowHeight - labelLineHeight) / 2;
         int textColor = applyOpacityToColor(0xFFFFFF, opacity);
+        int labelColor = applyOpacityToColor(0x55FFFF, opacity);
 
-        context.drawString(client.font, rowCache.priorityText, rowLeft, textY, textColor);
-        context.drawString(client.font, rowCache.checkboxText, rowLeft + rowCache.checkboxOffset, textY, textColor);
+        context.drawString(client.font, rowCache.priorityText, rowLeft, titleTextY, textColor);
 
-        if (rowCache.titleText != null) {
-            context.drawString(client.font, rowCache.titleText, rowLeft + rowCache.titleOffset, textY, textColor);
+        if (rowCache.assigneeText != null && !rowCache.assigneeText.isEmpty()) {
+            drawScaledString(context, rowCache.assigneeText, rowLeft + rowCache.assigneeOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
         }
-
-        if (rowCache.tagText != null) {
-            int tagX = rowLeft + Math.min(rowWidth, Math.max(0, rowCache.tagXOffset));
-            context.drawString(client.font, rowCache.tagText, tagX, textY, textColor);
+        if (rowCache.tagText != null && !rowCache.tagText.isEmpty()) {
+            drawScaledString(context, rowCache.tagText, rowLeft + rowCache.tagOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
+        }
+        if (rowCache.titleText != null) {
+            context.drawString(client.font, rowCache.titleText, rowLeft + rowCache.titleOffset, titleTextY, textColor);
         }
     }
 
+    /**
+     * 重建 HUD 任务行缓存。
+     *
+     * @param pending 未完成任务列表
+     * @param done 已完成任务列表
+     * @param hudWidth HUD 宽度
+     */
     private void rebuildRowRenderCache(List<Task> pending, List<Task> done, int hudWidth) {
         rowRenderCacheByTaskId.clear();
         for (Task task : pending) {
@@ -508,64 +519,217 @@ public class TodoHudRenderer {
         }
     }
 
+    /**
+     * 构建单条 HUD 任务行缓存。
+     *
+     * @param task 当前任务
+     * @param hudWidth HUD 宽度
+     * @return 行缓存对象
+     */
     private RowRenderCache buildRowRenderCache(Task task, int hudWidth) {
         String taskId = valueOrEmpty(task.getId());
-        Component priorityText = switch (task.getPriority()) {
-            case HIGH -> PRIORITY_HIGH_ICON;
-            case MEDIUM -> PRIORITY_MEDIUM_ICON;
-            case LOW -> PRIORITY_LOW_ICON;
-        };
-        Component checkboxText = task.isCompleted() ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED;
-        int spaceWidth = client.font.width(" ");
-        int priorityWidth = client.font.width(priorityText);
-        int checkboxWidth = client.font.width(checkboxText);
-        int checkboxOffset = priorityWidth + spaceWidth;
-
+        double guiScale = client.getWindow().getGuiScale();
+        String layoutKey = buildRowLayoutKey(task, hudWidth, guiScale);
+        Component priorityText = getPriorityText(task);
         int rowWidth = Math.max(0, hudWidth - 8);
-        int tagAreaWidth = Math.max(60, Math.min(120, rowWidth / 3));
-        int tagGap = 6;
-        int titleAreaWidth = Math.max(0, rowWidth - tagAreaWidth - tagGap);
-        int titleOffset = checkboxOffset + checkboxWidth + spaceWidth;
-        int titleMaxWidth = Math.max(0, titleAreaWidth - titleOffset);
+        int currentOffset = client.font.width(priorityText);
+        int maxLabelWidth = Math.max(18, rowWidth / 3);
 
-        String title = valueOrEmpty(task.getTitle());
-        String titleCore = trimWithEllipsis(title, titleMaxWidth);
+        String assigneeToken = buildHudLabelToken(resolveAssigneeLabel(task), maxLabelWidth);
+        String tagToken = buildHudLabelToken(resolveFirstTaskTag(task), maxLabelWidth);
+
+        int assigneeOffset = 0;
+        if (!assigneeToken.isEmpty()) {
+            assigneeOffset = currentOffset;
+            currentOffset += measureScaledTextWidth(assigneeToken, HUD_LABEL_SCALE);
+        }
+
+        int tagOffset = 0;
+        if (!tagToken.isEmpty()) {
+            tagOffset = currentOffset;
+            currentOffset += measureScaledTextWidth(tagToken, HUD_LABEL_SCALE);
+        }
+
+        int titleOffset = currentOffset;
+        int titleMaxWidth = Math.max(0, rowWidth - titleOffset);
+        String titleCore = trimWithEllipsis(valueOrEmpty(task.getTitle()), titleMaxWidth);
         Component titleText = titleCore.isEmpty()
                 ? null
                 : (task.isCompleted()
                 ? Component.literal(titleCore).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
                 : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
 
-        boolean completed = task.isCompleted();
-        String assigneeLabel = resolveAssigneeLabel(task);
-        String mergedTagText = assigneeLabel.isEmpty() ? buildTagText(task) : "[" + assigneeLabel + "]" + buildTagText(task);
-        String trimmedTagText = trimWithEllipsis(mergedTagText, tagAreaWidth);
-        Component tagText = trimmedTagText.isEmpty() ? null : Component.literal(trimmedTagText).withStyle(ChatFormatting.DARK_AQUA);
-        int tagTextWidth = trimmedTagText.isEmpty() ? 0 : client.font.width(trimmedTagText);
-        int tagXOffset = Math.max(0, Math.max(rowWidth - tagAreaWidth, rowWidth - tagTextWidth));
-
-        return new RowRenderCache(taskId, priorityText, checkboxText, checkboxOffset, titleOffset, titleText, tagText, tagXOffset);
+        return new RowRenderCache(taskId, layoutKey, priorityText,
+                assigneeToken.isEmpty() ? null : assigneeToken,
+                tagToken.isEmpty() ? null : tagToken,
+                assigneeOffset, tagOffset, titleOffset, titleText, hudWidth, guiScale);
     }
 
-    private String buildTagText(Task task) {
-        Set<String> tags = task.getTags();
-        if (tags.isEmpty()) {
+    /**
+     * 构建任务行布局签名，用于判断缓存是否失效。
+     *
+     * @param task 当前任务
+     * @param hudWidth HUD 宽度
+     * @param guiScale 当前 GUI 缩放
+     * @return 布局签名
+     */
+    private String buildRowLayoutKey(Task task, int hudWidth, double guiScale) {
+        return valueOrEmpty(task.getId()) + '|'
+                + valueOrEmpty(task.getTitle()) + '|'
+                + task.getPriority().name() + '|'
+                + task.isCompleted() + '|'
+                + resolveAssigneeLabel(task) + '|'
+                + resolveFirstTaskTag(task) + '|'
+                + hudWidth + '|'
+                + guiScale;
+    }
+
+    /**
+     * 判断任务行缓存是否仍然可复用。
+     *
+     * @param cache 当前缓存
+     * @param task 当前任务
+     * @param hudWidth HUD 宽度
+     * @return true 表示缓存有效
+     */
+    private boolean isRowRenderCacheValid(RowRenderCache cache, Task task, int hudWidth) {
+        if (cache == null) {
+            return false;
+        }
+        double guiScale = client.getWindow().getGuiScale();
+        if (cache.hudWidth != hudWidth || Double.compare(cache.guiScale, guiScale) != 0) {
+            return false;
+        }
+        return cache.layoutKey.equals(buildRowLayoutKey(task, hudWidth, guiScale));
+    }
+
+    /**
+     * 获取 HUD 行使用的优先级文本。
+     *
+     * @param task 当前任务
+     * @return 优先级文本
+     */
+    private Component getPriorityText(Task task) {
+        return switch (task.getPriority()) {
+            case HIGH -> PRIORITY_HIGH_ICON;
+            case MEDIUM -> PRIORITY_MEDIUM_ICON;
+            case LOW -> PRIORITY_LOW_ICON;
+        };
+    }
+
+    /**
+     * 构建 HUD 前置标签。
+     *
+     * @param rawLabel 原始标签内容
+     * @param maxScaledWidth 标签允许的最大缩放宽度
+     * @return 可直接绘制的标签文本
+     */
+    private String buildHudLabelToken(String rawLabel, int maxScaledWidth) {
+        String limited = limitLabelContent(rawLabel, HUD_LABEL_MAX_CHARS);
+        if (limited.isEmpty()) {
             return "";
         }
-        List<String> sortedTags = new ArrayList<>(tags);
-        sortedTags.sort(String::compareToIgnoreCase);
-        StringBuilder builder = new StringBuilder();
-        for (String tag : sortedTags) {
+        return trimScaledTextWithEllipsis("[" + limited + "]", maxScaledWidth, HUD_LABEL_SCALE);
+    }
+
+    /**
+     * 获取 HUD 使用的首个任务标签。
+     *
+     * @param task 当前任务
+     * @return 首个非空标签
+     */
+    private String resolveFirstTaskTag(Task task) {
+        if (task == null) {
+            return "";
+        }
+        for (String tag : task.getTags()) {
             if (tag == null) {
                 continue;
             }
             String trimmed = tag.trim();
-            if (trimmed.isEmpty()) {
-                continue;
+            if (!trimmed.isEmpty()) {
+                return trimmed;
             }
-            builder.append('[').append(trimmed).append(']');
         }
-        return builder.toString();
+        return "";
+    }
+
+    /**
+     * 按字符数限制标签内容长度。
+     *
+     * @param text 原始文本
+     * @param maxChars 最大字符数
+     * @return 裁剪后的文本
+     */
+    private String limitLabelContent(String text, int maxChars) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        if (trimmed.length() <= maxChars) {
+            return trimmed;
+        }
+        return trimmed.substring(0, maxChars) + "...";
+    }
+
+    /**
+     * 计算缩放文本的屏幕宽度。
+     *
+     * @param text 文本内容
+     * @param scale 绘制缩放
+     * @return 屏幕像素宽度
+     */
+    private int measureScaledTextWidth(String text, float scale) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        return Math.max(1, Math.round(client.font.width(text) * scale));
+    }
+
+    /**
+     * 按缩放后的像素宽度裁剪文本。
+     *
+     * @param text 原始文本
+     * @param maxScaledWidth 最大缩放宽度
+     * @param scale 绘制缩放
+     * @return 裁剪后的文本
+     */
+    private String trimScaledTextWithEllipsis(String text, int maxScaledWidth, float scale) {
+        if (text == null) {
+            return "";
+        }
+        if (maxScaledWidth <= 0) {
+            return "";
+        }
+        if (measureScaledTextWidth(text, scale) <= maxScaledWidth) {
+            return text;
+        }
+        int unscaledWidth = Math.max(1, (int) Math.floor(maxScaledWidth / Math.max(0.01F, scale)));
+        return trimWithEllipsis(text, unscaledWidth);
+    }
+
+    /**
+     * 以缩放方式绘制 HUD 标签文本。
+     *
+     * @param context 绘制上下文
+     * @param text 文本内容
+     * @param x 绘制 X 坐标
+     * @param y 绘制 Y 坐标
+     * @param color 文本颜色
+     * @param scale 绘制缩放
+     */
+    private void drawScaledString(GuiGraphics context, String text, int x, int y, int color, float scale) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        context.pose().pushPose();
+        context.pose().translate(x, y, 0.0F);
+        context.pose().scale(scale, scale, 1.0F);
+        context.drawString(client.font, text, 0, 0, color, false);
+        context.pose().popPose();
     }
 
     /**
@@ -588,6 +752,12 @@ public class TodoHudRenderer {
         return (scaledAlpha << 24) | (argb & 0x00FFFFFF);
     }
 
+    /**
+     * 解析 HUD 使用的指派人标签。
+     *
+     * @param task 当前任务
+     * @return 指派人标签
+     */
     private String resolveAssigneeLabel(Task task) {
         if (task == null) {
             return "";
@@ -600,9 +770,18 @@ public class TodoHudRenderer {
         if (assigneeUuid == null || assigneeUuid.isEmpty()) {
             return "";
         }
-        return assigneeUuid.length() > 8 ? assigneeUuid.substring(0, 8) : assigneeUuid;
+        return assigneeUuid.length() > HUD_LABEL_MAX_CHARS
+                ? assigneeUuid.substring(0, HUD_LABEL_MAX_CHARS)
+                : assigneeUuid;
     }
 
+    /**
+     * 按像素宽度裁剪文本并追加省略号。
+     *
+     * @param text 原始文本
+     * @param maxWidth 最大像素宽度
+     * @return 裁剪后的文本
+     */
     private String trimWithEllipsis(String text, int maxWidth) {
         if (text == null) {
             return "";
@@ -637,8 +816,46 @@ public class TodoHudRenderer {
         rowRenderCacheByTaskId.clear();
     }
 
+    /**
+     * 计算当前配置下 HUD 实际会使用的面板高度。
+     *
+     * @return HUD 当前面板高度
+     */
+    public int getCurrentPanelHeight() {
+        ModConfig config = ModConfig.getInstance();
+        HudViewMode viewMode = resolveViewMode(config);
+        Project.Scope scope = getScopeByView(viewMode);
+        refreshHudModelIfNeeded(config, viewMode, scope);
+        return calculatePanelHeight(config, cachedPendingTasks, cachedDoneTasks);
+    }
+
     private String valueOrEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * 根据当前任务列表计算 HUD 面板高度。
+     *
+     * @param config 当前模组配置
+     * @param pending 未完成任务列表
+     * @param done 已完成任务列表
+     * @return HUD 面板高度
+     */
+    private int calculatePanelHeight(ModConfig config, List<Task> pending, List<Task> done) {
+        int rowHeight = 12;
+        int headerHeight = 14;
+        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
+        int todoLimit = Math.max(0, config.getHudTodoLimit());
+        int doneLimit = Math.max(0, config.getHudDoneLimit());
+        int shownPending = Math.min(pending.size(), Math.min(todoLimit, maxRowsByHeight));
+        int rowsAfterPending = maxRowsByHeight - shownPending;
+        boolean showDoneSection = !done.isEmpty() && doneLimit > 0 && rowsAfterPending > 0;
+        int shownDone = showDoneSection ? Math.min(done.size(), Math.min(doneLimit, rowsAfterPending - 1)) : 0;
+        int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
+        int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
+        boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
+        int totalRows = rowsForSummary + (showMore ? 1 : 0);
+        return headerHeight + totalRows * rowHeight;
     }
 
     /**
