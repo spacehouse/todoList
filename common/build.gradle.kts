@@ -1,4 +1,7 @@
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+import org.gradle.kotlin.dsl.the
 
 plugins {
     id("dev.architectury.loom") version "1.7.435"
@@ -36,4 +39,24 @@ tasks.withType<JavaCompile>().configureEach {
                 }
             }
     }
+}
+
+val sourceSets = the<SourceSetContainer>()
+val mainSourceSet = sourceSets["main"]
+val testSourceSet = sourceSets["test"]
+
+tasks.register<JavaExec>("commandSystemTest") {
+    group = "verification"
+    description = "Run the offline command system self-tests without external test frameworks."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.bootstrap.CommandSystemTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.named("check").configure {
+    dependsOn("commandSystemTest")
+}
+
+tasks.withType<Test>().configureEach {
+    enabled = false
 }

@@ -1,55 +1,252 @@
 {
   "name": "COMMAND_RESULT_TRIPLET baseline sample",
-  "description": "示例基线：用于演示 code/messageKey/sideEffects 三元组自动比对流程。",
+  "description": "命令系统基线样本：覆盖当前已实现命令的代表性成功/失败 code/messageKey/sideEffects 三元组。",
   "triplets": [
     {
       "caseId": "todo.help",
       "code": 1,
       "messageKey": "command.todolist.result.none",
-      "sideEffects": [
-        "NONE"
-      ]
+      "sideEffects": ["NONE"]
     },
     {
       "caseId": "todo.task.list",
       "code": 1,
       "messageKey": "command.todolist.result.none",
-      "sideEffects": [
-        "NONE"
-      ]
+      "sideEffects": ["NONE"]
     },
     {
-      "caseId": "todo.task.done.success",
+      "caseId": "todo.task.listp",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.add",
+      "code": 1,
+      "messageKey": "command.todolist.task.add.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.addp",
+      "code": 1,
+      "messageKey": "command.todolist.task.add.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.clean.request",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.clean.confirm",
+      "code": 1,
+      "messageKey": "command.todolist.task.clean.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.done",
       "code": 1,
       "messageKey": "command.todolist.task.done.success",
-      "sideEffects": [
-        "PERSIST_DATA",
-        "REFRESH_HUD"
-      ]
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.donep",
+      "code": 1,
+      "messageKey": "command.todolist.task.done.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.claimp",
+      "code": 1,
+      "messageKey": "command.todolist.task.claim.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.abandonp",
+      "code": 1,
+      "messageKey": "command.todolist.task.abandon.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.remove",
+      "code": 1,
+      "messageKey": "command.todolist.task.remove.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.removep",
+      "code": 1,
+      "messageKey": "command.todolist.task.remove.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.task.assignp",
+      "code": 1,
+      "messageKey": "command.todolist.task.assign.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.project.create",
+      "code": 1,
+      "messageKey": "command.todolist.project.create.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.rename",
+      "code": 1,
+      "messageKey": "command.todolist.project.rename.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.member_create",
+      "code": 1,
+      "messageKey": "command.todolist.project.member_create.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.star",
+      "code": 1,
+      "messageKey": "command.todolist.project.star.success",
+      "sideEffects": ["REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.project.unstar",
+      "code": 1,
+      "messageKey": "command.todolist.project.unstar.success",
+      "sideEffects": ["REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.project.member.add",
+      "code": 1,
+      "messageKey": "command.todolist.project.member.add.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.member.remove",
+      "code": 1,
+      "messageKey": "command.todolist.project.member.remove.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.member.role",
+      "code": 1,
+      "messageKey": "command.todolist.project.member.role.success",
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.project.remove.request",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.remove.confirm",
+      "code": 1,
+      "messageKey": "command.todolist.project.remove.success",
+      "sideEffects": ["PERSIST_DATA", "REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.project.select",
+      "code": 1,
+      "messageKey": "command.todolist.project.select.success",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.list",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": ["NONE"]
     },
     {
       "caseId": "todo.hud.toggle",
       "code": 1,
       "messageKey": "command.todolist.hud.toggle",
-      "sideEffects": [
-        "REFRESH_HUD"
-      ]
+      "sideEffects": ["REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.hud.set",
+      "code": 1,
+      "messageKey": "command.todolist.hud.toggle",
+      "sideEffects": ["REFRESH_HUD"]
+    },
+    {
+      "caseId": "todo.join.project",
+      "code": 1,
+      "messageKey": "command.todolist.result.none",
+      "sideEffects": ["NONE"]
     },
     {
       "caseId": "todo.join.accept",
       "code": 1,
       "messageKey": "command.todolist.join.accept.success",
-      "sideEffects": [
-        "PERSIST_DATA"
-      ]
+      "sideEffects": ["PERSIST_DATA"]
+    },
+    {
+      "caseId": "todo.join.deny",
+      "code": 1,
+      "messageKey": "command.todolist.join.deny.success",
+      "sideEffects": ["PERSIST_DATA"]
     },
     {
       "caseId": "todo.permission.denied",
       "code": 0,
       "messageKey": "command.todolist.permission_denied",
-      "sideEffects": [
-        "NONE"
-      ]
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.add.invalid_title",
+      "code": 0,
+      "messageKey": "command.todolist.task.add.invalid_title",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.team_only",
+      "code": 0,
+      "messageKey": "command.todolist.task.project.team_only",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.assign.invalid_target",
+      "code": 0,
+      "messageKey": "command.todolist.task.assign.invalid_target",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.task.clean.confirm_expired",
+      "code": 0,
+      "messageKey": "command.todolist.task.clean.confirm_expired",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.create.invalid_scope",
+      "code": 0,
+      "messageKey": "command.todolist.project.create.invalid_scope",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.star.not_found",
+      "code": 0,
+      "messageKey": "command.todolist.project.star.not_found",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.member.role.invalid_value",
+      "code": 0,
+      "messageKey": "command.todolist.project.member.role.invalid_value",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.project.remove.confirm_expired",
+      "code": 0,
+      "messageKey": "command.todolist.project.remove.confirm_expired",
+      "sideEffects": ["NONE"]
+    },
+    {
+      "caseId": "todo.hud.invalid_value",
+      "code": 0,
+      "messageKey": "command.todolist.hud.invalid_value",
+      "sideEffects": ["NONE"]
     }
   ]
 }

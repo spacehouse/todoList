@@ -47,6 +47,7 @@ public class ProjectPackets {
     public static final ResourceLocation SET_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_active_project");
     public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_active_project");
     public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = new ResourceLocation(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
+    public static final ResourceLocation SYNC_HUD_STARRED_PROJECT_IDS_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_hud_starred_project_ids");
     public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
@@ -257,7 +258,9 @@ public class ProjectPackets {
         if (player == null) {
             return;
         }
-        playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizeProjectIds(projectIds));
+        List<String> sanitizedProjectIds = sanitizeProjectIds(projectIds);
+        playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizedProjectIds);
+        syncHudStarredProjectIdsToPlayer(player, sanitizedProjectIds);
     }
 
     public static boolean isHudVisible(ServerPlayer player) {
@@ -281,6 +284,7 @@ public class ProjectPackets {
             cachePlayerNameForTeamProjects(server, player);
             syncProjectsToPlayer(player);
             syncHudVisibilityToPlayer(player, isHudVisible(player));
+            syncHudStarredProjectIdsToPlayer(player, getHudStarredProjectIds(player));
             syncActiveProjectIdToPlayer(player, playerActiveProjectIdMap.get(player.getStringUUID()));
         });
     }
@@ -912,6 +916,25 @@ public class ProjectPackets {
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeBoolean(visible);
         serverPacketSender.send(player, SYNC_HUD_VISIBILITY_ID, buf);
+    }
+
+    /**
+     * 将服务端记录的 HUD 星标项目列表同步到客户端。
+     *
+     * @param player 目标玩家
+     * @param projectIds 星标项目 ID 列表
+     */
+    private static void syncHudStarredProjectIdsToPlayer(ServerPlayer player, List<String> projectIds) {
+        if (player == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        List<String> ids = projectIds == null ? List.of() : sanitizeProjectIds(projectIds);
+        buf.writeInt(ids.size());
+        for (String projectId : ids) {
+            buf.writeUtf(projectId == null ? "" : projectId);
+        }
+        serverPacketSender.send(player, SYNC_HUD_STARRED_PROJECT_IDS_ID, buf);
     }
 
     // Helper methods
