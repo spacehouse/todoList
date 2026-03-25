@@ -93,6 +93,7 @@ public class ModConfig {
     // VIEW_ONLY：普通玩家仅可使用查看类命令，编辑类命令仍需 OP
     // FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器）
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
+    private transient boolean commandAccessModeDirty;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -233,13 +234,16 @@ public class ModConfig {
                 if (changed) {
                     save();
                 }
+                instance.commandAccessModeDirty = false;
             } catch (IOException e) {
                 TodoConstants.LOGGER.error("Failed to load configuration, using defaults", e);
                 instance = new ModConfig();
+                instance.commandAccessModeDirty = false;
             }
         } else {
             instance = new ModConfig();
             save();
+            instance.commandAccessModeDirty = false;
             TodoConstants.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
         }
     }
@@ -355,6 +359,7 @@ public class ModConfig {
      */
     public static void save() {
         try {
+            preserveExternalCommandAccessModeIfNeeded();
             Files.createDirectories(CONFIG_PATH.getParent());
             try (java.io.Writer writer = Files.newBufferedWriter(CONFIG_PATH, StandardCharsets.UTF_8)) {
                 String json = GSON.toJson(instance);
@@ -363,6 +368,39 @@ public class ModConfig {
             }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save configuration", e);
+        }
+    }
+
+    /**
+     * Preserve a manually edited command access mode from disk when this save is triggered by unrelated settings.
+     */
+    private static void preserveExternalCommandAccessModeIfNeeded() {
+        if (instance == null || instance.commandAccessModeDirty) {
+            return;
+        }
+        CommandAccessMode persistedMode = loadPersistedCommandAccessMode();
+        if (persistedMode != null && persistedMode != instance.getCommandAccessMode()) {
+            instance.commandAccessMode = persistedMode;
+        }
+    }
+
+    /**
+     * Load only the persisted command access mode from disk without replacing the current in-memory config instance.
+     *
+     * @return the persisted command access mode, or null when unavailable
+     */
+    private static CommandAccessMode loadPersistedCommandAccessMode() {
+        if (!Files.exists(CONFIG_PATH)) {
+            return null;
+        }
+        try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
+            JsonReader jsonReader = new JsonReader(reader);
+            jsonReader.setLenient(true);
+            ModConfig persisted = GSON.fromJson(jsonReader, ModConfig.class);
+            return persisted == null ? null : persisted.commandAccessMode;
+        } catch (Exception e) {
+            TodoConstants.LOGGER.warn("Failed to read persisted commandAccessMode from {}", CONFIG_PATH, e);
+            return null;
         }
     }
 
@@ -524,6 +562,7 @@ public class ModConfig {
      */
     public void setCommandAccessMode(CommandAccessMode commandAccessMode) {
         this.commandAccessMode = commandAccessMode == null ? CommandAccessMode.OP_ONLY : commandAccessMode;
+        this.commandAccessModeDirty = true;
         save();
     }
 
@@ -946,6 +985,32 @@ public class ModConfig {
         }
         save();
         ClientBridge.ops().sendHudStarredProjectIds(getHudStarredProjectIds());
+    }
+
+    /**
+     * 批量设置 HUD 星标项目列表，并将结果保存到本地配置。
+     *
+     * @param projectIds 最新星标项目 ID 列表
+     */
+    public void setHudStarredProjectIds(List<String> projectIds) {
+        if (gui.hudStarredProjectIds == null) {
+            gui.hudStarredProjectIds = new ArrayList<>();
+        } else {
+            gui.hudStarredProjectIds.clear();
+        }
+        if (projectIds != null) {
+            for (String projectId : projectIds) {
+                if (projectId == null) {
+                    continue;
+                }
+                String normalizedProjectId = projectId.trim();
+                if (normalizedProjectId.isEmpty() || gui.hudStarredProjectIds.contains(normalizedProjectId)) {
+                    continue;
+                }
+                gui.hudStarredProjectIds.add(normalizedProjectId);
+            }
+        }
+        save();
     }
 
     public String getLastActiveProjectId() {

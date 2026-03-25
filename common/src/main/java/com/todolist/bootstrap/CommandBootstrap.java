@@ -94,7 +94,7 @@ public final class CommandBootstrap {
 
     private static final long CONFIRM_WINDOW_MILLIS = 15_000L;
     private static final List<String> TASK_LIST_STATUS_SUGGESTIONS = List.of(
-            "incomplete", "completed"
+            "all", "incomplete", "completed"
     );
     private static final List<String> TASK_LIST_PRIORITY_SUGGESTIONS = List.of(
             "all", "low", "medium", "high"
@@ -104,6 +104,9 @@ public final class CommandBootstrap {
     );
     private static final List<String> PROJECT_LIST_MODE_SUGGESTIONS = List.of(
             "all", "current", "star"
+    );
+    private static final List<String> PROJECT_MEMBER_ROLE_SUGGESTIONS = List.of(
+            "lead", "member"
     );
     private static final List<String> TASK_CLEAN_SCOPE_SUGGESTIONS = List.of(
             "personal", "team"
@@ -210,6 +213,42 @@ public final class CommandBootstrap {
                                                                 StringArgumentType.getString(ctx, "priority"),
                                                                 StringArgumentType.getString(ctx, "text")
                                                         ))))))
+                        .then(Commands.literal("listp")
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .executes(ctx -> sendTaskListByProject(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                "all",
+                                                "all",
+                                                null
+                                        ))
+                                        .then(Commands.argument("status", StringArgumentType.word())
+                                                .suggests(CommandBootstrap::suggestTaskListStatuses)
+                                                .executes(ctx -> sendTaskListByProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "status"),
+                                                        "all",
+                                                        null
+                                                ))
+                                                .then(Commands.argument("priority", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestTaskListPriorities)
+                                                        .executes(ctx -> sendTaskListByProject(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "status"),
+                                                                StringArgumentType.getString(ctx, "priority"),
+                                                                null
+                                                        ))
+                                                        .then(Commands.argument("text", StringArgumentType.greedyString())
+                                                                .executes(ctx -> sendTaskListByProject(
+                                                                        ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                                        StringArgumentType.getString(ctx, "status"),
+                                                                        StringArgumentType.getString(ctx, "priority"),
+                                                                        StringArgumentType.getString(ctx, "text")
+                                                                )))))))
                         .then(Commands.literal("add")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("title", StringArgumentType.string())
@@ -283,13 +322,66 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
+                        .then(Commands.literal("donep")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskDoneByProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
+                        .then(Commands.literal("claimp")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskClaimByProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
+                        .then(Commands.literal("abandonp")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskAbandonByProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
                         .then(Commands.literal("remove")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("taskId", StringArgumentType.word())
                                         .executes(ctx -> executeTaskRemove(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
-                                        )))))
+                                        ))))
+                        .then(Commands.literal("removep")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskRemoveByProject(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
+                        .then(Commands.literal("assignp")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .then(Commands.argument("member", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestAssignableProjectMembers)
+                                                        .executes(ctx -> executeTaskAssignByProject(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "taskId"),
+                                                                StringArgumentType.getString(ctx, "member")
+                                                        )))))))
                 .then(Commands.literal("project")
                         .then(Commands.literal("create")
                                 .then(Commands.argument("scope", StringArgumentType.word())
@@ -300,6 +392,76 @@ public final class CommandBootstrap {
                                                         StringArgumentType.getString(ctx, "scope"),
                                                         StringArgumentType.getString(ctx, "name")
                                                 )))))
+                        .then(Commands.literal("rename")
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                                .executes(ctx -> executeProjectRename(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "name")
+                                                )))))
+                        .then(Commands.literal("member-create")
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("enabled", StringArgumentType.word())
+                                                .executes(ctx -> executeProjectAllowMemberCreate(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "enabled")
+                                                )))))
+                        .then(Commands.literal("star")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .executes(ctx -> executeProjectStarState(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                true
+                                        ))))
+                        .then(Commands.literal("unstar")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL, null))
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .executes(ctx -> executeProjectStarState(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "projectId"),
+                                                false
+                                        ))))
+                        .then(Commands.literal("member")
+                                .then(Commands.literal("add")
+                                        .then(Commands.argument("projectId", StringArgumentType.word())
+                                                .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                                .then(Commands.argument("member", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestAddableProjectMembers)
+                                                        .executes(ctx -> executeProjectMemberAdd(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "member")
+                                                        )))))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("projectId", StringArgumentType.word())
+                                                .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                                .then(Commands.argument("memberUuid", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestRemovableProjectMemberIds)
+                                                        .executes(ctx -> executeProjectMemberRemove(
+                                                                ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "projectId"),
+                                                                StringArgumentType.getString(ctx, "memberUuid")
+                                                        )))))
+                                .then(Commands.literal("role")
+                                        .then(Commands.argument("projectId", StringArgumentType.word())
+                                                .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                                .then(Commands.argument("memberUuid", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestRoleEditableProjectMemberIds)
+                                                        .then(Commands.argument("role", StringArgumentType.word())
+                                                                .suggests(CommandBootstrap::suggestProjectMemberRoles)
+                                                                .executes(ctx -> executeProjectMemberRole(
+                                                                        ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                                        StringArgumentType.getString(ctx, "memberUuid"),
+                                                                        StringArgumentType.getString(ctx, "role")
+                                                                )))))))
                         .then(Commands.literal("remove")
                                 .then(Commands.literal("confirm")
                                         .executes(ctx -> executeProjectRemoveConfirm(ctx.getSource())))
@@ -326,7 +488,13 @@ public final class CommandBootstrap {
                 .then(Commands.literal("hud")
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL, null))
                         .then(Commands.literal("toggle")
-                                .executes(ctx -> toggleHudStatus(ctx.getSource()))))
+                                .executes(ctx -> toggleHudStatus(ctx.getSource())))
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("enabled", StringArgumentType.word())
+                                        .executes(ctx -> setHudStatus(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "enabled")
+                                        )))))
                 .then(Commands.literal("join")
                         .then(Commands.literal("project")
                                 .then(Commands.argument("projectId", StringArgumentType.word())
@@ -405,17 +573,31 @@ public final class CommandBootstrap {
                 "command.todolist.help.title",
                 "command.todolist.help.todo_help",
                 "command.todolist.help.todo_task_list",
+                "command.todolist.help.todo_task_listp",
                 "command.todolist.help.todo_task_list_options",
                 "command.todolist.help.todo_task_add",
                 "command.todolist.help.todo_task_addp",
                 "command.todolist.help.todo_task_clean",
                 "command.todolist.help.todo_task_done",
+                "command.todolist.help.todo_task_donep",
+                "command.todolist.help.todo_task_claimp",
+                "command.todolist.help.todo_task_abandonp",
                 "command.todolist.help.todo_task_remove",
+                "command.todolist.help.todo_task_removep",
+                "command.todolist.help.todo_task_assignp",
                 "command.todolist.help.todo_project_create",
+                "command.todolist.help.todo_project_rename",
+                "command.todolist.help.todo_project_member_create",
+                "command.todolist.help.todo_project_member_add",
+                "command.todolist.help.todo_project_member_remove",
+                "command.todolist.help.todo_project_member_role",
                 "command.todolist.help.todo_project_remove",
                 "command.todolist.help.todo_project_list",
                 "command.todolist.help.todo_project_select",
+                "command.todolist.help.todo_project_star",
+                "command.todolist.help.todo_project_unstar",
                 "command.todolist.help.todo_hud_toggle",
+                "command.todolist.help.todo_hud_set",
                 "command.todolist.help.todo_join_project",
                 "command.todolist.help.todo_join_accept",
                 "command.todolist.help.todo_join_deny",
@@ -444,9 +626,34 @@ public final class CommandBootstrap {
         return sendCommandSuccess(
                 source,
                 COMMAND_SUCCESS,
-                SIDE_EFFECT_NONE,
+                SIDE_EFFECT_REFRESH_HUD,
                 "command.todolist.hud.toggle",
                 getHudSwitchText(nextEnabled)
+        );
+    }
+
+    /**
+     * 按显式开关值设置 HUD 状态，避免用户只能依赖 toggle。
+     */
+    private static int setHudStatus(CommandSourceStack source, String enabled) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Boolean normalizedEnabled = CommandInputNormalizer.normalizeToggleState(enabled);
+        if (normalizedEnabled == null) {
+            return sendCommandFailure(source, "command.todolist.hud.invalid_value");
+        }
+        ProjectPackets.setHudVisible(player, normalizedEnabled);
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_REFRESH_HUD,
+                "command.todolist.hud.toggle",
+                getHudSwitchText(normalizedEnabled)
         );
     }
 
@@ -493,6 +700,73 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load player task list for command", e);
+            return sendCommandFailure(source, "command.todolist.task.list.failed");
+        }
+    }
+
+    /**
+     * 成员输入解析结果：统一承载成员 UUID 与展示名称，便于命令侧复用。
+     */
+    private static final class ResolvedMemberTarget {
+        private final String uuid;
+        private final String displayName;
+
+        /**
+         * 创建成员解析结果对象。
+         *
+         * @param uuid 成员 UUID
+         * @param displayName 成员展示名称
+         */
+        private ResolvedMemberTarget(String uuid, String displayName) {
+            this.uuid = uuid;
+            this.displayName = displayName;
+        }
+    }
+
+    /**
+     * 按指定项目输出任务列表，支持个人项目与团队项目共用同一套筛选参数。
+     */
+    private static int sendTaskListByProject(CommandSourceStack source, String projectId, String status, String priority, String text) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.task.project.not_found");
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        try {
+            List<Task> scopedTasks = loadProjectTasksForCommand(source, player, project).stream()
+                    .filter(task -> task != null && task.belongsToProject(project.getId()))
+                    .sorted(buildTaskSummaryComparator())
+                    .toList();
+            int totalCount = scopedTasks.size();
+            int completedCount = (int) scopedTasks.stream().filter(Task::isCompleted).count();
+            List<Task> filteredTasks = scopedTasks.stream()
+                    .filter(task -> matchesTaskStatus(task, status))
+                    .filter(task -> matchesTaskPriority(task, priority))
+                    .filter(task -> matchesTaskText(task, text))
+                    .toList();
+            String searchText = text == null || text.isBlank() ? null : text.trim();
+            return sendListWithUnifiedTemplate(
+                    source,
+                    filteredTasks,
+                    TASK_LIST_MAX_SUMMARY,
+                    () -> Component.translatable(
+                            "command.todolist.task.project.list.summary",
+                            buildProjectNameComponent(project),
+                            totalCount,
+                            completedCount
+                    ),
+                    "command.todolist.task.project.list.empty",
+                    (displayIndex, task) -> buildTaskListItem(displayIndex, task, searchText),
+                    "command.todolist.task.list.more"
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to load project task list for command, projectId={}", project.getId(), e);
             return sendCommandFailure(source, "command.todolist.task.list.failed");
         }
     }
@@ -599,6 +873,53 @@ public final class CommandBootstrap {
         TaskPackets.syncTasksToPlayer(player);
     }
 
+    /**
+     * 解析命令中引用的项目对象，并统一处理“不可见/不存在”错误提示。
+     */
+    private static Project resolveProjectForCommand(CommandSourceStack source, ServerPlayer player, String projectId, String notFoundTranslationKey) {
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            sendCommandFailure(source, notFoundTranslationKey, projectId);
+            return null;
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null || !isProjectVisibleToPlayer(project, player.getStringUUID(), source.getServer())) {
+            sendCommandFailure(source, notFoundTranslationKey, normalizedProjectId);
+            return null;
+        }
+        return project;
+    }
+
+    /**
+     * 按项目范围读取命令所需的任务列表。
+     */
+    private static List<Task> loadProjectTasksForCommand(CommandSourceStack source, ServerPlayer player, Project project) throws IOException {
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        if (project.getScope() == Project.Scope.TEAM) {
+            return new ArrayList<>(storage.loadTeamTasks());
+        }
+        return new ArrayList<>(loadPersonalTasksForCommand(source.getServer(), storage, player.getUUID()));
+    }
+
+    /**
+     * 按项目范围保存命令修改后的任务列表，并触发对应同步。
+     */
+    private static void saveProjectTasksForCommand(
+            CommandSourceStack source,
+            ServerPlayer player,
+            Project project,
+            TaskStorage storage,
+            List<Task> tasks
+    ) throws IOException {
+        if (project.getScope() == Project.Scope.TEAM) {
+            storage.saveTeamTasks(tasks);
+            TaskPackets.broadcastTeamTasks(source.getServer());
+            return;
+        }
+        savePersonalTasksForCommand(source.getServer(), storage, player.getUUID(), tasks);
+        syncTasksToPlayer(source.getServer(), player);
+    }
+
     private static boolean matchesTaskStatus(Task task, String status) {
         String normalizedStatus = normalizeTaskListStatus(status);
         if ("all".equals(normalizedStatus)) {
@@ -627,78 +948,31 @@ public final class CommandBootstrap {
     }
 
     private static String normalizeTaskListStatus(String status) {
-        if (status == null) {
-            return "all";
-        }
-        return switch (status.toLowerCase(Locale.ROOT)) {
-            case "all" -> "all";
-            case "incomplete" -> "incomplete";
-            case "completed" -> "completed";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeTaskListStatus(status);
     }
 
     private static String normalizeTaskListPriority(String priority) {
-        if (priority == null) {
-            return "all";
-        }
-        return switch (priority.toLowerCase(Locale.ROOT)) {
-            case "all" -> "all";
-            case "low" -> "low";
-            case "medium" -> "medium";
-            case "high" -> "high";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeTaskListPriority(priority);
     }
 
     private static String normalizeTaskCleanScope(String scope) {
-        if (scope == null) {
-            return "";
-        }
-        return switch (scope.toLowerCase(Locale.ROOT)) {
-            case "personal" -> "personal";
-            case "team" -> "team";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeTaskCleanScope(scope);
     }
 
     private static String normalizeTaskCleanProjectSelector(String selector) {
-        if (selector == null) {
-            return "";
-        }
-        return switch (selector.toLowerCase(Locale.ROOT)) {
-            case "current" -> "current";
-            case "star" -> "star";
-            case "all" -> "all";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeTaskCleanProjectSelector(selector);
     }
 
     private static String normalizeTaskCleanStatus(String status) {
-        if (status == null) {
-            return "";
-        }
-        return switch (status.toLowerCase(Locale.ROOT)) {
-            case "incomplete" -> "incomplete";
-            case "completed" -> "completed";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeTaskCleanStatus(status);
     }
 
     private static String normalizeProjectScope(String scope) {
-        return normalizeTaskCleanScope(scope);
+        return CommandInputNormalizer.normalizeProjectScope(scope);
     }
 
     private static String normalizeProjectListMode(String mode) {
-        if (mode == null) {
-            return "";
-        }
-        return switch (mode.toLowerCase(Locale.ROOT)) {
-            case "all" -> "all";
-            case "current" -> "current";
-            case "star" -> "star";
-            default -> "";
-        };
+        return CommandInputNormalizer.normalizeProjectListMode(mode);
     }
 
     private static boolean matchesTaskText(Task task, String text) {
@@ -721,6 +995,9 @@ public final class CommandBootstrap {
      * 请求任务清空确认：首次执行仅提示确认入口，不做实际清空。
      */
     private static int requestTaskCleanConfirm(CommandSourceStack source, String scope, String projectSelector, String status) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
@@ -743,6 +1020,9 @@ public final class CommandBootstrap {
     }
 
     private static int executeTaskCleanConfirm(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
@@ -1020,7 +1300,7 @@ public final class CommandBootstrap {
             return sendCommandFailure(source, "command.todolist.project.select.not_found", projectId);
         }
         Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
-        if (project == null || !isProjectVisibleToPlayer(project, player.getStringUUID(), player.getServer())) {
+        if (project == null || !isProjectVisibleToPlayer(project, player.getStringUUID(), source.getServer())) {
             return sendCommandFailure(source, "command.todolist.project.select.not_found", normalizedProjectId);
         }
         if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(source.getServer())) {
@@ -1050,7 +1330,7 @@ public final class CommandBootstrap {
             return sendCommandFailure(source, "command.todolist.project.list.invalid_mode");
         }
 
-        List<Project> visibleProjects = resolveProjectsForListMode(player, normalizedMode);
+        List<Project> visibleProjects = resolveProjectsForListMode(player, source.getServer(), normalizedMode);
         return sendListWithUnifiedTemplate(
                 source,
                 visibleProjects,
@@ -1070,13 +1350,13 @@ public final class CommandBootstrap {
         };
     }
 
-    private static List<Project> resolveProjectsForListMode(ServerPlayer player, String mode) {
+    private static List<Project> resolveProjectsForListMode(ServerPlayer player, MinecraftServer server, String mode) {
         ProjectManager projectManager = TodoListCommon.getProjectManager();
         String playerUuid = player.getStringUUID();
         if ("current".equals(mode)) {
             String activeProjectId = ProjectPackets.getActiveProjectId(player);
             Project project = activeProjectId == null ? null : projectManager.getProject(activeProjectId);
-            if (project == null || !isProjectVisibleToPlayer(project, playerUuid, player.getServer())) {
+            if (project == null || !isProjectVisibleToPlayer(project, playerUuid, server)) {
                 return List.of();
             }
             return List.of(project);
@@ -1084,13 +1364,13 @@ public final class CommandBootstrap {
         if ("star".equals(mode)) {
             return ProjectPackets.getHudStarredProjectIds(player).stream()
                     .map(projectManager::getProject)
-                    .filter(project -> project != null && isProjectVisibleToPlayer(project, playerUuid, player.getServer()))
+                    .filter(project -> project != null && isProjectVisibleToPlayer(project, playerUuid, server))
                     .distinct()
                     .sorted(buildProjectSummaryComparator())
                     .toList();
         }
         return projectManager.getAllProjects().stream()
-                .filter(project -> isProjectVisibleToPlayer(project, playerUuid, player.getServer()))
+                .filter(project -> isProjectVisibleToPlayer(project, playerUuid, server))
                 .sorted(buildProjectSummaryComparator())
                 .toList();
     }
@@ -1131,7 +1411,251 @@ public final class CommandBootstrap {
         );
     }
 
+    /**
+     * 重命名指定项目，并在成功后同步项目列表。
+     */
+    private static int executeProjectRename(CommandSourceStack source, String projectId, String name) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.rename.not_found", projectId);
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null) {
+            return sendCommandFailure(source, "command.todolist.project.rename.not_found", normalizedProjectId);
+        }
+        if (!canEditProject(source, player, project)) {
+            return sendCommandFailure(source, "command.todolist.project.rename.no_permission");
+        }
+        String normalizedName = name == null ? "" : name.trim();
+        if (normalizedName.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.create.invalid_name");
+        }
+        project.setName(normalizedName);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.rename.success",
+                buildProjectNameComponent(project)
+        );
+    }
+
+    /**
+     * 设置团队项目的“成员可创建任务”开关，并在成功后同步项目列表。
+     */
+    private static int executeProjectAllowMemberCreate(CommandSourceStack source, String projectId, String enabled) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.member_create.not_found", projectId);
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null) {
+            return sendCommandFailure(source, "command.todolist.project.member_create.not_found", normalizedProjectId);
+        }
+        if (project.getScope() != Project.Scope.TEAM) {
+            return sendCommandFailure(source, "command.todolist.project.member_create.team_only");
+        }
+        if (!canEditProject(source, player, project)) {
+            return sendCommandFailure(source, "command.todolist.project.member_create.no_permission");
+        }
+        Boolean normalizedEnabled = CommandInputNormalizer.normalizeToggleState(enabled);
+        if (normalizedEnabled == null) {
+            return sendCommandFailure(source, "command.todolist.project.member_create.invalid_value");
+        }
+        project.setAllowMemberCreate(normalizedEnabled);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.member_create.success",
+                buildProjectNameComponent(project),
+                getCommandToggleText(normalizedEnabled)
+        );
+    }
+
+    /**
+     * 向团队项目添加成员，支持在线玩家名或 UUID 输入。
+     */
+    /**
+     * 调整项目的 HUD 星标状态，并同步到客户端本地配置。
+     */
+    private static int executeProjectStarState(CommandSourceStack source, String projectId, boolean starred) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.project.star.not_found");
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        List<String> currentProjectIds = ProjectPackets.getHudStarredProjectIds(player);
+        boolean alreadyStarred = currentProjectIds.contains(project.getId());
+        if (starred == alreadyStarred) {
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    starred ? "command.todolist.project.star.already_starred" : "command.todolist.project.unstar.not_starred",
+                    buildProjectNameComponent(project)
+            );
+        }
+        List<String> updatedProjectIds = CommandInputNormalizer.applyHudStarredProjectState(currentProjectIds, project.getId(), starred);
+        ProjectPackets.setHudStarredProjectIds(player, updatedProjectIds);
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_REFRESH_HUD,
+                starred ? "command.todolist.project.star.success" : "command.todolist.project.unstar.success",
+                buildProjectNameComponent(project)
+        );
+    }
+
+    /**
+     * 向团队项目添加成员，支持在线玩家名或 UUID 输入。
+     */
+    private static int executeProjectMemberAdd(CommandSourceStack source, String projectId, String memberToken) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForMemberCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        if (!canManageProjectMember(player, project, null, Operation.ADD_MEMBER)) {
+            return sendCommandFailure(source, "command.todolist.project.member.add.no_permission");
+        }
+        ResolvedMemberTarget target = resolveMemberTarget(source.getServer(), memberToken);
+        if (target == null) {
+            return sendCommandFailure(source, "command.todolist.project.member.add.invalid_target", memberToken);
+        }
+        if (target.uuid.equals(project.getOwnerUuid()) || project.getMemberRole(target.uuid) != null) {
+            return sendCommandFailure(source, "command.todolist.project.member.add.already_exists", target.displayName);
+        }
+        project.addMember(target.uuid, Project.ProjectRole.MEMBER, target.displayName);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.member.add.success",
+                buildProjectNameComponent(project),
+                Component.literal(target.displayName)
+        );
+    }
+
+    /**
+     * 从团队项目移除成员，并同步项目列表。
+     */
+    private static int executeProjectMemberRemove(CommandSourceStack source, String projectId, String memberUuid) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForMemberCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedMemberUuid = memberUuid == null ? "" : memberUuid.trim();
+        if (normalizedMemberUuid.isEmpty() || project.getMemberRole(normalizedMemberUuid) == null) {
+            return sendCommandFailure(source, "command.todolist.project.member.target.not_found", memberUuid);
+        }
+        if (!canManageProjectMember(player, project, normalizedMemberUuid, Operation.REMOVE_MEMBER)) {
+            return sendCommandFailure(source, "command.todolist.project.member.remove.no_permission");
+        }
+        String memberName = getProjectMemberDisplayName(project, normalizedMemberUuid);
+        project.removeMember(normalizedMemberUuid);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.member.remove.success",
+                buildProjectNameComponent(project),
+                Component.literal(memberName)
+        );
+    }
+
+    /**
+     * 修改团队项目成员角色，目前支持 MEMBER 与 LEAD 之间切换。
+     */
+    private static int executeProjectMemberRole(CommandSourceStack source, String projectId, String memberUuid, String role) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForMemberCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedMemberUuid = memberUuid == null ? "" : memberUuid.trim();
+        if (normalizedMemberUuid.isEmpty() || project.getMemberRole(normalizedMemberUuid) == null) {
+            return sendCommandFailure(source, "command.todolist.project.member.target.not_found", memberUuid);
+        }
+        if (!canManageProjectMember(player, project, normalizedMemberUuid, Operation.CHANGE_MEMBER_ROLE)) {
+            return sendCommandFailure(source, "command.todolist.project.member.role.no_permission");
+        }
+        String normalizedRole = CommandInputNormalizer.normalizeProjectMemberRole(role);
+        if (normalizedRole.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.member.role.invalid_value");
+        }
+        Project.ProjectRole newRole = "lead".equals(normalizedRole) ? Project.ProjectRole.LEAD : Project.ProjectRole.MEMBER;
+        String memberName = getProjectMemberDisplayName(project, normalizedMemberUuid);
+        project.addMember(normalizedMemberUuid, newRole, memberName);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.member.role.success",
+                buildProjectNameComponent(project),
+                Component.literal(memberName),
+                getProjectMemberRoleText(newRole)
+        );
+    }
+
     private static int requestProjectRemoveConfirm(CommandSourceStack source, String projectId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
@@ -1173,6 +1697,9 @@ public final class CommandBootstrap {
     }
 
     private static int executeProjectRemoveConfirm(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         ServerPlayer player = getPlayerIfPresent(source);
         if (player == null) {
             return COMMAND_FAILURE;
@@ -1193,6 +1720,164 @@ public final class CommandBootstrap {
             return sendCommandFailure(source, "command.todolist.project.remove.no_permission");
         }
         return executeProjectRemoveNow(source, player, project);
+    }
+
+    /**
+     * 判断玩家是否具备编辑指定项目的能力。
+     */
+    private static boolean canEditProject(CommandSourceStack source, ServerPlayer player, Project project) {
+        if (player == null || project == null) {
+            return false;
+        }
+        if (source.hasPermission(2)) {
+            return true;
+        }
+        String playerUuid = player.getStringUUID();
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            String ownerUuid = project.getOwnerUuid();
+            return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(playerUuid);
+        }
+        Role role = resolveProjectRole(player, project);
+        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false);
+        return PermissionCenter.canPerform(Operation.EDIT_PROJECT, role, ctx);
+    }
+
+    /**
+     * 解析成员管理命令使用的团队项目，并统一处理范围与可见性校验。
+     */
+    /**
+     * 解析团队任务命令使用的团队项目，并统一处理可见性与项目类型校验。
+     */
+    private static Project resolveTeamProjectForTaskCommand(CommandSourceStack source, ServerPlayer player, String projectId) {
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.task.project.not_found");
+        if (project == null) {
+            return null;
+        }
+        if (project.getScope() != Project.Scope.TEAM) {
+            sendCommandFailure(source, "command.todolist.task.project.team_only");
+            return null;
+        }
+        return project;
+    }
+
+    /**
+     * 解析成员管理命令使用的团队项目，并统一处理可见性与项目类型校验。
+     */
+    private static Project resolveTeamProjectForMemberCommand(CommandSourceStack source, ServerPlayer player, String projectId) {
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.project.member.project_not_found");
+        if (project == null) {
+            return null;
+        }
+        if (project.getScope() != Project.Scope.TEAM) {
+            sendCommandFailure(source, "command.todolist.project.member.team_only");
+            return null;
+        }
+        return project;
+    }
+
+    /**
+     * 判断当前玩家是否可以对目标成员执行指定成员管理操作。
+     */
+    private static boolean canManageProjectMember(ServerPlayer actor, Project project, String targetMemberUuid, Operation operation) {
+        if (actor == null || project == null) {
+            return false;
+        }
+        String actorUuid = actor.getStringUUID();
+        boolean targetSelf = targetMemberUuid != null && targetMemberUuid.equals(actorUuid);
+        boolean targetProjectManager = targetMemberUuid != null && targetMemberUuid.equals(project.getOwnerUuid());
+        Role role = resolveProjectRole(actor, project);
+        Context context = new Context(ViewScope.TEAM_ALL, false, false, false, targetSelf, targetProjectManager, isTeamProjectMember(actor, project));
+        return PermissionCenter.canPerform(operation, role, context);
+    }
+
+    /**
+     * 将成员输入解析为 UUID 与展示名。
+     */
+    private static ResolvedMemberTarget resolveMemberTarget(MinecraftServer server, String memberToken) {
+        String normalizedToken = memberToken == null ? "" : memberToken.trim();
+        if (normalizedToken.isEmpty()) {
+            return null;
+        }
+        try {
+            UUID uuid = UUID.fromString(normalizedToken);
+            ServerPlayer online = server == null ? null : server.getPlayerList().getPlayer(uuid);
+            String displayName = online == null ? normalizedToken : online.getName().getString();
+            return new ResolvedMemberTarget(uuid.toString(), displayName);
+        } catch (IllegalArgumentException ignored) {
+            if (server == null) {
+                return null;
+            }
+            ServerPlayer online = server.getPlayerList().getPlayerByName(normalizedToken);
+            if (online == null) {
+                return null;
+            }
+            return new ResolvedMemberTarget(online.getStringUUID(), online.getName().getString());
+        }
+    }
+
+    /**
+     * 解析团队任务指派目标，只允许项目经理、负责人或成员本人已在项目中的成员被选中。
+     */
+    private static ResolvedMemberTarget resolveProjectAssignmentTarget(Project project, MinecraftServer server, String memberToken) {
+        if (project == null || project.getScope() != Project.Scope.TEAM) {
+            return null;
+        }
+        String normalizedToken = CommandInputNormalizer.normalizeProjectId(memberToken);
+        if (normalizedToken.isEmpty()) {
+            return null;
+        }
+
+        ResolvedMemberTarget directTarget = resolveMemberTarget(server, normalizedToken);
+        if (directTarget != null && isProjectAssignableMember(project, directTarget.uuid)) {
+            String displayName = getProjectMemberDisplayName(project, directTarget.uuid);
+            if (displayName == null || displayName.isBlank()) {
+                displayName = directTarget.displayName;
+            }
+            return new ResolvedMemberTarget(directTarget.uuid, displayName);
+        }
+
+        for (Map.Entry<String, Project.ProjectRole> entry : project.getMembers().entrySet()) {
+            String memberUuid = entry.getKey();
+            String displayName = getProjectMemberDisplayName(project, memberUuid);
+            if (displayName != null && !displayName.isBlank() && displayName.equalsIgnoreCase(normalizedToken)) {
+                return new ResolvedMemberTarget(memberUuid, displayName);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 判断目标成员是否属于当前团队项目，可作为任务指派目标。
+     */
+    private static boolean isProjectAssignableMember(Project project, String memberUuid) {
+        if (project == null || memberUuid == null || memberUuid.isBlank()) {
+            return false;
+        }
+        if (memberUuid.equals(project.getOwnerUuid())) {
+            return true;
+        }
+        return project.getMemberRole(memberUuid) != null;
+    }
+
+    /**
+     * 获取项目内成员的展示名称，不存在缓存时回退到 UUID。
+     */
+    private static String getProjectMemberDisplayName(Project project, String memberUuid) {
+        if (project == null || memberUuid == null || memberUuid.isBlank()) {
+            return "";
+        }
+        String memberName = project.getMemberName(memberUuid);
+        return memberName == null || memberName.isBlank() ? memberUuid : memberName;
+    }
+
+    /**
+     * 将项目成员角色转换为本地化文本。
+     */
+    private static Component getProjectMemberRoleText(Project.ProjectRole role) {
+        if (role == Project.ProjectRole.LEAD) {
+            return Component.translatable("gui.todolist.role.lead");
+        }
+        return Component.translatable("gui.todolist.role.member");
     }
 
     private static boolean canRemoveProject(CommandSourceStack source, ServerPlayer player, Project project) {
@@ -1229,6 +1914,13 @@ public final class CommandBootstrap {
                 "command.todolist.project.remove.success",
                 getProjectDisplayName(project, projectId)
         );
+    }
+
+    /**
+     * 将命令开关结果转换为统一的本地化文本。
+     */
+    private static Component getCommandToggleText(boolean enabled) {
+        return Component.translatable(enabled ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off");
     }
 
     private static void purgeDeletedProjectTasks(Project.Scope scope, String projectId, ServerPlayer player) {
@@ -1416,6 +2108,51 @@ public final class CommandBootstrap {
         );
     }
 
+    /**
+     * 判断命令来源是否可以对指定项目任务执行目标操作。
+     */
+    private static boolean canOperateProjectTask(
+            CommandSourceStack source,
+            ServerPlayer player,
+            Project project,
+            Task task,
+            Operation operation
+    ) {
+        if (source.hasPermission(2)) {
+            return true;
+        }
+        if (project == null || task == null) {
+            return false;
+        }
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            String ownerUuid = project.getOwnerUuid();
+            return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(player.getStringUUID());
+        }
+        Role role = resolveProjectRole(player, project);
+        boolean assigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
+        boolean assigneeSelf = assigned && player.getStringUUID().equals(task.getAssigneeUuid());
+        boolean projectMember = isTeamProjectMember(player, project);
+        ViewScope scope;
+        if (!assigned) {
+            scope = ViewScope.TEAM_UNASSIGNED;
+        } else if (assigneeSelf) {
+            scope = ViewScope.TEAM_ASSIGNED;
+        } else {
+            scope = ViewScope.TEAM_ALL;
+        }
+        Context context = new Context(
+                scope,
+                task.isCompleted(),
+                assigned,
+                assigneeSelf,
+                false,
+                false,
+                projectMember,
+                project.isAllowMemberCreate()
+        );
+        return PermissionCenter.canPerform(operation, role, context);
+    }
+
     private static MutableComponent buildHighlightedText(String value, String query, ChatFormatting baseColor, ChatFormatting matchColor) {
         String safeValue = value == null ? "" : value;
         MutableComponent component = Component.empty();
@@ -1498,7 +2235,187 @@ public final class CommandBootstrap {
     }
 
     /**
+     * 将指定项目中的目标任务标记为完成，并依据项目范围执行对应同步。
+     */
+    private static int executeTaskDoneByProject(CommandSourceStack source, String projectId, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.task.project.not_found");
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadProjectTasksForCommand(source, player, project);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null || !task.belongsToProject(project.getId())) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (!canOperateProjectTask(source, player, project, task, Operation.TOGGLE_COMPLETE)) {
+                return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            }
+            if (task.isCompleted()) {
+                return sendCommandSuccess(
+                        source,
+                        COMMAND_SUCCESS,
+                        SIDE_EFFECT_NONE,
+                        "command.todolist.task.done.already_completed",
+                        task.getTitle()
+                );
+            }
+            task.setCompleted(true);
+            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.done.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to mark project task as done for command, projectId={}", project.getId(), e);
+            return sendCommandFailure(source, "command.todolist.task.done.failed");
+        }
+    }
+
+    /**
      * 从当前玩家任务列表删除指定任务并写回存储。
+     */
+    /**
+     * 在团队项目中领取指定任务，并将任务指派给当前玩家。
+     */
+    private static int executeTaskClaimByProject(CommandSourceStack source, String projectId, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForTaskCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadProjectTasksForCommand(source, player, project);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null || !task.belongsToProject(project.getId())) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (!canOperateProjectTask(source, player, project, task, Operation.CLAIM_TASK)) {
+                return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            }
+            task.setAssigneeUuid(player.getStringUUID());
+            task.setAssigneeName(player.getName().getString());
+            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.claim.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to claim project task for command, projectId={}", project.getId(), e);
+            return sendCommandFailure(source, "command.todolist.task.claim.failed");
+        }
+    }
+
+    /**
+     * 在团队项目中放弃指定任务，清空当前指派人。
+     */
+    private static int executeTaskAbandonByProject(CommandSourceStack source, String projectId, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForTaskCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadProjectTasksForCommand(source, player, project);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null || !task.belongsToProject(project.getId())) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (!canOperateProjectTask(source, player, project, task, Operation.ABANDON_TASK)) {
+                return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            }
+            task.setAssigneeUuid(null);
+            task.setAssigneeName(null);
+            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.abandon.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to abandon project task for command, projectId={}", project.getId(), e);
+            return sendCommandFailure(source, "command.todolist.task.abandon.failed");
+        }
+    }
+
+    /**
+     * 在团队项目中将指定任务指派给目标成员。
+     */
+    private static int executeTaskAssignByProject(CommandSourceStack source, String projectId, String taskId, String memberToken) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveTeamProjectForTaskCommand(source, player, projectId);
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadProjectTasksForCommand(source, player, project);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null || !task.belongsToProject(project.getId())) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (!canOperateProjectTask(source, player, project, task, Operation.ASSIGN_OTHERS)) {
+                return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            }
+            ResolvedMemberTarget target = resolveProjectAssignmentTarget(project, source.getServer(), memberToken);
+            if (target == null) {
+                return sendCommandFailure(source, "command.todolist.task.assign.invalid_target", memberToken);
+            }
+            task.setAssigneeUuid(target.uuid);
+            task.setAssigneeName(target.displayName);
+            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.assign.success",
+                    task.getTitle(),
+                    target.displayName
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to assign project task for command, projectId={}", project.getId(), e);
+            return sendCommandFailure(source, "command.todolist.task.assign.failed");
+        }
+    }
+
+    /**
+     * 从当前玩家任务列表删除指定任务，并写回存储。
      */
     private static int executeTaskRemove(CommandSourceStack source, String taskId) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
@@ -1529,6 +2446,46 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to remove task for command", e);
+            return sendCommandFailure(source, "command.todolist.task.remove.failed");
+        }
+    }
+
+    /**
+     * 从指定项目中删除目标任务，并依据项目范围执行对应同步。
+     */
+    private static int executeTaskRemoveByProject(CommandSourceStack source, String projectId, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.task.project.not_found");
+        if (project == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadProjectTasksForCommand(source, player, project);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null || !task.belongsToProject(project.getId())) {
+                return sendCommandFailure(source, "command.todolist.task.remove.not_found", taskId);
+            }
+            if (!canOperateProjectTask(source, player, project, task, Operation.DELETE_TASK)) {
+                return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            }
+            tasks.remove(task);
+            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.remove.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to remove project task for command, projectId={}", project.getId(), e);
             return sendCommandFailure(source, "command.todolist.task.remove.failed");
         }
     }
@@ -1842,6 +2799,10 @@ public final class CommandBootstrap {
         return suggestWords(PROJECT_LIST_MODE_SUGGESTIONS, builder);
     }
 
+    private static CompletableFuture<Suggestions> suggestProjectMemberRoles(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(PROJECT_MEMBER_ROLE_SUGGESTIONS, builder);
+    }
+
     private static CompletableFuture<Suggestions> suggestSelectableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         CommandSourceStack source = ctx.getSource();
         ServerPlayer player = getPlayerOrNull(source);
@@ -1858,6 +2819,107 @@ public final class CommandBootstrap {
                 continue;
             }
             builder.suggest(project.getId());
+        }
+        return builder.buildFuture();
+    }
+
+    private static CompletableFuture<Suggestions> suggestAddableProjectMembers(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player == null) {
+            return builder.buildFuture();
+        }
+        String projectId = StringArgumentType.getString(ctx, "projectId");
+        Project project = TodoListCommon.getProjectManager().getProject(projectId);
+        if (project == null || project.getScope() != Project.Scope.TEAM || source.getServer() == null) {
+            return builder.buildFuture();
+        }
+        for (ServerPlayer online : source.getServer().getPlayerList().getPlayers()) {
+            if (online == null) {
+                continue;
+            }
+            String onlineUuid = online.getStringUUID();
+            if (onlineUuid.equals(project.getOwnerUuid()) || project.getMemberRole(onlineUuid) != null) {
+                continue;
+            }
+            builder.suggest(online.getName().getString());
+            builder.suggest(onlineUuid);
+        }
+        return builder.buildFuture();
+    }
+
+    /**
+     * 为团队任务指派命令提供可选成员建议，包含成员 UUID 与缓存名称。
+     */
+    private static CompletableFuture<Suggestions> suggestAssignableProjectMembers(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player == null) {
+            return builder.buildFuture();
+        }
+        String projectId = StringArgumentType.getString(ctx, "projectId");
+        Project project = TodoListCommon.getProjectManager().getProject(projectId);
+        if (project == null || project.getScope() != Project.Scope.TEAM) {
+            return builder.buildFuture();
+        }
+        Set<String> suggestions = new LinkedHashSet<>();
+        String ownerUuid = project.getOwnerUuid();
+        if (ownerUuid != null && !ownerUuid.isBlank()) {
+            suggestions.add(ownerUuid);
+            String ownerName = getProjectMemberDisplayName(project, ownerUuid);
+            if (ownerName != null && !ownerName.isBlank()) {
+                suggestions.add(ownerName);
+            }
+        }
+        for (Map.Entry<String, Project.ProjectRole> entry : project.getMembers().entrySet()) {
+            String memberUuid = entry.getKey();
+            if (memberUuid == null || memberUuid.isBlank()) {
+                continue;
+            }
+            suggestions.add(memberUuid);
+            String memberName = getProjectMemberDisplayName(project, memberUuid);
+            if (memberName != null && !memberName.isBlank()) {
+                suggestions.add(memberName);
+            }
+        }
+        for (String suggestion : suggestions) {
+            builder.suggest(suggestion);
+        }
+        return builder.buildFuture();
+    }
+
+    private static CompletableFuture<Suggestions> suggestRemovableProjectMemberIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestProjectMemberIds(ctx, builder, false);
+    }
+
+    private static CompletableFuture<Suggestions> suggestRoleEditableProjectMemberIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestProjectMemberIds(ctx, builder, true);
+    }
+
+    private static CompletableFuture<Suggestions> suggestProjectMemberIds(
+            CommandContext<CommandSourceStack> ctx,
+            SuggestionsBuilder builder,
+            boolean excludeProjectManager
+    ) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = getPlayerOrNull(source);
+        if (player == null) {
+            return builder.buildFuture();
+        }
+        String projectId = StringArgumentType.getString(ctx, "projectId");
+        Project project = TodoListCommon.getProjectManager().getProject(projectId);
+        if (project == null || project.getScope() != Project.Scope.TEAM) {
+            return builder.buildFuture();
+        }
+        for (Map.Entry<String, Project.ProjectRole> entry : project.getMembers().entrySet()) {
+            String memberUuid = entry.getKey();
+            if (memberUuid == null || memberUuid.isBlank()) {
+                continue;
+            }
+            if (excludeProjectManager && memberUuid.equals(project.getOwnerUuid())) {
+                continue;
+            }
+            builder.suggest(memberUuid);
         }
         return builder.buildFuture();
     }

@@ -15,6 +15,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,17 @@ public class ClientProjectPackets {
                 return;
             }
             if (channelId.equals(ProjectPackets.SYNC_HUD_VISIBILITY_ID)) {
-                buf.readBoolean();
+                boolean visible = buf.readBoolean();
+                client.execute(() -> applyHudVisibilitySync(visible));
+                return;
+            }
+            if (channelId.equals(ProjectPackets.SYNC_HUD_STARRED_PROJECT_IDS_ID)) {
+                int count = buf.readInt();
+                List<String> projectIds = new ArrayList<>(count);
+                for (int i = 0; i < count; i++) {
+                    projectIds.add(buf.readUtf());
+                }
+                client.execute(() -> ModConfig.getInstance().setHudStarredProjectIds(projectIds));
                 return;
             }
             if (channelId.equals(ProjectPackets.SYNC_ACTIVE_PROJECT_ID)) {
@@ -132,6 +143,15 @@ public class ClientProjectPackets {
             return null;
         }
         return project.getId();
+    }
+
+    /**
+     * 应用服务端同步过来的 HUD 可见性状态。
+     *
+     * @param visible HUD 是否可见
+     */
+    private static void applyHudVisibilitySync(boolean visible) {
+        ClientBridge.ops().setHudVisible(visible);
     }
 
     /**

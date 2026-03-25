@@ -2,6 +2,11 @@ plugins {
     id("maven-publish")
 }
 
+val tripletCompareScript = layout.projectDirectory.file("tools/triplet-compare/compare-command-result-triplet.ps1")
+val tripletBaselineSample = layout.projectDirectory.file("tools/triplet-compare/baseline-sample.json")
+val tripletLogSample = layout.projectDirectory.file("tools/triplet-compare/log-sample.txt")
+val tripletReport = layout.buildDirectory.file("reports/triplet-sample-diff.json")
+
 subprojects {
     apply(plugin = "java")
     apply(plugin = "maven-publish")
@@ -64,9 +69,34 @@ tasks.register<Copy>("distReleaseJars") {
     }
 }
 
+tasks.register<Exec>("tripletSampleCheck") {
+    group = "verification"
+    description = "Validate COMMAND_RESULT_TRIPLET sample baseline against the sample log."
+
+    inputs.file(tripletCompareScript)
+    inputs.file(tripletBaselineSample)
+    inputs.file(tripletLogSample)
+    outputs.file(tripletReport)
+
+    commandLine(
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        tripletCompareScript.asFile.absolutePath,
+        "-LogPath",
+        tripletLogSample.asFile.absolutePath,
+        "-BaselinePath",
+        tripletBaselineSample.asFile.absolutePath,
+        "-ReportPath",
+        tripletReport.get().asFile.absolutePath
+    )
+}
+
 // 注册根目录 build 任务，并让其触发 distReleaseJars
 tasks.register("build") {
-    dependsOn("distReleaseJars")
+    dependsOn("distReleaseJars", "tripletSampleCheck")
 }
 
 // 注册 clean 任务，用于清理根目录 build 文件夹

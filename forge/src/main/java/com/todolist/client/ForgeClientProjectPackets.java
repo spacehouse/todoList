@@ -10,6 +10,7 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,16 @@ public final class ForgeClientProjectPackets {
         });
         ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
             // HUD 可见性改为客户端本地控制，服务端不再作为权威来源
-            buf.readBoolean();
+            boolean visible = buf.readBoolean();
+            client.execute(() -> applyHudVisibilitySync(visible));
+        });
+        ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_STARRED_PROJECT_IDS_ID, (client, handler, buf, responseSender) -> {
+            int count = buf.readInt();
+            List<String> projectIds = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                projectIds.add(buf.readUtf());
+            }
+            client.execute(() -> ModConfig.getInstance().setHudStarredProjectIds(projectIds));
         });
         ForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
             boolean present = buf.readBoolean();
@@ -140,6 +150,15 @@ public final class ForgeClientProjectPackets {
             return null;
         }
         return project.getId();
+    }
+
+    /**
+     * Apply the HUD visibility synchronized by server-side commands to the local client state.
+     *
+     * @param visible whether the HUD should be visible on the client
+     */
+    private static void applyHudVisibilitySync(boolean visible) {
+        ClientBridge.ops().setHudVisible(visible);
     }
 
     public static void sendAddProject(Project project) {
