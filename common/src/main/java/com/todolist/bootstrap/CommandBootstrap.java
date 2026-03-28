@@ -551,6 +551,9 @@ public final class CommandBootstrap {
             return COMMAND_FAILURE;
         }
         String applicantUuid = StringArgumentType.getString(ctx, "applicantUuid");
+        if (!isValidUuidToken(applicantUuid)) {
+            return sendCommandFailure(source, "command.todolist.join.invalid_applicant_uuid");
+        }
         if (!handleJoinDecision(source.getServer(), approver, projectId, applicantUuid, approved)) {
             return COMMAND_FAILURE;
         }
@@ -564,6 +567,21 @@ public final class CommandBootstrap {
 
     private static boolean handleJoinDecision(MinecraftServer server, ServerPlayer approver, String projectId, String applicantUuid, boolean accepted) {
         return ProjectPackets.handleJoinDecision(server, approver, projectId, applicantUuid, accepted);
+    }
+
+    /**
+     * 校验命令行传入的 UUID 文本是否为合法格式，避免非法输入直接落入业务层静默失败。
+     */
+    private static boolean isValidUuidToken(String uuidToken) {
+        if (uuidToken == null || uuidToken.isBlank()) {
+            return false;
+        }
+        try {
+            UUID.fromString(uuidToken);
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     private static int executeJoinProject(CommandSourceStack source, String projectId) {
@@ -1944,6 +1962,7 @@ public final class CommandBootstrap {
             return sendCommandFailure(source, "command.todolist.project.member.add.already_exists", target.displayName);
         }
         project.addMember(target.uuid, Project.ProjectRole.MEMBER, target.displayName);
+        ProjectPackets.clearPendingJoinRequest(project.getId(), target.uuid);
         TodoListCommon.getProjectManager().updateProject(project);
         saveProjects(source.getServer(), project.getScope());
         refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
@@ -3384,10 +3403,10 @@ public final class CommandBootstrap {
             return Role.MEMBER;
         }
         String playerUuid = player.getStringUUID();
-        if (playerUuid.equals(project.getOwnerUuid())) {
+        Project.ProjectRole memberRole = project.getMemberRole(playerUuid);
+        if (memberRole == Project.ProjectRole.PROJECT_MANAGER) {
             return Role.PROJECT_MANAGER;
         }
-        Project.ProjectRole memberRole = project.getMemberRole(playerUuid);
         if (memberRole == Project.ProjectRole.LEAD) {
             return Role.LEAD;
         }
@@ -3401,11 +3420,7 @@ public final class CommandBootstrap {
         if (player == null || project == null || project.getScope() != Project.Scope.TEAM) {
             return false;
         }
-        String playerUuid = player.getStringUUID();
-        if (playerUuid.equals(project.getOwnerUuid())) {
-            return true;
-        }
-        return project.getMemberRole(playerUuid) != null;
+        return project.getMemberRole(player.getStringUUID()) != null;
     }
 
     /**

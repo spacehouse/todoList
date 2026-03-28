@@ -165,6 +165,7 @@
   "message.todolist.project.join.cannot_approve_self": "You cannot approve your own request",
   "message.todolist.project.join.no_permission": "You do not have permission to approve this request",
   "message.todolist.project.join.no_pending_request": "There is no pending join request for this applicant",
+  "command.todolist.join.invalid_applicant_uuid": "Applicant UUID format is invalid.",
   "message.todolist.project.join.applicant_offline": "Applicant is offline",
   "message.todolist.project.join.accepted": "Your join request was accepted: %s",
   "message.todolist.project.join.denied": "Your join request was denied: %s",

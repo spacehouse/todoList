@@ -18,7 +18,7 @@ public final class CommandSystemTestMain {
      * @throws Exception 当任一测试失败时向上抛出异常
      */
     public static void main(String[] args) throws Exception {
-        CommandInputNormalizerTestMain.main(args);
-        CommandBootstrapIntegrationTestMain.main(args);
+        CommandTestSupport.runTestGroup("CommandInputNormalizerTestMain", () -> CommandInputNormalizerTestMain.main(args));
+        CommandTestSupport.runTestGroup("CommandBootstrapIntegrationTestMain", () -> CommandBootstrapIntegrationTestMain.main(args));
     }
 }

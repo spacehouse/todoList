@@ -53,8 +53,17 @@ tasks.register<JavaExec>("commandSystemTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("guiSystemTest") {
+    group = "verification"
+    description = "Run the offline GUI self-tests without launching a real client."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.gui.GuiSystemTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
+    dependsOn("guiSystemTest")
 }
 
 tasks.withType<Test>().configureEach {

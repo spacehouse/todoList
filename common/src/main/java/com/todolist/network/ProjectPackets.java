@@ -638,6 +638,7 @@ public class ProjectPackets {
             }
 
             project.addMember(memberUuid, Project.ProjectRole.MEMBER, finalName);
+            clearPendingJoinRequest(projectId, memberUuid);
             manager.updateProject(project);
             saveProjects(server, project.getScope());
             broadcastProjects(server);
@@ -652,6 +653,7 @@ public class ProjectPackets {
                     if (project.getMembers().containsKey(uuid)) return;
 
                     project.addMember(uuid, Project.ProjectRole.MEMBER, profile.getName());
+                    clearPendingJoinRequest(projectId, uuid);
                     manager.updateProject(project);
                     saveProjects(server, project.getScope());
                     broadcastProjects(server);
@@ -726,7 +728,7 @@ public class ProjectPackets {
             return;
         }
         String applicantUuid = player.getStringUUID();
-        if (applicantUuid.equals(project.getOwnerUuid()) || project.getMemberRole(applicantUuid) != null) {
+        if (isExistingProjectMember(project, applicantUuid)) {
             player.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
             return;
         }
@@ -757,35 +759,40 @@ public class ProjectPackets {
 
         boolean notified = false;
         java.util.Set<String> notifiedUuids = new java.util.HashSet<>();
-        if (project.getOwnerUuid() != null && !project.getOwnerUuid().isEmpty()) {
+        String ownerUuid = project.getOwnerUuid();
+        if (ownerUuid != null
+                && !ownerUuid.isEmpty()
+                && project.getMemberRole(ownerUuid) == Project.ProjectRole.PROJECT_MANAGER) {
             try {
-                ServerPlayer owner = server.getPlayerList().getPlayer(UUID.fromString(project.getOwnerUuid()));
+                ServerPlayer owner = server.getPlayerList().getPlayer(UUID.fromString(ownerUuid));
                 if (owner != null) {
                     owner.displayClientMessage(msg, false);
                     notified = true;
-                    notifiedUuids.add(project.getOwnerUuid());
+                    notifiedUuids.add(ownerUuid);
                 }
             } catch (IllegalArgumentException e) {
                 TodoConstants.LOGGER.debug("Invalid ownerUuid when notifying join request, projectId={}", projectId, e);
             }
         }
 
-        for (var entry : project.getMembers().entrySet()) {
-            if (!entry.getValue().atLeast(Project.ProjectRole.LEAD)) {
-                continue;
-            }
-            if (notifiedUuids.contains(entry.getKey())) {
-                continue;
-            }
-            try {
-                ServerPlayer lead = server.getPlayerList().getPlayer(UUID.fromString(entry.getKey()));
-                if (lead != null) {
-                    lead.displayClientMessage(msg, false);
-                    notified = true;
-                    notifiedUuids.add(entry.getKey());
+        if (!notified) {
+            for (var entry : project.getMembers().entrySet()) {
+                if (!entry.getValue().atLeast(Project.ProjectRole.LEAD)) {
+                    continue;
                 }
-            } catch (IllegalArgumentException e) {
-                TodoConstants.LOGGER.debug("Invalid leadUuid when notifying join request, projectId={}", projectId, e);
+                if (notifiedUuids.contains(entry.getKey())) {
+                    continue;
+                }
+                try {
+                    ServerPlayer lead = server.getPlayerList().getPlayer(UUID.fromString(entry.getKey()));
+                    if (lead != null) {
+                        lead.displayClientMessage(msg, false);
+                        notified = true;
+                        notifiedUuids.add(entry.getKey());
+                    }
+                } catch (IllegalArgumentException e) {
+                    TodoConstants.LOGGER.debug("Invalid leadUuid when notifying join request, projectId={}", projectId, e);
+                }
             }
         }
 
@@ -836,7 +843,7 @@ public class ProjectPackets {
             return false;
         }
 
-        boolean alreadyMember = applicantUuid.equals(project.getOwnerUuid()) || project.getMemberRole(applicantUuid) != null;
+        boolean alreadyMember = isExistingProjectMember(project, applicantUuid);
         if (alreadyMember) {
             approver.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
             return false;
@@ -889,6 +896,40 @@ public class ProjectPackets {
     }
 
     /**
+     * 清理指定项目与申请人的单条待审批加入请求，避免成员已被手动加入后保留陈旧申请。
+     *
+     * @param projectId 项目 ID
+     * @param applicantUuid 申请人 UUID
+     */
+    public static void clearPendingJoinRequest(String projectId, String applicantUuid) {
+        if (projectId == null || projectId.isBlank() || applicantUuid == null || applicantUuid.isBlank()) {
+            return;
+        }
+        pendingJoinRequestMap.remove(buildJoinRequestKey(projectId, applicantUuid));
+    }
+
+    /**
+     * 构建加入申请在运行期缓存中的唯一键。
+     *
+     * @param projectId 项目 ID
+     * @param applicantUuid 申请人 UUID
+     * @return 由项目与申请人组成的唯一键
+     */
+    /**
+     * 判断指定玩家当前是否已在项目成员表中拥有有效成员身份。
+     *
+     * @param project 目标项目
+     * @param playerUuid 待检查的玩家 UUID
+     * @return 已存在成员记录时返回 true
+     */
+    private static boolean isExistingProjectMember(Project project, String playerUuid) {
+        if (project == null || playerUuid == null || playerUuid.isBlank()) {
+            return false;
+        }
+        return project.getMemberRole(playerUuid) != null;
+    }
+
+    /**
      * 构建加入申请在运行期缓存中的唯一键。
      *
      * @param projectId 项目 ID
@@ -924,11 +965,11 @@ public class ProjectPackets {
             return Role.MEMBER;
         }
         String uuid = player.getStringUUID();
-        if (uuid.equals(project.getOwnerUuid())) {
+        Project.ProjectRole memberRole = project.getMemberRole(uuid);
+        if (memberRole == Project.ProjectRole.PROJECT_MANAGER) {
             return Role.PROJECT_MANAGER;
         }
-        Project.ProjectRole r = project.getMemberRole(uuid);
-        if (r == Project.ProjectRole.LEAD) {
+        if (memberRole == Project.ProjectRole.LEAD) {
             return Role.LEAD;
         }
         return Role.MEMBER;

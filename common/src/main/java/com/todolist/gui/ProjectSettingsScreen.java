@@ -38,6 +38,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     private MemberListWidget memberList;
     private Button addMemberBtn;
     private Button allowMemberCreateBtn;
+    private Button saveButton;
     private boolean allowMemberCreate;
 
     /**
@@ -47,6 +48,81 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         super(Component.translatable("gui.todolist.project_settings.title"));
         this.parent = parent;
         this.project = project;
+    }
+
+    /**
+     * 返回当前项目设置界面使用的项目对象，供同包测试代码断言刷新结果。
+     *
+     * @return 当前项目对象
+     */
+    Project getProjectForTest() {
+        return project;
+    }
+
+    /**
+     * 返回当前是否允许编辑项目，供同包测试代码断言权限分支。
+     *
+     * @return true 表示当前允许编辑
+     */
+    boolean canEditForTest() {
+        return canEdit;
+    }
+
+    /**
+     * 返回成员搜索输入框，供同包测试代码写入查询文本。
+     *
+     * @return 成员搜索输入框
+     */
+    EditBox getMemberSearchFieldForTest() {
+        return memberSearchField;
+    }
+
+    /**
+     * 返回新增成员按钮，供同包测试代码断言按钮状态。
+     *
+     * @return 新增成员按钮
+     */
+    Button getAddMemberButtonForTest() {
+        return addMemberBtn;
+    }
+
+    /**
+     * 返回项目名称输入框，供同包测试代码写入待保存名称。
+     *
+     * @return 项目名称输入框
+     */
+    EditBox getNameFieldForTest() {
+        return nameField;
+    }
+
+    /**
+     * 返回允许成员创建任务开关按钮，供同包测试代码驱动开关切换。
+     *
+     * @return 允许成员创建任务开关按钮
+     */
+    Button getAllowMemberCreateButtonForTest() {
+        return allowMemberCreateBtn;
+    }
+
+    /**
+     * 返回保存按钮，供同包测试代码触发保存流程。
+     *
+     * @return 保存按钮
+     */
+    Button getSaveButtonForTest() {
+        return saveButton;
+    }
+
+    /**
+     * 返回当前成员列表中可见成员名称快照，供同包测试代码断言搜索与刷新结果。
+     *
+     * @return 当前成员列表中可见成员名称快照
+     */
+    List<String> getVisibleMemberNamesForTest() {
+        if (memberList == null) {
+            return List.of();
+        }
+        return memberList.getVisibleMemberNamesForTest();
     }
 
     @Override
@@ -97,10 +173,10 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         }
 
         // Save Button
-        Button saveBtn = Button.builder(Component.translatable("gui.todolist.save"), button -> saveProject())
+        saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> saveProject())
                 .bounds(x + 80, y + h - 30, 50, 20).build();
-        saveBtn.active = canEdit;
-        addRenderableWidget(saveBtn);
+        saveButton.active = canEdit;
+        addRenderableWidget(saveButton);
 
         // Cancel Button
         addRenderableWidget(Button.builder(Component.translatable("gui.todolist.cancel"), button -> onClose())
@@ -313,6 +389,17 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 }
             }
         }
+
+        /**
+         * 返回当前成员列表可见成员名称快照，供同包测试代码断言过滤与刷新结果。
+         *
+         * @return 可见成员名称快照
+         */
+        public List<String> getVisibleMemberNamesForTest() {
+            return this.children().stream()
+                    .map(MemberEntry::getNameForTest)
+                    .toList();
+        }
         
         @Override
         public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
@@ -478,6 +565,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                     return Component.translatable("gui.todolist.role.lead");
                 }
                 return Component.translatable("gui.todolist.role.manager");
+            }
+
+            /**
+             * 返回当前成员项解析后的显示名称，供同包测试代码断言列表内容。
+             *
+             * @return 成员显示名称
+             */
+            public String getNameForTest() {
+                return name;
             }
         }
     }

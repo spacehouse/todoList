@@ -165,6 +165,7 @@
   "message.todolist.project.join.cannot_approve_self": "不能审批自己的申请",
   "message.todolist.project.join.no_permission": "无权限审批该申请",
   "message.todolist.project.join.no_pending_request": "当前没有这条待审批的加入申请",
+  "command.todolist.join.invalid_applicant_uuid": "申请人 UUID 格式无效。",
   "message.todolist.project.join.applicant_offline": "申请人不在线，无法处理",
   "message.todolist.project.join.accepted": "你的加入申请已通过：%s",
   "message.todolist.project.join.denied": "你的加入申请已被拒绝：%s",

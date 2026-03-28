@@ -92,6 +92,15 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         return selectedProject;
     }
 
+    /**
+     * 返回当前用于渲染的项目列表快照，供同包测试代码断言排序与筛选结果。
+     *
+     * @return 当前可见项目列表快照
+     */
+    List<Project> getProjectsForTest() {
+        return List.copyOf(projects);
+    }
+
     private void rebuildProjects() {
         ModConfig config = ModConfig.getInstance();
         List<Project> starred = new ArrayList<>();

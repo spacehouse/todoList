@@ -33,6 +33,8 @@ public class ConfigScreen extends Screen {
     private Button hudShowWhenEmptyButton;
     private Button hudVisibilityButton;
     private Button hudProjectSourceButton;
+    private Button saveButton;
+    private Button cancelButton;
 
     private int previewHudX;
     private int previewHudY;
@@ -60,6 +62,149 @@ public class ConfigScreen extends Screen {
     public ConfigScreen(Screen parent) {
         super(Component.translatable("gui.todolist.config.title"));
         this.parent = parent;
+    }
+
+    /**
+     * 返回 HUD 宽度输入框，供同包测试代码写入宽度值。
+     *
+     * @return HUD 宽度输入框
+     */
+    EditBox getHudWidthFieldForTest() {
+        return hudWidthField;
+    }
+
+    /**
+     * 返回 HUD 最大高度输入框，供同包测试代码写入高度值。
+     *
+     * @return HUD 最大高度输入框
+     */
+    EditBox getHudMaxHeightFieldForTest() {
+        return hudMaxHeightField;
+    }
+
+    /**
+     * 返回 HUD 可见性切换按钮，供同包测试代码触发点击。
+     *
+     * @return HUD 可见性按钮
+     */
+    Button getHudVisibilityButtonForTest() {
+        return hudVisibilityButton;
+    }
+
+    /**
+     * 返回 HUD 列表来源切换按钮，供同包测试代码触发点击。
+     *
+     * @return HUD 列表来源按钮
+     */
+    Button getHudProjectSourceButtonForTest() {
+        return hudProjectSourceButton;
+    }
+
+    /**
+     * 返回保存按钮，供同包测试代码直接触发保存流程。
+     *
+     * @return 保存按钮
+     */
+    Button getSaveButtonForTest() {
+        return saveButton;
+    }
+
+    /**
+     * 返回取消按钮，供同包测试代码直接触发关闭流程。
+     *
+     * @return 取消按钮
+     */
+    Button getCancelButtonForTest() {
+        return cancelButton;
+    }
+
+    /**
+     * 返回当前 HUD 可见值，供同包测试代码断言按钮联动。
+     *
+     * @return 当前 HUD 可见值
+     */
+    boolean isHudVisibleValueForTest() {
+        return hudVisibleValue;
+    }
+
+    /**
+     * 返回当前 HUD 项目来源值，供同包测试代码断言切换结果。
+     *
+     * @return 当前 HUD 项目来源值
+     */
+    String getHudProjectSourceValueForTest() {
+        return hudProjectSourceValue;
+    }
+
+    /**
+     * 返回当前是否使用自定义预览位置，供同包测试代码断言拖拽结果。
+     *
+     * @return true 表示预览已切到自定义位置
+     */
+    boolean isPreviewUseCustomForTest() {
+        return previewUseCustom;
+    }
+
+    /**
+     * 返回预览矩形左上角 X 坐标，供同包测试代码构造拖拽输入。
+     *
+     * @return 预览矩形左上角 X 坐标
+     */
+    int getPreviewRectXForTest() {
+        return previewRectX;
+    }
+
+    /**
+     * 返回预览矩形左上角 Y 坐标，供同包测试代码构造拖拽输入。
+     *
+     * @return 预览矩形左上角 Y 坐标
+     */
+    int getPreviewRectYForTest() {
+        return previewRectY;
+    }
+
+    /**
+     * 返回预览 HUD 宽度，供同包测试代码构造拖拽输入。
+     *
+     * @return 预览 HUD 宽度
+     */
+    int getPreviewHudWidthForTest() {
+        return previewHudWidth;
+    }
+
+    /**
+     * 返回预览 HUD 高度，供同包测试代码构造拖拽输入。
+     *
+     * @return 预览 HUD 高度
+     */
+    int getPreviewHudHeightForTest() {
+        return previewHudHeight;
+    }
+
+    /**
+     * 返回预览 HUD 当前 X 坐标，供同包测试代码断言位置写回结果。
+     *
+     * @return 预览 HUD 当前 X 坐标
+     */
+    int getPreviewHudXForTest() {
+        return previewHudX;
+    }
+
+    /**
+     * 返回预览 HUD 当前 Y 坐标，供同包测试代码断言位置写回结果。
+     *
+     * @return 预览 HUD 当前 Y 坐标
+     */
+    int getPreviewHudYForTest() {
+        return previewHudY;
+    }
+
+    /**
+     * 将当前预览 HUD 的绝对坐标同步到点击命中矩形，供同包测试代码复用拖拽逻辑。
+     */
+    void syncPreviewRectForTest() {
+        previewRectX = previewHudX;
+        previewRectY = previewHudY;
     }
 
     @Override
@@ -176,14 +321,14 @@ public class ConfigScreen extends Screen {
         syncPreviewPositionFromConfig(cfg);
 
         int buttonY = y + row * rowH + 30;
-        Button save = Button.builder(Component.translatable("gui.todolist.config.save_apply"), b -> {
+        saveButton = Button.builder(Component.translatable("gui.todolist.config.save_apply"), b -> {
             applyAndReturn();
         }).bounds(x, buttonY, guiWidth / 2 - 5, 20).build();
-        Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
             this.minecraft.setScreen(parent);
         }).bounds(x + guiWidth / 2 + 5, buttonY, guiWidth / 2 - 5, 20).build();
-        this.addRenderableWidget(save);
-        this.addRenderableWidget(cancel);
+        this.addRenderableWidget(saveButton);
+        this.addRenderableWidget(cancelButton);
     }
 
     @Override

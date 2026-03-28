@@ -829,6 +829,52 @@ public class TodoHudRenderer {
         return calculatePanelHeight(config, cachedPendingTasks, cachedDoneTasks);
     }
 
+    /**
+     * 供离线测试手动触发一次 HUD 模型刷新，便于断言缓存筛选结果。
+     */
+    void refreshHudModelForTest() {
+        ModConfig config = ModConfig.getInstance();
+        HudViewMode viewMode = resolveViewMode(config);
+        Project.Scope scope = getScopeByView(viewMode);
+        refreshHudModelIfNeeded(config, viewMode, scope);
+    }
+
+    /**
+     * 返回当前解析出的 HUD 视图模式名称，供离线测试断言回退逻辑。
+     *
+     * @return 当前 HUD 视图模式名称
+     */
+    String getResolvedViewModeNameForTest() {
+        return resolveViewMode(ModConfig.getInstance()).name();
+    }
+
+    /**
+     * 返回当前缓存中的未完成任务快照，供离线测试断言筛选结果。
+     *
+     * @return 当前缓存的未完成任务列表
+     */
+    List<Task> getCachedPendingTasksForTest() {
+        return new ArrayList<>(cachedPendingTasks);
+    }
+
+    /**
+     * 返回当前缓存中的已完成任务快照，供离线测试断言筛选结果。
+     *
+     * @return 当前缓存的已完成任务列表
+     */
+    List<Task> getCachedDoneTasksForTest() {
+        return new ArrayList<>(cachedDoneTasks);
+    }
+
+    /**
+     * 返回当前任务行渲染缓存数量，供离线测试断言缓存重建与清空行为。
+     *
+     * @return 当前任务行缓存条目数
+     */
+    int getRowRenderCacheSizeForTest() {
+        return rowRenderCacheByTaskId.size();
+    }
+
     private String valueOrEmpty(String value) {
         return value == null ? "" : value;
     }
