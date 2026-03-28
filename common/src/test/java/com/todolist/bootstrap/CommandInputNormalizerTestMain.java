@@ -25,6 +25,7 @@ public final class CommandInputNormalizerTestMain {
         shouldNormalizeProjectInputs();
         shouldNormalizeToggleState();
         shouldNormalizeProjectMemberRole();
+        shouldNormalizeCommandAccessMode();
         shouldApplyHudStarredProjectState();
     }
 
@@ -104,6 +105,17 @@ public final class CommandInputNormalizerTestMain {
         assertEquals("member", CommandInputNormalizer.normalizeProjectMemberRole("member"), "member 角色归一化失败");
         assertEquals("", CommandInputNormalizer.normalizeProjectMemberRole("manager"), "非法项目成员角色应归一化为空字符串");
         assertEquals("", CommandInputNormalizer.normalizeProjectMemberRole(null), "null 项目成员角色应归一化为空字符串");
+    }
+
+    /**
+     * 校验命令权限模式参数的归一化规则。
+     */
+    private static void shouldNormalizeCommandAccessMode() {
+        assertEquals("op_only", CommandInputNormalizer.normalizeCommandAccessMode("OP_ONLY"), "op_only 权限模式归一化失败");
+        assertEquals("view_only", CommandInputNormalizer.normalizeCommandAccessMode("view-only"), "view_only 权限模式归一化失败");
+        assertEquals("full", CommandInputNormalizer.normalizeCommandAccessMode("full"), "full 权限模式归一化失败");
+        assertEquals("", CommandInputNormalizer.normalizeCommandAccessMode("guest"), "非法权限模式应归一化为空字符串");
+        assertEquals("", CommandInputNormalizer.normalizeCommandAccessMode(null), "null 权限模式应归一化为空字符串");
     }
 
     /**

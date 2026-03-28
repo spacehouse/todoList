@@ -71,6 +71,23 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         ensureSelectionFallback();
     }
 
+    /**
+     * 返回当前项目列表的滚动偏移量。
+     */
+    public int getScrollOffset() {
+        return scrollOffset;
+    }
+
+    /**
+     * 设置项目列表滚动偏移量，并自动裁剪到当前可见范围内。
+     *
+     * @param scrollOffset 目标滚动偏移量
+     */
+    public void setScrollOffset(int scrollOffset) {
+        this.scrollOffset = scrollOffset;
+        clampScrollOffset();
+    }
+
     public Project getSelectedProject() {
         return selectedProject;
     }

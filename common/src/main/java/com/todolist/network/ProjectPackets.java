@@ -10,6 +10,7 @@ import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
+import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.task.Task;
@@ -24,6 +25,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -47,12 +49,14 @@ public class ProjectPackets {
     public static final ResourceLocation SET_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_active_project");
     public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_active_project");
     public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
+    public static final ResourceLocation SET_HUD_VISIBILITY_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_visibility");
     public static final ResourceLocation SYNC_HUD_STARRED_PROJECT_IDS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_starred_project_ids");
     public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<String>> playerHudStarredProjectIdsMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Boolean> playerHudVisibilityMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Boolean> pendingJoinRequestMap = new ConcurrentHashMap<>();
 
     public static void setServerPacketSender(TaskPackets.ServerPacketSender sender) {
         serverPacketSender = sender == null ? (player, channelId, buf) -> { } : sender;
@@ -157,7 +161,21 @@ public class ProjectPackets {
      * 客户端主动请求服务端重新同步项目列表。
      */
     public static void onRequestSyncProjectsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
-        server.execute(() -> syncProjectsToPlayer(player));
+        ClientProjectStateSeed seed;
+        try {
+            seed = readClientProjectStateSeed(buf);
+        } catch (IllegalArgumentException ex) {
+            PacketGuards.logDrop(REQUEST_SYNC_PROJECTS_ID.toString(), ex);
+            return;
+        }
+        server.execute(() -> {
+            initializePlayerProjectStateIfMissing(player, seed);
+            restorePlayerProjectState(server, player);
+            syncProjectsToPlayer(player);
+            syncHudVisibilityToPlayer(player, isHudVisible(player));
+            syncHudStarredProjectIdsToPlayer(player, getHudStarredProjectIds(player));
+            syncActiveProjectIdToPlayer(player, getActiveProjectId(player));
+        });
     }
 
     public static void onSetHudStarredProjectIdsPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
@@ -180,7 +198,29 @@ public class ProjectPackets {
     }
 
     /**
-     * 客户端上报当前激活（选中）的项目 ID，用于命令默认关联项目等服务端逻辑。
+     * 处理客户端主动上报的 HUD 显隐状态。
+     *
+     * @param server 当前服务端
+     * @param player 当前玩家
+     * @param buf 网络缓冲区
+     */
+    public static void onSetHudVisibilityPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        boolean visible;
+        try {
+            visible = buf.readBoolean();
+        } catch (RuntimeException ex) {
+            PacketGuards.logDrop(SET_HUD_VISIBILITY_ID.toString(), ex);
+            return;
+        }
+        server.execute(() -> setHudVisible(player, visible));
+    }
+
+    /**
+     * 处理客户端上报的当前激活项目 ID，用于服务端侧命令默认关联项目。
+     *
+     * @param server 当前服务端
+     * @param player 当前玩家
+     * @param buf 网络缓冲区
      */
     public static void onSetActiveProjectPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         boolean present;
@@ -218,21 +258,25 @@ public class ProjectPackets {
         String uuid = player.getStringUUID();
         if (projectId == null || projectId.isBlank()) {
             playerActiveProjectIdMap.remove(uuid);
+            persistPlayerProjectState(player);
             syncActiveProjectIdToPlayer(player, null);
             return;
         }
         Project project = TodoListCommon.getProjectManager().getProject(projectId.trim());
         if (project == null) {
             playerActiveProjectIdMap.remove(uuid);
+            persistPlayerProjectState(player);
             syncActiveProjectIdToPlayer(player, null);
             return;
         }
         if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(player.getServer())) {
             playerActiveProjectIdMap.remove(uuid);
+            persistPlayerProjectState(player);
             syncActiveProjectIdToPlayer(player, null);
             return;
         }
         playerActiveProjectIdMap.put(uuid, projectId.trim());
+        persistPlayerProjectState(player);
         syncActiveProjectIdToPlayer(player, projectId.trim());
     }
 
@@ -259,7 +303,12 @@ public class ProjectPackets {
             return;
         }
         List<String> sanitizedProjectIds = sanitizeProjectIds(projectIds);
-        playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizedProjectIds);
+        if (sanitizedProjectIds.isEmpty()) {
+            playerHudStarredProjectIdsMap.remove(player.getStringUUID());
+        } else {
+            playerHudStarredProjectIdsMap.put(player.getStringUUID(), sanitizedProjectIds);
+        }
+        persistPlayerProjectState(player);
         syncHudStarredProjectIdsToPlayer(player, sanitizedProjectIds);
     }
 
@@ -274,7 +323,12 @@ public class ProjectPackets {
         if (player == null) {
             return;
         }
-        playerHudVisibilityMap.put(player.getStringUUID(), visible);
+        if (visible) {
+            playerHudVisibilityMap.remove(player.getStringUUID());
+        } else {
+            playerHudVisibilityMap.put(player.getStringUUID(), false);
+        }
+        persistPlayerProjectState(player);
         syncHudVisibilityToPlayer(player, visible);
     }
 
@@ -282,6 +336,7 @@ public class ProjectPackets {
         server.execute(() -> {
             ensureDefaultTeamProjectOwner(server, player);
             cachePlayerNameForTeamProjects(server, player);
+            restorePlayerProjectState(server, player);
             syncProjectsToPlayer(player);
             syncHudVisibilityToPlayer(player, isHudVisible(player));
             syncHudStarredProjectIdsToPlayer(player, getHudStarredProjectIds(player));
@@ -469,6 +524,7 @@ public class ProjectPackets {
             }
         }
 
+        clearPendingJoinRequestsForProject(projectId);
         manager.deleteProject(projectId);
         purgeDeletedProjectTasks(existingProject.getScope(), projectId, player);
 
@@ -657,6 +713,10 @@ public class ProjectPackets {
         if (server == null || player == null || projectId == null || projectId.isEmpty()) {
             return;
         }
+        if (isSingleplayerServer(server)) {
+            player.displayClientMessage(Component.translatable("message.todolist.project.join.singleplayer_forbidden"), false);
+            return;
+        }
         ProjectManager manager = TodoListCommon.getProjectManager();
         Project project = manager.getProject(projectId);
         if (project == null || project.getScope() != Project.Scope.TEAM) {
@@ -668,8 +728,13 @@ public class ProjectPackets {
             player.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
             return;
         }
-
         MutableComponent projectName = getProjectDisplayName(project);
+        String joinRequestKey = buildJoinRequestKey(projectId, applicantUuid);
+        if (pendingJoinRequestMap.containsKey(joinRequestKey)) {
+            player.displayClientMessage(Component.translatable("message.todolist.project.join.already_requested", projectName), false);
+            return;
+        }
+        pendingJoinRequestMap.put(joinRequestKey, Boolean.TRUE);
         String cmdAccept = "/todolist join accept " + projectId + " " + applicantUuid;
         String cmdDeny = "/todolist join deny " + projectId + " " + applicantUuid;
 
@@ -774,6 +839,11 @@ public class ProjectPackets {
             approver.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
             return false;
         }
+        String joinRequestKey = buildJoinRequestKey(projectId, applicantUuid);
+        if (!pendingJoinRequestMap.containsKey(joinRequestKey)) {
+            approver.displayClientMessage(Component.translatable("message.todolist.project.join.no_pending_request"), false);
+            return false;
+        }
 
         ServerPlayer applicant = null;
         try {
@@ -788,6 +858,7 @@ public class ProjectPackets {
         }
 
         MutableComponent projectName = getProjectDisplayName(project);
+        pendingJoinRequestMap.remove(joinRequestKey);
         if (accepted) {
             project.addMember(applicantUuid, Project.ProjectRole.MEMBER, applicant.getName().getString());
             manager.updateProject(project);
@@ -800,6 +871,32 @@ public class ProjectPackets {
             approver.displayClientMessage(Component.translatable("message.todolist.project.join.rejected", applicant.getName().getString()), false);
         }
         return true;
+    }
+
+    /**
+     * 清理指定项目对应的所有待审批加入请求，避免项目删除后保留悬挂请求。
+     *
+     * @param projectId 项目 ID
+     */
+    public static void clearPendingJoinRequestsForProject(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        String normalizedProjectId = projectId.trim();
+        pendingJoinRequestMap.keySet().removeIf(key -> key.startsWith(normalizedProjectId + "|"));
+    }
+
+    /**
+     * 构建加入申请在运行期缓存中的唯一键。
+     *
+     * @param projectId 项目 ID
+     * @param applicantUuid 申请人 UUID
+     * @return 由项目与申请人组成的唯一键
+     */
+    private static String buildJoinRequestKey(String projectId, String applicantUuid) {
+        String safeProjectId = projectId == null ? "" : projectId.trim();
+        String safeApplicantUuid = applicantUuid == null ? "" : applicantUuid.trim();
+        return safeProjectId + "|" + safeApplicantUuid;
     }
 
     private static MutableComponent getProjectDisplayName(Project project) {
@@ -891,6 +988,358 @@ public class ProjectPackets {
             sanitized.add(trimmed);
         }
         return sanitized;
+    }
+
+    /**
+     * 承载客户端发起 requestSyncProjects 时附带的本地项目状态种子。
+     */
+    private static final class ClientProjectStateSeed {
+        private final String activeProjectId;
+        private final List<String> hudStarredProjectIds;
+        private final boolean hudVisible;
+
+        /**
+         * 创建一份客户端项目状态种子。
+         *
+         * @param activeProjectId 客户端当前激活项目
+         * @param hudStarredProjectIds 客户端当前 HUD 星标项目
+         * @param hudVisible 客户端当前 HUD 可见性
+         */
+        private ClientProjectStateSeed(String activeProjectId, List<String> hudStarredProjectIds, boolean hudVisible) {
+            this.activeProjectId = activeProjectId;
+            this.hudStarredProjectIds = hudStarredProjectIds == null ? List.of() : List.copyOf(hudStarredProjectIds);
+            this.hudVisible = hudVisible;
+        }
+
+        /**
+         * 返回一份空的客户端项目状态种子，用于兼容旧包格式。
+         *
+         * @return 空种子
+         */
+        private static ClientProjectStateSeed empty() {
+            return new ClientProjectStateSeed(null, List.of(), true);
+        }
+    }
+
+    /**
+     * 读取客户端发来的项目状态种子，用于首次建立服务端玩家状态。
+     *
+     * @param buf 网络缓冲区
+     * @return 客户端项目状态种子
+     */
+    private static ClientProjectStateSeed readClientProjectStateSeed(FriendlyByteBuf buf) {
+        if (buf == null || buf.readableBytes() <= 0) {
+            return ClientProjectStateSeed.empty();
+        }
+        boolean activePresent = buf.readBoolean();
+        String activeProjectId = activePresent ? PacketGuards.readString(buf, "activeProjectId") : null;
+        int count = PacketGuards.readBoundedCount(buf, PacketGuards.MAX_PROJECT_LIST_SIZE, "hudStarredProjectIds");
+        List<String> starredProjectIds = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            starredProjectIds.add(PacketGuards.readString(buf, "hudStarredProjectId"));
+        }
+        boolean hudVisible = buf.readableBytes() <= 0 || buf.readBoolean();
+        return new ClientProjectStateSeed(activeProjectId, starredProjectIds, hudVisible);
+    }
+
+    /**
+     * 持久化指定玩家当前的项目相关运行期状态。
+     *
+     * @param player 目标玩家
+     */
+    private static void persistPlayerProjectState(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        persistPlayerProjectState(player, buildPlayerProjectState(player));
+    }
+
+    /**
+     * 将指定的玩家项目状态直接写入磁盘。
+     *
+     * @param player 目标玩家
+     * @param state 待持久化的项目状态
+     */
+    private static void persistPlayerProjectState(
+            ServerPlayer player,
+            ProjectPlayerStateStorage.ProjectPlayerState state
+    ) {
+        if (player == null) {
+            return;
+        }
+        try {
+            ProjectPlayerStateStorage.ProjectPlayerState mergedState = mergeTemporarilyUnavailableTeamState(player, state);
+            getProjectPlayerStateStorage().savePlayerState(player.getUUID(), mergedState);
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to persist project player state for {}", player.getStringUUID(), e);
+        }
+    }
+
+    /**
+     * 在服务端尚未建立玩家项目状态文件时，用客户端种子初始化一份初始状态。
+     *
+     * @param player 当前玩家
+     * @param seed 客户端上报的本地项目状态
+     */
+    private static void initializePlayerProjectStateIfMissing(ServerPlayer player, ClientProjectStateSeed seed) {
+        if (player == null) {
+            return;
+        }
+        ProjectPlayerStateStorage storage = getProjectPlayerStateStorage();
+        if (storage.hasPlayerState(player.getUUID())) {
+            return;
+        }
+        ClientProjectStateSeed safeSeed = seed == null ? ClientProjectStateSeed.empty() : seed;
+        persistPlayerProjectState(
+                player,
+                new ProjectPlayerStateStorage.ProjectPlayerState(
+                        safeSeed.activeProjectId,
+                        sanitizeProjectIds(safeSeed.hudStarredProjectIds),
+                        safeSeed.hudVisible
+                )
+        );
+    }
+
+    /**
+     * 在未发布局域网的本地单机环境中，保留磁盘上已有的团队项目 current/star 状态，
+     * 避免运行期临时净化结果因为其他单机交互再次写盘而永久覆盖原始团队状态。
+     *
+     * @param player 当前玩家
+     * @param state 本次准备写盘的运行期状态
+     * @return 合并后的最终持久化状态
+     * @throws IOException 读取历史玩家状态失败时抛出
+     */
+    private static ProjectPlayerStateStorage.ProjectPlayerState mergeTemporarilyUnavailableTeamState(
+            ServerPlayer player,
+            ProjectPlayerStateStorage.ProjectPlayerState state
+    ) throws IOException {
+        ProjectPlayerStateStorage.ProjectPlayerState safeState = state == null
+                ? ProjectPlayerStateStorage.ProjectPlayerState.empty()
+                : state;
+        MinecraftServer server = player.getServer();
+        if (!isSingleplayerServer(server)) {
+            return safeState;
+        }
+
+        ProjectPlayerStateStorage.ProjectPlayerState storedState = getProjectPlayerStateStorage().loadPlayerState(player.getUUID());
+        String mergedActiveProjectId = safeState.getActiveProjectId();
+        if (!isTeamProjectId(mergedActiveProjectId) && isTemporarilyUnavailableTeamProjectId(server, storedState.getActiveProjectId())) {
+            mergedActiveProjectId = storedState.getActiveProjectId();
+        }
+
+        List<String> mergedStarredProjectIds = new ArrayList<>(sanitizeProjectIds(safeState.getHudStarredProjectIds()));
+        for (String projectId : sanitizeProjectIds(storedState.getHudStarredProjectIds())) {
+            if (!isTemporarilyUnavailableTeamProjectId(server, projectId) || mergedStarredProjectIds.contains(projectId)) {
+                continue;
+            }
+            mergedStarredProjectIds.add(projectId);
+        }
+
+        return new ProjectPlayerStateStorage.ProjectPlayerState(
+                mergedActiveProjectId,
+                mergedStarredProjectIds,
+                safeState.isHudVisible()
+        );
+    }
+
+    /**
+     * 在玩家进服时从磁盘恢复项目相关运行期状态，并覆盖当前内存缓存。
+     *
+     * @param server 当前服务端
+     * @param player 目标玩家
+     */
+    private static void restorePlayerProjectState(MinecraftServer server, ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        ProjectPlayerStateStorage.ProjectPlayerState state = ProjectPlayerStateStorage.ProjectPlayerState.empty();
+        try {
+            state = getProjectPlayerStateStorage().loadPlayerState(player.getUUID());
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to load project player state for {}", player.getStringUUID(), e);
+        }
+        ProjectPlayerStateStorage.ProjectPlayerState runtimeState = sanitizePlayerProjectState(server, state, true);
+        applyPlayerProjectState(player, runtimeState);
+        ProjectPlayerStateStorage.ProjectPlayerState persistedState = sanitizePlayerProjectState(server, state, false);
+        if (!samePlayerProjectState(state, persistedState)) {
+            persistPlayerProjectState(player, persistedState);
+        }
+    }
+
+    /**
+     * 将当前内存中的项目运行期状态组装为可写盘对象。
+     *
+     * @param player 目标玩家
+     * @return 当前玩家的项目运行期状态
+     */
+    private static ProjectPlayerStateStorage.ProjectPlayerState buildPlayerProjectState(ServerPlayer player) {
+        return new ProjectPlayerStateStorage.ProjectPlayerState(
+                getActiveProjectId(player),
+                getHudStarredProjectIds(player),
+                isHudVisible(player)
+        );
+    }
+
+    /**
+     * 将恢复后的玩家项目状态应用到运行期缓存。
+     *
+     * @param player 目标玩家
+     * @param state 已规范化的玩家项目状态
+     */
+    private static void applyPlayerProjectState(ServerPlayer player, ProjectPlayerStateStorage.ProjectPlayerState state) {
+        if (player == null) {
+            return;
+        }
+        ProjectPlayerStateStorage.ProjectPlayerState safeState = state == null
+                ? ProjectPlayerStateStorage.ProjectPlayerState.empty()
+                : state;
+        String uuid = player.getStringUUID();
+        String activeProjectId = safeState.getActiveProjectId();
+        if (activeProjectId == null || activeProjectId.isBlank()) {
+            playerActiveProjectIdMap.remove(uuid);
+        } else {
+            playerActiveProjectIdMap.put(uuid, activeProjectId);
+        }
+        List<String> starredProjectIds = sanitizeProjectIds(safeState.getHudStarredProjectIds());
+        if (starredProjectIds.isEmpty()) {
+            playerHudStarredProjectIdsMap.remove(uuid);
+        } else {
+            playerHudStarredProjectIdsMap.put(uuid, starredProjectIds);
+        }
+        if (safeState.isHudVisible()) {
+            playerHudVisibilityMap.remove(uuid);
+        } else {
+            playerHudVisibilityMap.put(uuid, false);
+        }
+    }
+
+    /**
+     * 规范化从磁盘恢复的玩家项目状态，移除不存在或当前环境不可用的项目引用。
+     *
+     * @param server 当前服务端
+     * @param state 原始玩家项目状态
+     * @return 规范化后的玩家项目状态
+     */
+    private static ProjectPlayerStateStorage.ProjectPlayerState sanitizePlayerProjectState(
+            MinecraftServer server,
+            ProjectPlayerStateStorage.ProjectPlayerState state,
+            boolean excludeTemporarilyUnavailableTeamProjects
+    ) {
+        if (state == null) {
+            return ProjectPlayerStateStorage.ProjectPlayerState.empty();
+        }
+        String sanitizedActiveProjectId = sanitizeStoredProjectId(server, state.getActiveProjectId(), excludeTemporarilyUnavailableTeamProjects);
+        List<String> sanitizedStarredProjectIds = new ArrayList<>();
+        for (String projectId : sanitizeProjectIds(state.getHudStarredProjectIds())) {
+            String sanitizedProjectId = sanitizeStoredProjectId(server, projectId, excludeTemporarilyUnavailableTeamProjects);
+            if (sanitizedProjectId == null || sanitizedStarredProjectIds.contains(sanitizedProjectId)) {
+                continue;
+            }
+            sanitizedStarredProjectIds.add(sanitizedProjectId);
+        }
+        return new ProjectPlayerStateStorage.ProjectPlayerState(
+                sanitizedActiveProjectId,
+                sanitizedStarredProjectIds,
+                state.isHudVisible()
+        );
+    }
+
+    /**
+     * 规范化单个已持久化项目 ID，移除不存在或在当前环境不可用的项目。
+     *
+     * @param server 当前服务端
+     * @param projectId 待规范化的项目 ID
+     * @return 规范化后的项目 ID；不可用时返回 null
+     */
+    private static String sanitizeStoredProjectId(
+            MinecraftServer server,
+            String projectId,
+            boolean excludeTemporarilyUnavailableTeamProjects
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return null;
+        }
+        String normalizedProjectId = projectId.trim();
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null) {
+            return null;
+        }
+        if (excludeTemporarilyUnavailableTeamProjects
+                && project.getScope() == Project.Scope.TEAM
+                && isSingleplayerServer(server)) {
+            return null;
+        }
+        return normalizedProjectId;
+    }
+
+    /**
+     * 判断指定项目 ID 当前是否指向团队项目。
+     *
+     * @param projectId 待判断的项目 ID
+     * @return 是团队项目时返回 true
+     */
+    private static boolean isTeamProjectId(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            return false;
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(projectId.trim());
+        return project != null && project.getScope() == Project.Scope.TEAM;
+    }
+
+    /**
+     * 判断指定项目是否属于“因当前单机环境暂时不可用，但磁盘上仍应保留”的团队项目。
+     *
+     * @param server 当前服务端
+     * @param projectId 待判断的项目 ID
+     * @return 属于临时不可用团队项目时返回 true
+     */
+    private static boolean isTemporarilyUnavailableTeamProjectId(MinecraftServer server, String projectId) {
+        return isSingleplayerServer(server) && isTeamProjectId(projectId);
+    }
+
+    /**
+     * 比较两份玩家项目状态是否等价。
+     *
+     * @param left 左侧状态
+     * @param right 右侧状态
+     * @return 两份状态等价时返回 true
+     */
+    private static boolean samePlayerProjectState(
+            ProjectPlayerStateStorage.ProjectPlayerState left,
+            ProjectPlayerStateStorage.ProjectPlayerState right
+    ) {
+        ProjectPlayerStateStorage.ProjectPlayerState safeLeft = left == null
+                ? ProjectPlayerStateStorage.ProjectPlayerState.empty()
+                : left;
+        ProjectPlayerStateStorage.ProjectPlayerState safeRight = right == null
+                ? ProjectPlayerStateStorage.ProjectPlayerState.empty()
+                : right;
+        return sameNullableString(safeLeft.getActiveProjectId(), safeRight.getActiveProjectId())
+                && safeLeft.isHudVisible() == safeRight.isHudVisible()
+                && safeLeft.getHudStarredProjectIds().equals(safeRight.getHudStarredProjectIds());
+    }
+
+    /**
+     * 比较两个可空字符串是否相同。
+     *
+     * @param left 左侧字符串
+     * @param right 右侧字符串
+     * @return 相同时返回 true
+     */
+    private static boolean sameNullableString(String left, String right) {
+        if (left == null) {
+            return right == null;
+        }
+        return left.equals(right);
+    }
+
+    /**
+     * 返回玩家项目状态存储实例。
+     *
+     * @return 玩家项目状态存储
+     */
+    private static ProjectPlayerStateStorage getProjectPlayerStateStorage() {
+        return new ProjectPlayerStateStorage();
     }
 
     private static void syncActiveProjectIdToPlayer(ServerPlayer player, String projectId) {

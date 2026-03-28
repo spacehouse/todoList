@@ -168,6 +168,25 @@ public final class CommandInputNormalizer {
     }
 
     /**
+     * 归一化命令权限模式参数。
+     *
+     * @param rawMode 原始权限模式参数
+     * @return op_only/view_only/full 之一；非法值返回空字符串
+     */
+    public static String normalizeCommandAccessMode(String rawMode) {
+        if (rawMode == null) {
+            return "";
+        }
+        String normalizedMode = rawMode.trim().toLowerCase(Locale.ROOT).replace('-', '_');
+        return switch (normalizedMode) {
+            case "op_only" -> "op_only";
+            case "view_only" -> "view_only";
+            case "full" -> "full";
+            default -> "";
+        };
+    }
+
+    /**
      * 根据目标状态生成新的 HUD 星标项目列表，自动去重并过滤空值。
      *
      * @param currentProjectIds 当前星标项目 ID 列表

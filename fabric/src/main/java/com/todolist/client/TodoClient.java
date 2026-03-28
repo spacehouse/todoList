@@ -39,6 +39,7 @@ public class TodoClient implements ClientModInitializer {
     private static String activeProjectId;
     private static boolean hudVisible = true;
     private static boolean lastConnectionWasRemote;
+    private static Boolean lastLocalPublishedState;
 
     /**
      * Fabric 客户端入口点。
@@ -99,6 +100,7 @@ public class TodoClient implements ClientModInitializer {
 
         // Register key press handler
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            refreshLocalPublishedState(client);
             while (openTodoKeyBinding.consumeClick()) {
                 openTodoScreen();
             }
@@ -137,6 +139,7 @@ public class TodoClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             boolean localServer = client.isLocalServer();
             applyStorageNamespace(localServer, client);
+            lastLocalPublishedState = localServer ? isLocalPublished(client) : null;
             client.execute(() -> {
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);
@@ -158,7 +161,6 @@ public class TodoClient implements ClientModInitializer {
                     ClientProjectPackets.sendRequestSyncProjects();
                     ClientTaskPackets.requestTeamSync();
                 }
-                ClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             });
             lastConnectionWasRemote = !localServer;
             TodoListMod.LOGGER.info("Joined server, requesting task sync...");
@@ -166,6 +168,7 @@ public class TodoClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             boolean wasRemote = lastConnectionWasRemote;
             lastConnectionWasRemote = false;
+            lastLocalPublishedState = null;
             if (!wasRemote) {
                 return;
             }
@@ -225,6 +228,47 @@ public class TodoClient implements ClientModInitializer {
     private void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
         ClientBridge.ops().setHudVisible(nextVisible);
+    }
+
+    /**
+     * 检查本地世界的局域网发布状态变化，并在刚发布时主动拉取最新团队状态。
+     *
+     * @param current 当前客户端实例
+     */
+    private static void refreshLocalPublishedState(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            lastLocalPublishedState = null;
+            return;
+        }
+        boolean published = isLocalPublished(current);
+        if (lastLocalPublishedState != null && !lastLocalPublishedState && published) {
+            syncLocalLanStateAfterPublish();
+        } else if (lastLocalPublishedState != null && lastLocalPublishedState && !published) {
+            teamTaskManager.clearAll();
+        }
+        lastLocalPublishedState = published;
+    }
+
+    /**
+     * 判断当前本地集成服是否已发布局域网。
+     *
+     * @param current 当前客户端实例
+     * @return 已发布局域网时返回 true
+     */
+    private static boolean isLocalPublished(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            return false;
+        }
+        var server = current.getSingleplayerServer();
+        return server != null && server.isPublished();
+    }
+
+    /**
+     * 本地世界发布局域网后，重新拉取项目状态和团队任务，恢复单机阶段被临时净化的团队视图。
+     */
+    private static void syncLocalLanStateAfterPublish() {
+        ClientProjectPackets.sendRequestSyncProjects();
+        ClientTaskPackets.requestTeamSync();
     }
 
     /**

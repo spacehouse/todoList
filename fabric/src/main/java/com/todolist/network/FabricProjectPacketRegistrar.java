@@ -1,15 +1,24 @@
 package com.todolist.network;
 
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 
+/**
+ * 注册 Fabric 平台项目相关网络包的收发入口。
+ */
 public final class FabricProjectPacketRegistrar {
+    /**
+     * 私有构造方法，避免工具类被实例化。
+     */
     private FabricProjectPacketRegistrar() {
     }
 
+    /**
+     * 注册 Fabric 项目网络包的类型、接收器与玩家进服同步逻辑。
+     */
     public static void register() {
         PayloadTypeRegistry.playC2S().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
@@ -58,6 +67,10 @@ public final class FabricProjectPacketRegistrar {
             }
             if (channelId.equals(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
                 ProjectPackets.onSetHudStarredProjectIdsPacket(context.server(), context.player(), buf);
+                return;
+            }
+            if (channelId.equals(ProjectPackets.SET_HUD_VISIBILITY_ID)) {
+                ProjectPackets.onSetHudVisibilityPacket(context.server(), context.player(), buf);
             }
         });
 

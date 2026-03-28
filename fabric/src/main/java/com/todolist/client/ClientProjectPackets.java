@@ -151,7 +151,7 @@ public class ClientProjectPackets {
      * @param visible HUD 是否可见
      */
     private static void applyHudVisibilitySync(boolean visible) {
-        ClientBridge.ops().setHudVisible(visible);
+        TodoClient.setHudVisible(visible);
     }
 
     /**
@@ -266,13 +266,14 @@ public class ClientProjectPackets {
     }
 
     /**
-     * 向服务端请求重新同步项目列表。
+     * 向服务端请求重新同步项目列表，并附带当前客户端项目状态种子。
      */
     public static void sendRequestSyncProjects() {
         if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeClientProjectStateSeed(buf);
         ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf));
     }
 
@@ -313,6 +314,42 @@ public class ClientProjectPackets {
             buf.writeUtf(projectId == null ? "" : projectId);
         }
         ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf));
+    }
+
+    /**
+     * 向服务端同步客户端当前的 HUD 显隐状态。
+     *
+     * @param visible HUD 是否可见
+     */
+    public static void sendSetHudVisibility(boolean visible) {
+        if (!ClientPlayNetworking.canSend(FabricProjectPayload.TYPE)) {
+            applyLocalHudVisibility(visible);
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeBoolean(visible);
+        ClientPlayNetworking.send(FabricProjectPayload.of(ProjectPackets.SET_HUD_VISIBILITY_ID, buf));
+    }
+
+    /**
+     * 将客户端当前项目状态写入 requestSyncProjects 请求。
+     *
+     * @param buf 待写入的网络缓冲区
+     */
+    private static void writeClientProjectStateSeed(FriendlyByteBuf buf) {
+        String activeProjectId = ClientBridge.ops().getActiveProjectId();
+        if (activeProjectId == null || activeProjectId.isBlank()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeUtf(activeProjectId.trim());
+        }
+        List<String> starredProjectIds = ModConfig.getInstance().getHudStarredProjectIds();
+        buf.writeInt(starredProjectIds.size());
+        for (String projectId : starredProjectIds) {
+            buf.writeUtf(projectId == null ? "" : projectId);
+        }
+        buf.writeBoolean(ClientBridge.ops().isHudVisible());
     }
 
     /**
@@ -425,6 +462,23 @@ public class ClientProjectPackets {
         }
         List<String> ids = projectIds == null ? List.of() : List.copyOf(projectIds);
         server.execute(() -> ProjectPackets.setHudStarredProjectIds(serverPlayer, ids));
+    }
+
+    /**
+     * 在本地单人环境中直接把 HUD 显隐状态写回集成服务端。
+     *
+     * @param visible HUD 是否可见
+     */
+    private static void applyLocalHudVisibility(boolean visible) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setHudVisible(serverPlayer, visible));
     }
 
     /**

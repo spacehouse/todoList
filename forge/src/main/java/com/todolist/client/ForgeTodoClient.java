@@ -9,13 +9,13 @@ import com.todolist.gui.ConfigScreen;
 import com.todolist.gui.TodoScreen;
 import com.todolist.network.ProjectPackets;
 import com.todolist.network.TaskPackets;
-import com.todolist.project.Project;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.ResourceLocation;
@@ -31,8 +31,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Forge 骞冲彴瀹㈡埛绔富绫汇€?
- * 璐熻矗瀹㈡埛绔垵濮嬪寲銆佷簨浠剁洃鍚€佸揩鎹烽敭澶勭悊涓?HUD 娓叉煋銆?
+ * Forge 平台客户端主类，负责客户端初始化、HUD 集成与状态同步。
  */
 public final class ForgeTodoClient {
     private static final ResourceLocation HUD_OVERLAY_ID =
@@ -47,16 +46,16 @@ public final class ForgeTodoClient {
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
+    private static Boolean lastLocalPublishedState;
 
     /**
-     * 绉佹湁鏋勯€犲嚱鏁帮紝閬垮厤澶栭儴瀹炰緥鍖栥€?
+     * 私有构造方法，避免工具类被实例化。
      */
     private ForgeTodoClient() {
     }
 
     /**
-     * 鍒濆鍖栧鎴风銆?
-     * 娉ㄥ唽閰嶇疆灞忓箷銆丠UD銆佺綉缁滃寘涓庝簨浠剁洃鍚櫒銆?
+     * 初始化客户端。
      */
     public static void initialize() {
         client = Minecraft.getInstance();
@@ -75,7 +74,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 娉ㄥ唽閰嶇疆鐣岄潰宸ュ巶銆?
+     * 注册配置界面工厂。
      */
     @SuppressWarnings("removal")
     private static void registerConfigScreenFactory() {
@@ -90,7 +89,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 娉ㄥ唽 HUD 鍥惧眰鍒版柊鐨勫彔鍔犲眰绯荤粺銆?
+     * 注册 HUD 叠加层。
      */
     @SuppressWarnings("removal")
     private static void registerHudOverlayLayer() {
@@ -103,9 +102,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 澶勭悊鍙犲姞灞傛敞鍐屼簨浠讹紝灏?HUD 鎻掑叆鍒扮儹閿爮灞備箣涓娿€?
+     * 处理 HUD 叠加层注册事件。
      *
-     * @param event 鍙犲姞灞傛敞鍐屼簨浠?
+     * @param event 叠加层注册事件
      */
     private static void onAddGuiOverlayLayersEvent(AddGuiOverlayLayersEvent event) {
         event.getLayeredDraw().addAbove(
@@ -117,10 +116,10 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 娓叉煋 HUD 鍥惧眰銆?
+     * 渲染 HUD 图层。
      *
-     * @param guiGraphics GUI 缁樺埗涓婁笅鏂?
-     * @param deltaTracker 甯ч棿闅旇绠楀櫒
+     * @param guiGraphics GUI 绘制上下文
+     * @param deltaTracker 帧时间跟踪器
      */
     private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (hudRenderer == null) {
@@ -131,7 +130,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 閫氳繃鍙嶅皠娉ㄥ唽瀹㈡埛绔簨浠剁洃鍚櫒锛岄檷浣?API 鍙樺姩鐨勫奖鍝嶃€?
+     * 注册客户端事件监听器。
      */
     @SuppressWarnings("removal")
     private static void registerClientListeners() {
@@ -142,7 +141,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 澶勭悊瀹㈡埛绔?Tick 浜嬩欢锛屽搷搴斿揩鎹烽敭骞剁淮鎶ょ姸鎬佸悓姝ャ€?
+     * 处理客户端 Tick 事件并维护同步状态。
+     *
+     * @param ignored Tick 事件
      */
     private static void onClientTickEvent(TickEvent.ClientTickEvent.Post ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -155,14 +156,15 @@ public final class ForgeTodoClient {
         } else if (!current.isLocalServer()) {
             applyStorageNamespace(resolveStorageNamespace(current));
         }
-        if (pendingRemoteResync &&
-                ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
-                ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+        if (pendingRemoteResync
+                && ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)
+                && ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             ForgeClientProjectPackets.sendRequestSyncProjects();
             ForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             ForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
+        refreshLocalPublishedState(current);
         if (current.player == null) {
             return;
         }
@@ -178,9 +180,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * Registers key mappings on the Forge mod event bus.
+     * 注册快捷键。
      *
-     * @param event key mapping registration event
+     * @param event 快捷键注册事件
      */
     private static void onRegisterKeyMappingsEvent(RegisterKeyMappingsEvent event) {
         event.register(OPEN_TODO_KEY);
@@ -189,15 +191,20 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 澶勭悊瀹㈡埛绔€€鍑轰簨浠讹紝閲嶇疆杩滅鍚屾鏍囪銆?
+     * 处理客户端退出事件。
+     *
+     * @param ignored 退出事件
      */
     private static void onClientLoggingOutEvent(ClientPlayerNetworkEvent.LoggingOut ignored) {
         pendingRemoteResync = false;
+        lastLocalPublishedState = null;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
     /**
-     * 澶勭悊瀹㈡埛绔櫥褰曚簨浠讹紝鍑嗗杩滅鍚屾銆?
+     * 处理客户端进入世界事件。
+     *
+     * @param ignored 进入事件
      */
     private static void onClientLoggingInEvent(ClientPlayerNetworkEvent.LoggingIn ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -206,21 +213,24 @@ public final class ForgeTodoClient {
         }
         if (!current.isLocalServer()) {
             applyStorageNamespace(resolveStorageNamespace(current));
+            lastLocalPublishedState = null;
+        } else {
+            lastLocalPublishedState = isLocalPublished(current);
         }
         pendingRemoteResync = true;
     }
 
     /**
-     * 瑙ｆ瀽褰撳墠鏈嶅姟鍣ㄧ殑瀛樺偍鍛藉悕绌洪棿銆?
+     * 解析当前服务端对应的存储命名空间。
      *
-     * @param client Minecraft 瀹㈡埛绔疄渚?
-     * @return 瀛樺偍鍛藉悕绌洪棿
+     * @param current 当前客户端实例
+     * @return 存储命名空间
      */
-    private static String resolveStorageNamespace(Minecraft client) {
-        if (client == null || client.isLocalServer()) {
+    private static String resolveStorageNamespace(Minecraft current) {
+        if (current == null || current.isLocalServer()) {
             return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
         }
-        ServerData serverData = client.getCurrentServer();
+        ServerData serverData = current.getCurrentServer();
         if (serverData == null || serverData.ip == null || serverData.ip.trim().isEmpty()) {
             return "server_unknown";
         }
@@ -228,9 +238,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 搴旂敤鏂扮殑瀛樺偍鍛藉悕绌洪棿骞跺悓姝?HUD 鐘舵€併€?
+     * 应用新的存储命名空间并重载客户端状态。
      *
-     * @param namespace 瀛樺偍鍛藉悕绌洪棿
+     * @param namespace 目标命名空间
      */
     private static void applyStorageNamespace(String namespace) {
         if (namespace == null || namespace.isEmpty()) {
@@ -247,21 +257,21 @@ public final class ForgeTodoClient {
         teamTaskManager.clearAll();
         String lastActive = ModConfig.getInstance().getLastActiveProjectId();
         if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListForge.getProjectManager().getProject(lastActive);
-            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
-                p = null;
+            Project project = TodoListForge.getProjectManager().getProject(lastActive);
+            if (project != null && project.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                project = null;
             }
-            if (p != null) {
-                setActiveProjectId(p.getId());
-                ForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+            if (project != null) {
+                setActiveProjectId(project.getId());
+                ForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
             }
         }
     }
 
     /**
-     * 鎵撳紑 Todo 鍒楄〃鐣岄潰銆?
+     * 打开待办界面。
      *
-     * @param current 褰撳墠 Minecraft 瀹㈡埛绔?
+     * @param current 当前客户端实例
      */
     private static void openTodoScreen(Minecraft current) {
         if (current.screen == null) {
@@ -270,7 +280,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 鍒濆鍖?HUD 娓叉煋鍣ㄥ苟娉ㄥ唽鍒板钩鍙伴€傞厤灞傘€?
+     * 注册 HUD 渲染器。
      */
     private static void registerHudRenderer() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -282,7 +292,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 鍒囨崲 HUD 灞曞紑/鏀惰捣鐘舵€併€?
+     * 切换 HUD 展开状态。
      */
     private static void toggleHud() {
         if (hudRenderer != null) {
@@ -291,7 +301,7 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 鍒囨崲 HUD 鍙鎬с€?
+     * 切换 HUD 可见性。
      */
     private static void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
@@ -299,54 +309,95 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 鑾峰彇鍥㈤槦浠诲姟绠＄悊鍣ㄣ€?
+     * 检查本地世界的局域网发布状态变化，并在刚发布时主动拉取一次团队相关同步数据。
      *
-     * @return 鍥㈤槦浠诲姟绠＄悊鍣?
+     * @param current 当前客户端实例
+     */
+    private static void refreshLocalPublishedState(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            lastLocalPublishedState = null;
+            return;
+        }
+        boolean published = isLocalPublished(current);
+        if (lastLocalPublishedState != null && !lastLocalPublishedState && published) {
+            syncLocalLanStateAfterPublish();
+        } else if (lastLocalPublishedState != null && lastLocalPublishedState && !published) {
+            teamTaskManager.clearAll();
+        }
+        lastLocalPublishedState = published;
+    }
+
+    /**
+     * 判断当前本地集成服是否已发布局域网。
+     *
+     * @param current 当前客户端实例
+     * @return 已发布时返回 true
+     */
+    private static boolean isLocalPublished(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            return false;
+        }
+        var server = current.getSingleplayerServer();
+        return server != null && server.isPublished();
+    }
+
+    /**
+     * 本地世界发布局域网后，重新同步项目状态与团队任务。
+     */
+    private static void syncLocalLanStateAfterPublish() {
+        ForgeClientProjectPackets.sendRequestSyncProjects();
+        ForgeClientTaskPackets.requestTeamSync();
+    }
+
+    /**
+     * 获取团队任务管理器。
+     *
+     * @return 团队任务管理器
      */
     public static TaskManager getTeamTaskManager() {
         return teamTaskManager;
     }
 
     /**
-     * 鑾峰彇褰撳墠婵€娲婚」鐩?ID銆?
+     * 获取当前激活项目 ID。
      *
-     * @return 婵€娲婚」鐩?ID
+     * @return 激活项目 ID
      */
     public static String getActiveProjectId() {
         return activeProjectId;
     }
 
     /**
-     * 璁剧疆褰撳墠婵€娲婚」鐩?ID銆?
+     * 设置当前激活项目 ID。
      *
-     * @param projectId 婵€娲婚」鐩?ID
+     * @param projectId 激活项目 ID
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
     }
 
     /**
-     * 鍒ゆ柇 HUD 鏄惁鍙銆?
+     * 判断 HUD 是否可见。
      *
-     * @return 鏄惁鍙
+     * @return HUD 是否可见
      */
     public static boolean isHudVisible() {
         return hudVisible;
     }
 
     /**
-     * 璁剧疆 HUD 鍙鐘舵€併€?
+     * 设置 HUD 可见性。
      *
-     * @param visible 鏄惁鍙
+     * @param visible HUD 是否可见
      */
     public static void setHudVisible(boolean visible) {
         hudVisible = visible;
     }
 
     /**
-     * 浠庢湇鍔＄鏇存柊鍥㈤槦浠诲姟鍒楄〃銆?
+     * 用服务端同步结果刷新团队任务。
      *
-     * @param tasks 鍥㈤槦浠诲姟鍒楄〃
+     * @param tasks 团队任务列表
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
@@ -356,9 +407,9 @@ public final class ForgeTodoClient {
     }
 
     /**
-     * 鍒ゆ柇鍥㈤槦椤圭洰鍔熻兘鏄惁鍙敤銆?
+     * 判断当前环境是否允许使用团队项目。
      *
-     * @return 鏄惁鍚敤
+     * @return 可用时返回 true
      */
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();

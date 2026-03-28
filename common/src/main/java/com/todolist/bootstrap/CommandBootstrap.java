@@ -108,6 +108,9 @@ public final class CommandBootstrap {
     private static final List<String> PROJECT_MEMBER_ROLE_SUGGESTIONS = List.of(
             "lead", "member"
     );
+    private static final List<String> COMMAND_ACCESS_MODE_SUGGESTIONS = List.of(
+            "op_only", "view_only", "full"
+    );
     private static final List<String> TASK_CLEAN_SCOPE_SUGGESTIONS = List.of(
             "personal", "team"
     );
@@ -119,6 +122,7 @@ public final class CommandBootstrap {
     );
     private static final ConcurrentHashMap<String, PendingTaskCleanConfirmation> pendingTaskCleanConfirmMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, PendingProjectRemoveConfirmation> pendingProjectRemoveConfirmMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, TaskListPageState> taskListPageStateMap = new ConcurrentHashMap<>();
 
     private static final class PendingTaskCleanConfirmation {
         private final String scope;
@@ -247,8 +251,12 @@ public final class CommandBootstrap {
                                                                         StringArgumentType.getString(ctx, "projectId"),
                                                                         StringArgumentType.getString(ctx, "status"),
                                                                         StringArgumentType.getString(ctx, "priority"),
-                                                                        StringArgumentType.getString(ctx, "text")
+                                                                StringArgumentType.getString(ctx, "text")
                                                                 )))))))
+                        .then(Commands.literal("more")
+                                .executes(ctx -> executeTaskListPageTurn(ctx.getSource(), 1)))
+                        .then(Commands.literal("prev")
+                                .executes(ctx -> executeTaskListPageTurn(ctx.getSource(), -1)))
                         .then(Commands.literal("add")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("title", StringArgumentType.string())
@@ -504,7 +512,17 @@ public final class CommandBootstrap {
                                                 StringArgumentType.getString(ctx, "projectId")
                                         ))))
                         .then(buildJoinDecisionLiteral("accept", true))
-                        .then(buildJoinDecisionLiteral("deny", false)));
+                        .then(buildJoinDecisionLiteral("deny", false)))
+                .then(Commands.literal("admin")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
+                        .then(Commands.literal("command-access")
+                                .executes(ctx -> sendCommandAccessMode(ctx.getSource()))
+                                .then(Commands.argument("mode", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestCommandAccessModes)
+                                        .executes(ctx -> setCommandAccessMode(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "mode")
+                                        )))));
 
         LiteralCommandNode<CommandSourceStack> todoRootNode = dispatcher.register(todoRoot);
         dispatcher.register(Commands.literal("todolist").redirect(todoRootNode));
@@ -560,6 +578,9 @@ public final class CommandBootstrap {
         if (normalizedProjectId.isEmpty()) {
             return sendCommandFailure(source, "message.todolist.project.join.invalid_project");
         }
+        if (isSingleplayerServer(source.getServer())) {
+            return sendCommandFailure(source, "message.todolist.project.join.singleplayer_forbidden");
+        }
         ProjectPackets.requestJoinProject(source.getServer(), player, normalizedProjectId);
         return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE);
     }
@@ -575,6 +596,8 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_task_list",
                 "command.todolist.help.todo_task_listp",
                 "command.todolist.help.todo_task_list_options",
+                "command.todolist.help.todo_task_more",
+                "command.todolist.help.todo_task_prev",
                 "command.todolist.help.todo_task_add",
                 "command.todolist.help.todo_task_addp",
                 "command.todolist.help.todo_task_clean",
@@ -598,6 +621,7 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_project_unstar",
                 "command.todolist.help.todo_hud_toggle",
                 "command.todolist.help.todo_hud_set",
+                "command.todolist.help.todo_admin_command_access",
                 "command.todolist.help.todo_join_project",
                 "command.todolist.help.todo_join_accept",
                 "command.todolist.help.todo_join_deny",
@@ -657,6 +681,51 @@ public final class CommandBootstrap {
         );
     }
 
+    /**
+     * 输出当前命令权限模式，便于管理员确认服务端当前开放级别。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int sendCommandAccessMode(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_NONE,
+                "command.todolist.command_access_mode.current",
+                getCommandAccessModeText(ModConfig.getInstance().getCommandAccessMode())
+        );
+    }
+
+    /**
+     * 通过命令修改 commandAccessMode 配置，并立即刷新在线玩家的命令树。
+     *
+     * @param source 命令源
+     * @param mode 原始权限模式参数
+     * @return 命令执行结果
+     */
+    private static int setCommandAccessMode(CommandSourceStack source, String mode) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ModConfig.CommandAccessMode resolvedMode = resolveCommandAccessMode(mode);
+        if (resolvedMode == null) {
+            return sendCommandFailure(source, "command.todolist.command_access_mode.invalid_value");
+        }
+        ModConfig.getInstance().setCommandAccessMode(resolvedMode);
+        refreshAvailableCommands(source.getServer());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.command_access_mode.success",
+                getCommandAccessModeText(resolvedMode)
+        );
+    }
+
     private static Component getHudSwitchText(boolean enabled) {
         return Component.translatable(enabled ? "command.todolist.hud.enabled" : "command.todolist.hud.disabled");
     }
@@ -673,34 +742,84 @@ public final class CommandBootstrap {
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        UUID playerUuid = player.getUUID();
-        TaskStorage storage = TodoListCommon.getTaskStorage();
+        TaskListPageState pageState = rememberTaskListPageState(
+                player,
+                new TaskListPageState(
+                        null,
+                        normalizeTaskListStatus(status),
+                        normalizeTaskListPriority(priority),
+                        normalizeTaskListText(text),
+                        1
+                )
+        );
+        return renderTaskListPage(source, player, pageState);
+    }
 
-        try {
-            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
-            int totalCount = tasks.size();
-            int completedCount = (int) tasks.stream().filter(Task::isCompleted).count();
+    /**
+     * 记录玩家最近一次任务列表查询的筛选条件与当前页码，供 more/prev 翻页复用。
+     */
+    private static final class TaskListPageState {
+        private final String projectId;
+        private final String status;
+        private final String priority;
+        private final String text;
+        private final int page;
 
-            List<Task> filteredTasks = tasks.stream()
-                    .filter(task -> matchesTaskStatus(task, status))
-                    .filter(task -> matchesTaskPriority(task, priority))
-                    .filter(task -> matchesTaskText(task, text))
-                    .sorted(buildTaskSummaryComparator())
-                    .toList();
+        /**
+         * 创建一份任务列表翻页状态快照。
+         *
+         * @param projectId 项目 ID，null 表示个人任务列表
+         * @param status 状态筛选
+         * @param priority 优先级筛选
+         * @param text 文本搜索条件
+         * @param page 当前页码，从 1 开始
+         */
+        private TaskListPageState(String projectId, String status, String priority, String text, int page) {
+            this.projectId = projectId;
+            this.status = status;
+            this.priority = priority;
+            this.text = text;
+            this.page = Math.max(1, page);
+        }
 
-            String searchText = text == null || text.isBlank() ? null : text.trim();
-            return sendListWithUnifiedTemplate(
-                    source,
-                    filteredTasks,
-                    TASK_LIST_MAX_SUMMARY,
-                    () -> Component.translatable("command.todolist.task.list.summary", totalCount, completedCount),
-                    "command.todolist.task.list.empty",
-                    (displayIndex, task) -> buildTaskListItem(displayIndex, task, searchText),
-                    "command.todolist.task.list.more"
-            );
-        } catch (IOException e) {
-            TodoConstants.LOGGER.error("Failed to load player task list for command", e);
-            return sendCommandFailure(source, "command.todolist.task.list.failed");
+        /**
+         * 基于当前筛选条件创建一份新的页码状态。
+         *
+         * @param nextPage 目标页码
+         * @return 带有新页码的翻页状态
+         */
+        private TaskListPageState withPage(int nextPage) {
+            return new TaskListPageState(projectId, status, priority, text, nextPage);
+        }
+    }
+
+    /**
+     * 承载一次任务列表渲染所需的数据，避免 personal/listp 两条链路重复组织摘要信息。
+     */
+    private static final class ResolvedTaskListPage {
+        private final List<Task> filteredTasks;
+        private final Supplier<Component> summarySupplier;
+        private final String emptyTranslationKey;
+        private final String searchText;
+
+        /**
+         * 创建一份可直接用于分页渲染的任务列表结果。
+         *
+         * @param filteredTasks 经过筛选并排序后的任务列表
+         * @param summarySupplier 顶部摘要文案
+         * @param emptyTranslationKey 空列表文案翻译键
+         * @param searchText 当前文本搜索条件
+         */
+        private ResolvedTaskListPage(
+                List<Task> filteredTasks,
+                Supplier<Component> summarySupplier,
+                String emptyTranslationKey,
+                String searchText
+        ) {
+            this.filteredTasks = filteredTasks;
+            this.summarySupplier = summarySupplier;
+            this.emptyTranslationKey = emptyTranslationKey;
+            this.searchText = searchText;
         }
     }
 
@@ -734,41 +853,240 @@ public final class CommandBootstrap {
         if (player == null) {
             return COMMAND_FAILURE;
         }
-        Project project = resolveProjectForCommand(source, player, projectId, "command.todolist.task.project.not_found");
-        if (project == null) {
+        TaskListPageState pageState = rememberTaskListPageState(
+                player,
+                new TaskListPageState(
+                        projectId == null ? null : projectId.trim(),
+                        normalizeTaskListStatus(status),
+                        normalizeTaskListPriority(priority),
+                        normalizeTaskListText(text),
+                        1
+                )
+        );
+        return renderTaskListPage(source, player, pageState);
+    }
+
+    /**
+     * 基于玩家最近一次任务列表查询继续向前或向后翻页。
+     *
+     * @param source 命令源
+     * @param delta 页码变化量，1 表示下一页，-1 表示上一页
+     * @return 命令执行结果
+     */
+    private static int executeTaskListPageTurn(CommandSourceStack source, int delta) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.VIEW) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskListPageState currentState = taskListPageStateMap.get(player.getStringUUID());
+        if (currentState == null) {
+            return sendCommandFailure(source, "command.todolist.task.list.page.no_session");
+        }
+        if (delta < 0 && currentState.page <= 1) {
+            return sendCommandFailure(source, "command.todolist.task.list.page.already_first");
+        }
+        return renderTaskListPage(source, player, currentState.withPage(currentState.page + delta));
+    }
+
+    /**
+     * 将一次任务列表查询保存为玩家的当前翻页上下文。
+     *
+     * @param player 当前玩家
+     * @param pageState 最新的列表翻页状态
+     * @return 已保存的列表翻页状态
+     */
+    private static TaskListPageState rememberTaskListPageState(ServerPlayer player, TaskListPageState pageState) {
+        taskListPageStateMap.put(player.getStringUUID(), pageState);
+        return pageState;
+    }
+
+    /**
+     * 根据保存的筛选条件重新加载任务列表，并按目标页码输出对应片段。
+     *
+     * @param source 命令源
+     * @param player 当前玩家
+     * @param pageState 翻页状态
+     * @return 命令执行结果
+     */
+    private static int renderTaskListPage(CommandSourceStack source, ServerPlayer player, TaskListPageState pageState) {
         try {
-            List<Task> scopedTasks = loadProjectTasksForCommand(source, player, project).stream()
-                    .filter(task -> task != null && task.belongsToProject(project.getId()))
-                    .sorted(buildTaskSummaryComparator())
-                    .toList();
-            int totalCount = scopedTasks.size();
-            int completedCount = (int) scopedTasks.stream().filter(Task::isCompleted).count();
-            List<Task> filteredTasks = scopedTasks.stream()
-                    .filter(task -> matchesTaskStatus(task, status))
-                    .filter(task -> matchesTaskPriority(task, priority))
-                    .filter(task -> matchesTaskText(task, text))
-                    .toList();
-            String searchText = text == null || text.isBlank() ? null : text.trim();
-            return sendListWithUnifiedTemplate(
+            ResolvedTaskListPage resolvedPage = resolveTaskListPage(source, player, pageState);
+            if (resolvedPage == null) {
+                taskListPageStateMap.remove(player.getStringUUID());
+                return COMMAND_FAILURE;
+            }
+
+            List<Task> filteredTasks = resolvedPage.filteredTasks;
+            sendFeedback(source, resolvedPage.summarySupplier);
+            if (filteredTasks.isEmpty()) {
+                taskListPageStateMap.remove(player.getStringUUID());
+                sendFeedbackByTranslationKey(source, resolvedPage.emptyTranslationKey);
+                return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE);
+            }
+
+            int totalCount = filteredTasks.size();
+            int totalPages = Math.max(1, (totalCount + TASK_LIST_MAX_SUMMARY - 1) / TASK_LIST_MAX_SUMMARY);
+            if (pageState.page > totalPages) {
+                return sendCommandFailure(source, "command.todolist.task.list.page.already_last");
+            }
+
+            int startIndex = (pageState.page - 1) * TASK_LIST_MAX_SUMMARY;
+            int endExclusive = Math.min(totalCount, startIndex + TASK_LIST_MAX_SUMMARY);
+            sendFeedbackByTranslationKey(
                     source,
-                    filteredTasks,
-                    TASK_LIST_MAX_SUMMARY,
-                    () -> Component.translatable(
-                            "command.todolist.task.project.list.summary",
-                            buildProjectNameComponent(project),
-                            totalCount,
-                            completedCount
-                    ),
-                    "command.todolist.task.project.list.empty",
-                    (displayIndex, task) -> buildTaskListItem(displayIndex, task, searchText),
-                    "command.todolist.task.list.more"
+                    "command.todolist.task.list.page.status",
+                    pageState.page,
+                    totalPages,
+                    startIndex + 1,
+                    endExclusive,
+                    totalCount
             );
+            for (int index = startIndex; index < endExclusive; index++) {
+                int displayIndex = index + 1;
+                Task task = filteredTasks.get(index);
+                sendFeedback(source, () -> buildTaskListItem(displayIndex, task, resolvedPage.searchText));
+            }
+
+            boolean hasPrev = pageState.page > 1;
+            boolean hasNext = pageState.page < totalPages;
+            if (hasPrev || hasNext) {
+                sendFeedback(source, () -> buildTaskListPageButtons(hasPrev, hasNext));
+            }
+            rememberTaskListPageState(player, pageState);
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE);
         } catch (IOException e) {
-            TodoConstants.LOGGER.error("Failed to load project task list for command, projectId={}", project.getId(), e);
+            TodoConstants.LOGGER.error("Failed to render task list page for command", e);
             return sendCommandFailure(source, "command.todolist.task.list.failed");
         }
+    }
+
+    /**
+     * 解析当前翻页状态对应的任务列表数据，并生成摘要与空状态文案。
+     *
+     * @param source 命令源
+     * @param player 当前玩家
+     * @param pageState 翻页状态
+     * @return 一份可直接用于渲染的任务列表结果
+     * @throws IOException 读取任务存储失败时抛出
+     */
+    private static ResolvedTaskListPage resolveTaskListPage(
+            CommandSourceStack source,
+            ServerPlayer player,
+            TaskListPageState pageState
+    ) throws IOException {
+        if (pageState.projectId == null || pageState.projectId.isBlank()) {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), TodoListCommon.getTaskStorage(), player.getUUID());
+            int totalCount = tasks.size();
+            int completedCount = (int) tasks.stream().filter(Task::isCompleted).count();
+            List<Task> filteredTasks = tasks.stream()
+                    .filter(task -> matchesTaskStatus(task, pageState.status))
+                    .filter(task -> matchesTaskPriority(task, pageState.priority))
+                    .filter(task -> matchesTaskText(task, pageState.text))
+                    .sorted(buildTaskSummaryComparator())
+                    .toList();
+            return new ResolvedTaskListPage(
+                    filteredTasks,
+                    () -> Component.translatable("command.todolist.task.list.summary", totalCount, completedCount),
+                    "command.todolist.task.list.empty",
+                    pageState.text
+            );
+        }
+
+        Project project = resolveProjectForCommand(source, player, pageState.projectId, "command.todolist.task.project.not_found");
+        if (project == null) {
+            return null;
+        }
+        if (!canViewProjectTasks(player, project)) {
+            sendCommandFailure(source, "command.todolist.task.project.permission_denied");
+            return null;
+        }
+        List<Task> scopedTasks = loadProjectTasksForCommand(source, player, project).stream()
+                .filter(task -> task != null && task.belongsToProject(project.getId()))
+                .sorted(buildTaskSummaryComparator())
+                .toList();
+        int totalCount = scopedTasks.size();
+        int completedCount = (int) scopedTasks.stream().filter(Task::isCompleted).count();
+        List<Task> filteredTasks = scopedTasks.stream()
+                .filter(task -> matchesTaskStatus(task, pageState.status))
+                .filter(task -> matchesTaskPriority(task, pageState.priority))
+                .filter(task -> matchesTaskText(task, pageState.text))
+                .toList();
+        return new ResolvedTaskListPage(
+                filteredTasks,
+                () -> Component.translatable(
+                        "command.todolist.task.project.list.summary",
+                        buildProjectNameComponent(project),
+                        totalCount,
+                        completedCount
+                ),
+                "command.todolist.task.project.list.empty",
+                pageState.text
+        );
+    }
+
+    /**
+     * 规范化任务列表的文本搜索条件，空白输入统一视为 null。
+     *
+     * @param text 原始文本搜索条件
+     * @return 规范化后的文本搜索条件
+     */
+    private static String normalizeTaskListText(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        return text.trim();
+    }
+
+    /**
+     * 构建任务列表翻页按钮行，便于玩家继续查看更多或返回上一页。
+     *
+     * @param hasPrev 是否展示上一页按钮
+     * @param hasNext 是否展示下一页按钮
+     * @return 翻页按钮组件
+     */
+    private static Component buildTaskListPageButtons(boolean hasPrev, boolean hasNext) {
+        MutableComponent line = Component.empty();
+        if (hasPrev) {
+            line.append(buildTaskListPageButton(
+                    "command.todolist.task.list.page.prev_button",
+                    "/todo task prev",
+                    "command.todolist.task.list.page.prev_hover"
+            ));
+        }
+        if (hasPrev && hasNext) {
+            line.append(Component.literal(" "));
+        }
+        if (hasNext) {
+            line.append(buildTaskListPageButton(
+                    "command.todolist.task.list.page.next_button",
+                    "/todo task more",
+                    "command.todolist.task.list.page.next_hover"
+            ));
+        }
+        return line;
+    }
+
+    /**
+     * 构建单个任务列表翻页按钮，并附带点击与悬停提示。
+     *
+     * @param labelKey 按钮文案翻译键
+     * @param command 点击后执行的命令
+     * @param hoverKey 悬停提示翻译键
+     * @return 可点击的按钮组件
+     */
+    private static Component buildTaskListPageButton(String labelKey, String command, String hoverKey) {
+        return Component.translatable(labelKey)
+                .withStyle(style -> style
+                        .withColor(ChatFormatting.AQUA)
+                        .withBold(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
+                        .withHoverEvent(new HoverEvent(
+                                HoverEvent.Action.SHOW_TEXT,
+                                Component.translatable(hoverKey)
+                        )));
     }
 
     /**
@@ -899,6 +1217,23 @@ public final class CommandBootstrap {
             return new ArrayList<>(storage.loadTeamTasks());
         }
         return new ArrayList<>(loadPersonalTasksForCommand(source.getServer(), storage, player.getUUID()));
+    }
+
+    /**
+     * 判断当前玩家是否可以查看指定项目下的任务列表。
+     */
+    private static boolean canViewProjectTasks(ServerPlayer player, Project project) {
+        if (player == null || project == null) {
+            return false;
+        }
+        if (player.hasPermissions(2)) {
+            return true;
+        }
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            String ownerUuid = project.getOwnerUuid();
+            return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(player.getStringUUID());
+        }
+        return isTeamProjectMember(player, project);
     }
 
     /**
@@ -1285,6 +1620,56 @@ public final class CommandBootstrap {
 
     private static Component getTaskCleanStatusText(String status) {
         return Component.translatable("command.todolist.status." + status);
+    }
+
+    /**
+     * 将命令输入解析为配置中的命令权限模式。
+     *
+     * @param mode 原始权限模式参数
+     * @return 命中的命令权限模式；非法值返回 null
+     */
+    private static ModConfig.CommandAccessMode resolveCommandAccessMode(String mode) {
+        String normalizedMode = CommandInputNormalizer.normalizeCommandAccessMode(mode);
+        return switch (normalizedMode) {
+            case "op_only" -> ModConfig.CommandAccessMode.OP_ONLY;
+            case "view_only" -> ModConfig.CommandAccessMode.VIEW_ONLY;
+            case "full" -> ModConfig.CommandAccessMode.FULL;
+            default -> null;
+        };
+    }
+
+    /**
+     * 构建命令权限模式的本地化文本组件。
+     *
+     * @param mode 命令权限模式
+     * @return 模式文本组件
+     */
+    private static Component getCommandAccessModeText(ModConfig.CommandAccessMode mode) {
+        String normalizedMode = mode == null ? "op_only" : mode.name().toLowerCase(Locale.ROOT);
+        return Component.translatable("command.todolist.command_access_mode.mode." + normalizedMode);
+    }
+
+    /**
+     * 在命令权限模式变化后刷新所有在线玩家的命令树。
+     *
+     * @param server 当前服务端
+     */
+    private static void refreshAvailableCommands(MinecraftServer server) {
+        if (server == null || server.getPlayerList() == null) {
+            return;
+        }
+        try {
+            if (server.getCommands() == null) {
+                return;
+            }
+            for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                if (online != null) {
+                    server.getCommands().sendCommands(online);
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // 测试桩服务端可能不具备完整命令分发能力，这里保持静默即可。
+        }
     }
 
     private static int executeProjectSelect(CommandSourceStack source, String projectId) {
@@ -1898,6 +2283,7 @@ public final class CommandBootstrap {
     private static int executeProjectRemoveNow(CommandSourceStack source, ServerPlayer player, Project project) {
         String projectId = project.getId();
         Project.Scope scope = project.getScope();
+        ProjectPackets.clearPendingJoinRequestsForProject(projectId);
         TodoListCommon.getProjectManager().deleteProject(projectId);
         purgeDeletedProjectTasks(scope, projectId, player);
         saveProjects(source.getServer(), scope);
@@ -2801,6 +3187,17 @@ public final class CommandBootstrap {
 
     private static CompletableFuture<Suggestions> suggestProjectMemberRoles(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(PROJECT_MEMBER_ROLE_SUGGESTIONS, builder);
+    }
+
+    /**
+     * 为管理员命令的 commandAccessMode 参数提供自动补全。
+     *
+     * @param ctx 命令上下文
+     * @param builder 补全构建器
+     * @return 补全结果
+     */
+    private static CompletableFuture<Suggestions> suggestCommandAccessModes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(COMMAND_ACCESS_MODE_SUGGESTIONS, builder);
     }
 
     private static CompletableFuture<Suggestions> suggestSelectableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
