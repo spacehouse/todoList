@@ -70,6 +70,7 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
     @Override
     public void setHudVisible(boolean visible) {
         TodoClient.setHudVisible(visible);
+        ClientProjectPackets.sendSetHudVisibility(visible);
     }
 
     /**

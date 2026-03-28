@@ -158,7 +158,7 @@ public final class ForgeClientProjectPackets {
      * @param visible whether the HUD should be visible on the client
      */
     private static void applyHudVisibilitySync(boolean visible) {
-        ClientBridge.ops().setHudVisible(visible);
+        ForgeTodoClient.setHudVisible(visible);
     }
 
     public static void sendAddProject(Project project) {
@@ -258,6 +258,7 @@ public final class ForgeClientProjectPackets {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeClientProjectStateSeed(buf);
         ForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
     }
 
@@ -293,6 +294,42 @@ public final class ForgeClientProjectPackets {
             buf.writeUtf(projectId == null ? "" : projectId);
         }
         ForgeNetworkBridge.sendToServer(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf);
+    }
+
+    /**
+     * 向服务端同步客户端当前的 HUD 显隐状态。
+     *
+     * @param visible HUD 是否可见
+     */
+    public static void sendSetHudVisibility(boolean visible) {
+        if (!ForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_VISIBILITY_ID)) {
+            applyLocalHudVisibility(visible);
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeBoolean(visible);
+        ForgeNetworkBridge.sendToServer(ProjectPackets.SET_HUD_VISIBILITY_ID, buf);
+    }
+
+    /**
+     * 将客户端当前项目状态写入 requestSyncProjects 请求，供服务端首次初始化玩家状态。
+     *
+     * @param buf 待写入的网络缓冲区
+     */
+    private static void writeClientProjectStateSeed(FriendlyByteBuf buf) {
+        String activeProjectId = ClientBridge.ops().getActiveProjectId();
+        if (activeProjectId == null || activeProjectId.isBlank()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeUtf(activeProjectId.trim());
+        }
+        List<String> starredProjectIds = ModConfig.getInstance().getHudStarredProjectIds();
+        buf.writeInt(starredProjectIds.size());
+        for (String projectId : starredProjectIds) {
+            buf.writeUtf(projectId == null ? "" : projectId);
+        }
+        buf.writeBoolean(ClientBridge.ops().isHudVisible());
     }
 
     /**
@@ -391,7 +428,26 @@ public final class ForgeClientProjectPackets {
     }
 
     /**
+     * 在本地单人环境中直接把 HUD 显隐状态写回集成服务端。
+     *
+     * @param visible HUD 是否可见
+     */
+    private static void applyLocalHudVisibility(boolean visible) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setHudVisible(serverPlayer, visible));
+    }
+
+    /**
      * 解析当前本地单人环境对应的服务端玩家对象，用于无网络能力时的本地回退。
+     *
+     * @return 对应的服务端玩家；不存在时返回 null
      */
     private static ServerPlayer resolveLocalServerPlayer() {
         Minecraft minecraft = Minecraft.getInstance();

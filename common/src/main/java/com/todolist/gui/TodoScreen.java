@@ -94,6 +94,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private String preferredPersonalProjectId;
     private String preferredTeamProjectId;
     private boolean teamProjectsEnabled = true;
+    private int savedProjectListScrollOffset;
     
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
     
@@ -491,6 +492,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         projectListWidget = new ProjectListWidget(this.minecraft, x + padding, projListY, sidebarWidth, sidebarListHeight);
         updateProjectList(); 
+        projectListWidget.setScrollOffset(savedProjectListScrollOffset);
         projectListWidget.setSelectedProject(currentProject);
         projectListWidget.setOnProjectSelected(this::switchProject);
         this.addRenderableWidget(projectListWidget);
@@ -1910,6 +1912,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     
     private void switchProject(Project project) {
+        if (projectListWidget != null) {
+            savedProjectListScrollOffset = projectListWidget.getScrollOffset();
+        }
         this.selectedTask = null;
         this.currentProject = project;
         rememberSelectedProject(project);

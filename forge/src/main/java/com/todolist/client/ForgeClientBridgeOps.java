@@ -45,6 +45,7 @@ public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
     @Override
     public void setHudVisible(boolean visible) {
         ForgeTodoClient.setHudVisible(visible);
+        ForgeClientProjectPackets.sendSetHudVisibility(visible);
     }
 
     @Override

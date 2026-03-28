@@ -39,6 +39,7 @@ public final class ForgeTodoClient {
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
+    private static Boolean lastLocalPublishedState;
 
     private ForgeTodoClient() {
     }
@@ -108,10 +109,10 @@ public final class ForgeTodoClient {
                 ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
                 ForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             ForgeClientProjectPackets.sendRequestSyncProjects();
-            ForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             ForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
+        refreshLocalPublishedState(current);
         if (current.player == null) {
             return;
         }
@@ -134,6 +135,7 @@ public final class ForgeTodoClient {
 
     private static void onClientLoggingOutEvent(Object ignored) {
         pendingRemoteResync = false;
+        lastLocalPublishedState = null;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
@@ -144,6 +146,9 @@ public final class ForgeTodoClient {
         }
         if (!current.isLocalServer()) {
             applyStorageNamespace(resolveStorageNamespace(current));
+            lastLocalPublishedState = null;
+        } else {
+            lastLocalPublishedState = isLocalPublished(current);
         }
         pendingRemoteResync = true;
     }
@@ -221,6 +226,47 @@ public final class ForgeTodoClient {
     private static void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
         ClientBridge.ops().setHudVisible(nextVisible);
+    }
+
+    /**
+     * 检查本地世界的局域网发布状态变化，并在刚发布时主动拉取一次团队相关同步数据。
+     *
+     * @param current 当前客户端实例
+     */
+    private static void refreshLocalPublishedState(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            lastLocalPublishedState = null;
+            return;
+        }
+        boolean published = isLocalPublished(current);
+        if (lastLocalPublishedState != null && !lastLocalPublishedState && published) {
+            syncLocalLanStateAfterPublish();
+        } else if (lastLocalPublishedState != null && lastLocalPublishedState && !published) {
+            teamTaskManager.clearAll();
+        }
+        lastLocalPublishedState = published;
+    }
+
+    /**
+     * 判断当前本地集成服是否已发布局域网。
+     *
+     * @param current 当前客户端实例
+     * @return 已发布局域网时返回 true
+     */
+    private static boolean isLocalPublished(Minecraft current) {
+        if (current == null || !current.isLocalServer()) {
+            return false;
+        }
+        var server = current.getSingleplayerServer();
+        return server != null && server.isPublished();
+    }
+
+    /**
+     * 本地世界发布局域网后，重新同步项目状态与团队任务，恢复单机阶段被临时净化的客户端视图。
+     */
+    private static void syncLocalLanStateAfterPublish() {
+        ForgeClientProjectPackets.sendRequestSyncProjects();
+        ForgeClientTaskPackets.requestTeamSync();
     }
 
     public static TaskManager getTeamTaskManager() {

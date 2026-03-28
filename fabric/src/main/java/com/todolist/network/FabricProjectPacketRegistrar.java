@@ -30,6 +30,8 @@ public final class FabricProjectPacketRegistrar {
                 ProjectPackets.onSetActiveProjectPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, (server, player, handler, buf, responseSender) ->
                 ProjectPackets.onSetHudStarredProjectIdsPacket(server, player, buf));
+        ServerPlayNetworking.registerGlobalReceiver(ProjectPackets.SET_HUD_VISIBILITY_ID, (server, player, handler, buf, responseSender) ->
+                ProjectPackets.onSetHudVisibilityPacket(server, player, buf));
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 ProjectPackets.onPlayerJoin(server, handler.getPlayer()));
