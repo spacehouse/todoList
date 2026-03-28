@@ -43,6 +43,60 @@ public class AddMemberScreen extends Screen {
         this.projectId = projectId;
     }
 
+    /**
+     * 返回当前过滤后的在线玩家列表快照，供同包测试代码断言过滤结果。
+     *
+     * @return 过滤后的在线玩家列表快照
+     */
+    List<net.minecraft.client.multiplayer.PlayerInfo> getFilteredPlayersForTest() {
+        return filteredPlayers == null ? List.of() : List.copyOf(filteredPlayers);
+    }
+
+    /**
+     * 返回当前滚动偏移量，供同包测试代码断言滚动行为。
+     *
+     * @return 当前滚动偏移量
+     */
+    int getScrollOffsetForTest() {
+        return scrollOffset;
+    }
+
+    /**
+     * 返回搜索输入框，供同包测试代码写入查询文本。
+     *
+     * @return 搜索输入框
+     */
+    EditBox getSearchFieldForTest() {
+        return searchField;
+    }
+
+    /**
+     * 返回当前成员列表按钮数组快照，供同包测试代码触发成员添加操作。
+     *
+     * @return 当前成员列表按钮数组快照
+     */
+    Button[] getPlayerButtonsForTest() {
+        return playerButtons == null ? new Button[0] : playerButtons.clone();
+    }
+
+    /**
+     * 返回成员列表区域中心点 X 坐标，供同包测试代码驱动滚轮事件。
+     *
+     * @return 成员列表区域中心点 X 坐标
+     */
+    double getListCenterXForTest() {
+        return listX + (listWidth / 2.0D);
+    }
+
+    /**
+     * 返回成员列表区域中心点 Y 坐标，供同包测试代码驱动滚轮事件。
+     *
+     * @return 成员列表区域中心点 Y 坐标
+     */
+    double getListCenterYForTest() {
+        return listY + (listHeight / 2.0D);
+    }
+
     @Override
     protected void init() {
         if (minecraft == null || minecraft.getConnection() == null) {

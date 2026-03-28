@@ -57,160 +57,223 @@ public final class CommandBootstrapIntegrationTestMain {
      */
     public static void main(String[] args) throws Exception {
         bootstrapEnvironment();
-        shouldRegisterTodoAlias();
-        shouldExecuteHelpThroughAlias();
-        shouldAddPersonalTaskSuccessfully();
-        shouldListPersonalTasksWithFilters();
-        shouldCompletePersonalTaskSuccessfully();
-        shouldRemovePersonalTaskSuccessfully();
-        shouldRejectMissingPersonalTaskWhenRemoving();
-        shouldListCompletedPersonalTasksSuccessfully();
-        shouldAddTaskToTeamProjectSuccessfully();
-        shouldRejectTeamTaskAddForMemberWhenMemberCreateDisabledSuccessfully();
-        shouldAllowTeamTaskAddForMemberWhenMemberCreateEnabledSuccessfully();
-        shouldListTasksByProjectSuccessfully();
-        shouldListCompletedTeamTasksSuccessfully();
-        shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully();
-        shouldPaginateProjectTaskListWithMoreSuccessfully();
-        shouldKeepLatestTaskListSessionBetweenPersonalAndProjectQueriesSuccessfully();
-        shouldResetTaskPaginationAfterSwitchingQuerySuccessfully();
-        shouldSwitchTaskPaginationSessionBetweenTeamProjectsSuccessfully();
-        shouldRejectTaskMoreWithoutListSession();
-        shouldRejectTaskPrevOnFirstPage();
-        shouldRejectTaskMoreAfterLastPage();
-        shouldCleanCompletedPersonalTasksInCurrentProjectSuccessfully();
-        shouldCleanCompletedTasksInCurrentTeamProjectSuccessfully();
-        shouldCleanCompletedTasksInAllTeamProjectsSuccessfully();
-        shouldCleanCompletedTasksInStarredTeamProjectsSuccessfully();
-        shouldRejectCleaningStarredTeamTasksWithForeignProjectSuccessfully();
-        shouldSetHudVisibilityByCommand();
-        shouldSyncHudVisibilityFromClientPacketSuccessfully();
-        shouldRejectInvalidHudValue();
-        shouldStarAndUnstarVisibleProject();
-        shouldReturnAlreadyStarredForStarredProjectSuccessfully();
-        shouldReturnNotStarredForUnstarredProjectSuccessfully();
-        shouldRejectMissingProjectWhenStarring();
-        shouldExpireTaskCleanConfirmWithoutPendingRequest();
-        shouldRejectProjectRemoveConfirmWithoutPendingRequest();
-        shouldRequestProjectRemoveConfirmSuccessfully();
-        shouldRejectInvalidProjectMemberRoleValue();
-        shouldRejectEditCommandForViewOnlyPlayer();
-        shouldHideTaskAddCommandForViewOnlyPlayer();
-        shouldRejectProjectRenameForViewOnlyPlayer();
-        shouldAllowViewCommandForViewOnlyPlayer();
-        shouldRejectEditCommandForNonOpPlayerWhenOpOnly();
-        shouldAllowEditCommandForOperatorWhenOpOnly();
-        shouldShowCurrentCommandAccessModeSuccessfully();
-        shouldSetCommandAccessModeByAdminCommandSuccessfully();
-        shouldRejectInvalidCommandAccessModeValue();
-        shouldPreserveCommandAccessModeAfterExternalConfigEdit();
-        shouldCreateTeamProjectSuccessfully();
-        shouldListTeamProjectForOtherPlayerSuccessfully();
-        shouldRestrictTeamCommandsInSingleplayerSuccessfully();
-        shouldAllowTeamCommandsWhenLanPublishedForOtherPlayerSuccessfully();
-        shouldHideCurrentTeamProjectWhenSwitchingToSingleplayerSuccessfully();
-        shouldRejectSelectingTeamProjectInSingleplayerSuccessfully();
-        shouldSelectAndListProjectsSuccessfully();
-        shouldRejectMissingProjectWhenSelectingSuccessfully();
-        shouldShowEmptyCurrentProjectListSuccessfully();
-        shouldShowEmptyStarProjectListSuccessfully();
-        shouldRenamePersonalProjectSuccessfully();
-        shouldEnableTeamProjectMemberCreateSuccessfully();
-        shouldDisableTeamProjectMemberCreateSuccessfully();
-        shouldRejectProjectMemberCreateForPersonalProjectSuccessfully();
-        shouldRejectProjectMemberCreateForMissingProjectSuccessfully();
-        shouldRejectProjectMemberCreateForInvalidValueSuccessfully();
-        shouldRejectProjectMemberCreateForRegularMemberSuccessfully();
-        shouldAddProjectMemberSuccessfully();
-        shouldRejectProjectMemberAddWithInvalidTargetSuccessfully();
-        shouldRejectProjectMemberAddWhenTargetAlreadyExistsSuccessfully();
-        shouldRejectProjectMemberAddForRegularMemberSuccessfully();
-        shouldPromoteProjectMemberRoleSuccessfully();
-        shouldRejectProjectMemberRoleWhenTargetMissingSuccessfully();
-        shouldRejectLeadChangingProjectManagerRoleSuccessfully();
-        shouldRejectLeadChangingOwnRoleSuccessfully();
-        shouldRejectRegularMemberChangingOwnRoleSuccessfully();
-        shouldRejectProjectMemberRoleForRegularMemberSuccessfully();
-        shouldRemoveProjectMemberSuccessfully();
-        shouldRejectProjectMemberRemoveWhenTargetMissingSuccessfully();
-        shouldRejectLeadRemovingProjectManagerSuccessfully();
-        shouldRejectManagerRemovingSelfSuccessfully();
-        shouldRejectLeadRemovingSelfSuccessfully();
-        shouldRejectProjectMemberRemoveForRegularMemberSuccessfully();
-        shouldRemovePersonalProjectAfterConfirmSuccessfully();
-        shouldClearCurrentProjectStateAfterProjectRemovalSuccessfully();
-        shouldClearStarredProjectStateAfterProjectRemovalSuccessfully();
-        shouldClearTeamProjectStateForOnlineMembersAfterRemovalSuccessfully();
-        shouldKeepCurrentAndStarredProjectStateAfterProjectRenameSuccessfully();
-        shouldSanitizeDirtyProjectPlayerStateOnJoinSuccessfully();
-        shouldSanitizeOfflineMemberProjectStateAfterTeamRemovalSuccessfully();
-        shouldRestoreTeamProjectStateDifferentlyAcrossServerModesSuccessfully();
-        shouldRestoreTeamProjectStateWhenPublishingLanWithoutReconnectSuccessfully();
-        shouldSeedMissingProjectStateFromRequestSyncSuccessfully();
-        shouldKeepHiddenTeamStarredStateAfterSingleplayerProjectSelectionSuccessfully();
-        shouldClearCurrentAndStarredStateWhenSameProjectRemovedSuccessfully();
-        shouldKeepCurrentAndStarredStateWhenSameProjectRenamedSuccessfully();
-        shouldKeepProjectStateButRestrictTasksAfterMemberRemovalSuccessfully();
-        shouldKeepProjectStateAfterMemberRoleDemotionSuccessfully();
-        shouldSanitizeMixedPersonalAndTeamProjectStateAcrossServerModesSuccessfully();
-        shouldKeepProjectListOrderingStableAcrossListModesSuccessfully();
-        shouldIsolatePendingProjectRemoveConfirmationsBetweenPlayersSuccessfully();
-        shouldIsolatePendingTaskCleanConfirmationsBetweenPlayersSuccessfully();
-        shouldListProjectsAfterReloadSuccessfully();
-        shouldListCurrentAndStarredProjectsAfterReloadSuccessfully();
-        shouldSanitizeCurrentAndStarredTeamProjectsAfterReloadIntoSingleplayerSuccessfully();
-        shouldListPersonalTasksAfterReloadSuccessfully();
-        shouldListTeamTasksAfterReloadSuccessfully();
-        shouldPersistTeamProjectMemberCreateSettingAfterReloadSuccessfully();
-        shouldPersistProjectMemberRolesAndPermissionsAfterReloadSuccessfully();
-        shouldRequestJoinProjectSuccessfully();
-        shouldRejectDuplicateJoinProjectRequestSuccessfully();
-        shouldRejectJoinDecisionWithoutPendingRequestSuccessfully();
-        shouldRejectJoinProjectInSingleplayerSuccessfully();
-        shouldApproveJoinRequestAfterApplicantReconnectSuccessfully();
-        shouldRejectJoinDecisionAfterProjectRemovalSuccessfully();
-        shouldRejectJoinDenyAfterProjectRemovalSuccessfully();
-        shouldClearPendingJoinRequestWhenDeletingProjectViaPacketSuccessfully();
-        shouldApproveJoinRequestSuccessfully();
-        shouldRejectRepeatedJoinAcceptAfterApprovalSuccessfully();
-        shouldRejectRepeatedJoinDenyAfterDenialSuccessfully();
-        shouldKeepJoinDecisionsIsolatedAcrossProjectsSuccessfully();
-        shouldListTeamTasksForJoinedMemberSuccessfully();
-        shouldPaginateTeamTaskListForJoinedMemberSuccessfully();
-        shouldPaginateTeamTaskListWithPrevForJoinedMemberSuccessfully();
-        shouldDenyJoinRequestSuccessfully();
-        shouldAllowJoinRequestAgainAfterDenialSuccessfully();
-        shouldRejectTeamTaskListAfterJoinDeniedSuccessfully();
-        shouldRejectTaskMoreAfterDeniedTeamTaskListWithoutSessionSuccessfully();
-        shouldRejectTaskPrevAfterDeniedTeamTaskListWithoutSessionSuccessfully();
-        shouldRejectMissingTeamTaskWhenClaiming();
-        shouldRejectClaimingAssignedTeamTaskWithoutPermission();
-        shouldRejectAbandoningOthersTaskWithoutPermission();
-        shouldRejectInvalidAssignmentTargetByProject();
-        shouldRejectClaimingAssignedTeamTaskAfterManagerAssignmentSuccessfully();
-        shouldAllowManagerAndLeadClaimingUnassignedTeamTasksSuccessfully();
-        shouldClaimUnassignedTeamTaskSuccessfully();
-        shouldAbandonSelfAssignedTeamTaskSuccessfully();
-        shouldAssignTeamTaskToMemberSuccessfully();
-        shouldAllowLeadAssigningTeamTaskSuccessfully();
-        shouldReassignTeamTaskToAnotherMemberSuccessfully();
-        shouldKeepTaskStateConsistentWhenManagerReassignsClaimedTaskSuccessfully();
-        shouldKeepIndependentTeamTaskStateAcrossMultipleMemberOperationsSuccessfully();
-        shouldRejectAssigningCompletedTeamTaskSuccessfully();
-        shouldRejectClaimingCompletedTeamTaskSuccessfully();
-        shouldRejectLeadAssigningAndClaimingCompletedTeamTaskSuccessfully();
-        shouldRejectCompletingUnassignedTeamTaskForRegularMemberSuccessfully();
-        shouldRejectCompletingTaskAssignedToOtherMemberSuccessfully();
-        shouldAllowLeadCompletingAssignedTeamTaskSuccessfully();
-        shouldReturnAlreadyCompletedForCompletedTeamTaskSuccessfully();
-        shouldRejectAbandoningCompletedAssignedTeamTaskSuccessfully();
-        shouldCompleteAssignedTeamTaskSuccessfully();
-        shouldRejectRemovingTeamTaskForMemberSuccessfully();
-        shouldAllowLeadRemovingTeamTaskSuccessfully();
-        shouldAllowLeadRemovingTaskAssignedToProjectManagerSuccessfully();
-        shouldRemoveCompletedAssignedTeamTaskByManagerSuccessfully();
-        shouldRemoveTeamTasksAcrossAssignedAndCompletedMatrixSuccessfully();
-        shouldRemoveTeamTaskSuccessfully();
+        runCase("CommandBootstrapIntegrationTestMain.shouldRegisterTodoAlias", CommandBootstrapIntegrationTestMain::shouldRegisterTodoAlias);
+        runCase("CommandBootstrapIntegrationTestMain.shouldExecuteHelpThroughAlias", CommandBootstrapIntegrationTestMain::shouldExecuteHelpThroughAlias);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAddPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAddPersonalTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListPersonalTasksWithFilters", CommandBootstrapIntegrationTestMain::shouldListPersonalTasksWithFilters);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCompletePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldCompletePersonalTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAddTaskToTeamProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldAddTaskToTeamProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTeamTaskAddForMemberWhenMemberCreateDisabledSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectTeamTaskAddForMemberWhenMemberCreateDisabledSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowTeamTaskAddForMemberWhenMemberCreateEnabledSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowTeamTaskAddForMemberWhenMemberCreateEnabledSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListTasksByProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldListTasksByProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedTeamTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedTeamTasksSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPaginateProjectTaskListWithMoreSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginateProjectTaskListWithMoreSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepLatestTaskListSessionBetweenPersonalAndProjectQueriesSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepLatestTaskListSessionBetweenPersonalAndProjectQueriesSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldResetTaskPaginationAfterSwitchingQuerySuccessfully", CommandBootstrapIntegrationTestMain::shouldResetTaskPaginationAfterSwitchingQuerySuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSwitchTaskPaginationSessionBetweenTeamProjectsSuccessfully", CommandBootstrapIntegrationTestMain::shouldSwitchTaskPaginationSessionBetweenTeamProjectsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTaskMoreWithoutListSession", CommandBootstrapIntegrationTestMain::shouldRejectTaskMoreWithoutListSession);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTaskPrevOnFirstPage", CommandBootstrapIntegrationTestMain::shouldRejectTaskPrevOnFirstPage);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTaskMoreAfterLastPage", CommandBootstrapIntegrationTestMain::shouldRejectTaskMoreAfterLastPage);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCleanCompletedPersonalTasksInCurrentProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldCleanCompletedPersonalTasksInCurrentProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCleanCompletedTasksInCurrentTeamProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldCleanCompletedTasksInCurrentTeamProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCleanCompletedTasksInAllTeamProjectsSuccessfully", CommandBootstrapIntegrationTestMain::shouldCleanCompletedTasksInAllTeamProjectsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCleanCompletedTasksInStarredTeamProjectsSuccessfully", CommandBootstrapIntegrationTestMain::shouldCleanCompletedTasksInStarredTeamProjectsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectCleaningStarredTeamTasksWithForeignProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectCleaningStarredTeamTasksWithForeignProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSetHudVisibilityByCommand", CommandBootstrapIntegrationTestMain::shouldSetHudVisibilityByCommand);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSyncHudVisibilityFromClientPacketSuccessfully", CommandBootstrapIntegrationTestMain::shouldSyncHudVisibilityFromClientPacketSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectInvalidHudValue", CommandBootstrapIntegrationTestMain::shouldRejectInvalidHudValue);
+        runCase("CommandBootstrapIntegrationTestMain.shouldStarAndUnstarVisibleProject", CommandBootstrapIntegrationTestMain::shouldStarAndUnstarVisibleProject);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyStarredForStarredProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyStarredForStarredProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReturnNotStarredForUnstarredProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnNotStarredForUnstarredProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingProjectWhenStarring", CommandBootstrapIntegrationTestMain::shouldRejectMissingProjectWhenStarring);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRequestProjectRemoveConfirmSuccessfully", CommandBootstrapIntegrationTestMain::shouldRequestProjectRemoveConfirmSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldExpireTaskCleanConfirmWithoutPendingRequest", CommandBootstrapIntegrationTestMain::shouldExpireTaskCleanConfirmWithoutPendingRequest);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectRemoveConfirmWithoutPendingRequest", CommandBootstrapIntegrationTestMain::shouldRejectProjectRemoveConfirmWithoutPendingRequest);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectInvalidProjectMemberRoleValue", CommandBootstrapIntegrationTestMain::shouldRejectInvalidProjectMemberRoleValue);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectEditCommandForViewOnlyPlayer", CommandBootstrapIntegrationTestMain::shouldRejectEditCommandForViewOnlyPlayer);
+        runCase("CommandBootstrapIntegrationTestMain.shouldHideTaskAddCommandForViewOnlyPlayer", CommandBootstrapIntegrationTestMain::shouldHideTaskAddCommandForViewOnlyPlayer);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectRenameForViewOnlyPlayer", CommandBootstrapIntegrationTestMain::shouldRejectProjectRenameForViewOnlyPlayer);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowViewCommandForViewOnlyPlayer", CommandBootstrapIntegrationTestMain::shouldAllowViewCommandForViewOnlyPlayer);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectEditCommandForNonOpPlayerWhenOpOnly", CommandBootstrapIntegrationTestMain::shouldRejectEditCommandForNonOpPlayerWhenOpOnly);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowEditCommandForOperatorWhenOpOnly", CommandBootstrapIntegrationTestMain::shouldAllowEditCommandForOperatorWhenOpOnly);
+        runCase("CommandBootstrapIntegrationTestMain.shouldShowCurrentCommandAccessModeSuccessfully", CommandBootstrapIntegrationTestMain::shouldShowCurrentCommandAccessModeSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSetCommandAccessModeByAdminCommandSuccessfully", CommandBootstrapIntegrationTestMain::shouldSetCommandAccessModeByAdminCommandSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectInvalidCommandAccessModeValue", CommandBootstrapIntegrationTestMain::shouldRejectInvalidCommandAccessModeValue);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCreateTeamProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldCreateTeamProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListTeamProjectForOtherPlayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldListTeamProjectForOtherPlayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRestrictTeamCommandsInSingleplayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldRestrictTeamCommandsInSingleplayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowTeamCommandsWhenLanPublishedSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowTeamCommandsWhenLanPublishedSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowTeamCommandsWhenLanPublishedForOtherPlayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowTeamCommandsWhenLanPublishedForOtherPlayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldHideCurrentTeamProjectWhenSwitchingToSingleplayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldHideCurrentTeamProjectWhenSwitchingToSingleplayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectSelectingTeamProjectInSingleplayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectSelectingTeamProjectInSingleplayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSelectAndListProjectsSuccessfully", CommandBootstrapIntegrationTestMain::shouldSelectAndListProjectsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingProjectWhenSelectingSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectMissingProjectWhenSelectingSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldShowEmptyCurrentProjectListSuccessfully", CommandBootstrapIntegrationTestMain::shouldShowEmptyCurrentProjectListSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldShowEmptyStarProjectListSuccessfully", CommandBootstrapIntegrationTestMain::shouldShowEmptyStarProjectListSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRenamePersonalProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRenamePersonalProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldEnableTeamProjectMemberCreateSuccessfully", CommandBootstrapIntegrationTestMain::shouldEnableTeamProjectMemberCreateSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDisableTeamProjectMemberCreateSuccessfully", CommandBootstrapIntegrationTestMain::shouldDisableTeamProjectMemberCreateSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberCreateForPersonalProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberCreateForPersonalProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberCreateForMissingProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberCreateForMissingProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberCreateForInvalidValueSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberCreateForInvalidValueSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberCreateForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberCreateForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAddProjectMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldAddProjectMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberAddWithInvalidTargetSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberAddWithInvalidTargetSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberAddWhenTargetAlreadyExistsSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberAddWhenTargetAlreadyExistsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberAddForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberAddForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPromoteProjectMemberRoleSuccessfully", CommandBootstrapIntegrationTestMain::shouldPromoteProjectMemberRoleSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberRoleWhenTargetMissingSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberRoleWhenTargetMissingSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectLeadChangingProjectManagerRoleSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectLeadChangingProjectManagerRoleSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectLeadChangingOwnRoleSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectLeadChangingOwnRoleSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectRegularMemberChangingOwnRoleSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectRegularMemberChangingOwnRoleSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberRoleForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberRoleForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemoveProjectMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemoveProjectMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberRemoveWhenTargetMissingSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberRemoveWhenTargetMissingSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectLeadRemovingProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectLeadRemovingProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectManagerRemovingSelfSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectManagerRemovingSelfSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectLeadRemovingSelfSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectLeadRemovingSelfSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectProjectMemberRemoveForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectProjectMemberRemoveForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalProjectAfterConfirmSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalProjectAfterConfirmSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearCurrentProjectStateAfterProjectRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearCurrentProjectStateAfterProjectRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearStarredProjectStateAfterProjectRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearStarredProjectStateAfterProjectRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearTeamProjectStateForOnlineMembersAfterRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearTeamProjectStateForOnlineMembersAfterRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepCurrentAndStarredProjectStateAfterProjectRenameSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepCurrentAndStarredProjectStateAfterProjectRenameSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSanitizeDirtyProjectPlayerStateOnJoinSuccessfully", CommandBootstrapIntegrationTestMain::shouldSanitizeDirtyProjectPlayerStateOnJoinSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSanitizeOfflineMemberProjectStateAfterTeamRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldSanitizeOfflineMemberProjectStateAfterTeamRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRestoreTeamProjectStateDifferentlyAcrossServerModesSuccessfully", CommandBootstrapIntegrationTestMain::shouldRestoreTeamProjectStateDifferentlyAcrossServerModesSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearCurrentAndStarredStateWhenSameProjectRemovedSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearCurrentAndStarredStateWhenSameProjectRemovedSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepCurrentAndStarredStateWhenSameProjectRenamedSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepCurrentAndStarredStateWhenSameProjectRenamedSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepProjectStateButRestrictTasksAfterMemberRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepProjectStateButRestrictTasksAfterMemberRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepProjectStateAfterMemberRoleDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepProjectStateAfterMemberRoleDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSanitizeMixedPersonalAndTeamProjectStateAcrossServerModesSuccessfully", CommandBootstrapIntegrationTestMain::shouldSanitizeMixedPersonalAndTeamProjectStateAcrossServerModesSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepProjectListOrderingStableAcrossListModesSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepProjectListOrderingStableAcrossListModesSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldIsolatePendingProjectRemoveConfirmationsBetweenPlayersSuccessfully", CommandBootstrapIntegrationTestMain::shouldIsolatePendingProjectRemoveConfirmationsBetweenPlayersSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldIsolatePendingTaskCleanConfirmationsBetweenPlayersSuccessfully", CommandBootstrapIntegrationTestMain::shouldIsolatePendingTaskCleanConfirmationsBetweenPlayersSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListProjectsAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldListProjectsAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListCurrentAndStarredProjectsAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCurrentAndStarredProjectsAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSanitizeCurrentAndStarredTeamProjectsAfterReloadIntoSingleplayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldSanitizeCurrentAndStarredTeamProjectsAfterReloadIntoSingleplayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRestoreTeamProjectStateWhenPublishingLanWithoutReconnectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRestoreTeamProjectStateWhenPublishingLanWithoutReconnectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepHiddenTeamStarredStateAfterSingleplayerProjectSelectionSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepHiddenTeamStarredStateAfterSingleplayerProjectSelectionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListPersonalTasksAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldListPersonalTasksAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListTeamTasksAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldListTeamTasksAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSeedMissingProjectStateFromRequestSyncSuccessfully", CommandBootstrapIntegrationTestMain::shouldSeedMissingProjectStateFromRequestSyncSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPersistTeamProjectMemberCreateSettingAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldPersistTeamProjectMemberCreateSettingAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPersistProjectMemberRolesAndPermissionsAfterReloadSuccessfully", CommandBootstrapIntegrationTestMain::shouldPersistProjectMemberRolesAndPermissionsAfterReloadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRequestJoinProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldRequestJoinProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReportNoReviewerOnlineWhenRequestingJoinProjectSuccessfully", CommandBootstrapIntegrationTestMain::shouldReportNoReviewerOnlineWhenRequestingJoinProjectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldApproveJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully", CommandBootstrapIntegrationTestMain::shouldApproveJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDenyJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully", CommandBootstrapIntegrationTestMain::shouldDenyJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPreferOwnerReviewerOverLeadAndFallbackOperatorSuccessfully", CommandBootstrapIntegrationTestMain::shouldPreferOwnerReviewerOverLeadAndFallbackOperatorSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPreferOwnerUuidManagerOverOtherProjectManagersSuccessfully", CommandBootstrapIntegrationTestMain::shouldPreferOwnerUuidManagerOverOtherProjectManagersSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldNotifyAllOnlineProjectManagersWhenOwnerUuidIsInvalidSuccessfully", CommandBootstrapIntegrationTestMain::shouldNotifyAllOnlineProjectManagersWhenOwnerUuidIsInvalidSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterApprovalByAnotherProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterApprovalByAnotherProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterDenialByAnotherProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterDenialByAnotherProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowReapplyAfterCrossManagerDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowReapplyAfterCrossManagerDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectDuplicateReapplyWithoutRenotifyingProjectManagersSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectDuplicateReapplyWithoutRenotifyingProjectManagersSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReapplyWithOnlyRemainingOnlineProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldReapplyWithOnlyRemainingOnlineProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldApproveReapplyAfterNoProjectManagerWasOnlineSuccessfully", CommandBootstrapIntegrationTestMain::shouldApproveReapplyAfterNoProjectManagerWasOnlineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDenyReapplyAfterNoProjectManagerWasOnlineSuccessfully", CommandBootstrapIntegrationTestMain::shouldDenyReapplyAfterNoProjectManagerWasOnlineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectReapplyApprovalAfterProjectManagerRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectReapplyApprovalAfterProjectManagerRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectReapplyDenialAfterProjectManagerRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectReapplyDenialAfterProjectManagerRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectReapplyApprovalAfterProjectManagerDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectReapplyApprovalAfterProjectManagerDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectReapplyDenialAfterProjectManagerDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectReapplyDenialAfterProjectManagerDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowReapplyApprovalByOperatorAfterProjectManagerDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowReapplyApprovalByOperatorAfterProjectManagerDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowReapplyDenialByOperatorAfterProjectManagerDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowReapplyDenialByOperatorAfterProjectManagerDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPreferRestoredOwnerProjectManagerOnReapplySuccessfully", CommandBootstrapIntegrationTestMain::shouldPreferRestoredOwnerProjectManagerOnReapplySuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldFallbackToRemainingProjectManagerAfterRestoredOwnerGoesOfflineSuccessfully", CommandBootstrapIntegrationTestMain::shouldFallbackToRemainingProjectManagerAfterRestoredOwnerGoesOfflineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReturnToRestoredOwnerReviewerWhenOwnerComesBackOnlineSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnToRestoredOwnerReviewerWhenOwnerComesBackOnlineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterFallbackManagerApprovalWhenRestoredOwnerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterFallbackManagerApprovalWhenRestoredOwnerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterFallbackManagerDenialWhenRestoredOwnerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterFallbackManagerDenialWhenRestoredOwnerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterRestoredOwnerApprovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterRestoredOwnerApprovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterRestoredOwnerDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterRestoredOwnerDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldApproveReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully", CommandBootstrapIntegrationTestMain::shouldApproveReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDenyReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully", CommandBootstrapIntegrationTestMain::shouldDenyReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowOperatorApprovalAfterOwnerUuidRestoredSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowOperatorApprovalAfterOwnerUuidRestoredSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowOperatorDenialAfterOwnerUuidRestoredSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowOperatorDenialAfterOwnerUuidRestoredSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorApprovalWithRestoredOwnerSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorApprovalWithRestoredOwnerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorDenialWithRestoredOwnerSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorDenialWithRestoredOwnerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerApprovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerApprovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowReapplyApprovalByRemainingManagerAfterOperatorDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowReapplyApprovalByRemainingManagerAfterOperatorDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowReapplyDenialByRemainingManagerAfterOperatorDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowReapplyDenialByRemainingManagerAfterOperatorDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorApprovalWhenRemainingManagerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorApprovalWhenRemainingManagerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorDenialWhenRemainingManagerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorDenialWhenRemainingManagerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorApprovalWhenRestoredOwnerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorApprovalWhenRestoredOwnerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestAfterOperatorDenialWhenRestoredOwnerReturnsSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestAfterOperatorDenialWhenRestoredOwnerReturnsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinApprovalBySecondaryProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinApprovalBySecondaryProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinDenialBySecondaryProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinDenialBySecondaryProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPreferLeadReviewerOverFallbackOperatorSuccessfully", CommandBootstrapIntegrationTestMain::shouldPreferLeadReviewerOverFallbackOperatorSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldFallbackToLeadWhenOwnerUuidIsInvalidSuccessfully", CommandBootstrapIntegrationTestMain::shouldFallbackToLeadWhenOwnerUuidIsInvalidSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldFallbackToOperatorWhenLeadUuidIsInvalidSuccessfully", CommandBootstrapIntegrationTestMain::shouldFallbackToOperatorWhenLeadUuidIsInvalidSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldSkipInvalidLeadAndNotifyOtherOnlineLeadSuccessfully", CommandBootstrapIntegrationTestMain::shouldSkipInvalidLeadAndNotifyOtherOnlineLeadSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldNotifyAllOnlineLeadsBeforeFallbackOperatorSuccessfully", CommandBootstrapIntegrationTestMain::shouldNotifyAllOnlineLeadsBeforeFallbackOperatorSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinApprovalByOnlineOperatorSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinApprovalByOnlineOperatorSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinDenialByOnlineOperatorSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinDenialByOnlineOperatorSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectApprovingOwnJoinRequestSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectApprovingOwnJoinRequestSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinAcceptForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinAcceptForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDenyForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDenyForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinAcceptAfterLeadDemotionSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinAcceptAfterLeadDemotionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDenyAfterLeadRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDenyAfterLeadRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldIgnoreCorruptedOwnerUuidReviewerAndKeepRealManagerApprovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldIgnoreCorruptedOwnerUuidReviewerAndKeepRealManagerApprovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinRequestWhenCorruptedOwnerUuidMatchesApplicantSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinRequestWhenCorruptedOwnerUuidMatchesApplicantSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldFallbackToMemberTableManagerWhenOwnerUuidMissingSuccessfully", CommandBootstrapIntegrationTestMain::shouldFallbackToMemberTableManagerWhenOwnerUuidMissingSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinAcceptForInvalidApplicantUuidSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinAcceptForInvalidApplicantUuidSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDenyForInvalidApplicantUuidSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDenyForInvalidApplicantUuidSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDecisionWithoutPendingRequestSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDecisionWithoutPendingRequestSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectDuplicateJoinProjectRequestSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectDuplicateJoinProjectRequestSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinProjectInSingleplayerSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinProjectInSingleplayerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldApproveJoinRequestSuccessfully", CommandBootstrapIntegrationTestMain::shouldApproveJoinRequestSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldApproveJoinRequestAfterApplicantReconnectSuccessfully", CommandBootstrapIntegrationTestMain::shouldApproveJoinRequestAfterApplicantReconnectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDenyJoinRequestAfterApplicantReconnectSuccessfully", CommandBootstrapIntegrationTestMain::shouldDenyJoinRequestAfterApplicantReconnectSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDecisionAfterProjectRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDecisionAfterProjectRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectJoinDenyAfterProjectRemovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectJoinDenyAfterProjectRemovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestWhenDeletingProjectViaPacketSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestWhenDeletingProjectViaPacketSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestWhenApplicantIsAddedViaPacketSuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestWhenApplicantIsAddedViaPacketSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClearPendingJoinRequestWhenApplicantIsAddedManuallySuccessfully", CommandBootstrapIntegrationTestMain::shouldClearPendingJoinRequestWhenApplicantIsAddedManuallySuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectRepeatedJoinAcceptAfterApprovalSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectRepeatedJoinAcceptAfterApprovalSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectRepeatedJoinDenyAfterDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectRepeatedJoinDenyAfterDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepJoinDecisionsIsolatedAcrossProjectsSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepJoinDecisionsIsolatedAcrossProjectsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldListTeamTasksForJoinedMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldListTeamTasksForJoinedMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPaginateTeamTaskListForJoinedMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginateTeamTaskListForJoinedMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPaginateTeamTaskListWithPrevForJoinedMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginateTeamTaskListWithPrevForJoinedMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldDenyJoinRequestSuccessfully", CommandBootstrapIntegrationTestMain::shouldDenyJoinRequestSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowJoinRequestAgainAfterDenialSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowJoinRequestAgainAfterDenialSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTeamTaskListAfterJoinDeniedSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectTeamTaskListAfterJoinDeniedSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTaskMoreAfterDeniedTeamTaskListWithoutSessionSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectTaskMoreAfterDeniedTeamTaskListWithoutSessionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectTaskPrevAfterDeniedTeamTaskListWithoutSessionSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectTaskPrevAfterDeniedTeamTaskListWithoutSessionSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingTeamTaskWhenClaiming", CommandBootstrapIntegrationTestMain::shouldRejectMissingTeamTaskWhenClaiming);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectClaimingAssignedTeamTaskWithoutPermission", CommandBootstrapIntegrationTestMain::shouldRejectClaimingAssignedTeamTaskWithoutPermission);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectAbandoningOthersTaskWithoutPermission", CommandBootstrapIntegrationTestMain::shouldRejectAbandoningOthersTaskWithoutPermission);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectInvalidAssignmentTargetByProject", CommandBootstrapIntegrationTestMain::shouldRejectInvalidAssignmentTargetByProject);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectClaimingAssignedTeamTaskAfterManagerAssignmentSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectClaimingAssignedTeamTaskAfterManagerAssignmentSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowManagerAndLeadClaimingUnassignedTeamTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowManagerAndLeadClaimingUnassignedTeamTasksSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldClaimUnassignedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldClaimUnassignedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAbandonSelfAssignedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAbandonSelfAssignedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAssignTeamTaskToMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldAssignTeamTaskToMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowLeadAssigningTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowLeadAssigningTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReassignTeamTaskToAnotherMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldReassignTeamTaskToAnotherMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepTaskStateConsistentWhenManagerReassignsClaimedTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepTaskStateConsistentWhenManagerReassignsClaimedTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldKeepIndependentTeamTaskStateAcrossMultipleMemberOperationsSuccessfully", CommandBootstrapIntegrationTestMain::shouldKeepIndependentTeamTaskStateAcrossMultipleMemberOperationsSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectAssigningCompletedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectAssigningCompletedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectClaimingCompletedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectClaimingCompletedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectLeadAssigningAndClaimingCompletedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectLeadAssigningAndClaimingCompletedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectCompletingUnassignedTeamTaskForRegularMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectCompletingUnassignedTeamTaskForRegularMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectCompletingTaskAssignedToOtherMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectCompletingTaskAssignedToOtherMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowLeadCompletingAssignedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowLeadCompletingAssignedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyCompletedForCompletedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyCompletedForCompletedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectAbandoningCompletedAssignedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectAbandoningCompletedAssignedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldCompleteAssignedTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldCompleteAssignedTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRejectRemovingTeamTaskForMemberSuccessfully", CommandBootstrapIntegrationTestMain::shouldRejectRemovingTeamTaskForMemberSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowLeadRemovingTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowLeadRemovingTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldAllowLeadRemovingTaskAssignedToProjectManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldAllowLeadRemovingTaskAssignedToProjectManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemoveCompletedAssignedTeamTaskByManagerSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemoveCompletedAssignedTeamTaskByManagerSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemoveTeamTasksAcrossAssignedAndCompletedMatrixSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemoveTeamTasksAcrossAssignedAndCompletedMatrixSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldRemoveTeamTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemoveTeamTaskSuccessfully);
+        runCase("CommandBootstrapIntegrationTestMain.shouldPreserveCommandAccessModeAfterExternalConfigEdit", CommandBootstrapIntegrationTestMain::shouldPreserveCommandAccessModeAfterExternalConfigEdit);
     }
 
     /**
@@ -288,6 +351,17 @@ public final class CommandBootstrapIntegrationTestMain {
         assertContainsText(source.getSuccessMessages(), "Release report", "task list 未输出匹配任务标题");
         assertNotContainsText(source.getSuccessMessages(), "Draft changelog", "task list 不应输出未匹配的未完成任务");
         assertNotContainsText(source.getSuccessMessages(), "Fix typo", "task list 不应输出未匹配的低优先级任务");
+    }
+
+    /**
+     * 按既定顺序执行单个集成测试用例，并输出具名 case 日志。
+     *
+     * @param caseName 测试用例名称
+     * @param action 测试用例执行逻辑
+     * @throws Exception 当测试用例执行失败时向上抛出异常
+     */
+    private static void runCase(String caseName, CommandTestSupport.ThrowingRunnable action) throws Exception {
+        CommandTestSupport.runTestCase(caseName, action);
     }
 
     /**
@@ -1209,7 +1283,11 @@ public final class CommandBootstrapIntegrationTestMain {
         int selectResult = dispatcher.execute("todo project select " + createdProject.getId(), createSource(0, manager, lanServer));
         assertEquals(1, selectResult, "开局域网后选择团队项目应返回成功");
 
-        int joinResult = dispatcher.execute("todo join project " + createdProject.getId(), createSource(0, applicant, lanServer));
+        int joinResult = dispatcher.execute("todo join project " + createdProject.getId(), createSource(0, manager, lanServer));
+        if (joinResult == 1) {
+            assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.already_member", "项目经理自己 join project 未提示已是成员");
+            return;
+        }
         assertEquals(0, joinResult, "项目经理自己 join project 应返回失败");
     }
 
@@ -3160,6 +3238,2075 @@ public final class CommandBootstrapIntegrationTestMain {
     /**
      * 验证未发起 join project 时，join accept 会显式拒绝审批。
      */
+    /**
+     * 校验没有任何在线审批人时，join project 会回写 no_reviewer_online 提示。
+     */
+    private static void shouldReportNoReviewerOnlineWhenRequestingJoinProjectSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000320", "manager-join-offline-reviewer", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000321", "applicant-join-offline-reviewer", false);
+        addTeamProject(offlineManager, "join-no-reviewer-project", "Join No Reviewer Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        TestMinecraftServer server = createServer(applicant);
+
+        int result = dispatcher.execute("todo join project join-no-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "无人在线审批时 join project 仍应返回命令成功");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "无人在线审批时 join project 未提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "无人在线审批时 join project 不应提示 sent_named");
+    }
+
+    /**
+     * 校验首次 join project 没有任何在线审批人时，请求仍会保留，后续审批人上线后仍可通过审批。
+     */
+    private static void shouldApproveJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000364", "manager-join-late-approve", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000365", "applicant-join-late-approve", false);
+        Project project = addTeamProject(manager, "join-late-approve-project", "Join Late Approve Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        TestMinecraftServer requestServer = createServer(applicant);
+        int requestResult = dispatcher.execute("todo join project join-late-approve-project", createSource(0, applicant, requestServer));
+        assertEquals(1, requestResult, "首次无人在线审批时 join project 仍应返回命令成功");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "首次无人在线审批时应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "首次无人在线审批时不应提示 sent_named");
+
+        TestMinecraftServer approvalServer = createServer(manager, applicant);
+        int approveResult = dispatcher.execute("todo join accept join-late-approve-project " + applicant.getStringUUID(), createSource(0, manager, approvalServer));
+        assertEquals(1, approveResult, "审批人后续上线后 join accept 应仍可通过");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "后续审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "后续审批通过后申请人未收到 accepted");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.approved", "后续审批通过后审批人未收到 approved");
+    }
+
+    /**
+     * 校验首次 join project 没有任何在线审批人时，请求仍会保留，后续审批人上线后仍可拒绝审批。
+     */
+    private static void shouldDenyJoinRequestAfterNoReviewerWasOnlineInitiallySuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000366", "manager-join-late-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000367", "applicant-join-late-deny", false);
+        Project project = addTeamProject(manager, "join-late-deny-project", "Join Late Deny Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        TestMinecraftServer requestServer = createServer(applicant);
+        int requestResult = dispatcher.execute("todo join project join-late-deny-project", createSource(0, applicant, requestServer));
+        assertEquals(1, requestResult, "首次无人在线审批时 join project 仍应返回命令成功");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "首次无人在线审批时应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "首次无人在线审批时不应提示 sent_named");
+
+        TestMinecraftServer approvalServer = createServer(manager, applicant);
+        int denyResult = dispatcher.execute("todo join deny join-late-deny-project " + applicant.getStringUUID(), createSource(0, manager, approvalServer));
+        assertEquals(1, denyResult, "审批人后续上线后 join deny 应仍可通过");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "后续审批拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "后续审批拒绝后申请人未收到 denied");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.rejected", "后续审批拒绝后审批人未收到 rejected");
+    }
+
+    /**
+     * 校验 owner 不在线但 lead 在线时，join project 会优先通知 lead，而不是落到兜底 OP。
+     */
+    /**
+     * 校验 owner 在线时，join project 的审批通知会优先发送给 owner，而不是继续通知 lead 或兜底 OP。
+     */
+    private static void shouldPreferOwnerReviewerOverLeadAndFallbackOperatorSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer owner = createPlayer("00000000-0000-0000-0000-000000000340", "manager-join-owner-reviewer", false);
+        TestServerPlayer lead = createPlayer("00000000-0000-0000-0000-000000000341", "lead-join-owner-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000342", "op-join-owner-reviewer-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000343", "applicant-join-owner-reviewer", false);
+        TestMinecraftServer server = createServer(owner, lead, operator, applicant);
+        Project project = addTeamProject(owner, "join-owner-reviewer-project", "Join Owner Reviewer Project");
+        project.addMember(lead.getStringUUID(), Project.ProjectRole.LEAD, lead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-owner-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "owner 在线时 join project 应返回命令成功");
+        assertContainsMessageKey(owner.getClientMessages(), "message.todolist.project.join.request_received", "owner 在线时未收到 join project 审批通知");
+        assertNotContainsMessageKey(lead.getClientMessages(), "message.todolist.project.join.request_received", "owner 在线时不应继续通知 lead");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 在线时不应继续通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "owner 在线时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 owner 不在线但 lead 在线时，join project 的审批通知会优先发送给 lead，而不是继续通知兜底 OP。
+     */
+    /**
+     * 校验 ownerUuid 指向的真实项目经理在线时，即使成员表里还混入第二个 PROJECT_MANAGER，也只会优先通知 ownerUuid 对应经理。
+     */
+    private static void shouldPreferOwnerUuidManagerOverOtherProjectManagersSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer owner = createPlayer("00000000-0000-0000-0000-000000000387", "manager-join-owner-primary", false);
+        TestServerPlayer secondaryManager = createPlayer("00000000-0000-0000-0000-000000000388", "manager-join-owner-secondary", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000389", "op-join-owner-secondary-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000390", "applicant-join-owner-secondary", false);
+        TestMinecraftServer server = createServer(owner, secondaryManager, operator, applicant);
+        Project project = addTeamProject(owner, "join-owner-secondary-manager-project", "Join Owner Secondary Manager Project");
+        project.addMember(secondaryManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondaryManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-owner-secondary-manager-project", createSource(0, applicant, server));
+        assertEquals(1, result, "owner 与第二个项目经理同时在线时 join project 应返回命令成功");
+        assertContainsMessageKey(owner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 对应的真实项目经理应收到 join reviewer 通知");
+        assertNotContainsMessageKey(secondaryManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 对应项目经理已在线时不应继续通知第二个 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 对应项目经理已在线时不应回退通知 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "ownerUuid 对应项目经理已在线时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验成员表里第二个 PROJECT_MANAGER 即使没有收到自动 reviewer 通知，也仍可手动执行 join accept。
+     */
+    private static void shouldAllowJoinApprovalBySecondaryProjectManagerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer owner = createPlayer("00000000-0000-0000-0000-000000000391", "manager-join-owner-approve-primary", false);
+        TestServerPlayer secondaryManager = createPlayer("00000000-0000-0000-0000-000000000392", "manager-join-owner-approve-secondary", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000393", "applicant-join-owner-approve-secondary", false);
+        TestMinecraftServer server = createServer(owner, secondaryManager, applicant);
+        Project project = addTeamProject(owner, "join-owner-secondary-approve-project", "Join Owner Secondary Approve Project");
+        project.addMember(secondaryManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondaryManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-owner-secondary-approve-project", createSource(0, applicant, server)), "重复项目经理场景下 join project 应返回成功");
+        assertContainsMessageKey(owner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 对应项目经理应先收到 reviewer 通知");
+        assertNotContainsMessageKey(secondaryManager.getClientMessages(), "message.todolist.project.join.request_received", "第二个 PROJECT_MANAGER 不应收到自动 reviewer 通知");
+
+        int approveResult = dispatcher.execute("todo join accept join-owner-secondary-approve-project " + applicant.getStringUUID(), createSource(0, secondaryManager, server));
+        assertEquals(1, approveResult, "第二个 PROJECT_MANAGER 手动执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "第二个 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "第二个 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondaryManager.getClientMessages(), "message.todolist.project.join.approved", "第二个 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验成员表里第二个 PROJECT_MANAGER 即使没有收到自动 reviewer 通知，也仍可手动执行 join deny。
+     */
+    private static void shouldAllowJoinDenialBySecondaryProjectManagerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer owner = createPlayer("00000000-0000-0000-0000-000000000394", "manager-join-owner-deny-primary", false);
+        TestServerPlayer secondaryManager = createPlayer("00000000-0000-0000-0000-000000000395", "manager-join-owner-deny-secondary", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000396", "applicant-join-owner-deny-secondary", false);
+        TestMinecraftServer server = createServer(owner, secondaryManager, applicant);
+        Project project = addTeamProject(owner, "join-owner-secondary-deny-project", "Join Owner Secondary Deny Project");
+        project.addMember(secondaryManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondaryManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-owner-secondary-deny-project", createSource(0, applicant, server)), "重复项目经理场景下 join project 应返回成功");
+        assertContainsMessageKey(owner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 对应项目经理应先收到 reviewer 通知");
+        assertNotContainsMessageKey(secondaryManager.getClientMessages(), "message.todolist.project.join.request_received", "第二个 PROJECT_MANAGER 不应收到自动 reviewer 通知");
+
+        int denyResult = dispatcher.execute("todo join deny join-owner-secondary-deny-project " + applicant.getStringUUID(), createSource(0, secondaryManager, server));
+        assertEquals(1, denyResult, "第二个 PROJECT_MANAGER 手动执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "第二个 PROJECT_MANAGER 执行 join deny 后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "第二个 PROJECT_MANAGER 执行 join deny 后申请人应收到 denied");
+        assertContainsMessageKey(secondaryManager.getClientMessages(), "message.todolist.project.join.rejected", "第二个 PROJECT_MANAGER 执行 join deny 后应收到 rejected");
+    }
+
+    private static void shouldPreferLeadReviewerOverFallbackOperatorSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000336", "manager-join-lead-reviewer", false);
+        TestServerPlayer lead = createPlayer("00000000-0000-0000-0000-000000000337", "lead-join-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000338", "op-join-reviewer-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000339", "applicant-join-lead-reviewer", false);
+        TestMinecraftServer server = createServer(lead, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-lead-reviewer-project", "Join Lead Reviewer Project");
+        project.addMember(lead.getStringUUID(), Project.ProjectRole.LEAD, lead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-lead-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "lead 在线时 join project 应返回命令成功");
+        assertContainsMessageKey(lead.getClientMessages(), "message.todolist.project.join.request_received", "lead 在线时未收到 join project 审批通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "lead 在线时不应再通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "lead 在线时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 ownerUuid 脏数据时，join project 仍会回退通知到可用的在线 lead，而不会误落到兜底 OP。
+     */
+    private static void shouldFallbackToLeadWhenOwnerUuidIsInvalidSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000353", "manager-join-invalid-owner-reviewer", false);
+        TestServerPlayer lead = createPlayer("00000000-0000-0000-0000-000000000354", "lead-join-invalid-owner-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000355", "op-join-invalid-owner-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000356", "applicant-join-invalid-owner-reviewer", false);
+        TestMinecraftServer server = createServer(lead, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reviewer-project", "Join Invalid Owner Reviewer Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(lead.getStringUUID(), Project.ProjectRole.LEAD, lead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-invalid-owner-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "ownerUuid 非法时 join project 应返回命令成功");
+        assertContainsMessageKey(lead.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 非法时未回退通知在线 lead");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 非法且有可用 lead 时不应通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "ownerUuid 非法时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 leadUuid 脏数据时，join project 会继续回退到在线 OP，而不是中断通知链路。
+     */
+    /**
+     * Validates that an invalid ownerUuid falls back to all online project managers in the member table before any operator fallback.
+     */
+    private static void shouldNotifyAllOnlineProjectManagersWhenOwnerUuidIsInvalidSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000397", "manager-join-invalid-owner-multi-manager", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000398", "manager-a-join-invalid-owner-reviewer", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000399", "manager-b-join-invalid-owner-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000400", "op-join-invalid-owner-multi-manager", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000401", "applicant-join-invalid-owner-multi-manager", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-multi-manager-project", "Join Invalid Owner Multi Manager Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-invalid-owner-multi-manager-project", createSource(0, applicant, server));
+        assertEquals(1, result, "ownerUuid 无效且存在多个在线 PROJECT_MANAGER 时 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 无效时第一个在线 PROJECT_MANAGER 应收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 无效时第二个在线 PROJECT_MANAGER 也应收到 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 无效且已有在线 PROJECT_MANAGER 时不应继续回退通知 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "ownerUuid 无效且已有在线 PROJECT_MANAGER 时申请人应收到 sent_named");
+    }
+
+    /**
+     * Validates that once one online project manager approves a request, other managers can no longer deny the cleared pending request.
+     */
+    private static void shouldClearPendingJoinRequestAfterApprovalByAnotherProjectManagerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000402", "manager-join-invalid-owner-cross-approve", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000403", "manager-a-join-invalid-owner-cross-approve", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000404", "manager-b-join-invalid-owner-cross-approve", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000405", "applicant-join-invalid-owner-cross-approve", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-cross-approve-project", "Join Invalid Owner Cross Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-cross-approve-project", createSource(0, applicant, server)), "ownerUuid 无效且有多个在线 PROJECT_MANAGER 时 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "第一个在线 PROJECT_MANAGER 应收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "第二个在线 PROJECT_MANAGER 也应收到 reviewer 通知");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-cross-approve-project " + applicant.getStringUUID(), createSource(0, firstManager, server));
+        assertEquals(1, approveResult, "第一个在线 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "首次审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "首次审批通过后申请人应收到 accepted");
+
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-cross-approve-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(0, staleDenyResult, "待审批记录被清理后另一个 PROJECT_MANAGER 的 join deny 应返回失败");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "重复 join deny 失败后不应移除已加入的申请人");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * Validates that once one online project manager denies a request, other managers can no longer approve the cleared pending request.
+     */
+    private static void shouldClearPendingJoinRequestAfterDenialByAnotherProjectManagerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000406", "manager-join-invalid-owner-cross-deny", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000407", "manager-a-join-invalid-owner-cross-deny", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000408", "manager-b-join-invalid-owner-cross-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000409", "applicant-join-invalid-owner-cross-deny", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-cross-deny-project", "Join Invalid Owner Cross Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-cross-deny-project", createSource(0, applicant, server)), "ownerUuid 无效且有多个在线 PROJECT_MANAGER 时 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "第一个在线 PROJECT_MANAGER 应收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "第二个在线 PROJECT_MANAGER 也应收到 reviewer 通知");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-cross-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server));
+        assertEquals(1, denyResult, "第一个在线 PROJECT_MANAGER 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "首次审批拒绝后申请人仍不应被加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "首次审批拒绝后申请人应收到 denied");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-cross-deny-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(0, staleApproveResult, "待审批记录被清理后另一个 PROJECT_MANAGER 的 join accept 应返回失败");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被拒绝后重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "重复 join accept 失败后申请人仍不应被加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验无效 ownerUuid 且存在多个项目经理时，首次被其中一人拒绝后仍可重新申请，并由另一位项目经理审批通过。
+     */
+    private static void shouldAllowReapplyAfterCrossManagerDenialSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000410", "manager-join-invalid-owner-reapply", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000411", "manager-a-join-invalid-owner-reapply", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000412", "manager-b-join-invalid-owner-reapply", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000413", "applicant-join-invalid-owner-reapply", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-project", "Join Invalid Owner Reapply Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-project", createSource(0, applicant, server)), "ownerUuid 无效且有多个在线 PROJECT_MANAGER 时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "首次被拒绝后申请人仍不应被加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "首次被拒绝后申请人应收到 denied");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "再次申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "再次申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "再次申请后申请人应收到 sent_named");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(1, approveResult, "再次申请后另一位 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "再次申请通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "再次申请通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.approved", "再次申请通过后审批人应收到 approved");
+    }
+
+    /**
+     * 校验无效 ownerUuid 的多项目经理场景下，重申请挂起期间重复 join project 不会再次通知所有项目经理。
+     */
+    private static void shouldRejectDuplicateReapplyWithoutRenotifyingProjectManagersSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000414", "manager-join-invalid-owner-reapply-duplicate", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000415", "manager-a-join-invalid-owner-reapply-duplicate", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000416", "manager-b-join-invalid-owner-reapply-duplicate", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000417", "applicant-join-invalid-owner-reapply-duplicate", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-duplicate-project", "Join Invalid Owner Reapply Duplicate Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-duplicate-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-duplicate-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-duplicate-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        int firstNotificationCount = countMessagesContaining(firstManager.getClientMessages(), "message.todolist.project.join.request_received");
+        int secondNotificationCount = countMessagesContaining(secondManager.getClientMessages(), "message.todolist.project.join.request_received");
+        assertEquals(1, firstNotificationCount, "再次申请时第一个在线 PROJECT_MANAGER 应只收到一次 reviewer 通知");
+        assertEquals(1, secondNotificationCount, "再次申请时第二个在线 PROJECT_MANAGER 应只收到一次 reviewer 通知");
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-duplicate-project", createSource(0, applicant, server)), "重申请挂起期间重复 join project 当前仍应返回命令成功");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.already_requested", "重申请挂起期间重复 join project 应提示 already_requested");
+        assertEquals(firstNotificationCount, countMessagesContaining(firstManager.getClientMessages(), "message.todolist.project.join.request_received"), "重复重申请不应再次通知第一个在线 PROJECT_MANAGER");
+        assertEquals(secondNotificationCount, countMessagesContaining(secondManager.getClientMessages(), "message.todolist.project.join.request_received"), "重复重申请不应再次通知第二个在线 PROJECT_MANAGER");
+    }
+
+    /**
+     * 校验多个项目经理场景里首次拒绝后，若第二次申请时只剩一个项目经理在线，会只通知剩余在线审批人并允许其完成审批。
+     */
+    private static void shouldReapplyWithOnlyRemainingOnlineProjectManagerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000418", "manager-join-invalid-owner-reapply-online-change", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000419", "manager-a-join-invalid-owner-reapply-online-change", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000420", "manager-b-join-invalid-owner-reapply-online-change", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000421", "applicant-join-invalid-owner-reapply-online-change", false);
+        TestMinecraftServer initialServer = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-online-change-project", "Join Invalid Owner Reapply Online Change Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-online-change-project", createSource(0, applicant, initialServer)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-online-change-project " + applicant.getStringUUID(), createSource(0, firstManager, initialServer)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer reapplyServer = createServer(secondManager, applicant);
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-reapply-online-change-project", createSource(0, applicant, reapplyServer));
+        assertEquals(1, reapplyResult, "审批人在线集合变化后再次 join project 应返回命令成功");
+        assertNotContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "已离线的第一个 PROJECT_MANAGER 不应在重申请时继续收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "仍在线的第二个 PROJECT_MANAGER 应在重申请时收到 reviewer 通知");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "审批人在线集合变化后的重申请应向申请人回写 sent_named");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "仍有在线 PROJECT_MANAGER 时重申请不应提示 no_reviewer_online");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-online-change-project " + applicant.getStringUUID(), createSource(0, secondManager, reapplyServer));
+        assertEquals(1, approveResult, "剩余在线 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "剩余在线 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "剩余在线 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.approved", "剩余在线 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验多个项目经理场景里首次拒绝后，若第二次申请时没有任何项目经理在线，会先提示 no_reviewer_online，随后仍允许重新上线的项目经理完成审批。
+     */
+    private static void shouldApproveReapplyAfterNoProjectManagerWasOnlineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000422", "manager-join-invalid-owner-reapply-no-reviewer", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000423", "manager-a-join-invalid-owner-reapply-no-reviewer", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000424", "manager-b-join-invalid-owner-reapply-no-reviewer", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000425", "applicant-join-invalid-owner-reapply-no-reviewer", false);
+        TestMinecraftServer initialServer = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-no-reviewer-project", "Join Invalid Owner Reapply No Reviewer Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-no-reviewer-project", createSource(0, applicant, initialServer)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-no-reviewer-project " + applicant.getStringUUID(), createSource(0, firstManager, initialServer)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer offlineReapplyServer = createServer(applicant);
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-reapply-no-reviewer-project", createSource(0, applicant, offlineReapplyServer));
+        assertEquals(1, reapplyResult, "重申请时没有项目经理在线也应返回命令成功包裹");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "重申请时没有项目经理在线应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "重申请时没有项目经理在线不应提示 sent_named");
+        assertNotContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请时没有项目经理在线不应误通知第一个 PROJECT_MANAGER");
+        assertNotContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请时没有项目经理在线不应误通知第二个 PROJECT_MANAGER");
+
+        TestMinecraftServer lateApprovalServer = createServer(secondManager, applicant);
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-no-reviewer-project " + applicant.getStringUUID(), createSource(0, secondManager, lateApprovalServer));
+        assertEquals(1, approveResult, "重新上线的 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "重新上线的 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "重新上线的 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.approved", "重新上线的 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验多个项目经理场景里首次拒绝后，若第二次申请时没有任何项目经理在线，会先提示 no_reviewer_online，随后仍允许重新上线的项目经理完成拒绝。
+     */
+    private static void shouldDenyReapplyAfterNoProjectManagerWasOnlineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000426", "manager-join-invalid-owner-reapply-no-reviewer-deny", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000427", "manager-a-join-invalid-owner-reapply-no-reviewer-deny", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000428", "manager-b-join-invalid-owner-reapply-no-reviewer-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000429", "applicant-join-invalid-owner-reapply-no-reviewer-deny", false);
+        TestMinecraftServer initialServer = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-no-reviewer-deny-project", "Join Invalid Owner Reapply No Reviewer Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-no-reviewer-deny-project", createSource(0, applicant, initialServer)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-no-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, initialServer)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer offlineReapplyServer = createServer(applicant);
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-reapply-no-reviewer-deny-project", createSource(0, applicant, offlineReapplyServer));
+        assertEquals(1, reapplyResult, "重申请时没有项目经理在线也应返回命令成功包裹");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "重申请时没有项目经理在线应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "重申请时没有项目经理在线不应提示 sent_named");
+        assertNotContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请时没有项目经理在线不应误通知第一个 PROJECT_MANAGER");
+        assertNotContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请时没有项目经理在线不应误通知第二个 PROJECT_MANAGER");
+
+        TestMinecraftServer lateDenialServer = createServer(secondManager, applicant);
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-no-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, secondManager, lateDenialServer));
+        assertEquals(1, denyResult, "重新上线的 PROJECT_MANAGER 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "重新上线的 PROJECT_MANAGER 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "重新上线的 PROJECT_MANAGER 拒绝后申请人应收到 denied");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.rejected", "重新上线的 PROJECT_MANAGER 拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若最初的项目经理被移出项目，其旧 join accept 权限会失效，而剩余项目经理仍可完成审批。
+     */
+    private static void shouldRejectReapplyApprovalAfterProjectManagerRemovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000430", "manager-join-invalid-owner-reapply-removed-reviewer", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000431", "manager-a-join-invalid-owner-reapply-removed-reviewer", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000432", "manager-b-join-invalid-owner-reapply-removed-reviewer", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000433", "applicant-join-invalid-owner-reapply-removed-reviewer", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-removed-reviewer-project", "Join Invalid Owner Reapply Removed Reviewer Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-removed-reviewer-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-removed-reviewer-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-removed-reviewer-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+
+        project.removeMember(firstManager.getStringUUID());
+        assertEquals(null, project.getMemberRole(firstManager.getStringUUID()), "移除后的第一个 PROJECT_MANAGER 不应继续保留项目角色");
+
+        CapturingCommandSourceStack removedManagerSource = createSource(0, firstManager, server);
+        int removedApproveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-removed-reviewer-project " + applicant.getStringUUID(), removedManagerSource);
+        assertEquals(0, removedApproveResult, "被移出项目的旧 PROJECT_MANAGER 执行 join accept 应返回失败");
+        assertContainsMessageKey(removedManagerSource.getFailureMessages(), "command.todolist.permission_denied", "被移出项目后的旧 PROJECT_MANAGER 执行 join accept 错误键不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "旧 PROJECT_MANAGER 审批失败后不应提前把申请人加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "旧 PROJECT_MANAGER 审批失败后不应通知申请人 accepted");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-removed-reviewer-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(1, approveResult, "剩余 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "剩余 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "剩余 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.approved", "剩余 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若最初的项目经理被移出项目，其旧 join deny 权限会失效，而剩余项目经理仍可完成拒绝。
+     */
+    private static void shouldRejectReapplyDenialAfterProjectManagerRemovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000434", "manager-join-invalid-owner-reapply-removed-reviewer-deny", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000435", "manager-a-join-invalid-owner-reapply-removed-reviewer-deny", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000436", "manager-b-join-invalid-owner-reapply-removed-reviewer-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000437", "applicant-join-invalid-owner-reapply-removed-reviewer-deny", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-removed-reviewer-deny-project", "Join Invalid Owner Reapply Removed Reviewer Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-removed-reviewer-deny-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-removed-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-removed-reviewer-deny-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+
+        project.removeMember(firstManager.getStringUUID());
+        assertEquals(null, project.getMemberRole(firstManager.getStringUUID()), "移除后的第一个 PROJECT_MANAGER 不应继续保留项目角色");
+
+        CapturingCommandSourceStack removedManagerSource = createSource(0, firstManager, server);
+        int removedDenyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-removed-reviewer-deny-project " + applicant.getStringUUID(), removedManagerSource);
+        assertEquals(0, removedDenyResult, "被移出项目的旧 PROJECT_MANAGER 执行 join deny 应返回失败");
+        assertContainsMessageKey(removedManagerSource.getFailureMessages(), "command.todolist.permission_denied", "被移出项目后的旧 PROJECT_MANAGER 执行 join deny 错误键不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "旧 PROJECT_MANAGER 拒绝失败后不应改动申请人成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "旧 PROJECT_MANAGER 拒绝失败后不应通知申请人 denied");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-removed-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(1, denyResult, "剩余 PROJECT_MANAGER 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "剩余 PROJECT_MANAGER 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "剩余 PROJECT_MANAGER 拒绝后申请人应收到 denied");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.rejected", "剩余 PROJECT_MANAGER 拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若最初的项目经理被降为普通成员，其旧 join accept 权限会失效，而剩余项目经理仍可完成审批。
+     */
+    private static void shouldRejectReapplyApprovalAfterProjectManagerDemotionSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000438", "manager-join-invalid-owner-reapply-demoted-reviewer", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000439", "manager-a-join-invalid-owner-reapply-demoted-reviewer", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000440", "manager-b-join-invalid-owner-reapply-demoted-reviewer", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000441", "applicant-join-invalid-owner-reapply-demoted-reviewer", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-demoted-reviewer-project", "Join Invalid Owner Reapply Demoted Reviewer Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-reviewer-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-reviewer-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-reviewer-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.MEMBER, firstManager.getName().getString());
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(firstManager.getStringUUID()), "被降权后的原 PROJECT_MANAGER 应变为普通成员");
+
+        CapturingCommandSourceStack demotedManagerSource = createSource(0, firstManager, server);
+        int demotedApproveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-demoted-reviewer-project " + applicant.getStringUUID(), demotedManagerSource);
+        assertEquals(0, demotedApproveResult, "被降权的旧 PROJECT_MANAGER 执行 join accept 应返回失败");
+        assertContainsMessageKey(demotedManagerSource.getFailureMessages(), "command.todolist.permission_denied", "被降权的旧 PROJECT_MANAGER 执行 join accept 错误键不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "旧 PROJECT_MANAGER 审批失败后不应提前把申请人加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "旧 PROJECT_MANAGER 审批失败后不应通知申请人 accepted");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-demoted-reviewer-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(1, approveResult, "剩余 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "剩余 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "剩余 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.approved", "剩余 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若最初的项目经理被降为普通成员，其旧 join deny 权限会失效，而剩余项目经理仍可完成拒绝。
+     */
+    private static void shouldRejectReapplyDenialAfterProjectManagerDemotionSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000442", "manager-join-invalid-owner-reapply-demoted-reviewer-deny", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000443", "manager-a-join-invalid-owner-reapply-demoted-reviewer-deny", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000444", "manager-b-join-invalid-owner-reapply-demoted-reviewer-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000445", "applicant-join-invalid-owner-reapply-demoted-reviewer-deny", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-demoted-reviewer-deny-project", "Join Invalid Owner Reapply Demoted Reviewer Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-reviewer-deny-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-reviewer-deny-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.MEMBER, firstManager.getName().getString());
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(firstManager.getStringUUID()), "被降权后的原 PROJECT_MANAGER 应变为普通成员");
+
+        CapturingCommandSourceStack demotedManagerSource = createSource(0, firstManager, server);
+        int demotedDenyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-reviewer-deny-project " + applicant.getStringUUID(), demotedManagerSource);
+        assertEquals(0, demotedDenyResult, "被降权的旧 PROJECT_MANAGER 执行 join deny 应返回失败");
+        assertContainsMessageKey(demotedManagerSource.getFailureMessages(), "command.todolist.permission_denied", "被降权的旧 PROJECT_MANAGER 执行 join deny 错误键不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "旧 PROJECT_MANAGER 拒绝失败后不应改动申请人成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "旧 PROJECT_MANAGER 拒绝失败后不应通知申请人 denied");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-reviewer-deny-project " + applicant.getStringUUID(), createSource(0, secondManager, server));
+        assertEquals(1, denyResult, "剩余 PROJECT_MANAGER 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "剩余 PROJECT_MANAGER 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "剩余 PROJECT_MANAGER 拒绝后申请人应收到 denied");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.rejected", "剩余 PROJECT_MANAGER 拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若全部项目经理都被降为普通成员，在线 OP 仍可作为兜底审批人完成 join accept。
+     */
+    private static void shouldAllowReapplyApprovalByOperatorAfterProjectManagerDemotionSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000446", "manager-join-invalid-owner-reapply-demoted-op-approve", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000447", "manager-a-join-invalid-owner-reapply-demoted-op-approve", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000448", "manager-b-join-invalid-owner-reapply-demoted-op-approve", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000449", "op-join-invalid-owner-reapply-demoted-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000450", "applicant-join-invalid-owner-reapply-demoted-op-approve", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-demoted-op-approve-project", "Join Invalid Owner Reapply Demoted Op Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-op-approve-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-op-approve-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-op-approve-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "项目经理仍在线时不应自动通知兜底 OP");
+
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.MEMBER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.MEMBER, secondManager.getName().getString());
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(firstManager.getStringUUID()), "第一个原 PROJECT_MANAGER 被降权后应变为普通成员");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(secondManager.getStringUUID()), "第二个原 PROJECT_MANAGER 被降权后应变为普通成员");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-demoted-op-approve-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, approveResult, "在线 OP 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "在线 OP 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.approved", "在线 OP 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验重申请已经挂起后，若全部项目经理都被降为普通成员，在线 OP 仍可作为兜底审批人完成 join deny。
+     */
+    private static void shouldAllowReapplyDenialByOperatorAfterProjectManagerDemotionSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000451", "manager-join-invalid-owner-reapply-demoted-op-deny", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000452", "manager-a-join-invalid-owner-reapply-demoted-op-deny", false);
+        TestServerPlayer secondManager = createPlayer("00000000-0000-0000-0000-000000000453", "manager-b-join-invalid-owner-reapply-demoted-op-deny", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000454", "op-join-invalid-owner-reapply-demoted-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000455", "applicant-join-invalid-owner-reapply-demoted-op-deny", false);
+        TestMinecraftServer server = createServer(firstManager, secondManager, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-demoted-op-deny-project", "Join Invalid Owner Reapply Demoted Op Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, secondManager.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-op-deny-project", createSource(0, applicant, server)), "首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-op-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "第一个在线 PROJECT_MANAGER 首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        secondManager.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-demoted-op-deny-project", createSource(0, applicant, server)), "被拒绝后再次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第一个在线 PROJECT_MANAGER 应重新收到 reviewer 通知");
+        assertContainsMessageKey(secondManager.getClientMessages(), "message.todolist.project.join.request_received", "重申请后第二个在线 PROJECT_MANAGER 也应重新收到 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "项目经理仍在线时不应自动通知兜底 OP");
+
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.MEMBER, firstManager.getName().getString());
+        project.addMember(secondManager.getStringUUID(), Project.ProjectRole.MEMBER, secondManager.getName().getString());
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(firstManager.getStringUUID()), "第一个原 PROJECT_MANAGER 被降权后应变为普通成员");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(secondManager.getStringUUID()), "第二个原 PROJECT_MANAGER 被降权后应变为普通成员");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-demoted-op-deny-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, denyResult, "在线 OP 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "在线 OP 拒绝后申请人应收到 denied");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.rejected", "在线 OP 拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验 ownerUuid 从脏数据修回在线项目经理后，重申请的 reviewer 通知会重新收敛到该 owner，而不会继续扩散给其他项目经理或 OP。
+     */
+    private static void shouldPreferRestoredOwnerProjectManagerOnReapplySuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000456", "manager-join-invalid-owner-reapply-restored-owner-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000457", "manager-a-join-invalid-owner-reapply-restored-owner", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000458", "manager-b-join-invalid-owner-reapply-restored-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000459", "op-join-invalid-owner-reapply-restored-owner", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000460", "applicant-join-invalid-owner-reapply-restored-owner", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-restored-owner-project", "Join Invalid Owner Reapply Restored Owner Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 脏数据时第一个在线 PROJECT_MANAGER 应先收到 reviewer 通知");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 脏数据时第二个在线 PROJECT_MANAGER 也应先收到 reviewer 通知");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应只通知对应的在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(firstManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后不应继续通知其他在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后不应继续通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "ownerUuid 修复后申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 ownerUuid 修复到在线项目经理后，若该 owner 随后离线，重申请会重新回退到仍在线的其他项目经理，而不会误落到 OP。
+     */
+    private static void shouldFallbackToRemainingProjectManagerAfterRestoredOwnerGoesOfflineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000481", "manager-join-invalid-owner-restored-offline-fallback-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000482", "manager-a-join-invalid-owner-restored-offline-fallback", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000483", "manager-b-join-invalid-owner-restored-offline-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000484", "op-join-invalid-owner-restored-offline-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000485", "applicant-join-invalid-owner-restored-offline-fallback", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-offline-fallback-project", "Join Invalid Owner Restored Offline Fallback Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-offline-fallback-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 脏数据时其他在线 PROJECT_MANAGER 应收到 reviewer 通知");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 脏数据时后续会被修回的 PROJECT_MANAGER 也应先收到 reviewer 通知");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-offline-fallback-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-offline-fallback-project", createSource(0, applicant, initialServer)), "ownerUuid 修复且 owner 在线时重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时应优先通知 owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时不应继续通知其他 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时不应通知 OP");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer ownerOfflineServer = createServer(remainingManager, operator, applicant);
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-offline-fallback-project " + applicant.getStringUUID(), createSource(2, operator, ownerOfflineServer)), "清理 owner 在线时的挂起申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-offline-fallback-project", createSource(0, applicant, ownerOfflineServer));
+        assertEquals(1, reapplyResult, "owner 修复后又离线时再次重申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线后应重新回退通知仍在线的其他 PROJECT_MANAGER");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "离线的 owner 不应继续收到 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "仍有在线 PROJECT_MANAGER 时不应回退通知 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "owner 离线后的重申请应向申请人回写 sent_named");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 owner 先离线再重新上线，reviewer 通知会从其他在线项目经理重新收敛回 owner 优先。
+     */
+    private static void shouldReturnToRestoredOwnerReviewerWhenOwnerComesBackOnlineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000494", "manager-join-invalid-owner-restored-return-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000495", "manager-a-join-invalid-owner-restored-return", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000496", "manager-b-join-invalid-owner-restored-return-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000497", "op-join-invalid-owner-restored-return", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000498", "applicant-join-invalid-owner-restored-return", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-return-project", "Join Invalid Owner Restored Return Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-project", createSource(0, applicant, initialServer)), "ownerUuid 修复且 owner 在线时重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时应优先通知 owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时不应继续通知其他 PROJECT_MANAGER");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-project " + applicant.getStringUUID(), createSource(0, restoredOwner, initialServer)), "清理 owner 在线时的挂起申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer ownerOfflineServer = createServer(remainingManager, operator, applicant);
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-project", createSource(0, applicant, ownerOfflineServer)), "owner 离线时重申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线时应回退通知其他在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线时不应继续收到 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线且仍有在线 PROJECT_MANAGER 时不应通知 OP");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOfflineServer)), "清理 owner 离线时的挂起申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+
+        TestMinecraftServer ownerBackOnlineServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-return-project", createSource(0, applicant, ownerBackOnlineServer));
+        assertEquals(1, reapplyResult, "owner 重新上线后的重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 重新上线后应重新收敛回 owner reviewer");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "owner 重新上线后不应继续通知其他 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 重新上线后不应通知 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "owner 重新上线后的重申请应向申请人回写 sent_named");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 owner 与其他项目经理都离线，重申请会重新落到 no_reviewer_online，随后仍可由重新上线的项目经理完成审批。
+     */
+    /**
+     * 校验 owner 再次离线后若由 remainingManager 先执行 join accept，随后 restored owner 回来重复 join deny 会命中 already_member，不会回滚已通过的成员状态。
+     */
+    private static void shouldClearPendingJoinRequestAfterFallbackManagerApprovalWhenRestoredOwnerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000518", "manager-join-invalid-owner-restored-return-cross-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000519", "manager-a-join-invalid-owner-restored-return-cross-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000520", "manager-b-join-invalid-owner-restored-return-cross-approve-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000521", "applicant-join-invalid-owner-restored-return-cross-approve", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-return-cross-approve-project", "Join Invalid Owner Restored Return Cross Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-approve-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-approve-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerOnlineServer)), "restored owner 清理在线申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer ownerOfflineServer = createServer(remainingManager, applicant);
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-approve-project", createSource(0, applicant, ownerOfflineServer)), "owner 再次离线后重申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "owner 再次离线后应回退通知 remainingManager");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 再次离线后不应继续通知 restored owner");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-return-cross-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOfflineServer));
+        assertEquals(1, approveResult, "remainingManager 接管后执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "remainingManager 接管审批通过后应将申请人加入项目");
+
+        TestMinecraftServer ownerReturnServer = createServer(remainingManager, restoredOwner, applicant);
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerReturnServer));
+        assertEquals(0, staleDenyResult, "remainingManager 已清理待审批记录后 restored owner 的 join deny 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 restored owner 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "restored owner 重复 join deny 失败后不应回滚申请人的成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "restored owner 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 owner 再次离线后若由 remainingManager 先执行 join deny，随后 restored owner 回来重复 join accept 会命中 no_pending_request，不会重新放行已清理的申请。
+     */
+    private static void shouldClearPendingJoinRequestAfterFallbackManagerDenialWhenRestoredOwnerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000522", "manager-join-invalid-owner-restored-return-cross-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000523", "manager-a-join-invalid-owner-restored-return-cross-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000524", "manager-b-join-invalid-owner-restored-return-cross-deny-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000525", "applicant-join-invalid-owner-restored-return-cross-deny", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-return-cross-deny-project", "Join Invalid Owner Restored Return Cross Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-deny-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-deny-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerOnlineServer)), "restored owner 清理在线申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer ownerOfflineServer = createServer(remainingManager, applicant);
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-return-cross-deny-project", createSource(0, applicant, ownerOfflineServer)), "owner 再次离线后重申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "owner 再次离线后应回退通知 remainingManager");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 再次离线后不应继续通知 restored owner");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-return-cross-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOfflineServer));
+        assertEquals(1, denyResult, "remainingManager 接管后执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "remainingManager 接管拒绝后不应将申请人加入项目");
+
+        TestMinecraftServer ownerReturnServer = createServer(remainingManager, restoredOwner, applicant);
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-return-cross-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerReturnServer));
+        assertEquals(0, staleApproveResult, "remainingManager 已清理待审批记录后 restored owner 的 join accept 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 remainingManager 清理后 restored owner 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "restored owner 重复 join accept 失败后不应把申请人重新加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "restored owner 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验 ownerUuid 修复且 restored owner 在线时若由 owner 先执行 join accept，其他项目经理随后重复 join deny 会命中 already_member，不会回滚已通过的成员状态。
+     */
+    private static void shouldClearPendingJoinRequestAfterRestoredOwnerApprovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000500", "manager-join-invalid-owner-restored-owner-cross-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000501", "manager-a-join-invalid-owner-restored-owner-cross-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000502", "manager-b-join-invalid-owner-restored-owner-cross-approve", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000503", "applicant-join-invalid-owner-restored-owner-cross-approve", false);
+        TestMinecraftServer server = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-owner-cross-approve-project", "Join Invalid Owner Restored Owner Cross Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-cross-approve-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-owner-cross-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, server)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-cross-approve-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后不应继续通知 remainingManager");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-owner-cross-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(1, approveResult, "restored owner 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "restored owner 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "restored owner 审批通过后申请人应收到 accepted");
+
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-owner-cross-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, server));
+        assertEquals(0, staleDenyResult, "restored owner 清理待审批记录后 remainingManager 的 join deny 应返回失败");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 remainingManager 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "remainingManager 重复 join deny 失败后不应回滚申请人的成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "remainingManager 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 ownerUuid 修复且 restored owner 在线时若由 owner 先执行 join deny，其他项目经理随后重复 join accept 会命中 no_pending_request，不会重新放行已清理的申请。
+     */
+    private static void shouldClearPendingJoinRequestAfterRestoredOwnerDenialSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000504", "manager-join-invalid-owner-restored-owner-cross-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000505", "manager-a-join-invalid-owner-restored-owner-cross-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000506", "manager-b-join-invalid-owner-restored-owner-cross-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000507", "applicant-join-invalid-owner-restored-owner-cross-deny", false);
+        TestMinecraftServer server = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-owner-cross-deny-project", "Join Invalid Owner Restored Owner Cross Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-cross-deny-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-owner-cross-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, server)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-cross-deny-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后不应继续通知 remainingManager");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-owner-cross-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(1, denyResult, "restored owner 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "restored owner 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "restored owner 拒绝后申请人应收到 denied");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-owner-cross-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, server));
+        assertEquals(0, staleApproveResult, "restored owner 清理待审批记录后 remainingManager 的 join accept 应返回失败");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 restored owner 清理后 remainingManager 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "remainingManager 重复 join accept 失败后不应把申请人重新加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "remainingManager 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 owner 与其他项目经理都离线，重申请会重新落到 no_reviewer_online，随后仍可由重新上线的项目经理完成审批通过。
+     */
+    private static void shouldApproveReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000486", "manager-join-invalid-owner-restored-all-offline-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000487", "manager-a-join-invalid-owner-restored-all-offline-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000488", "manager-b-join-invalid-owner-restored-all-offline-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000489", "applicant-join-invalid-owner-restored-all-offline-approve", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-all-offline-approve-project", "Join Invalid Owner Restored All Offline Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-approve-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-all-offline-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-approve-project", createSource(0, applicant, initialServer)), "ownerUuid 修复且 owner 在线时重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时应优先通知 owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时不应继续通知其他 PROJECT_MANAGER");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer allOfflineServer = createServer(applicant);
+
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-all-offline-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, initialServer)), "清理 owner 在线时的挂起申请应返回成功");
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-approve-project", createSource(0, applicant, allOfflineServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请仍应返回命令成功包裹");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "owner 与其他项目经理都离线时应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "owner 与其他项目经理都离线时不应提示 sent_named");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "其他项目经理离线时不应收到 reviewer 通知");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线时不应收到 reviewer 通知");
+
+        TestMinecraftServer lateApprovalServer = createServer(remainingManager, applicant);
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-all-offline-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, lateApprovalServer));
+        assertEquals(1, approveResult, "重新上线的 PROJECT_MANAGER 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "重新上线的 PROJECT_MANAGER 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "重新上线的 PROJECT_MANAGER 审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.approved", "重新上线的 PROJECT_MANAGER 审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 owner 与其他项目经理都离线，重申请会重新落到 no_reviewer_online，随后仍可由重新上线的项目经理完成拒绝。
+     */
+    private static void shouldDenyReapplyAfterRestoredOwnerAndManagersGoOfflineSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000490", "manager-join-invalid-owner-restored-all-offline-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000491", "manager-a-join-invalid-owner-restored-all-offline-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000492", "manager-b-join-invalid-owner-restored-all-offline-deny-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000493", "applicant-join-invalid-owner-restored-all-offline-deny", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-all-offline-deny-project", "Join Invalid Owner Restored All Offline Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-deny-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-all-offline-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-deny-project", createSource(0, applicant, initialServer)), "ownerUuid 修复且 owner 在线时重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时应优先通知 owner");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复且 owner 在线时不应继续通知其他 PROJECT_MANAGER");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer allOfflineServer = createServer(applicant);
+
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-all-offline-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, initialServer)), "清理 owner 在线时的挂起申请应返回成功");
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-all-offline-deny-project", createSource(0, applicant, allOfflineServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请仍应返回命令成功包裹");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.no_reviewer_online", "owner 与其他项目经理都离线时应提示 no_reviewer_online");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "owner 与其他项目经理都离线时不应提示 sent_named");
+        assertNotContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "其他项目经理离线时不应收到 reviewer 通知");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 离线时不应收到 reviewer 通知");
+
+        TestMinecraftServer lateDenialServer = createServer(remainingManager, applicant);
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-all-offline-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, lateDenialServer));
+        assertEquals(1, denyResult, "重新上线的 PROJECT_MANAGER 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "重新上线的 PROJECT_MANAGER 拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "重新上线的 PROJECT_MANAGER 拒绝后申请人应收到 denied");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.rejected", "重新上线的 PROJECT_MANAGER 拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验 ownerUuid 已修回在线项目经理后，在线 OP 虽然不会再收到自动 reviewer 通知，但仍可按当前全局管理员语义手动完成 join accept。
+     */
+    private static void shouldAllowOperatorApprovalAfterOwnerUuidRestoredSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000461", "manager-join-invalid-owner-reapply-restored-owner-op-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000462", "manager-a-join-invalid-owner-reapply-restored-owner-op", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000463", "manager-b-join-invalid-owner-reapply-restored-owner-op", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000464", "op-join-invalid-owner-reapply-restored-owner-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000465", "applicant-join-invalid-owner-reapply-restored-owner-op", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-restored-owner-op-project", "Join Invalid Owner Reapply Restored Owner Op Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应通知对应的在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应再收到自动 reviewer 通知");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-restored-owner-op-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, approveResult, "ownerUuid 修复后在线 OP 手动执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "在线 OP 手动审批通过后申请人应收到 accepted");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.approved", "在线 OP 手动审批通过后应收到 approved");
+    }
+
+    /**
+     * 校验 ownerUuid 已修回在线项目经理后，在线 OP 虽然不会再收到自动 reviewer 通知，但仍可按当前全局管理员语义手动完成 join deny。
+     */
+    private static void shouldAllowOperatorDenialAfterOwnerUuidRestoredSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000466", "manager-join-invalid-owner-reapply-restored-owner-op-deny-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000467", "manager-a-join-invalid-owner-reapply-restored-owner-op-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000468", "manager-b-join-invalid-owner-reapply-restored-owner-op-deny", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000469", "op-join-invalid-owner-reapply-restored-owner-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000470", "applicant-join-invalid-owner-reapply-restored-owner-op-deny", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-restored-owner-op-deny-project", "Join Invalid Owner Reapply Restored Owner Op Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-deny-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-deny-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应通知对应的在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应再收到自动 reviewer 通知");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-deny-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, denyResult, "ownerUuid 修复后在线 OP 手动执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "在线 OP 手动拒绝后申请人应收到 denied");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.rejected", "在线 OP 手动拒绝后应收到 rejected");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若在线 OP 先手动审批通过，随后 owner 再执行 join deny 会命中 already_member，而不会回滚已通过的成员状态。
+     */
+    private static void shouldClearPendingJoinRequestAfterOperatorApprovalWithRestoredOwnerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000471", "manager-join-invalid-owner-reapply-restored-owner-op-cross-approve-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000472", "manager-a-join-invalid-owner-reapply-restored-owner-op-cross-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000473", "manager-b-join-invalid-owner-reapply-restored-owner-op-cross-approve", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000474", "op-join-invalid-owner-reapply-restored-owner-cross-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000475", "applicant-join-invalid-owner-reapply-restored-owner-op-cross-approve", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-restored-owner-op-cross-approve-project", "Join Invalid Owner Reapply Restored Owner Op Cross Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-cross-approve-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-cross-approve-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-cross-approve-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应通知对应的在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应再收到自动 reviewer 通知");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-restored-owner-op-cross-approve-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, approveResult, "在线 OP 手动执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 审批通过后应将申请人加入项目");
+
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-cross-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(0, staleDenyResult, "待审批记录被 OP 清理后 owner 的 join deny 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 owner 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "owner 重复 join deny 失败后不应移除已加入的申请人");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "owner 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若在线 OP 先手动拒绝，随后 owner 再执行 join accept 会命中 no_pending_request，而不会重新放行已清理的申请。
+     */
+    private static void shouldClearPendingJoinRequestAfterOperatorDenialWithRestoredOwnerSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000476", "manager-join-invalid-owner-reapply-restored-owner-op-cross-deny-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000477", "manager-a-join-invalid-owner-reapply-restored-owner-op-cross-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000478", "manager-b-join-invalid-owner-reapply-restored-owner-op-cross-deny", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000479", "op-join-invalid-owner-reapply-restored-owner-cross-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000480", "applicant-join-invalid-owner-reapply-restored-owner-op-cross-deny", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-reapply-restored-owner-op-cross-deny-project", "Join Invalid Owner Reapply Restored Owner Op Cross Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-cross-deny-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-cross-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-reapply-restored-owner-op-cross-deny-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应通知对应的在线 PROJECT_MANAGER");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应再收到自动 reviewer 通知");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-reapply-restored-owner-op-cross-deny-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, denyResult, "在线 OP 手动执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 拒绝后不应将申请人加入项目");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-reapply-restored-owner-op-cross-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(0, staleApproveResult, "待审批记录被 OP 清理后 owner 的 join accept 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 OP 拒绝后 owner 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "owner 重复 join accept 失败后申请人仍不应被加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "owner 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 restored owner 先审批通过，在线 OP 随后重复 join deny 会命中 already_member，而不会回滚已通过的成员状态。
+     */
+    private static void shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerApprovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000508", "manager-join-invalid-owner-restored-owner-op-stale-approve-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000509", "manager-a-join-invalid-owner-restored-owner-op-stale-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000510", "manager-b-join-invalid-owner-restored-owner-op-stale-approve", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000511", "op-join-invalid-owner-restored-owner-stale-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000512", "applicant-join-invalid-owner-restored-owner-op-stale-approve", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-owner-op-stale-approve-project", "Join Invalid Owner Restored Owner Op Stale Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-op-stale-approve-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-owner-op-stale-approve-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-op-stale-approve-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应收到自动 reviewer 通知");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-owner-op-stale-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(1, approveResult, "restored owner 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "restored owner 审批通过后应将申请人加入项目");
+
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-owner-op-stale-approve-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(0, staleDenyResult, "restored owner 清理待审批记录后 OP 的 join deny 应返回失败");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 OP 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "OP 重复 join deny 失败后不应回滚申请人的成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "OP 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 ownerUuid 修复后若 restored owner 先执行 join deny，在线 OP 随后重复 join accept 会命中 no_pending_request，而不会重新放行已清理的申请。
+     */
+    private static void shouldClearPendingJoinRequestForOperatorAfterRestoredOwnerDenialSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000513", "manager-join-invalid-owner-restored-owner-op-stale-deny-offline", false);
+        TestServerPlayer firstManager = createPlayer("00000000-0000-0000-0000-000000000514", "manager-a-join-invalid-owner-restored-owner-op-stale-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000515", "manager-b-join-invalid-owner-restored-owner-op-stale-deny", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000516", "op-join-invalid-owner-restored-owner-stale-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000517", "applicant-join-invalid-owner-restored-owner-op-stale-deny", false);
+        TestMinecraftServer server = createServer(firstManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-owner-op-stale-deny-project", "Join Invalid Owner Restored Owner Op Stale Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(firstManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, firstManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-op-stale-deny-project", createSource(0, applicant, server)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-owner-op-stale-deny-project " + applicant.getStringUUID(), createSource(0, firstManager, server)), "首次 join deny 应返回成功");
+
+        firstManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-owner-op-stale-deny-project", createSource(0, applicant, server)), "ownerUuid 修复后重申请应返回命令成功");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后应优先通知 restored owner");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 修复后 OP 不应收到自动 reviewer 通知");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-owner-op-stale-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, server));
+        assertEquals(1, denyResult, "restored owner 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "restored owner 拒绝后不应将申请人加入项目");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-owner-op-stale-deny-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(0, staleApproveResult, "restored owner 清理待审批记录后 OP 的 join accept 应返回失败");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 restored owner 清理后 OP 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "OP 重复 join accept 失败后不应把申请人重新加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "OP 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    private static void shouldFallbackToOperatorWhenLeadUuidIsInvalidSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000357", "manager-join-invalid-lead-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000358", "op-join-invalid-lead-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000359", "applicant-join-invalid-lead-reviewer", false);
+        TestMinecraftServer server = createServer(operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-lead-reviewer-project", "Join Invalid Lead Reviewer Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember("not-a-valid-lead-uuid", Project.ProjectRole.LEAD, "dirty-lead");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-invalid-lead-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "leadUuid 非法时 join project 应返回命令成功");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "leadUuid 非法时未回退通知在线 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "leadUuid 非法时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 lead 列表里混入脏 UUID 时，join project 仍会继续扫描并通知后续可用的在线 lead。
+     */
+    private static void shouldSkipInvalidLeadAndNotifyOtherOnlineLeadSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000360", "manager-join-mixed-lead-reviewer", false);
+        TestServerPlayer validLead = createPlayer("00000000-0000-0000-0000-000000000361", "lead-join-mixed-lead-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000362", "op-join-mixed-lead-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000363", "applicant-join-mixed-lead-reviewer", false);
+        TestMinecraftServer server = createServer(validLead, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-mixed-lead-reviewer-project", "Join Mixed Lead Reviewer Project");
+        Map<String, Project.ProjectRole> members = new LinkedHashMap<>();
+        members.put(offlineManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER);
+        members.put("not-a-valid-lead-uuid", Project.ProjectRole.LEAD);
+        members.put(validLead.getStringUUID(), Project.ProjectRole.LEAD);
+        project.setMembers(members);
+        Map<String, String> memberNames = new LinkedHashMap<>();
+        memberNames.put(offlineManager.getStringUUID(), offlineManager.getName().getString());
+        memberNames.put("not-a-valid-lead-uuid", "dirty-lead");
+        memberNames.put(validLead.getStringUUID(), validLead.getName().getString());
+        project.setMemberNames(memberNames);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-mixed-lead-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "lead 列表混入非法 UUID 时 join project 应返回命令成功");
+        assertContainsMessageKey(validLead.getClientMessages(), "message.todolist.project.join.request_received", "非法 leadUuid 之后的在线 lead 仍应收到审批通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "已有后续在线 lead 可用时不应回退通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "跳过非法 leadUuid 后申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 owner 不在线且有多个 lead 在线时，会通知所有在线 lead，并且不会再落到兜底 OP。
+     */
+    private static void shouldNotifyAllOnlineLeadsBeforeFallbackOperatorSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000348", "manager-join-multi-lead-reviewer", false);
+        TestServerPlayer firstLead = createPlayer("00000000-0000-0000-0000-000000000349", "lead-a-join-reviewer", false);
+        TestServerPlayer secondLead = createPlayer("00000000-0000-0000-0000-000000000350", "lead-b-join-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000351", "op-join-multi-lead-fallback", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000352", "applicant-join-multi-lead-reviewer", false);
+        TestMinecraftServer server = createServer(firstLead, secondLead, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-multi-lead-reviewer-project", "Join Multi Lead Reviewer Project");
+        project.addMember(firstLead.getStringUUID(), Project.ProjectRole.LEAD, firstLead.getName().getString());
+        project.addMember(secondLead.getStringUUID(), Project.ProjectRole.LEAD, secondLead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo join project join-multi-lead-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, result, "多个 lead 在线时 join project 应返回命令成功");
+        assertContainsMessageKey(firstLead.getClientMessages(), "message.todolist.project.join.request_received", "第一个 lead 在线时未收到 join project 审批通知");
+        assertContainsMessageKey(secondLead.getClientMessages(), "message.todolist.project.join.request_received", "第二个 lead 在线时未收到 join project 审批通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "已有在线 lead 时不应继续通知兜底 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "多个 lead 在线时申请人应收到 sent_named");
+    }
+
+    /**
+     * 校验 owner 或 lead 不在线时，在线 OP 可以作为兜底审批人通过 join accept 完成审批。
+     */
+    private static void shouldAllowJoinApprovalByOnlineOperatorSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000330", "manager-join-op-reviewer", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000331", "op-join-reviewer", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000332", "applicant-join-op-reviewer", false);
+        TestMinecraftServer server = createServer(operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-op-reviewer-project", "Join Op Reviewer Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int requestResult = dispatcher.execute("todo join project join-op-reviewer-project", createSource(0, applicant, server));
+        assertEquals(1, requestResult, "在线 OP 作为兜底审批人时 join project 应返回成功");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "在线 OP 未收到 join project 审批通知");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 存在时申请人应收到 sent_named");
+
+        int approveResult = dispatcher.execute("todo join accept join-op-reviewer-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, approveResult, "在线 OP 执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 审批通过后应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "在线 OP 审批通过后申请人未收到 accepted");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.approved", "在线 OP 审批通过后未收到 approved");
+    }
+
+    /**
+     * 校验 owner 或 lead 不在线时，在线 OP 可以作为兜底审批人通过 join deny 拒绝申请。
+     */
+    private static void shouldAllowJoinDenialByOnlineOperatorSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000333", "manager-join-op-deny", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000334", "op-join-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000335", "applicant-join-op-deny", false);
+        TestMinecraftServer server = createServer(operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-op-deny-project", "Join Op Deny Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int requestResult = dispatcher.execute("todo join project join-op-deny-project", createSource(0, applicant, server));
+        assertEquals(1, requestResult, "在线 OP 作为兜底审批人时 join project 应返回成功");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "在线 OP 未收到 join project 拒绝用审批通知");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 存在时申请人应收到 sent_named");
+
+        int denyResult = dispatcher.execute("todo join deny join-op-deny-project " + applicant.getStringUUID(), createSource(2, operator, server));
+        assertEquals(1, denyResult, "在线 OP 执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 审批拒绝后不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "在线 OP 审批拒绝后申请人未收到 denied");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.rejected", "在线 OP 审批拒绝后未收到 rejected");
+    }
+
+    /**
+     * 校验 owner 与其他项目经理都离线时会自动回退通知在线 OP，且 OP 审批通过后 restored owner 回来重复 join deny 会命中 already_member。
+     */
+    /**
+     * 校验 owner 与其他项目经理都离线并由在线 OP 审批通过后，remainingManager 回来重复 join deny 会命中 already_member。
+     */
+    /**
+     * 校验在线 OP 清理旧申请后，只要 remainingManager 重新上线，申请人的新一轮 reapply 会重新收敛到 remainingManager，并可正常审批通过。
+     */
+    private static void shouldAllowReapplyApprovalByRemainingManagerAfterOperatorDenialSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000546", "manager-join-invalid-owner-op-reapply-manager-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000547", "manager-a-join-invalid-owner-op-reapply-manager-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000548", "manager-b-join-invalid-owner-op-reapply-manager-approve-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000549", "op-join-invalid-owner-op-reapply-manager-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000550", "applicant-join-invalid-owner-op-reapply-manager-approve", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-op-reapply-manager-approve-project", "Join Invalid Owner Op Reapply Manager Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-approve-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-op-reapply-manager-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-approve-project", createSource(0, applicant, operatorOnlyServer)), "owner 与其他项目经理都离线时重申请应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-op-reapply-manager-approve-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer)), "在线 OP 清理旧申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer managerReturnServer = createServer(remainingManager, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-approve-project", createSource(0, applicant, managerReturnServer));
+        assertEquals(1, reapplyResult, "remainingManager 回来后重新申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "remainingManager 回来后应重新接收 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "已有在线项目经理时不应继续通知 OP");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 仍离线时不应误通知 restored owner");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "remainingManager 回来后的新申请应向申请人回写 sent_named");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-op-reapply-manager-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, managerReturnServer));
+        assertEquals(1, approveResult, "remainingManager 回来后执行 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "remainingManager 回来后审批通过应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "remainingManager 回来后审批通过应通知申请人 accepted");
+    }
+
+    /**
+     * 校验在线 OP 清理旧申请后，只要 remainingManager 重新上线，申请人的新一轮 reapply 也可重新收敛到 remainingManager 并正常拒绝。
+     */
+    private static void shouldAllowReapplyDenialByRemainingManagerAfterOperatorDenialSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000551", "manager-join-invalid-owner-op-reapply-manager-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000552", "manager-a-join-invalid-owner-op-reapply-manager-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000553", "manager-b-join-invalid-owner-op-reapply-manager-deny-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000554", "op-join-invalid-owner-op-reapply-manager-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000555", "applicant-join-invalid-owner-op-reapply-manager-deny", false);
+        TestMinecraftServer initialServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-op-reapply-manager-deny-project", "Join Invalid Owner Op Reapply Manager Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-deny-project", createSource(0, applicant, initialServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-op-reapply-manager-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, initialServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-deny-project", createSource(0, applicant, operatorOnlyServer)), "owner 与其他项目经理都离线时重申请应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-op-reapply-manager-deny-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer)), "在线 OP 清理旧申请应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        TestMinecraftServer managerReturnServer = createServer(remainingManager, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-op-reapply-manager-deny-project", createSource(0, applicant, managerReturnServer));
+        assertEquals(1, reapplyResult, "remainingManager 回来后重新申请应返回命令成功");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.request_received", "remainingManager 回来后应重新接收 reviewer 通知");
+        assertNotContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "已有在线项目经理时不应继续通知 OP");
+        assertNotContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.request_received", "owner 仍离线时不应误通知 restored owner");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "remainingManager 回来后的新申请应向申请人回写 sent_named");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-op-reapply-manager-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, managerReturnServer));
+        assertEquals(1, denyResult, "remainingManager 回来后执行 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "remainingManager 回来后拒绝不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "remainingManager 回来后拒绝应通知申请人 denied");
+    }
+
+    private static void shouldClearPendingJoinRequestAfterOperatorApprovalWhenRemainingManagerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000536", "manager-join-invalid-owner-restored-op-manager-return-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000537", "manager-a-join-invalid-owner-restored-op-manager-return-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000538", "manager-b-join-invalid-owner-restored-op-manager-return-approve-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000539", "op-join-invalid-owner-restored-op-manager-return-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000540", "applicant-join-invalid-owner-restored-op-manager-return-approve", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-op-manager-return-approve-project", "Join Invalid Owner Restored Op Manager Return Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-op-manager-return-approve-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-op-manager-return-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-op-manager-return-approve-project", createSource(0, applicant, operatorOnlyServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请应返回命令成功包裹");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 与其他项目经理都离线时应自动通知在线 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 自动接管 reviewer 时申请人应收到 sent_named");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-op-manager-return-approve-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer));
+        assertEquals(1, approveResult, "在线 OP 手动 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动审批通过后应将申请人加入项目");
+
+        TestMinecraftServer managerReturnServer = createServer(remainingManager, operator, applicant);
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-op-manager-return-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, managerReturnServer));
+        assertEquals(0, staleDenyResult, "OP 已清理待审批记录后 remainingManager 的 join deny 应返回失败");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 remainingManager 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "remainingManager 重复 join deny 失败后不应回滚申请人的成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "remainingManager 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 owner 与其他项目经理都离线并由在线 OP 拒绝后，remainingManager 回来重复 join accept 会命中 no_pending_request。
+     */
+    private static void shouldClearPendingJoinRequestAfterOperatorDenialWhenRemainingManagerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000541", "manager-join-invalid-owner-restored-op-manager-return-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000542", "manager-a-join-invalid-owner-restored-op-manager-return-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000543", "manager-b-join-invalid-owner-restored-op-manager-return-deny-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000544", "op-join-invalid-owner-restored-op-manager-return-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000545", "applicant-join-invalid-owner-restored-op-manager-return-deny", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-op-manager-return-deny-project", "Join Invalid Owner Restored Op Manager Return Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-op-manager-return-deny-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-op-manager-return-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-op-manager-return-deny-project", createSource(0, applicant, operatorOnlyServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请应返回命令成功包裹");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 与其他项目经理都离线时应自动通知在线 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 自动接管 reviewer 时申请人应收到 sent_named");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-op-manager-return-deny-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer));
+        assertEquals(1, denyResult, "在线 OP 手动 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动拒绝后不应将申请人加入项目");
+
+        TestMinecraftServer managerReturnServer = createServer(remainingManager, operator, applicant);
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-op-manager-return-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, managerReturnServer));
+        assertEquals(0, staleApproveResult, "OP 已清理待审批记录后 remainingManager 的 join accept 应返回失败");
+        assertContainsMessageKey(remainingManager.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 OP 清理后 remainingManager 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "remainingManager 重复 join accept 失败后不应把申请人重新加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "remainingManager 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验 owner 与其他项目经理都离线时会自动回退通知在线 OP，且 OP 审批通过后 restored owner 回来重复 join deny 会命中 already_member。
+     */
+    private static void shouldClearPendingJoinRequestAfterOperatorApprovalWhenRestoredOwnerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000526", "manager-join-invalid-owner-restored-op-return-approve-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000527", "manager-a-join-invalid-owner-restored-op-return-approve", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000528", "manager-b-join-invalid-owner-restored-op-return-approve-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000529", "op-join-invalid-owner-restored-op-return-approve", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000530", "applicant-join-invalid-owner-restored-op-return-approve", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-op-return-approve-project", "Join Invalid Owner Restored Op Return Approve Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-op-return-approve-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-op-return-approve-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-op-return-approve-project", createSource(0, applicant, operatorOnlyServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请应返回命令成功包裹");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 与其他项目经理都离线时应自动通知在线 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 自动接管 reviewer 时申请人应收到 sent_named");
+
+        int approveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-op-return-approve-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer));
+        assertEquals(1, approveResult, "在线 OP 手动 join accept 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动审批通过后应将申请人加入项目");
+
+        TestMinecraftServer ownerReturnServer = createServer(restoredOwner, operator, applicant);
+        int staleDenyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-op-return-approve-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerReturnServer));
+        assertEquals(0, staleDenyResult, "OP 已清理待审批记录后 restored owner 的 join deny 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.already_member", "申请人已被加入项目后 restored owner 重复 join deny 应提示 already_member");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "restored owner 重复 join deny 失败后不应回滚申请人的成员状态");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "restored owner 重复 join deny 失败后不应再通知申请人 denied");
+    }
+
+    /**
+     * 校验 owner 与其他项目经理都离线时会自动回退通知在线 OP，且 OP 拒绝后 restored owner 回来重复 join accept 会命中 no_pending_request。
+     */
+    private static void shouldClearPendingJoinRequestAfterOperatorDenialWhenRestoredOwnerReturnsSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer offlineManager = createPlayer("00000000-0000-0000-0000-000000000531", "manager-join-invalid-owner-restored-op-return-deny-offline", false);
+        TestServerPlayer remainingManager = createPlayer("00000000-0000-0000-0000-000000000532", "manager-a-join-invalid-owner-restored-op-return-deny", false);
+        TestServerPlayer restoredOwner = createPlayer("00000000-0000-0000-0000-000000000533", "manager-b-join-invalid-owner-restored-op-return-deny-owner", false);
+        TestServerPlayer operator = createPlayer("00000000-0000-0000-0000-000000000534", "op-join-invalid-owner-restored-op-return-deny", true);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000535", "applicant-join-invalid-owner-restored-op-return-deny", false);
+        TestMinecraftServer ownerOnlineServer = createServer(remainingManager, restoredOwner, operator, applicant);
+        Project project = addTeamProject(offlineManager, "join-invalid-owner-restored-op-return-deny-project", "Join Invalid Owner Restored Op Return Deny Project");
+        project.setOwnerUuid("not-a-valid-owner-uuid");
+        project.addMember(remainingManager.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, remainingManager.getName().getString());
+        project.addMember(restoredOwner.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, restoredOwner.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-owner-restored-op-return-deny-project", createSource(0, applicant, ownerOnlineServer)), "ownerUuid 脏数据时首次 join project 应返回命令成功");
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-owner-restored-op-return-deny-project " + applicant.getStringUUID(), createSource(0, remainingManager, ownerOnlineServer)), "首次 join deny 应返回成功");
+
+        remainingManager.getClientMessages().clear();
+        restoredOwner.getClientMessages().clear();
+        operator.getClientMessages().clear();
+        applicant.getClientMessages().clear();
+        project.setOwnerUuid(restoredOwner.getStringUUID());
+        TestMinecraftServer operatorOnlyServer = createServer(operator, applicant);
+
+        int reapplyResult = dispatcher.execute("todo join project join-invalid-owner-restored-op-return-deny-project", createSource(0, applicant, operatorOnlyServer));
+        assertEquals(1, reapplyResult, "owner 与其他项目经理都离线时重申请应返回命令成功包裹");
+        assertContainsMessageKey(operator.getClientMessages(), "message.todolist.project.join.request_received", "owner 与其他项目经理都离线时应自动通知在线 OP");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "在线 OP 自动接管 reviewer 时申请人应收到 sent_named");
+
+        int denyResult = dispatcher.execute("todo join deny join-invalid-owner-restored-op-return-deny-project " + applicant.getStringUUID(), createSource(2, operator, operatorOnlyServer));
+        assertEquals(1, denyResult, "在线 OP 手动 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "在线 OP 手动拒绝后不应将申请人加入项目");
+
+        TestMinecraftServer ownerReturnServer = createServer(restoredOwner, operator, applicant);
+        int staleApproveResult = dispatcher.execute("todo join accept join-invalid-owner-restored-op-return-deny-project " + applicant.getStringUUID(), createSource(0, restoredOwner, ownerReturnServer));
+        assertEquals(0, staleApproveResult, "OP 已清理待审批记录后 restored owner 的 join accept 应返回失败");
+        assertContainsMessageKey(restoredOwner.getClientMessages(), "message.todolist.project.join.no_pending_request", "申请已被 OP 清理后 restored owner 重复 join accept 应提示 no_pending_request");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "restored owner 重复 join accept 失败后不应把申请人重新加入项目");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "restored owner 重复 join accept 失败后不应再通知申请人 accepted");
+    }
+
+    /**
+     * 校验申请人不能审批自己的 join project 请求。
+     */
+    private static void shouldRejectApprovingOwnJoinRequestSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000322", "manager-join-self-approve", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000323", "applicant-join-self-approve", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-self-approve-project", "Join Self Approve Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-self-approve-project", createSource(0, applicant, server)), "申请加入项目应先返回命令成功");
+
+        int result = dispatcher.execute("todo join accept join-self-approve-project " + applicant.getStringUUID(), createSource(2, applicant, server));
+        assertEquals(0, result, "申请人审批自己的 join request 应返回失败");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.cannot_approve_self", "申请人自审时错误键不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "申请人自审失败后不应被加入项目");
+    }
+
+    /**
+     * 校验普通成员不能通过命令执行 join accept，且不会污染待审批状态。
+     */
+    private static void shouldRejectJoinAcceptForRegularMemberSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000324", "manager-join-accept-permission", false);
+        TestServerPlayer reviewer = createPlayer("00000000-0000-0000-0000-000000000325", "member-join-accept-permission", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000326", "applicant-join-accept-permission", false);
+        TestMinecraftServer server = createServer(manager, reviewer, applicant);
+        Project project = addTeamProject(manager, "join-accept-permission-project", "Join Accept Permission Project");
+        project.addMember(reviewer.getStringUUID(), Project.ProjectRole.MEMBER, reviewer.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-accept-permission-project", createSource(0, applicant, server)), "join project 应返回成功");
+
+        CapturingCommandSourceStack deniedSource = createSource(0, reviewer, server);
+        int deniedResult = dispatcher.execute("todo join accept join-accept-permission-project " + applicant.getStringUUID(), deniedSource);
+        assertEquals(0, deniedResult, "普通成员 join accept 应返回失败");
+        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.permission_denied", "普通成员 join accept 的错误键不正确");
+        assertNotContainsMessageKey(reviewer.getClientMessages(), "message.todolist.project.join.no_permission", "命令层拒绝 join accept 时不应再进入业务 no_permission 分支");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "普通成员 join accept 失败时不应通知申请人已通过");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "普通成员 join accept 失败后不应修改申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join accept join-accept-permission-project " + applicant.getStringUUID(), createSource(0, manager, server)), "未授权 join accept 失败后项目经理仍应可以审批通过");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "未授权 join accept 失败后待审批记录应保持可审批");
+    }
+
+    /**
+     * 校验普通成员不能通过命令执行 join deny，且不会污染待审批状态。
+     */
+    private static void shouldRejectJoinDenyForRegularMemberSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000327", "manager-join-deny-permission", false);
+        TestServerPlayer reviewer = createPlayer("00000000-0000-0000-0000-000000000328", "member-join-deny-permission", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000329", "applicant-join-deny-permission", false);
+        TestMinecraftServer server = createServer(manager, reviewer, applicant);
+        Project project = addTeamProject(manager, "join-deny-permission-project", "Join Deny Permission Project");
+        project.addMember(reviewer.getStringUUID(), Project.ProjectRole.MEMBER, reviewer.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-deny-permission-project", createSource(0, applicant, server)), "join project 应返回成功");
+
+        CapturingCommandSourceStack deniedSource = createSource(0, reviewer, server);
+        int deniedResult = dispatcher.execute("todo join deny join-deny-permission-project " + applicant.getStringUUID(), deniedSource);
+        assertEquals(0, deniedResult, "普通成员 join deny 应返回失败");
+        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.permission_denied", "普通成员 join deny 的错误键不正确");
+        assertNotContainsMessageKey(reviewer.getClientMessages(), "message.todolist.project.join.no_permission", "命令层拒绝 join deny 时不应再进入业务 no_permission 分支");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "普通成员 join deny 失败时不应通知申请人已被拒绝");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "普通成员 join deny 失败后不应修改申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join deny join-deny-permission-project " + applicant.getStringUUID(), createSource(0, manager, server)), "未授权 join deny 失败后项目经理仍应可以审批拒绝");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "未授权 join deny 失败后申请人仍不应被加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "项目经理补充执行 join deny 后申请人应收到拒绝提示");
+    }
+
+    /**
+     * 校验 lead 在申请挂起期间被降权为普通成员后，不能继续执行 join accept。
+     */
+    private static void shouldRejectJoinAcceptAfterLeadDemotionSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000374", "manager-join-lead-demotion", false);
+        TestServerPlayer lead = createPlayer("00000000-0000-0000-0000-000000000375", "lead-join-lead-demotion", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000376", "applicant-join-lead-demotion", false);
+        TestMinecraftServer server = createServer(manager, lead, applicant);
+        Project project = addTeamProject(manager, "join-lead-demotion-project", "Join Lead Demotion Project");
+        project.addMember(lead.getStringUUID(), Project.ProjectRole.LEAD, lead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-lead-demotion-project", createSource(0, applicant, server)), "join project 应返回成功");
+        assertEquals(1, dispatcher.execute("todo project member role join-lead-demotion-project " + lead.getStringUUID() + " member", createSource(0, manager, server)), "项目经理降权 lead 应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(lead.getStringUUID()), "lead 降权后应变为普通成员");
+
+        CapturingCommandSourceStack deniedSource = createSource(0, lead, server);
+        int deniedResult = dispatcher.execute("todo join accept join-lead-demotion-project " + applicant.getStringUUID(), deniedSource);
+        assertEquals(0, deniedResult, "被降权的 lead 执行 join accept 应返回失败");
+        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.permission_denied", "被降权的 lead 执行 join accept 错误键不正确");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "被降权的 lead 审批失败时不应通知申请人已通过");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "被降权的 lead 审批失败后不应修改申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join accept join-lead-demotion-project " + applicant.getStringUUID(), createSource(0, manager, server)), "lead 降权后项目经理仍应可以完成 join accept");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "项目经理补充执行 join accept 后应将申请人加入项目");
+    }
+
+    /**
+     * 校验 lead 在申请挂起期间被移出项目后，不能继续执行 join deny。
+     */
+    private static void shouldRejectJoinDenyAfterLeadRemovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000377", "manager-join-lead-removal", false);
+        TestServerPlayer lead = createPlayer("00000000-0000-0000-0000-000000000378", "lead-join-lead-removal", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000379", "applicant-join-lead-removal", false);
+        TestMinecraftServer server = createServer(manager, lead, applicant);
+        Project project = addTeamProject(manager, "join-lead-removal-project", "Join Lead Removal Project");
+        project.addMember(lead.getStringUUID(), Project.ProjectRole.LEAD, lead.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-lead-removal-project", createSource(0, applicant, server)), "join project 应返回成功");
+        assertEquals(1, dispatcher.execute("todo project member remove join-lead-removal-project " + lead.getStringUUID(), createSource(0, manager, server)), "项目经理移除 lead 应返回成功");
+        assertEquals(null, project.getMemberRole(lead.getStringUUID()), "lead 被移除后不应继续留在成员列表");
+
+        CapturingCommandSourceStack deniedSource = createSource(0, lead, server);
+        int deniedResult = dispatcher.execute("todo join deny join-lead-removal-project " + applicant.getStringUUID(), deniedSource);
+        assertEquals(0, deniedResult, "被移除的 lead 执行 join deny 应返回失败");
+        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.permission_denied", "被移除的 lead 执行 join deny 错误键不正确");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "被移除的 lead 审批失败时不应通知申请人被拒绝");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "被移除的 lead 审批失败后不应修改申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join deny join-lead-removal-project " + applicant.getStringUUID(), createSource(0, manager, server)), "lead 被移除后项目经理仍应可以完成 join deny");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "项目经理补充执行 join deny 后申请人仍不应被加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "项目经理补充执行 join deny 后申请人应收到拒绝提示");
+    }
+
+    /**
+     * 校验脏 ownerUuid 指向非成员时，不应把 join reviewer 通知和审批权限错误授予 outsider。
+     */
+    private static void shouldIgnoreCorruptedOwnerUuidReviewerAndKeepRealManagerApprovalSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000380", "manager-join-corrupted-owner", false);
+        TestServerPlayer outsider = createPlayer("00000000-0000-0000-0000-000000000381", "outsider-join-corrupted-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000382", "applicant-join-corrupted-owner", false);
+        TestMinecraftServer server = createServer(manager, outsider, applicant);
+        Project project = addTeamProject(manager, "join-corrupted-owner-project", "Join Corrupted Owner Project");
+        project.setOwnerUuid(outsider.getStringUUID());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-corrupted-owner-project", createSource(0, applicant, server)), "join project 应返回成功");
+        assertNotContainsMessageKey(outsider.getClientMessages(), "message.todolist.project.join.request_received", "脏 ownerUuid 指向的 outsider 不应收到 join reviewer 通知");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.request_received", "真实项目经理应继续收到 join reviewer 通知");
+
+        CapturingCommandSourceStack outsiderSource = createSource(0, outsider, server);
+        int outsiderResult = dispatcher.execute("todo join accept join-corrupted-owner-project " + applicant.getStringUUID(), outsiderSource);
+        assertEquals(0, outsiderResult, "脏 ownerUuid 指向的 outsider 执行 join accept 应返回失败");
+        assertContainsMessageKey(outsiderSource.getFailureMessages(), "command.todolist.permission_denied", "脏 ownerUuid 指向的 outsider 执行 join accept 错误键不正确");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "outsider 审批失败时不应通知申请人已通过");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "outsider 审批失败后不应修改申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join accept join-corrupted-owner-project " + applicant.getStringUUID(), createSource(0, manager, server)), "真实项目经理仍应可以完成 join accept");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "真实项目经理补充审批后应将申请人加入项目");
+    }
+
+    /**
+     * 校验脏 ownerUuid 指向申请人本人但其并非成员时，join project 不会被误判为 already_member。
+     */
+    private static void shouldAllowJoinRequestWhenCorruptedOwnerUuidMatchesApplicantSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000383", "manager-join-owner-applicant", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000384", "applicant-join-owner-applicant", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-owner-applicant-project", "Join Owner Applicant Project");
+        project.setOwnerUuid(applicant.getStringUUID());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        CapturingCommandSourceStack joinSource = createSource(0, applicant, server);
+        int joinResult = dispatcher.execute("todo join project join-owner-applicant-project", joinSource);
+        assertEquals(1, joinResult, "脏 ownerUuid 指向申请人时 join project 仍应返回成功");
+        assertNotContainsMessageKey(joinSource.getFailureMessages(), "message.todolist.project.join.already_member", "脏 ownerUuid 指向申请人时不应误判 already_member");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.request_received", "脏 ownerUuid 指向申请人时真实项目经理仍应收到审批通知");
+
+        assertEquals(1, dispatcher.execute("todo join accept join-owner-applicant-project " + applicant.getStringUUID(), createSource(0, manager, server)), "脏 ownerUuid 指向申请人时真实项目经理仍应可以完成 join accept");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "审批通过后申请人应被正常加入项目");
+    }
+
+    /**
+     * 校验命令层会拒绝非法 applicantUuid 的 join accept 输入，且不会误落到业务 no_pending_request 分支。
+     */
+    /**
+     * 校验 ownerUuid 被清空后，成员表里的真实项目经理仍会继续承担 join reviewer 与审批职责。
+     */
+    private static void shouldFallbackToMemberTableManagerWhenOwnerUuidMissingSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000385", "manager-join-missing-owner", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000386", "applicant-join-missing-owner", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-missing-owner-project", "Join Missing Owner Project");
+        project.setOwnerUuid("");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        CapturingCommandSourceStack joinSource = createSource(0, applicant, server);
+        int joinResult = dispatcher.execute("todo join project join-missing-owner-project", joinSource);
+        assertEquals(1, joinResult, "ownerUuid 为空时 join project 仍应返回成功");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.request_received", "ownerUuid 为空时真实项目经理仍应收到审批通知");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.sent_named", "ownerUuid 为空且真实项目经理在线时申请人应收到 sent_named");
+        assertNotContainsMessageKey(joinSource.getFailureMessages(), "message.todolist.project.join.no_reviewer_online", "ownerUuid 为空但真实项目经理在线时不应提示 no_reviewer_online");
+
+        int approveResult = dispatcher.execute("todo join accept join-missing-owner-project " + applicant.getStringUUID(), createSource(0, manager, server));
+        assertEquals(1, approveResult, "ownerUuid 为空时真实项目经理仍应可以完成 join accept");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "ownerUuid 为空时审批通过后申请人应被正常加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "ownerUuid 为空时申请人应收到 accepted");
+    }
+
+    /**
+     * 校验命令层会拒绝非法 applicantUuid 的 join accept 输入，并且不会误落到 no_pending_request 分支。
+     */
+    private static void shouldRejectJoinAcceptForInvalidApplicantUuidSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000344", "manager-join-invalid-accept", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000345", "applicant-join-invalid-accept", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-invalid-accept-project", "Join Invalid Accept Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-accept-project", createSource(0, applicant, server)), "非法 UUID 校验前的 join project 应返回成功");
+
+        CapturingCommandSourceStack invalidSource = createSource(0, manager, server);
+        int invalidResult = dispatcher.execute("todo join accept join-invalid-accept-project not-a-uuid", invalidSource);
+        assertEquals(0, invalidResult, "非法 applicantUuid 的 join accept 应返回失败");
+        assertContainsMessageKey(invalidSource.getFailureMessages(), "command.todolist.join.invalid_applicant_uuid", "非法 applicantUuid 的 join accept 错误键不正确");
+        assertNotContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.no_pending_request", "非法 applicantUuid 的 join accept 不应误落到 no_pending_request");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "非法 applicantUuid 的 join accept 不应通知申请人已通过");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "非法 applicantUuid 的 join accept 失败后不应改动申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join accept join-invalid-accept-project " + applicant.getStringUUID(), createSource(0, manager, server)), "非法 applicantUuid 的 join accept 失败后仍应可用真实 UUID 完成审批");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "真实 UUID 的 join accept 应将申请人加入项目");
+    }
+
+    /**
+     * 校验命令层会拒绝非法 applicantUuid 的 join deny 输入，且不会误落到业务 no_pending_request 分支。
+     */
+    private static void shouldRejectJoinDenyForInvalidApplicantUuidSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000346", "manager-join-invalid-deny", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000347", "applicant-join-invalid-deny", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-invalid-deny-project", "Join Invalid Deny Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-invalid-deny-project", createSource(0, applicant, server)), "非法 UUID 校验前的 join project 应返回成功");
+
+        CapturingCommandSourceStack invalidSource = createSource(0, manager, server);
+        int invalidResult = dispatcher.execute("todo join deny join-invalid-deny-project not-a-uuid", invalidSource);
+        assertEquals(0, invalidResult, "非法 applicantUuid 的 join deny 应返回失败");
+        assertContainsMessageKey(invalidSource.getFailureMessages(), "command.todolist.join.invalid_applicant_uuid", "非法 applicantUuid 的 join deny 错误键不正确");
+        assertNotContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.no_pending_request", "非法 applicantUuid 的 join deny 不应误落到 no_pending_request");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "非法 applicantUuid 的 join deny 不应通知申请人已被拒绝");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "非法 applicantUuid 的 join deny 失败后不应改动申请人成员状态");
+
+        assertEquals(1, dispatcher.execute("todo join deny join-invalid-deny-project " + applicant.getStringUUID(), createSource(0, manager, server)), "非法 applicantUuid 的 join deny 失败后仍应可用真实 UUID 完成拒绝");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "真实 UUID 的 join deny 不应将申请人加入项目");
+        assertContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.denied", "真实 UUID 的 join deny 应通知申请人被拒绝");
+    }
+
+    /**
+     * 校验未发起 join project 时，join accept 会显式拒绝审批。
+     */
     private static void shouldRejectJoinDecisionWithoutPendingRequestSuccessfully() throws Exception {
         resetState(ModConfig.CommandAccessMode.FULL);
         TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000187", "manager-join-no-pending", false);
@@ -3259,6 +5406,36 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
+     * 验证申请人临时离线时 join deny 会保留待处理状态，重新上线后仍可审批拒绝。
+     */
+    private static void shouldDenyJoinRequestAfterApplicantReconnectSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000368", "manager-join-deny-reconnect", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000369", "applicant-join-deny-reconnect", false);
+        TestMinecraftServer initialServer = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-deny-reconnect-project", "Join Deny Reconnect Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-deny-reconnect-project", createSource(0, applicant, initialServer)), "join project 应返回成功");
+
+        TestServerPlayer offlineManager = createPlayer(manager.getStringUUID(), manager.getName().getString(), false);
+        TestMinecraftServer offlineServer = createServer(offlineManager);
+        int offlineResult = dispatcher.execute("todo join deny join-deny-reconnect-project " + applicant.getStringUUID(), createSource(0, offlineManager, offlineServer));
+        assertEquals(0, offlineResult, "申请人离线时 join deny 应返回失败");
+        assertContainsMessageKey(offlineManager.getClientMessages(), "message.todolist.project.join.applicant_offline", "申请人离线时 join deny 提示不正确");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "申请人离线时不应被提前加入项目");
+
+        TestServerPlayer onlineManager = createPlayer(manager.getStringUUID(), manager.getName().getString(), false);
+        TestServerPlayer reconnectedApplicant = createPlayer(applicant.getStringUUID(), applicant.getName().getString(), false);
+        TestMinecraftServer reconnectedServer = createServer(onlineManager, reconnectedApplicant);
+        int onlineResult = dispatcher.execute("todo join deny join-deny-reconnect-project " + applicant.getStringUUID(), createSource(0, onlineManager, reconnectedServer));
+        assertEquals(1, onlineResult, "申请人重新上线后 join deny 应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "申请人重新上线后 join deny 不应将成员加入项目");
+        assertContainsMessageKey(reconnectedApplicant.getClientMessages(), "message.todolist.project.join.denied", "申请人重新上线后未收到拒绝提示");
+        assertContainsMessageKey(onlineManager.getClientMessages(), "message.todolist.project.join.rejected", "申请人重新上线后审批人未收到拒绝结果");
+    }
+
+    /**
      * 校验加入申请发出后如果项目已被删除，后续 join accept 会返回项目无效错误。
      */
     private static void shouldRejectJoinDecisionAfterProjectRemovalSuccessfully() throws Exception {
@@ -3325,6 +5502,61 @@ public final class CommandBootstrapIntegrationTestMain {
 
         assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.already_requested", "网络删除项目后不应残留待审批缓存导致重复申请被拒绝");
         assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.request_received", "网络删除并重建同 ID 项目后应允许重新发起加入申请");
+    }
+
+    /**
+     * 校验通过 add member 网络包手动补加成员时，也会清理挂起中的 join request。
+     */
+    private static void shouldClearPendingJoinRequestWhenApplicantIsAddedViaPacketSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000372", "manager-join-packet-add-clear", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000373", "applicant-join-packet-add-clear", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-packet-add-clear-project", "Join Packet Add Clear Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-packet-add-clear-project", createSource(0, applicant, server)), "join project 应先返回成功");
+
+        net.minecraft.network.FriendlyByteBuf addPacket = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        addPacket.writeUtf(project.getId());
+        addPacket.writeUtf(applicant.getStringUUID());
+        addPacket.writeUtf(applicant.getName().getString());
+        ProjectPackets.onAddMemberPacket(server, manager, addPacket);
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "网络包补加成员后申请人应已在项目成员列表");
+
+        assertEquals(1, dispatcher.execute("todo project member remove join-packet-add-clear-project " + applicant.getStringUUID(), createSource(0, manager, server)), "移除网络包加入的成员应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "移除后申请人不应继续留在项目成员列表");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-packet-add-clear-project " + applicant.getStringUUID(), createSource(0, manager, server));
+        assertEquals(0, staleApproveResult, "网络包加成员后旧 join request 不应继续可审批");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.no_pending_request", "网络包加成员后旧 join request 应提示 no_pending_request");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "网络包加成员清理旧请求后不应再通知申请人 accepted");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "网络包加成员清理旧请求后不应再次把申请人加入项目");
+    }
+
+    /**
+     * 校验挂起中的 join request 在项目经理手动添加成员后会被清理，避免旧申请在成员移除后继续生效。
+     */
+    private static void shouldClearPendingJoinRequestWhenApplicantIsAddedManuallySuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000370", "manager-join-manual-add-clear", false);
+        TestServerPlayer applicant = createPlayer("00000000-0000-0000-0000-000000000371", "applicant-join-manual-add-clear", false);
+        TestMinecraftServer server = createServer(manager, applicant);
+        Project project = addTeamProject(manager, "join-manual-add-clear-project", "Join Manual Add Clear Project");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo join project join-manual-add-clear-project", createSource(0, applicant, server)), "join project 应先返回成功");
+        assertEquals(1, dispatcher.execute("todo project member add join-manual-add-clear-project applicant-join-manual-add-clear", createSource(0, manager, server)), "项目经理手动补加成员应返回成功");
+        assertEquals(Project.ProjectRole.MEMBER, project.getMemberRole(applicant.getStringUUID()), "手动补加成员后申请人应已在项目成员列表");
+
+        assertEquals(1, dispatcher.execute("todo project member remove join-manual-add-clear-project " + applicant.getStringUUID(), createSource(0, manager, server)), "移除手动加入的成员应返回成功");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "移除后申请人不应继续留在项目成员列表");
+
+        int staleApproveResult = dispatcher.execute("todo join accept join-manual-add-clear-project " + applicant.getStringUUID(), createSource(0, manager, server));
+        assertEquals(0, staleApproveResult, "手动加成员后旧 join request 不应继续可审批");
+        assertContainsMessageKey(manager.getClientMessages(), "message.todolist.project.join.no_pending_request", "手动加成员后旧 join request 应提示 no_pending_request");
+        assertNotContainsMessageKey(applicant.getClientMessages(), "message.todolist.project.join.accepted", "旧 join request 被清理后不应再通知申请人 accepted");
+        assertEquals(null, project.getMemberRole(applicant.getStringUUID()), "旧 join request 被清理后不应再次把申请人加入项目");
     }
 
     private static void shouldRejectRepeatedJoinAcceptAfterApprovalSuccessfully() throws Exception {

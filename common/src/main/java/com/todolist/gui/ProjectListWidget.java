@@ -93,14 +93,27 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 鑾峰彇褰撳墠椤圭洰鍒楄〃婊氬姩鍋忕Щ閲忥紙鎸夎锛夈€?
+     * 返回当前用于渲染的项目列表快照，供同包测试代码断言排序与筛选结果。
+     *
+     * @return 当前可见项目列表快照
+     */
+     List<Project> getProjectsForTest() {
+         return List.copyOf(projects);
+    }
+
+    /**
+     * 获取当前项目列表滚动偏移量。
+     *
+     * @return 当前滚动偏移量
      */
     public int getScrollOffset() {
         return scrollOffset;
     }
 
     /**
-     * 璁剧疆椤圭洰鍒楄〃婊氬姩鍋忕Щ閲忥紙鎸夎锛夛紝骞舵墽琛岃竟鐣屽す鍙栥€?
+     * 设置项目列表滚动偏移量并执行边界收敛。
+     *
+     * @param scrollOffset 目标滚动偏移量
      */
     public void setScrollOffset(int scrollOffset) {
         this.scrollOffset = scrollOffset;

@@ -309,6 +309,24 @@ public class TaskListWidget implements Renderable {
         return tasks;
     }
 
+    /**
+     * 返回当前滚动偏移量，供同包测试代码断言滚动行为。
+     *
+     * @return 当前滚动偏移量
+     */
+    int getScrollOffsetForTest() {
+        return scrollBar.getValue();
+    }
+
+    /**
+     * 返回当前选中任务 ID，供同包测试代码断言选择保持逻辑。
+     *
+     * @return 当前选中任务 ID；未选中时返回 null
+     */
+    String getSelectedTaskIdForTest() {
+        return selectedTaskId;
+    }
+
     public int getHeight() {
         return height;
     }

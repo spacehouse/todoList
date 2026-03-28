@@ -19,14 +19,11 @@ public final class CommandInputNormalizerTestMain {
      * @param args 命令行参数，当前未使用
      */
     public static void main(String[] args) {
-        shouldNormalizeTaskListStatus();
-        shouldNormalizeTaskListPriority();
-        shouldNormalizeTaskCleanInputs();
-        shouldNormalizeProjectInputs();
-        shouldNormalizeToggleState();
-        shouldNormalizeProjectMemberRole();
-        shouldNormalizeCommandAccessMode();
-        shouldApplyHudStarredProjectState();
+        try {
+            CommandTestSupport.runAllShouldCases(CommandInputNormalizerTestMain.class);
+        } catch (Exception exception) {
+            throw new IllegalStateException("命令输入归一化自测执行失败", exception);
+        }
     }
 
     /**

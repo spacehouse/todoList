@@ -20,6 +20,8 @@ public class AddProjectScreen extends Screen {
     private EditBox nameField;
     private Project.Scope scope = Project.Scope.PERSONAL;
     private Button scopeButton;
+    private Button createButton;
+    private Button cancelButton;
     private boolean teamProjectsEnabled = true;
     private final Random random = new Random();
 
@@ -68,18 +70,74 @@ public class AddProjectScreen extends Screen {
         addRenderableWidget(scopeButton);
 
         // Create Button
-        addRenderableWidget(Button.builder(Component.translatable("gui.todolist.create"), button -> createProject())
-                .bounds(x + 10, y + 110, 85, 20).build());
+        createButton = Button.builder(Component.translatable("gui.todolist.create"), button -> createProject())
+                .bounds(x + 10, y + 110, 85, 20).build();
+        addRenderableWidget(createButton);
 
         // Cancel Button
-        addRenderableWidget(Button.builder(Component.translatable("gui.todolist.cancel"), button -> onClose())
-                .bounds(x + w - 95, y + 110, 85, 20).build());
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onClose())
+                .bounds(x + w - 95, y + 110, 85, 20).build();
+        addRenderableWidget(cancelButton);
         
         setFocused(nameField);
     }
 
     private Component getScopeText() {
         return Component.translatable("gui.todolist.scope", Component.translatable("gui.todolist.scope." + scope.name().toLowerCase()));
+    }
+
+    /**
+     * 返回名称输入框，供同包测试代码直接写入名称。
+     *
+     * @return 名称输入框
+     */
+    EditBox getNameFieldForTest() {
+        return nameField;
+    }
+
+    /**
+     * 返回项目范围切换按钮，供同包测试代码触发点击。
+     *
+     * @return 范围切换按钮
+     */
+    Button getScopeButtonForTest() {
+        return scopeButton;
+    }
+
+    /**
+     * 返回创建按钮，供同包测试代码直接触发创建流程。
+     *
+     * @return 创建按钮
+     */
+    Button getCreateButtonForTest() {
+        return createButton;
+    }
+
+    /**
+     * 返回取消按钮，供同包测试代码直接触发关闭流程。
+     *
+     * @return 取消按钮
+     */
+    Button getCancelButtonForTest() {
+        return cancelButton;
+    }
+
+    /**
+     * 返回当前项目范围，供同包测试代码断言切换结果。
+     *
+     * @return 当前项目范围
+     */
+    Project.Scope getScopeForTest() {
+        return scope;
+    }
+
+    /**
+     * 返回当前是否启用团队项目能力，供同包测试代码断言界面约束。
+     *
+     * @return 团队项目能力开关
+     */
+    boolean isTeamProjectsEnabledForTest() {
+        return teamProjectsEnabled;
     }
 
     private void createProject() {

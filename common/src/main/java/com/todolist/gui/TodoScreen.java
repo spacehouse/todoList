@@ -148,6 +148,296 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.parent = parent;
     }
 
+    /**
+     * 重置主界面的静态运行态，供同包测试代码隔离用例。
+     */
+    static void resetGuiStateForTest() {
+        personalHasUnsavedChanges = false;
+        teamHasUnsavedChanges = false;
+        lastGuiState = null;
+    }
+
+    /**
+     * 返回当前项目，供同包测试代码断言项目切换与恢复逻辑。
+     *
+     * @return 当前项目；不存在时返回 null
+     */
+    Project getCurrentProjectForTest() {
+        return currentProject;
+    }
+
+    /**
+     * 返回当前选中任务，供同包测试代码断言选择逻辑。
+     *
+     * @return 当前选中任务；不存在时返回 null
+     */
+    Task getSelectedTaskForTest() {
+        return selectedTask;
+    }
+
+    /**
+     * 返回当前视图模式名称，供同包测试代码断言视图恢复逻辑。
+     *
+     * @return 当前视图模式名称
+     */
+    String getViewModeNameForTest() {
+        return viewMode.name();
+    }
+
+    /**
+     * 返回当前状态筛选值，供同包测试代码断言过滤逻辑。
+     *
+     * @return 当前状态筛选值
+     */
+    String getCurrentFilterForTest() {
+        return currentFilter;
+    }
+
+    /**
+     * 返回当前优先级筛选值，供同包测试代码断言过滤逻辑。
+     *
+     * @return 当前优先级筛选值
+     */
+    int getCurrentPriorityFilterForTest() {
+        return currentPriorityFilter;
+    }
+
+    /**
+     * 返回当前搜索关键字，供同包测试代码断言搜索恢复逻辑。
+     *
+     * @return 当前搜索关键字
+     */
+    String getSearchQueryForTest() {
+        return searchQuery;
+    }
+
+    /**
+     * 返回当前通知数量，供同包测试代码断言提示行为。
+     *
+     * @return 当前通知数量
+     */
+    int getNotificationCountForTest() {
+        return notifications.size();
+    }
+
+    /**
+     * 返回任务标题输入框，供同包测试代码写入任务标题。
+     *
+     * @return 任务标题输入框
+     */
+    EditBox getTitleFieldForTest() {
+        return titleField;
+    }
+
+    /**
+     * 返回任务描述输入框，供同包测试代码写入任务描述。
+     *
+     * @return 任务描述输入框
+     */
+    MultiLineEditBox getDescFieldForTest() {
+        return descField;
+    }
+
+    /**
+     * 返回任务标签输入框，供同包测试代码写入标签内容。
+     *
+     * @return 任务标签输入框
+     */
+    EditBox getTagFieldForTest() {
+        return tagField;
+    }
+
+    /**
+     * 返回搜索输入框，供同包测试代码驱动搜索筛选。
+     *
+     * @return 搜索输入框
+     */
+    EditBox getSearchFieldForTest() {
+        return searchField;
+    }
+
+    /**
+     * 返回状态筛选按钮，供同包测试代码切换完成/未完成筛选。
+     *
+     * @return 状态筛选按钮
+     */
+    Button getFilterStatusButtonForTest() {
+        return filterStatusButton;
+    }
+
+    /**
+     * 返回优先级筛选按钮，供同包测试代码切换优先级筛选。
+     *
+     * @return 优先级筛选按钮
+     */
+    Button getFilterPriorityButtonForTest() {
+        return filterPriorityButton;
+    }
+
+    /**
+     * 返回当前是否存在未保存改动，供同包测试代码断言保存与关闭语义。
+     *
+     * @return true 表示当前存在未保存改动
+     */
+    boolean hasUnsavedChangesForTest() {
+        return hasUnsavedChanges;
+    }
+
+    /**
+     * 返回当前筛选结果任务快照，供同包测试代码断言过滤与上下文菜单行为。
+     *
+     * @return 当前筛选结果任务快照
+     */
+    List<Task> getFilteredTasksForTest() {
+        return List.copyOf(filteredTasks);
+    }
+
+    /**
+     * 返回当前任务管理器中的全部任务快照，供同包测试代码断言保存与关闭后的数据状态。
+     *
+     * @return 当前任务管理器中的全部任务快照
+     */
+    List<Task> getCurrentManagerTasksForTest() {
+        if (taskManager == null) {
+            return List.of();
+        }
+        return taskManager.getAllTasks();
+    }
+
+    /**
+     * 返回当前上下文菜单项文本快照，供同包测试代码断言菜单内容。
+     *
+     * @return 当前上下文菜单项文本快照
+     */
+    List<String> getContextMenuItemTextsForTest() {
+        List<String> texts = new ArrayList<>();
+        for (ContextMenuItem item : contextMenuItems) {
+            texts.add(item.text.getString());
+        }
+        return List.copyOf(texts);
+    }
+
+    /**
+     * 返回当前是否显示任务上下文菜单，供同包测试代码断言菜单行为。
+     *
+     * @return true 表示当前显示任务上下文菜单
+     */
+    boolean hasContextMenuForTest() {
+        return hasContextMenu();
+    }
+
+    /**
+     * 切换当前项目，供同包测试代码直接覆盖项目切换主路径。
+     *
+     * @param project 目标项目；传入 null 表示清空当前项目
+     */
+    void switchProjectForTest(Project project) {
+        switchProject(project);
+    }
+
+    /**
+     * 选中指定任务，供同包测试代码直接覆盖编辑相关分支。
+     *
+     * @param task 目标任务
+     */
+    void selectTaskForTest(Task task) {
+        selectTask(task);
+    }
+
+    /**
+     * 触发保存流程，供同包测试代码断言保存后的状态与桥接调用。
+     */
+    void saveTasksForTest() {
+        onSaveTasks();
+    }
+
+    /**
+     * 打开指定任务的上下文菜单，供同包测试代码断言菜单行为。
+     *
+     * @param task 目标任务
+     */
+    void openTaskContextMenuForTest(Task task) {
+        openTaskContextMenu(task, 32, 32);
+    }
+
+    /**
+     * 点击指定索引的上下文菜单项，供同包测试代码驱动菜单动作。
+     *
+     * @param index 菜单项索引
+     */
+    void clickContextMenuItemForTest(int index) {
+        if (!hasContextMenu() || index < 0 || index >= contextMenuItems.size()) {
+            closeTaskContextMenu();
+            return;
+        }
+        ContextMenuItem item = contextMenuItems.get(index);
+        if (item.enabled && item.action != null) {
+            item.action.run();
+        } else {
+            closeTaskContextMenu();
+        }
+    }
+
+    /**
+     * 创建任务分配弹窗，供同包测试代码覆盖玩家分配流程。
+     *
+     * @param task 目标任务
+     * @return 任务分配弹窗
+     */
+    Screen createAssignPlayerScreenForTest(Task task) {
+        return new AssignPlayerScreen(this, task);
+    }
+
+    /**
+     * 返回任务分配弹窗中的候选玩家名称快照，供同包测试代码断言过滤结果。
+     *
+     * @param screen 任务分配弹窗
+     * @return 候选玩家名称快照
+     */
+    List<String> getAssignablePlayerNamesForTest(Screen screen) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.filteredPlayers == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (net.minecraft.client.multiplayer.PlayerInfo info : assignPlayerScreen.filteredPlayers) {
+            if (info != null && info.getProfile() != null && info.getProfile().getName() != null) {
+                names.add(info.getProfile().getName());
+            }
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * 向任务分配弹窗的搜索框写入内容，供同包测试代码驱动候选人过滤。
+     *
+     * @param screen 任务分配弹窗
+     * @param value 搜索关键字
+     */
+    void setAssignPlayerSearchForTest(Screen screen, String value) {
+        if (screen instanceof AssignPlayerScreen assignPlayerScreen && assignPlayerScreen.searchField != null) {
+            assignPlayerScreen.searchField.setValue(value == null ? "" : value);
+        }
+    }
+
+    /**
+     * 点击任务分配弹窗中的指定候选人行，供同包测试代码驱动分配动作。
+     *
+     * @param screen 任务分配弹窗
+     * @param rowIndex 候选人行索引
+     */
+    void clickAssignPlayerRowForTest(Screen screen, int rowIndex) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.playerButtons == null) {
+            return;
+        }
+        if (rowIndex < 0 || rowIndex >= assignPlayerScreen.playerButtons.length) {
+            return;
+        }
+        Button button = assignPlayerScreen.playerButtons[rowIndex];
+        if (button != null && button.active && button.visible) {
+            button.onPress();
+        }
+    }
+
     @Override
     protected void init() {
         super.init();
