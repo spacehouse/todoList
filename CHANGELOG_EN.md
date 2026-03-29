@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.1.4] - 2026-03-29
+
+### New Features
+- **Local Personal-task Isolation**: Refactored personal-task storage and HUD layout so local singleplayer data is isolated more cleanly across different runtime contexts.
+- **HUD Visibility Sync**: Added more complete HUD visibility synchronization and improved coordination between the HUD and the main GUI view state.
+- **LAN Team Sync Improvements**: Improved the team-data synchronization flow in published LAN worlds to make team projects behave more reliably and consistently.
+
+### Improvements & Fixes
+- **Cross-project Save Fix**: Fixed incorrect save behavior when switching across projects, preventing accidental overwrite or missing persisted changes.
+- **LAN Personal-task Restore Fix**: Fixed incorrect personal-task restore behavior in LAN sessions to improve stability when moving between local and multiplayer contexts.
+- **Assign Dialog Member Source Fix**: Fixed the "Assign Others" dialog showing online players instead of current project members; offline members can now still be displayed and assigned.
+- **Assign Dialog Layout Fix**: Improved adaptive layout in the "Assign Others" dialog so the cancel button stays visible in small windows or large GUI scales.
+
+### Testing & Stability
+- **Offline Self-test Coverage**: Added offline self-test support for GUI components and the command system to improve regression verification.
+- **Integration Test Entry Expansion**: Added a dedicated command-system test entry point for more targeted integration testing and troubleshooting.
+
 ## [1.1.3] - 2026-03-21
 
 ### Improvements & Fixes
