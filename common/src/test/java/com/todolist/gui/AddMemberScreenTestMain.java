@@ -91,7 +91,7 @@ public final class AddMemberScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         for (int i = 0; i < 3; i++) {
-            screen.mouseScrolled(screen.getListCenterXForTest(), screen.getListCenterYForTest(), -1.0D);
+            screen.mouseScrolled(screen.getListCenterXForTest(), screen.getListCenterYForTest(), 0.0D, -1.0D);
         }
         GuiTestSupport.assertTrue(screen.getScrollOffsetForTest() > 0, "滚轮向下滚动后应产生正向偏移");
 

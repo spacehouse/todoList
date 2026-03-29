@@ -19,6 +19,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
+import net.minecraft.util.debugchart.SampleLogger;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import sun.misc.Unsafe;
@@ -996,7 +997,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * 构造方法仅用于满足编译要求，运行时通过 Unsafe 绕过。
          */
         private TestServerPlayer() {
-            super(null, null, null);
+            super(null, null, null, null);
             throw new UnsupportedOperationException("请通过 createPlayer 创建测试玩家");
         }
 
@@ -1124,6 +1125,25 @@ public final class CommandBootstrapIntegrationTestMain {
         @Override
         public void executeIfPossible(Runnable runnable) {
             execute(runnable);
+        }
+
+        /**
+         * 返回是否启用 Tick 耗时日志。
+         *
+         * @return 测试环境始终关闭 Tick 耗时日志
+         */
+        @Override
+        public boolean isTickTimeLoggingEnabled() {
+            return false;
+        }
+
+        /**
+         * 返回 Tick 时间日志器占位实现，用于探测 1.21.1 所需返回类型。
+         *
+         * @return 占位对象
+         */
+        public SampleLogger getTickTimeLogger() {
+            return null;
         }
 
         /**

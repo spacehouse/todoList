@@ -3,11 +3,7 @@ package com.todolist.gui.testsupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.telemetry.WorldSessionTelemetryManager;
 import net.minecraft.network.Connection;
-import net.minecraft.client.gui.screens.Screen;
-import com.mojang.authlib.GameProfile;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,7 +20,7 @@ public class FakeClientConnection extends ClientPacketListener {
      * 构造方法仅用于满足编译要求，测试运行时通过 Unsafe 绕过。
      */
     protected FakeClientConnection() {
-        super((Minecraft) null, (Screen) null, (Connection) null, (ServerData) null, (GameProfile) null, (WorldSessionTelemetryManager) null);
+        super((Minecraft) null, (Connection) null, null);
         throw new UnsupportedOperationException("请通过 FakeClientConnection.create 创建测试连接");
     }
 

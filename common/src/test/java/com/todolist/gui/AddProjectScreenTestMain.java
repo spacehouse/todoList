@@ -88,6 +88,7 @@ public final class AddProjectScreenTestMain {
         ScreenDriver.init(minecraft, screen);
 
         ScreenDriver.setText(screen.getNameFieldForTest(), "Roadmap");
+        screen.getNameFieldForTest().setFocused(true);
         ScreenDriver.pressEnter(screen);
 
         GuiTestSupport.assertEquals(1, ops.getAddProjectCalls().size(), "按回车创建时应发送新增项目请求");

@@ -3,12 +3,14 @@ package com.todolist.gui.testsupport;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.GameNarrator;
+import net.minecraft.client.InputType;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -23,6 +25,8 @@ public class FakeMinecraftClient extends Minecraft {
     private GameNarrator testNarrator;
     private Window testWindow;
     private Options testOptions;
+    private SoundManager testSoundManager;
+    private InputType testLastInputType;
     private Screen lastScreen;
     private boolean localServer;
     private IntegratedServer integratedServer;
@@ -88,6 +92,26 @@ public class FakeMinecraftClient extends Minecraft {
      */
     public void setTestOptions(Options options) {
         this.testOptions = options;
+    }
+
+    /**
+     * 设置测试音效管理器，避免按钮快捷键测试访问空的音频环境。
+     *
+     * @param soundManager 测试音效管理器
+     */
+    public void setTestSoundManager(SoundManager soundManager) {
+        this.testSoundManager = soundManager;
+        GuiTestSupport.setObjectField(Minecraft.class, this, "soundManager", soundManager);
+    }
+
+    /**
+     * 设置最近一次输入设备类型，避免 Screen 初始化阶段读取到空值。
+     *
+     * @param inputType 最近一次输入类型
+     */
+    public void setTestLastInputType(InputType inputType) {
+        this.testLastInputType = inputType;
+        GuiTestSupport.setObjectField(Minecraft.class, this, "lastInputType", inputType);
     }
 
     /**
@@ -187,6 +211,36 @@ public class FakeMinecraftClient extends Minecraft {
     @Override
     public Window getWindow() {
         return testWindow;
+    }
+
+    /**
+     * 返回测试音效管理器，供按钮交互播放点击音效时使用。
+     *
+     * @return 测试音效管理器
+     */
+    @Override
+    public SoundManager getSoundManager() {
+        return testSoundManager;
+    }
+
+    /**
+     * 返回最近一次输入设备类型，供 GUI 焦点逻辑判断键鼠模式。
+     *
+     * @return 最近一次输入类型
+     */
+    @Override
+    public InputType getLastInputType() {
+        return testLastInputType;
+    }
+
+    /**
+     * 同步更新最近一次输入设备类型，保持测试桩与父类字段一致。
+     *
+     * @param inputType 最近一次输入类型
+     */
+    @Override
+    public void setLastInputType(InputType inputType) {
+        setTestLastInputType(inputType);
     }
 
     /**

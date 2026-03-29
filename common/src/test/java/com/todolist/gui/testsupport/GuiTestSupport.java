@@ -12,6 +12,7 @@ import net.minecraft.DetectedVersion;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.GameNarrator;
+import net.minecraft.client.InputType;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
@@ -117,6 +118,7 @@ public final class GuiTestSupport {
         FakeClientPlayer player = FakeClientPlayer.create(playerUuid, playerName, operator);
         FakeClientConnection connection = FakeClientConnection.create();
         FakeGameNarrator narrator = FakeGameNarrator.create();
+        FakeSoundManager soundManager = FakeSoundManager.create();
         Window window = allocate(Window.class);
         Options options = allocate(Options.class);
         setIntField(Window.class, window, "width", 320);
@@ -129,12 +131,16 @@ public final class GuiTestSupport {
         setObjectField(Minecraft.class, minecraft, "player", player);
         setObjectField(Minecraft.class, minecraft, "window", window);
         setObjectField(Minecraft.class, minecraft, "options", options);
+        setObjectField(Minecraft.class, minecraft, "soundManager", soundManager);
+        setStaticObjectField(Minecraft.class, "instance", minecraft);
         minecraft.setTestFont(font);
         minecraft.setTestPlayer(player);
         minecraft.setTestConnection(connection);
         minecraft.setTestNarrator(narrator);
+        minecraft.setTestSoundManager(soundManager);
         minecraft.setTestWindow(window);
         minecraft.setTestOptions(options);
+        minecraft.setTestLastInputType(InputType.KEYBOARD_TAB);
         return minecraft;
     }
 
@@ -149,6 +155,9 @@ public final class GuiTestSupport {
     public static void initScreen(FakeMinecraftClient minecraft, Screen screen, int width, int height) {
         Objects.requireNonNull(minecraft, "minecraft");
         Objects.requireNonNull(screen, "screen");
+        if (minecraft.getLastInputType() == null) {
+            minecraft.setTestLastInputType(InputType.KEYBOARD_TAB);
+        }
         screen.init(minecraft, width, height);
     }
 

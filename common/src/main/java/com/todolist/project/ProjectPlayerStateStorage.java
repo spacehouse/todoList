@@ -106,7 +106,7 @@ public class ProjectPlayerStateStorage {
             starredProjectList.add(projectTag);
         }
         root.put(HUD_STARRED_PROJECT_IDS_KEY, starredProjectList);
-        NbtIo.write(root, getPlayerStateFilePath(playerUuid).toFile());
+        NbtIo.write(root, getPlayerStateFilePath(playerUuid));
     }
 
     /**
@@ -121,7 +121,7 @@ public class ProjectPlayerStateStorage {
         if (!Files.exists(playerStateFile)) {
             return ProjectPlayerState.empty();
         }
-        CompoundTag root = NbtIo.read(playerStateFile.toFile());
+        CompoundTag root = NbtIo.read(playerStateFile);
         if (root == null) {
             return ProjectPlayerState.empty();
         }
