@@ -1,3 +1,5 @@
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
     id("maven-publish")
 }
@@ -78,8 +80,14 @@ tasks.register<Exec>("tripletSampleCheck") {
     inputs.file(tripletLogSample)
     outputs.file(tripletReport)
 
+    val powerShellExecutable = if (OperatingSystem.current().isWindows) {
+        "powershell"
+    } else {
+        "pwsh"
+    }
+
     commandLine(
-        "powershell",
+        powerShellExecutable,
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
