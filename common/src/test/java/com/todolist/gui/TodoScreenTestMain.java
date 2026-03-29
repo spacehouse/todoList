@@ -9,6 +9,7 @@ import com.todolist.gui.testsupport.RecordingClientOps;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.server.IntegratedServer;
@@ -22,6 +23,9 @@ import java.util.UUID;
  */
 public final class TodoScreenTestMain {
     private static final UUID OWNER_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID ALICE_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
+    private static final UUID BOB_ID = UUID.fromString("20000000-0000-0000-0000-000000000003");
+    private static final UUID CHARLIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000004");
 
     /**
      * 工具类不需要实例化。
@@ -50,6 +54,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowNotificationWhenAddingWithoutProject", TodoScreenTestMain::shouldShowNotificationWhenAddingWithoutProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOpenContextMenuAndApplyPriorityAction", TodoScreenTestMain::shouldOpenContextMenuAndApplyPriorityAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSearchAndAssignPlayerFromAssignScreen", TodoScreenTestMain::shouldSearchAndAssignPlayerFromAssignScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldListOfflineProjectMembersInAssignScreen", TodoScreenTestMain::shouldListOfflineProjectMembersInAssignScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepAssignDialogCancelButtonInsideSmallScreen", TodoScreenTestMain::shouldKeepAssignDialogCancelButtonInsideSmallScreen);
     }
 
     /**
@@ -294,10 +300,13 @@ public final class TodoScreenTestMain {
         createDefaultPersonalProject();
         createDefaultTeamProject();
         Project teamProject = createTeamProject("team-dev", "Dev Team");
+        teamProject.addMember(ALICE_ID.toString(), Project.ProjectRole.MEMBER, "alice");
+        teamProject.addMember(BOB_ID.toString(), Project.ProjectRole.MEMBER, "bob");
         installOnlinePlayers(minecraft,
                 createPlayerInfo(OWNER_ID, "owner"),
-                createPlayerInfo(UUID.fromString("20000000-0000-0000-0000-000000000002"), "alice"),
-                createPlayerInfo(UUID.fromString("20000000-0000-0000-0000-000000000003"), "bob"));
+                createPlayerInfo(ALICE_ID, "alice"),
+                createPlayerInfo(BOB_ID, "bob"),
+                createPlayerInfo(CHARLIE_ID, "charlie"));
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
@@ -307,6 +316,7 @@ public final class TodoScreenTestMain {
 
         Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
         ScreenDriver.init(minecraft, assignScreen);
+        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "指派列表应只展示团队项目成员且 owner 只出现一次");
         screen.setAssignPlayerSearchForTest(assignScreen, "bo");
         GuiTestSupport.assertEquals(List.of("bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "搜索分配玩家时应只保留匹配结果");
 
@@ -317,6 +327,72 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, screen.getNotificationCountForTest(), "分配任务后应显示成功提示");
         GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "分配任务后应标记未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "完成分配后应返回主界面");
+    }
+
+    /**
+     * 校验“指派他人”弹窗会保留离线项目成员，并允许直接将任务指派给该离线成员。
+     */
+    private static void shouldListOfflineProjectMembersInAssignScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-offline-member", "Offline Member Team");
+        teamProject.addMember(ALICE_ID.toString(), Project.ProjectRole.MEMBER, "alice");
+        teamProject.addMember(BOB_ID.toString(), Project.ProjectRole.MEMBER, "bob");
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(ALICE_ID, "alice"),
+                createPlayerInfo(CHARLIE_ID, "charlie"));
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Offline Assign Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+
+        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        ScreenDriver.init(minecraft, assignScreen);
+
+        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "离线项目成员也应出现在指派列表中，在线非成员不应出现");
+        screen.setAssignPlayerSearchForTest(assignScreen, "bo");
+        GuiTestSupport.assertEquals(List.of("bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "搜索离线项目成员时也应命中缓存名称");
+
+        screen.clickAssignPlayerRowForTest(assignScreen, 0);
+
+        GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "离线成员被选中后应写入缓存名称");
+        GuiTestSupport.assertEquals(BOB_ID.toString(), task.getAssigneeUuid(), "离线成员被选中后应写入对应 UUID");
+        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "指派离线成员后仍应标记未保存");
+        GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "指派离线成员后应返回主界面");
+    }
+
+    /**
+     * 校验小窗口下“指派他人”弹窗会压缩成员列表高度，确保取消按钮仍位于界面内部。
+     */
+    private static void shouldKeepAssignDialogCancelButtonInsideSmallScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-small-screen", "Small Screen Team");
+        teamProject.addMember(ALICE_ID.toString(), Project.ProjectRole.MEMBER, "alice");
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(ALICE_ID, "alice"));
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Small Screen Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+
+        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        GuiTestSupport.initScreen(minecraft, assignScreen, 320, 170);
+
+        List<Button> buttons = ScreenDriver.getButtons(assignScreen);
+        GuiTestSupport.assertTrue(!buttons.isEmpty(), "指派弹窗初始化后应创建按钮");
+        Button cancelButton = buttons.get(buttons.size() - 1);
+        GuiTestSupport.assertTrue(cancelButton.getY() + cancelButton.getHeight() <= 170, "小窗口下取消按钮不应被挤出界面底部");
     }
 
     /**
