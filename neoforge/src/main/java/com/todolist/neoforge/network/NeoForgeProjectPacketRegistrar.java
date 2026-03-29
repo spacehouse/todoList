@@ -39,6 +39,8 @@ public final class NeoForgeProjectPacketRegistrar {
                 ProjectPackets.onSetActiveProjectPacket(server, player, buf));
         NeoForgeNetworkBridge.registerServerReceiver(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, (server, player, handler, buf, responseSender) ->
                 ProjectPackets.onSetHudStarredProjectIdsPacket(server, player, buf));
+        NeoForgeNetworkBridge.registerServerReceiver(ProjectPackets.SET_HUD_VISIBILITY_ID, (server, player, handler, buf, responseSender) ->
+                ProjectPackets.onSetHudVisibilityPacket(server, player, buf));
 
         NeoForgeNetworkBridge.registerJoinListener((player, sender, server) ->
                 ProjectPackets.onPlayerJoin(server, player));

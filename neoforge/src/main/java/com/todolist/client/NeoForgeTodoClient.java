@@ -12,8 +12,8 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoadingContext;
@@ -26,8 +26,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * NeoForge 楠炲啿褰寸€广垺鍩涚粩顖欏瘜缁眹鈧?
- * 鐠愮喕鐭楃€广垺鍩涚粩顖氬灥婵瀵查妴浣风皑娴犲墎娲冮崥顑跨瑢 HUD 濞撳弶鐓嬬粵澶婎槱閻炲棎鈧?
+ * NeoForge 平台客户端主类，负责客户端初始化、HUD 集成与状态同步。
  */
 public final class NeoForgeTodoClient {
     private static Minecraft client;
@@ -40,15 +39,17 @@ public final class NeoForgeTodoClient {
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
+    private static boolean pendingLocalWorldInitialization;
+    private static Boolean lastLocalPublishedState;
 
     /**
-     * 缁変焦婀侀弸鍕偓鐘插毐閺佸府绱濈粋浣诡剾鐎圭偘绶ラ崠鏍モ偓?
+     * 私有构造方法，避免工具类被实例化。
      */
     private NeoForgeTodoClient() {
     }
 
     /**
-     * 閸掓繂顫愰崠?NeoForge 鐎广垺鍩涚粩顖炩偓鏄忕帆閵?
+     * 初始化客户端。
      */
     public static void initialize() {
         client = Minecraft.getInstance();
@@ -66,7 +67,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 濞夈劌鍞介柊宥囩枂閻ｅ矂娼板銉ュ范閵?
+     * 注册配置界面工厂。
      */
     private static void registerConfigScreenFactory() {
         try {
@@ -80,7 +81,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 闁俺绻冮崣宥呯殸濞夈劌鍞界€广垺鍩涚粩顖欑皑娴犲墎娲冮崥顒€娅掗妴?
+     * 注册客户端事件监听器。
      */
     private static void registerClientListeners() {
         NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientTickEvent);
@@ -92,9 +93,9 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * Registers NeoForge key mappings on the mod event bus.
+     * 注册快捷键。
      *
-     * @param event key mapping registration event
+     * @param event 快捷键注册事件
      */
     private static void onRegisterKeyMappingsEvent(RegisterKeyMappingsEvent event) {
         event.register(OPEN_TODO_KEY);
@@ -103,29 +104,39 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 鐎广垺鍩涚粩?Tick 娴滃娆㈡径鍕倞閵?
+     * 处理客户端 Tick 事件并维护同步状态。
      *
-     * @param ignored 娴滃娆㈢€电钖?
+     * @param ignored Tick 事件
      */
     private static void onClientTickEvent(ClientTickEvent.Post ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) {
             return;
         }
+        boolean localIntegrated = isLocalIntegratedServer(current);
         if (current.getConnection() == null) {
             pendingRemoteResync = false;
             applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
-        } else if (!current.isLocalServer()) {
+        } else if (!localIntegrated) {
             applyStorageNamespace(resolveStorageNamespace(current));
         }
-        if (pendingRemoteResync &&
-                NeoForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID) &&
-                NeoForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
+        if (pendingLocalWorldInitialization && current.player != null) {
+            if (localIntegrated) {
+                initializeLocalWorldState(current);
+                pendingLocalWorldInitialization = false;
+            } else if (current.getConnection() != null) {
+                pendingLocalWorldInitialization = false;
+            }
+        }
+        if (pendingRemoteResync
+                && NeoForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)
+                && NeoForgeNetworkBridge.canSend(TaskPackets.TEAM_REQUEST_SYNC_ID)) {
             NeoForgeClientProjectPackets.sendRequestSyncProjects();
             NeoForgeClientProjectPackets.sendSetHudStarredProjectIds(ModConfig.getInstance().getHudStarredProjectIds());
             NeoForgeClientTaskPackets.requestTeamSync();
             pendingRemoteResync = false;
         }
+        refreshLocalPublishedState(current);
         if (current.player == null) {
             return;
         }
@@ -141,42 +152,88 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 鐎广垺鍩涚粩顖滄閸戣桨绨ㄦ禒璺侯槱閻炲棎鈧?
+     * 处理客户端退出事件。
      *
-     * @param ignored 娴滃娆㈢€电钖?
+     * @param ignored 退出事件
      */
     private static void onClientLoggingOutEvent(ClientPlayerNetworkEvent.LoggingOut ignored) {
         pendingRemoteResync = false;
+        pendingLocalWorldInitialization = false;
+        lastLocalPublishedState = null;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
     /**
-     * 鐎广垺鍩涚粩顖滄瑜版洑绨ㄦ禒璺侯槱閻炲棎鈧?
+     * 处理客户端进入世界事件，并为远程服与本地单人环境安排后续初始化。
      *
-     * @param ignored 娴滃娆㈢€电钖?
+     * @param ignored 进入事件
      */
     private static void onClientLoggingInEvent(ClientPlayerNetworkEvent.LoggingIn ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
-        if (current == null || current.getConnection() == null) {
+        if (current == null) {
             return;
         }
-        if (!current.isLocalServer()) {
-            applyStorageNamespace(resolveStorageNamespace(current));
+        pendingLocalWorldInitialization = true;
+        if (!isLocalIntegratedServer(current)) {
+            if (current.getConnection() != null) {
+                applyStorageNamespace(resolveStorageNamespace(current));
+            }
+            lastLocalPublishedState = null;
+        } else {
+            lastLocalPublishedState = isLocalPublished(current);
         }
         pendingRemoteResync = true;
     }
 
     /**
-     * 閺嶈宓侀張宥呭閸ｃ劋淇婇幁顖滄晸閹存劕鐡ㄩ崒銊ユ嚒閸氬秶鈹栭梻娣偓?
+     * 在本地单人世界进入后，统一恢复本地项目、个人任务和团队缓存状态。
      *
-     * @param client 鐎广垺鍩涚粩顖氱杽娓?
-     * @return 閸涜棄鎮曠粚娲？
+     * @param current 当前客户端实例
      */
-    private static String resolveStorageNamespace(Minecraft client) {
-        if (client == null || client.isLocalServer()) {
+    private static void initializeLocalWorldState(Minecraft current) {
+        applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
+        lastLocalPublishedState = isLocalPublished(current);
+        try {
+            ClientTaskStorageHelper.restorePublishedPlayerTasksToLocalStorage(TodoListNeoForge.getTaskStorage(), current);
+        } catch (Exception e) {
+            TodoListNeoForge.LOGGER.warn("Failed to restore published personal tasks back to local storage", e);
+        }
+        TodoListCommon.reloadProjectsFromStorage();
+        setActiveProjectId(null);
+        hudVisible = true;
+        teamTaskManager.clearAll();
+        if (isLocalPublished(current)) {
+            try {
+                updateTeamTasksFromServer(TodoListNeoForge.getTaskStorage().loadTeamTasks());
+            } catch (Exception e) {
+                TodoListNeoForge.LOGGER.warn("Failed to load local team tasks during local world initialization", e);
+            }
+        }
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive != null && !lastActive.isBlank()) {
+            Project project = TodoListNeoForge.getProjectManager().getProject(lastActive);
+            if (project != null && project.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                project = null;
+            }
+            if (project != null) {
+                setActiveProjectId(project.getId());
+                ClientBridge.syncHudViewForProject(project);
+                NeoForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
+            }
+        }
+    }
+
+    /**
+     * 解析当前服务端对应的存储命名空间。
+     *
+     * @param current 当前客户端实例
+     * @return 存储命名空间
+     */
+    private static String resolveStorageNamespace(Minecraft current) {
+        if (current == null || current.isLocalServer()) {
             return DataPathProvider.LOCAL_STORAGE_NAMESPACE;
         }
-        ServerData serverData = client.getCurrentServer();
+        ServerData serverData = current.getCurrentServer();
         if (serverData == null || serverData.ip == null || serverData.ip.trim().isEmpty()) {
             return "server_unknown";
         }
@@ -184,9 +241,9 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 鎼存梻鏁ら弬鎵畱鐎涙ê鍋嶉崨钘夋倳缁屾椽妫块妴?
+     * 应用新的存储命名空间并重载客户端状态。
      *
-     * @param namespace 閸涜棄鎮曠粚娲？
+     * @param namespace 目标命名空间
      */
     private static void applyStorageNamespace(String namespace) {
         if (namespace == null || namespace.isEmpty()) {
@@ -203,22 +260,22 @@ public final class NeoForgeTodoClient {
         teamTaskManager.clearAll();
         String lastActive = ModConfig.getInstance().getLastActiveProjectId();
         if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListNeoForge.getProjectManager().getProject(lastActive);
-            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
-                p = null;
+            Project project = TodoListNeoForge.getProjectManager().getProject(lastActive);
+            if (project != null && project.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                project = null;
             }
-            if (p != null) {
-                setActiveProjectId(p.getId());
-                ClientBridge.syncHudViewForProject(p);
-                NeoForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+            if (project != null) {
+                setActiveProjectId(project.getId());
+                ClientBridge.syncHudViewForProject(project);
+                NeoForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
             }
         }
     }
 
     /**
-     * 濞撳弶鐓?HUD 鐟曞棛娲婄仦鍌樷偓?
+     * 渲染 HUD 图层。
      *
-     * @param event 娴滃娆㈢€电钖?
+     * @param event GUI 渲染事件
      */
     private static void onRenderGuiPostEvent(RenderGuiEvent.Post event) {
         if (hudRenderer == null) {
@@ -231,9 +288,9 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 閹垫挸绱戞禒璇插閸掓銆冮悾宀勬桨閵?
+     * 打开待办界面。
      *
-     * @param current 鐎广垺鍩涚粩顖氱杽娓?
+     * @param current 当前客户端实例
      */
     private static void openTodoScreen(Minecraft current) {
         if (current.screen == null) {
@@ -242,7 +299,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 濞夈劌鍞?HUD 濞撳弶鐓嬮崳銊ｂ偓?
+     * 注册 HUD 渲染器。
      */
     private static void registerHudRenderer() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
@@ -254,7 +311,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 閸掑洦宕?HUD 鐏炴洖绱戦悩鑸碘偓浣碘偓?
+     * 切换 HUD 展开状态。
      */
     private static void toggleHud() {
         if (hudRenderer != null) {
@@ -263,7 +320,7 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 閸掑洦宕?HUD 閸欘垵顫嗛幀褋鈧?
+     * 切换 HUD 可见性。
      */
     private static void toggleHudVisibility() {
         boolean nextVisible = !ClientBridge.ops().isHudVisible();
@@ -271,67 +328,118 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 閼惧嘲褰囬崶銏ゆЕ娴犺濮熺粻锛勬倞閸ｃ劊鈧?
+     * 检查本地世界的局域网发布状态变化，并在刚发布时主动拉取一次团队相关同步数据。
      *
-     * @return 閸ャ垽妲︽禒璇插缁狅紕鎮婇崳?
+     * @param current 当前客户端实例
+     */
+    private static void refreshLocalPublishedState(Minecraft current) {
+        if (!isLocalIntegratedServer(current)) {
+            lastLocalPublishedState = null;
+            return;
+        }
+        boolean published = isLocalPublished(current);
+        if (lastLocalPublishedState != null && !lastLocalPublishedState && published) {
+            syncLocalLanStateAfterPublish();
+        } else if (lastLocalPublishedState != null && lastLocalPublishedState && !published) {
+            teamTaskManager.clearAll();
+        }
+        lastLocalPublishedState = published;
+    }
+
+    /**
+     * 判断当前本地集成服是否已发布局域网。
+     *
+     * @param current 当前客户端实例
+     * @return 已发布时返回 true
+     */
+    private static boolean isLocalPublished(Minecraft current) {
+        if (!isLocalIntegratedServer(current)) {
+            return false;
+        }
+        var server = current.getSingleplayerServer();
+        return server != null && server.isPublished();
+    }
+
+    /**
+     * 本地世界发布局域网后，重新同步项目状态与团队任务。
+     */
+    private static void syncLocalLanStateAfterPublish() {
+        try {
+            ClientTaskStorageHelper.migrateLocalTasksToPublishedPlayerStorage(TodoListNeoForge.getTaskStorage(), client);
+        } catch (Exception e) {
+            TodoListNeoForge.LOGGER.warn("Failed to migrate local personal tasks after publishing local world", e);
+        }
+        try {
+            updateTeamTasksFromServer(TodoListNeoForge.getTaskStorage().loadTeamTasks());
+        } catch (Exception e) {
+            TodoListNeoForge.LOGGER.warn("Failed to reload local team tasks after publishing local world", e);
+        }
+        NeoForgeClientProjectPackets.sendRequestSyncProjects();
+        NeoForgeClientTaskPackets.requestTeamSync();
+    }
+
+    /**
+     * 获取团队任务管理器。
+     *
+     * @return 团队任务管理器
      */
     public static TaskManager getTeamTaskManager() {
         return teamTaskManager;
     }
 
     /**
-     * 閼惧嘲褰囪ぐ鎾冲濞茶濮╂い鍦窗 ID閵?
+     * 获取当前激活项目 ID。
      *
-     * @return 妞ゅ湱娲?ID
+     * @return 激活项目 ID
      */
     public static String getActiveProjectId() {
         return activeProjectId;
     }
 
     /**
-     * 鐠佸墽鐤嗚ぐ鎾冲濞茶濮╂い鍦窗 ID閵?
+     * 设置当前激活项目 ID。
      *
-     * @param projectId 妞ゅ湱娲?ID
+     * @param projectId 激活项目 ID
      */
     public static void setActiveProjectId(String projectId) {
         activeProjectId = projectId;
     }
 
     /**
-     * 閸掋倖鏌?HUD 閺勵垰鎯侀崣顖濐潌閵?
+     * 判断 HUD 是否可见。
      *
-     * @return 閺勵垰鎯侀崣顖濐潌
+     * @return HUD 是否可见
      */
     public static boolean isHudVisible() {
         return hudVisible;
     }
 
     /**
-     * 鐠佸墽鐤?HUD 閸欘垵顫嗛幀褋鈧?
+     * 设置 HUD 可见性。
      *
-     * @param visible 閺勵垰鎯侀崣顖濐潌
+     * @param visible HUD 是否可见
      */
     public static void setHudVisible(boolean visible) {
         hudVisible = visible;
     }
 
     /**
-     * 娴犲孩婀囬崝锛勵伂閺囧瓨鏌婇崶銏ゆЕ娴犺濮熼崚妤勩€冮妴?
+     * 用服务端同步结果刷新团队任务。
      *
-     * @param tasks 娴犺濮熼崚妤勩€?
+     * @param tasks 团队任务列表
      */
     public static void updateTeamTasksFromServer(java.util.List<Task> tasks) {
         teamTaskManager.clearAll();
         String lastActive = ModConfig.getInstance().getLastActiveProjectId();
         if (lastActive != null && !lastActive.isBlank()) {
-            Project p = TodoListNeoForge.getProjectManager().getProject(lastActive);
-            if (p != null && p.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
-                p = null;
+            Project project = TodoListNeoForge.getProjectManager().getProject(lastActive);
+            if (project != null && project.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                project = null;
             }
-            if (p != null) {
-                setActiveProjectId(p.getId());
-                ClientBridge.syncHudViewForProject(p);
-                NeoForgeClientProjectPackets.sendSetActiveProjectId(p.getId());
+            if (project != null) {
+                setActiveProjectId(project.getId());
+                ClientBridge.syncHudViewForProject(project);
+                NeoForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
             }
         }
         for (Task task : tasks) {
@@ -340,19 +448,29 @@ public final class NeoForgeTodoClient {
     }
 
     /**
-     * 閸掋倖鏌囬弰顖氭儊閸氼垳鏁ら崶銏ゆЕ妞ゅ湱娲伴崝鐔诲厴閵?
+     * 判断当前环境是否允许使用团队项目。
      *
-     * @return 閺勵垰鎯侀崥顖滄暏
+     * @return 可用时返回 true
      */
     public static boolean isTeamProjectsEnabled() {
         Minecraft current = client != null ? client : Minecraft.getInstance();
         if (current == null) {
             return false;
         }
-        if (current.isLocalServer()) {
+        if (isLocalIntegratedServer(current)) {
             var server = current.getSingleplayerServer();
             return server != null && server.isPublished();
         }
         return NeoForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
+    }
+
+    /**
+     * 判断当前客户端是否处于本地集成服上下文。
+     *
+     * @param current 当前客户端实例
+     * @return 属于本地单人或本地主机上下文时返回 true
+     */
+    private static boolean isLocalIntegratedServer(Minecraft current) {
+        return current != null && (current.isLocalServer() || current.getSingleplayerServer() != null);
     }
 }

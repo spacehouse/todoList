@@ -14,6 +14,7 @@ import java.util.List;
 public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
     /**
      * 获取团队任务管理器。
+     *
      * @return 团队任务管理器
      */
     @Override
@@ -23,6 +24,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 判断是否启用团队项目。
+     *
      * @return 是否启用
      */
     @Override
@@ -32,6 +34,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 获取当前活动项目 ID。
+     *
      * @return 项目 ID
      */
     @Override
@@ -41,6 +44,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 设置当前活动项目 ID。
+     *
      * @param projectId 项目 ID
      */
     @Override
@@ -50,6 +54,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送设置活动项目 ID 的请求。
+     *
      * @param projectId 项目 ID
      */
     @Override
@@ -59,6 +64,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 判断 HUD 是否可见。
+     *
      * @return 是否可见
      */
     @Override
@@ -68,15 +74,18 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 设置 HUD 可见性。
+     *
      * @param visible 是否可见
      */
     @Override
     public void setHudVisible(boolean visible) {
         NeoForgeTodoClient.setHudVisible(visible);
+        NeoForgeClientProjectPackets.sendSetHudVisibility(visible);
     }
 
     /**
      * 发送更新任务请求。
+     *
      * @param task 任务
      */
     @Override
@@ -86,6 +95,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送替换全部任务请求。
+     *
      * @param tasks 任务列表
      */
     @Override
@@ -95,6 +105,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送替换团队任务请求。
+     *
      * @param tasks 团队任务列表
      */
     @Override
@@ -112,6 +123,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送请求加入项目。
+     *
      * @param projectId 项目 ID
      */
     @Override
@@ -121,6 +133,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送 HUD 星标项目 ID 列表。
+     *
      * @param projectIds 项目 ID 列表
      */
     @Override
@@ -130,6 +143,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送删除项目请求。
+     *
      * @param projectId 项目 ID
      */
     @Override
@@ -139,6 +153,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送更新项目信息请求。
+     *
      * @param project 项目
      */
     @Override
@@ -148,6 +163,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送移除成员请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      */
@@ -158,6 +174,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送更新成员角色请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      * @param role 角色
@@ -169,6 +186,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送添加项目请求。
+     *
      * @param project 项目
      */
     @Override
@@ -178,6 +196,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 发送添加成员请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      * @param memberName 成员名称
@@ -189,6 +208,7 @@ public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
 
     /**
      * 判断是否允许发送角色更新请求。
+     *
      * @return 是否允许
      */
     @Override

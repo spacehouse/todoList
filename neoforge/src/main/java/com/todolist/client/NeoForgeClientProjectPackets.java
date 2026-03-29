@@ -10,11 +10,13 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * NeoForge 平台客户端项目数据包处理类。
@@ -53,7 +55,16 @@ public final class NeoForgeClientProjectPackets {
             });
         });
         NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
-            buf.readBoolean();
+            boolean visible = buf.readBoolean();
+            client.execute(() -> applyHudVisibilitySync(visible));
+        });
+        NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_HUD_STARRED_PROJECT_IDS_ID, (client, handler, buf, responseSender) -> {
+            int count = buf.readInt();
+            List<String> projectIds = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                projectIds.add(buf.readUtf());
+            }
+            client.execute(() -> ModConfig.getInstance().setHudStarredProjectIds(projectIds));
         });
         NeoForgeNetworkBridge.registerClientReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
             boolean present = buf.readBoolean();
@@ -81,6 +92,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 处理来自服务端的项目同步数据。
+     *
      * @param projects 项目列表
      */
     private static void handleSyncProjects(List<Project> projects) {
@@ -88,9 +100,9 @@ public final class NeoForgeClientProjectPackets {
         ProjectManager manager = TodoListNeoForge.getProjectManager();
         try {
             Map<String, Project> incoming = new HashMap<>();
-            for (Project p : projects) {
-                p.setName(ProjectNameFormatter.normalizeDefaultName(p.getName(), p.getScope()));
-                incoming.put(p.getId(), p);
+            for (Project project : projects) {
+                project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
+                incoming.put(project.getId(), project);
             }
             for (Project existing : manager.getAllProjects()) {
                 if (!incoming.containsKey(existing.getId())) {
@@ -122,6 +134,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 解析本地可用的活动项目 ID。
+     *
      * @param manager 项目管理器
      * @return 项目 ID
      */
@@ -144,7 +157,17 @@ public final class NeoForgeClientProjectPackets {
     }
 
     /**
+     * 应用服务端同步的 HUD 可见性到本地客户端状态。
+     *
+     * @param visible HUD 是否可见
+     */
+    private static void applyHudVisibilitySync(boolean visible) {
+        NeoForgeTodoClient.setHudVisible(visible);
+    }
+
+    /**
      * 发送添加项目请求。
+     *
      * @param project 项目
      */
     public static void sendAddProject(Project project) {
@@ -159,6 +182,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送更新项目请求。
+     *
      * @param project 项目
      */
     public static void sendUpdateProject(Project project) {
@@ -173,6 +197,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送删除项目请求。
+     *
      * @param projectId 项目 ID
      */
     public static void sendDeleteProject(String projectId) {
@@ -187,6 +212,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送添加成员请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      * @param memberName 成员名称
@@ -204,6 +230,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送移除成员请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      */
@@ -219,6 +246,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送更新成员角色请求。
+     *
      * @param projectId 项目 ID
      * @param memberUuid 成员 UUID
      * @param role 角色
@@ -236,6 +264,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送请求加入项目。
+     *
      * @param projectId 项目 ID
      */
     public static void sendRequestJoinProject(String projectId) {
@@ -255,15 +284,18 @@ public final class NeoForgeClientProjectPackets {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeClientProjectStateSeed(buf);
         NeoForgeNetworkBridge.sendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
     }
 
     /**
      * 上报当前活动项目 ID。
+     *
      * @param projectId 项目 ID，null 表示清空
      */
     public static void sendSetActiveProjectId(String projectId) {
         if (!NeoForgeNetworkBridge.canSend(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
+            applyLocalActiveProjectId(projectId);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -278,10 +310,12 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 发送 HUD 星标项目 ID 列表。
+     *
      * @param projectIds 项目 ID 列表
      */
     public static void sendSetHudStarredProjectIds(List<String> projectIds) {
         if (!NeoForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
+            applyLocalHudStarredProjectIds(projectIds);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
@@ -294,7 +328,44 @@ public final class NeoForgeClientProjectPackets {
     }
 
     /**
+     * 向服务端同步客户端当前的 HUD 显隐状态。
+     *
+     * @param visible HUD 是否可见
+     */
+    public static void sendSetHudVisibility(boolean visible) {
+        if (!NeoForgeNetworkBridge.canSend(ProjectPackets.SET_HUD_VISIBILITY_ID)) {
+            applyLocalHudVisibility(visible);
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeBoolean(visible);
+        NeoForgeNetworkBridge.sendToServer(ProjectPackets.SET_HUD_VISIBILITY_ID, buf);
+    }
+
+    /**
+     * 将客户端当前项目状态写入请求同步数据包，供服务端首次初始化玩家状态。
+     *
+     * @param buf 待写入的网络缓冲区
+     */
+    private static void writeClientProjectStateSeed(FriendlyByteBuf buf) {
+        String activeProjectId = ClientBridge.ops().getActiveProjectId();
+        if (activeProjectId == null || activeProjectId.isBlank()) {
+            buf.writeBoolean(false);
+        } else {
+            buf.writeBoolean(true);
+            buf.writeUtf(activeProjectId.trim());
+        }
+        List<String> starredProjectIds = ModConfig.getInstance().getHudStarredProjectIds();
+        buf.writeInt(starredProjectIds.size());
+        for (String projectId : starredProjectIds) {
+            buf.writeUtf(projectId == null ? "" : projectId);
+        }
+        buf.writeBoolean(ClientBridge.ops().isHudVisible());
+    }
+
+    /**
      * 本地回退：添加项目。
+     *
      * @param project 项目
      */
     private static void addProjectLocally(Project project) {
@@ -316,6 +387,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 本地回退：更新项目。
+     *
      * @param project 项目
      */
     private static void updateProjectLocally(Project project) {
@@ -333,6 +405,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 本地回退：删除项目。
+     *
      * @param projectId 项目 ID
      */
     private static void deleteProjectLocally(String projectId) {
@@ -350,6 +423,7 @@ public final class NeoForgeClientProjectPackets {
 
     /**
      * 按范围保存项目数据。
+     *
      * @param scope 项目范围
      */
     private static void saveProjectsByScope(Project.Scope scope) {
@@ -365,9 +439,79 @@ public final class NeoForgeClientProjectPackets {
     }
 
     /**
+     * 在本地单人模式下直接把当前激活项目写入集成服务端，保证命令系统可读取到最新状态。
+     *
+     * @param projectId 项目 ID
+     */
+    private static void applyLocalActiveProjectId(String projectId) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setActiveProjectId(serverPlayer, projectId));
+    }
+
+    /**
+     * 在本地单人模式下直接把 HUD 星标项目写入集成服务端，避免命令侧读取到空状态。
+     *
+     * @param projectIds 项目 ID 列表
+     */
+    private static void applyLocalHudStarredProjectIds(List<String> projectIds) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        List<String> ids = projectIds == null ? List.of() : List.copyOf(projectIds);
+        server.execute(() -> ProjectPackets.setHudStarredProjectIds(serverPlayer, ids));
+    }
+
+    /**
+     * 在本地单人环境中直接把 HUD 显隐状态写回集成服务端。
+     *
+     * @param visible HUD 是否可见
+     */
+    private static void applyLocalHudVisibility(boolean visible) {
+        ServerPlayer serverPlayer = resolveLocalServerPlayer();
+        if (serverPlayer == null) {
+            return;
+        }
+        var server = serverPlayer.getServer();
+        if (server == null) {
+            return;
+        }
+        server.execute(() -> ProjectPackets.setHudVisible(serverPlayer, visible));
+    }
+
+    /**
+     * 解析当前本地单人环境对应的服务端玩家对象，用于无网络能力时的本地回退。
+     *
+     * @return 对应的服务端玩家；不存在时返回 null
+     */
+    private static ServerPlayer resolveLocalServerPlayer() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.player == null || !minecraft.isLocalServer()) {
+            return null;
+        }
+        var server = minecraft.getSingleplayerServer();
+        if (server == null) {
+            return null;
+        }
+        return server.getPlayerList().getPlayer(minecraft.player.getUUID());
+    }
+
+    /**
      * 判断是否需要走本地回退逻辑。
+     *
      * @param channelId 通道 ID
-     * @return 是否回退
+     * @return 是否需要回退
      */
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
         return !NeoForgeNetworkBridge.canSend(channelId);

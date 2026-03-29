@@ -1,6 +1,7 @@
 package com.todolist.client;
 
 import com.todolist.TodoListNeoForge;
+import com.todolist.gui.TodoScreen;
 import com.todolist.neoforge.network.NeoForgeNetworkBridge;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
@@ -42,8 +43,12 @@ public final class NeoForgeClientTaskPackets {
                             namespaceAtReceive, currentNamespace);
                     return;
                 }
+                if (hasPersonalUnsavedChanges()) {
+                    TodoListNeoForge.LOGGER.info("Skip NeoForge personal task sync write because local personal tasks are unsaved");
+                    return;
+                }
                 try {
-                    TodoListNeoForge.getTaskStorage().saveTasks(tasks);
+                    ClientTaskStorageHelper.savePersonalTasks(TodoListNeoForge.getTaskStorage(), client, tasks);
                     TodoListNeoForge.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
                 } catch (Exception e) {
                     TodoListNeoForge.LOGGER.error("Failed to save synced tasks on NeoForge client", e);
@@ -69,6 +74,7 @@ public final class NeoForgeClientTaskPackets {
 
     /**
      * 发送替换全部任务请求。
+     *
      * @param tasks 任务列表
      */
     public static void sendReplaceAllTasks(List<Task> tasks) {
@@ -86,6 +92,7 @@ public final class NeoForgeClientTaskPackets {
 
     /**
      * 发送替换团队任务请求。
+     *
      * @param tasks 团队任务列表
      */
     public static void sendReplaceTeamTasks(List<Task> tasks) {
@@ -118,6 +125,7 @@ public final class NeoForgeClientTaskPackets {
 
     /**
      * 发送更新任务请求。
+     *
      * @param task 任务
      */
     public static void sendUpdateTask(Task task) {
@@ -134,5 +142,14 @@ public final class NeoForgeClientTaskPackets {
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTask(buf, task);
         NeoForgeNetworkBridge.sendToServer(TaskPackets.UPDATE_TASK_ID, buf);
+    }
+
+    /**
+     * 判断当前个人任务是否存在未保存修改。
+     *
+     * @return 存在未保存修改时返回 true
+     */
+    private static boolean hasPersonalUnsavedChanges() {
+        return TodoScreen.hasPersonalUnsavedChanges();
     }
 }
