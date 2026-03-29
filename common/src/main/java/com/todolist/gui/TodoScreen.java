@@ -1111,39 +1111,83 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void onSaveTasks() {
-        try {
-            if (viewMode == ViewMode.PERSONAL) {
-                ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft, taskManager.getAllTasks());
-                TodoConstants.LOGGER.info("Tasks saved");
-                if (ClientBridge.ops() != null) {
-                    ClientBridge.ops().sendReplaceAllTasks(taskManager.getAllTasks());
-                }
-                TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
-                if (renderer != null) {
-                    renderer.forceRefreshTasks();
-                }
-            } else {
-                if (ClientBridge.ops() != null) {
-                    ClientBridge.ops().sendReplaceTeamTasks(taskManager.getAllTasks());
-                }
-                TodoConstants.LOGGER.info("Team tasks saved");
-            }
-            hasUnsavedChanges = false;
-            if (viewMode == ViewMode.PERSONAL) {
+        boolean personalSaved = !personalHasUnsavedChanges;
+        boolean teamSaved = !teamHasUnsavedChanges;
+
+        if (personalHasUnsavedChanges) {
+            try {
+                savePersonalTasks();
+                personalSaved = true;
                 personalHasUnsavedChanges = false;
-            } else {
-                teamHasUnsavedChanges = false;
+            } catch (Exception e) {
+                personalSaved = false;
+                TodoConstants.LOGGER.error("Failed to save personal tasks", e);
             }
+        }
+
+        if (teamHasUnsavedChanges) {
+            try {
+                saveTeamTasks();
+                teamSaved = true;
+                teamHasUnsavedChanges = false;
+            } catch (Exception e) {
+                teamSaved = false;
+                TodoConstants.LOGGER.error("Failed to save team tasks", e);
+            }
+        }
+
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+        if (personalSaved && teamSaved) {
             if (this.minecraft != null && this.minecraft.player != null) {
                 this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
             }
-        } catch (Exception e) {
-            TodoConstants.LOGGER.error("Failed to save tasks", e);
-            if (this.minecraft != null && this.minecraft.player != null) {
-                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
-            }
+            onClose();
+            return;
         }
-        onClose();
+
+        if (this.minecraft != null && this.minecraft.player != null) {
+            this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
+        }
+    }
+
+    /**
+     * 保存当前客户端缓存中的个人任务，并同步到服务端与 HUD。
+     *
+     * @throws Exception 当个人任务保存失败时抛出异常
+     */
+    private void savePersonalTasks() throws Exception {
+        if (personalTaskManager == null) {
+            return;
+        }
+        List<Task> personalTasks = personalTaskManager.getAllTasks();
+        ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft, personalTasks);
+        if (ClientBridge.ops() != null) {
+            ClientBridge.ops().sendReplaceAllTasks(personalTasks);
+        }
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            renderer.forceRefreshTasks();
+        }
+        TodoConstants.LOGGER.info("Personal tasks saved");
+    }
+
+    /**
+     * 保存当前客户端缓存中的团队任务，并同步到服务端。
+     *
+     * @throws Exception 当团队任务保存失败时抛出异常
+     */
+    private void saveTeamTasks() throws Exception {
+        if (teamTaskManager == null) {
+            return;
+        }
+        List<Task> teamTasks = teamTaskManager.getAllTasks();
+        if (ClientTaskStorageHelper.shouldUsePublishedLocalPlayerStorage(this.minecraft)) {
+            TodoListCommon.getTaskStorage().saveTeamTasks(teamTasks);
+        }
+        if (ClientBridge.ops() != null) {
+            ClientBridge.ops().sendReplaceTeamTasks(teamTasks);
+        }
+        TodoConstants.LOGGER.info("Team tasks saved");
     }
 
     @Override

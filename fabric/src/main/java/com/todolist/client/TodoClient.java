@@ -142,6 +142,13 @@ public class TodoClient implements ClientModInitializer {
             applyStorageNamespace(localServer, client);
             lastLocalPublishedState = localServer ? isLocalPublished(client) : null;
             client.execute(() -> {
+                if (localServer) {
+                    try {
+                        ClientTaskStorageHelper.restorePublishedPlayerTasksToLocalStorage(TodoListMod.getTaskStorage(), client);
+                    } catch (Exception e) {
+                        TodoListMod.LOGGER.warn("Failed to restore published personal tasks back to local storage", e);
+                    }
+                }
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);
                 teamTaskManager.clearAll();
@@ -268,6 +275,16 @@ public class TodoClient implements ClientModInitializer {
      * 本地世界发布局域网后，重新拉取项目状态和团队任务，恢复单机阶段被临时净化的团队视图。
      */
     private static void syncLocalLanStateAfterPublish() {
+        try {
+            ClientTaskStorageHelper.migrateLocalTasksToPublishedPlayerStorage(TodoListMod.getTaskStorage(), client);
+        } catch (Exception e) {
+            TodoListMod.LOGGER.warn("Failed to migrate local personal tasks after publishing local world", e);
+        }
+        try {
+            updateTeamTasksFromServer(TodoListMod.getTaskStorage().loadTeamTasks());
+        } catch (Exception e) {
+            TodoListMod.LOGGER.warn("Failed to reload local team tasks after publishing local world", e);
+        }
         ClientProjectPackets.sendRequestSyncProjects();
         ClientTaskPackets.requestTeamSync();
     }
