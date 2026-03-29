@@ -6,12 +6,13 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.2.0 Capability Overview / 1.2.0 版本能力概览
+### v1.2.2 Capability Overview / 1.2.2 版本能力概览
 - ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
 - ✅ In-game GUI task management: CRUD, priority, tags, filter & search / 游戏内GUI任务管理：增删改查、优先级、标签、筛选与搜索
 - ✅ HUD todo list: expand/collapse, view header, configurable size/position/opacity / HUD待办列表：展开/收起、视图标题、可配置尺寸/位置/透明度
 - ✅ Multiplayer & team collaboration: team tasks, view semantics, server-side permission checks and audit logs / 多人团队协作：团队任务、视图语义、服务端权限校验与操作审计日志
 - ✅ Projects: personal/team projects, project sidebar, basic project management / 项目：个人/团队项目、项目侧边栏与基础管理
+- ✅ Stability upgrades in LAN/team sync, personal task restore, and assign dialog UX / 局域网/团队同步、个人任务恢复与指派弹窗体验稳定性增强
 - ✅ i18n: Chinese & English / 多语言：中文与英文
 
 More details / 更多说明：
@@ -171,6 +172,11 @@ cd todoList
 
 # The JAR will be in build/libs/ / JAR文件位于build/libs/目录
 ```
+
+### Release / 发布
+
+- Releases are published by pushing a Git tag that starts with `v`, for example `v1.2.2`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.2.2`
+- The release workflow extracts notes from `CHANGELOG.md` based on the tag version. / 发布工作流会根据标签版本从 `CHANGELOG.md` 提取发布说明
 
 ### Project Structure / 项目结构
 

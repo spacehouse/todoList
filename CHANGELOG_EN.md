@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.2.2] - 2026-03-29
+
+### Improvements & Fixes
+- **HUD State Sync Improvements**: Strengthened HUD visibility synchronization to keep client and server display state more consistent.
+- **LAN Team Sync Improvements**: Optimized team project and team task synchronization in published LAN worlds for more stable multiplayer collaboration.
+- **Local Personal Task Isolation**: Refactored personal task storage to improve data isolation in local single-player environments and reduce cross-environment interference.
+- **Cross-Project Save Fix**: Fixed save issues when switching across projects to avoid incorrect overwrites or missed changes.
+- **LAN Personal Task Restore Fix**: Fixed incorrect personal task restoration in LAN scenarios, improving data stability when switching between local and networked sessions.
+- **NeoForge Sync Chain Fix**: Completed HUD sync and LAN state restore handling on NeoForge, improving cross-loader behavior consistency.
+- **Assign Dialog Member Source Fix**: Fixed the “Assign Others” dialog showing online players instead of the current team project members; offline members can now still be displayed and assigned correctly.
+- **Assign Dialog Layout Fix**: Improved adaptive layout for the “Assign Others” dialog so the member list shrinks with the screen size and the Cancel button stays visible.
+
+### Testing & Stability
+- **Offline Self-Test Coverage**: Expanded offline self-test support for GUI components, command flows, and submission workflows to improve regression verification.
+- **Integration Test Expansion**: Added and split command-system integration test entry points, with finer coverage for projects, tasks, and join approval flows.
+- **1.21.1 Test Adaptation**: Adapted offline test stubs and GUI submission flow for the `1.21.1` branch to make future maintenance more stable.
+
 ## [1.2.1] - 2026-03-21
 
 ### Improvements & Fixes
