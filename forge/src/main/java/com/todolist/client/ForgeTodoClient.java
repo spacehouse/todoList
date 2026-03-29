@@ -46,6 +46,7 @@ public final class ForgeTodoClient {
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
     private static boolean pendingRemoteResync;
+    private static boolean pendingLocalWorldInitialization;
     private static Boolean lastLocalPublishedState;
 
     /**
@@ -150,11 +151,20 @@ public final class ForgeTodoClient {
         if (current == null) {
             return;
         }
+        boolean localIntegrated = isLocalIntegratedServer(current);
         if (current.getConnection() == null) {
             pendingRemoteResync = false;
             applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
-        } else if (!current.isLocalServer()) {
+        } else if (!localIntegrated) {
             applyStorageNamespace(resolveStorageNamespace(current));
+        }
+        if (pendingLocalWorldInitialization && current.player != null) {
+            if (localIntegrated) {
+                initializeLocalWorldState(current);
+                pendingLocalWorldInitialization = false;
+            } else if (current.getConnection() != null) {
+                pendingLocalWorldInitialization = false;
+            }
         }
         if (pendingRemoteResync
                 && ForgeNetworkBridge.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)
@@ -197,27 +207,68 @@ public final class ForgeTodoClient {
      */
     private static void onClientLoggingOutEvent(ClientPlayerNetworkEvent.LoggingOut ignored) {
         pendingRemoteResync = false;
+        pendingLocalWorldInitialization = false;
         lastLocalPublishedState = null;
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
     /**
-     * 处理客户端进入世界事件。
+     * 处理客户端进入世界事件，并为远程服与本地单人环境安排后续初始化。
      *
      * @param ignored 进入事件
      */
     private static void onClientLoggingInEvent(ClientPlayerNetworkEvent.LoggingIn ignored) {
         Minecraft current = client != null ? client : Minecraft.getInstance();
-        if (current == null || current.getConnection() == null) {
+        if (current == null) {
             return;
         }
-        if (!current.isLocalServer()) {
-            applyStorageNamespace(resolveStorageNamespace(current));
+        pendingLocalWorldInitialization = true;
+        if (!isLocalIntegratedServer(current)) {
+            if (current.getConnection() != null) {
+                applyStorageNamespace(resolveStorageNamespace(current));
+            }
             lastLocalPublishedState = null;
         } else {
             lastLocalPublishedState = isLocalPublished(current);
         }
         pendingRemoteResync = true;
+    }
+
+    /**
+     * 在 Forge 本地单人世界进入后，统一恢复本地项目、个人任务和团队缓存状态。
+     *
+     * @param current 当前客户端实例
+     */
+    private static void initializeLocalWorldState(Minecraft current) {
+        applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
+        lastLocalPublishedState = isLocalPublished(current);
+        try {
+            ClientTaskStorageHelper.restorePublishedPlayerTasksToLocalStorage(TodoListForge.getTaskStorage(), current);
+        } catch (Exception e) {
+            TodoListForge.LOGGER.warn("Failed to restore published personal tasks back to local storage", e);
+        }
+        TodoListCommon.reloadProjectsFromStorage();
+        setActiveProjectId(null);
+        hudVisible = true;
+        teamTaskManager.clearAll();
+        if (isLocalPublished(current)) {
+            try {
+                updateTeamTasksFromServer(TodoListForge.getTaskStorage().loadTeamTasks());
+            } catch (Exception e) {
+                TodoListForge.LOGGER.warn("Failed to load local team tasks during local world initialization", e);
+            }
+        }
+        String lastActive = ModConfig.getInstance().getLastActiveProjectId();
+        if (lastActive != null && !lastActive.isBlank()) {
+            Project project = TodoListForge.getProjectManager().getProject(lastActive);
+            if (project != null && project.getScope() == Project.Scope.TEAM && !isTeamProjectsEnabled()) {
+                project = null;
+            }
+            if (project != null) {
+                setActiveProjectId(project.getId());
+                ForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
+            }
+        }
     }
 
     /**
@@ -314,7 +365,7 @@ public final class ForgeTodoClient {
      * @param current 当前客户端实例
      */
     private static void refreshLocalPublishedState(Minecraft current) {
-        if (current == null || !current.isLocalServer()) {
+        if (!isLocalIntegratedServer(current)) {
             lastLocalPublishedState = null;
             return;
         }
@@ -334,7 +385,7 @@ public final class ForgeTodoClient {
      * @return 已发布时返回 true
      */
     private static boolean isLocalPublished(Minecraft current) {
-        if (current == null || !current.isLocalServer()) {
+        if (!isLocalIntegratedServer(current)) {
             return false;
         }
         var server = current.getSingleplayerServer();
@@ -345,6 +396,16 @@ public final class ForgeTodoClient {
      * 本地世界发布局域网后，重新同步项目状态与团队任务。
      */
     private static void syncLocalLanStateAfterPublish() {
+        try {
+            ClientTaskStorageHelper.migrateLocalTasksToPublishedPlayerStorage(TodoListForge.getTaskStorage(), client);
+        } catch (Exception e) {
+            TodoListForge.LOGGER.warn("Failed to migrate local personal tasks after publishing local world", e);
+        }
+        try {
+            updateTeamTasksFromServer(TodoListForge.getTaskStorage().loadTeamTasks());
+        } catch (Exception e) {
+            TodoListForge.LOGGER.warn("Failed to reload local team tasks after publishing local world", e);
+        }
         ForgeClientProjectPackets.sendRequestSyncProjects();
         ForgeClientTaskPackets.requestTeamSync();
     }
@@ -416,10 +477,20 @@ public final class ForgeTodoClient {
         if (current == null) {
             return false;
         }
-        if (current.isLocalServer()) {
+        if (isLocalIntegratedServer(current)) {
             var server = current.getSingleplayerServer();
             return server != null && server.isPublished();
         }
         return ForgeNetworkBridge.canSend(ProjectPackets.ADD_PROJECT_ID);
+    }
+
+    /**
+     * 判断当前客户端是否处于本地集成服上下文。
+     *
+     * @param current 当前客户端实例
+     * @return 属于本地单人或本地主机上下文时返回 true
+     */
+    private static boolean isLocalIntegratedServer(Minecraft current) {
+        return current != null && (current.isLocalServer() || current.getSingleplayerServer() != null);
     }
 }

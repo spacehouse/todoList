@@ -19,6 +19,7 @@ dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
     mappings(loom.officialMojangMappings())
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
+    testCompileOnly("net.fabricmc:fabric-loader:$loaderVersion")
 
     compileOnly("org.slf4j:slf4j-api:2.0.7")
 }
