@@ -21,7 +21,9 @@ import com.todolist.task.TaskManager;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -395,13 +397,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @return 候选玩家名称快照
      */
     List<String> getAssignablePlayerNamesForTest(Screen screen) {
-        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.filteredPlayers == null) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.filteredMembers == null) {
             return List.of();
         }
         List<String> names = new ArrayList<>();
-        for (net.minecraft.client.multiplayer.PlayerInfo info : assignPlayerScreen.filteredPlayers) {
-            if (info != null && info.getProfile() != null && info.getProfile().getName() != null) {
-                names.add(info.getProfile().getName());
+        for (AssignableMember member : assignPlayerScreen.filteredMembers) {
+            if (member != null && member.displayName != null && !member.displayName.isEmpty()) {
+                names.add(member.displayName);
             }
         }
         return List.copyOf(names);
@@ -2021,6 +2023,60 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.minecraft.setScreen(new AssignPlayerScreen(this, selectedTask));
     }
 
+    /**
+     * 解析团队项目成员在当前客户端上的显示名称，优先使用缓存名称，并在成员在线时刷新为最新玩家名。
+     *
+     * @param project 当前团队项目
+     * @param memberUuid 成员 UUID
+     * @return 可用于界面展示的成员名称；若没有缓存名称则回退为 UUID
+     */
+    private String resolveProjectMemberDisplayName(Project project, String memberUuid) {
+        if (project == null || memberUuid == null || memberUuid.isBlank()) {
+            return "";
+        }
+        String displayName = project.getMemberName(memberUuid);
+        if (displayName != null && !displayName.isBlank()) {
+            displayName = displayName.trim();
+        }
+        try {
+            if (minecraft != null && minecraft.getConnection() != null) {
+                net.minecraft.client.multiplayer.PlayerInfo playerInfo = minecraft.getConnection().getPlayerInfo(UUID.fromString(memberUuid));
+                if (playerInfo != null && playerInfo.getProfile() != null) {
+                    String onlineName = playerInfo.getProfile().getName();
+                    if (onlineName != null && !onlineName.isBlank()) {
+                        displayName = onlineName;
+                        project.setMemberName(memberUuid, onlineName);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // 忽略非法 UUID 或临时连接状态异常，继续使用缓存名称或 UUID 兜底。
+        }
+        if (displayName == null || displayName.isBlank()) {
+            return memberUuid;
+        }
+        return displayName;
+    }
+
+    /**
+     * 任务指派弹窗中的成员候选项，保存成员 UUID 与当前显示名称。
+     */
+    private static final class AssignableMember {
+        private final String uuid;
+        private final String displayName;
+
+        /**
+         * 创建一个可指派成员候选项。
+         *
+         * @param uuid 成员 UUID
+         * @param displayName 成员显示名称
+         */
+        private AssignableMember(String uuid, String displayName) {
+            this.uuid = uuid;
+            this.displayName = displayName;
+        }
+    }
+
     private void filterTasks(String filter) {
         // If filter is "active" or "completed" or "all", update currentFilter (Tab)
         if (filter.equals("active") || filter.equals("completed") || filter.equals("all")) {
@@ -2425,8 +2481,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private final TodoScreen parentScreen;
         private final Task targetTask;
         private EditBox searchField;
-        private java.util.List<net.minecraft.client.multiplayer.PlayerInfo> allPlayers;
-        private java.util.List<net.minecraft.client.multiplayer.PlayerInfo> filteredPlayers;
+        private List<AssignableMember> allMembers;
+        private List<AssignableMember> filteredMembers;
         private Button[] playerButtons;
         private int scrollOffset;
         private int visibleRows;
@@ -2445,39 +2501,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         @Override
         protected void init() {
             super.init();
-            if (minecraft == null || minecraft.getConnection() == null) {
+            if (minecraft == null) {
                 return;
             }
-            int guiWidth = 200;
+            int guiWidth = Math.max(200, Math.min(320, this.width - 20));
             int x = (this.width - guiWidth) / 2;
-            int topY = this.height / 6;
+            int topY = Math.max(20, this.height / 6);
             int searchHeight = 20;
+            int cancelButtonHeight = 20;
+            int buttonGap = 10;
             rowHeight = 22;
-            visibleRows = 8;
+            int availableListHeight = this.height - topY - searchHeight - 6 - buttonGap - cancelButtonHeight;
+            int maxRowsByHeight = Math.max(1, availableListHeight / rowHeight);
+            visibleRows = Math.min(8, maxRowsByHeight);
             listWidth = guiWidth;
             listX = x;
             listY = topY + searchHeight + 6;
             listHeight = visibleRows * rowHeight;
 
             searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+            searchField.setHint(Component.translatable("gui.todolist.member.name"));
             searchField.setValue("");
             this.addRenderableWidget(searchField);
 
-            allPlayers = new java.util.ArrayList<>();
-            filteredPlayers = new java.util.ArrayList<>();
-            java.util.Collection<net.minecraft.client.multiplayer.PlayerInfo> entries = minecraft.getConnection().getOnlinePlayers();
-            allPlayers.addAll(entries);
+            allMembers = collectAssignableMembers();
+            filteredMembers = new ArrayList<>();
 
             playerButtons = new Button[visibleRows];
             for (int i = 0; i < visibleRows; i++) {
                 int btnY = listY + i * rowHeight;
                 final int rowIndex = i;
                 Button btn = Button.builder(Component.empty(), b -> {
-                    net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(rowIndex);
+                    AssignableMember entry = getMemberForRow(rowIndex);
                     if (entry != null) {
-                        String name = entry.getProfile().getName();
-                        java.util.UUID uuid = entry.getProfile().getId();
-                        applyAssignTo(uuid.toString(), name);
+                        applyAssignTo(entry.uuid, entry.displayName);
                     }
                 }).bounds(x, btnY, guiWidth, 20).build();
                 btn.active = false;
@@ -2486,10 +2543,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 playerButtons[i] = btn;
             }
 
-            int cancelY = listY + listHeight + 10;
+            int cancelY = listY + listHeight + buttonGap;
             Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
                 minecraft.setScreen(parentScreen);
-            }).bounds(x, cancelY, guiWidth, 20).build();
+            }).bounds(x, cancelY, guiWidth, cancelButtonHeight).build();
             this.addRenderableWidget(cancel);
 
             searchField.setResponder(text -> {
@@ -2499,47 +2556,88 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             this.setFocused(searchField);
         }
 
-        private net.minecraft.client.multiplayer.PlayerInfo getPlayerForRow(int rowIndex) {
-            if (filteredPlayers == null || filteredPlayers.isEmpty()) {
+        /**
+         * 构建当前团队项目可供指派的成员列表，包含 owner 且去重，并按约定顺序稳定输出。
+         *
+         * @return 可指派成员候选列表
+         */
+        private List<AssignableMember> collectAssignableMembers() {
+            List<AssignableMember> members = new ArrayList<>();
+            if (currentProject == null || currentProject.getScope() != Project.Scope.TEAM) {
+                return members;
+            }
+            String ownerUuid = currentProject.getOwnerUuid();
+            if (ownerUuid != null && !ownerUuid.isBlank()) {
+                members.add(new AssignableMember(ownerUuid, resolveProjectMemberDisplayName(currentProject, ownerUuid)));
+            }
+            List<AssignableMember> otherMembers = new ArrayList<>();
+            for (String memberUuid : currentProject.getMembers().keySet()) {
+                if (memberUuid == null || memberUuid.isBlank()) {
+                    continue;
+                }
+                if (memberUuid.equals(ownerUuid)) {
+                    continue;
+                }
+                otherMembers.add(new AssignableMember(memberUuid, resolveProjectMemberDisplayName(currentProject, memberUuid)));
+            }
+            otherMembers.sort(Comparator.comparing(member -> member.displayName, String.CASE_INSENSITIVE_ORDER));
+            members.addAll(otherMembers);
+            return members;
+        }
+
+        /**
+         * 返回指定行当前对应的成员候选项。
+         *
+         * @param rowIndex 行索引
+         * @return 当前行成员；若越界则返回 null
+         */
+        private AssignableMember getMemberForRow(int rowIndex) {
+            if (filteredMembers == null || filteredMembers.isEmpty()) {
                 return null;
             }
             int index = scrollOffset + rowIndex;
-            if (index < 0 || index >= filteredPlayers.size()) {
+            if (index < 0 || index >= filteredMembers.size()) {
                 return null;
             }
-            return filteredPlayers.get(index);
+            return filteredMembers.get(index);
         }
 
+        /**
+         * 按搜索关键字过滤可指派成员列表。
+         */
         private void updateFilteredPlayers() {
-            if (allPlayers == null) {
+            if (allMembers == null || filteredMembers == null) {
                 return;
             }
-            filteredPlayers.clear();
+            filteredMembers.clear();
             String query = searchField == null ? "" : searchField.getValue();
             if (query == null) {
                 query = "";
             }
             String q = query.trim().toLowerCase();
-            for (net.minecraft.client.multiplayer.PlayerInfo entry : allPlayers) {
-                String name = entry.getProfile().getName();
-                if (name == null) {
+            for (AssignableMember entry : allMembers) {
+                String name = entry.displayName;
+                if (name == null || name.isEmpty()) {
                     continue;
                 }
                 if (q.isEmpty() || name.toLowerCase().contains(q)) {
-                    filteredPlayers.add(entry);
+                    filteredMembers.add(entry);
                 }
             }
             scrollOffset = 0;
             updatePlayerButtons();
         }
 
+        /**
+         * 根据当前滚动位置刷新成员按钮文案与可见性。
+         */
         private void updatePlayerButtons() {
             if (playerButtons == null) {
                 return;
             }
             int maxOffset = 0;
-            if (filteredPlayers != null) {
-                maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+            if (filteredMembers != null) {
+                maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
             }
             if (scrollOffset > maxOffset) {
                 scrollOffset = maxOffset;
@@ -2549,20 +2647,25 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             for (int i = 0; i < playerButtons.length; i++) {
                 Button btn = playerButtons[i];
-                net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(i);
+                AssignableMember entry = getMemberForRow(i);
                 if (entry == null) {
                     btn.visible = false;
                     btn.active = false;
                     btn.setMessage(Component.empty());
                 } else {
-                    String name = entry.getProfile().getName();
                     btn.visible = true;
                     btn.active = true;
-                    btn.setMessage(Component.nullToEmpty(name));
+                    btn.setMessage(Component.nullToEmpty(entry.displayName));
                 }
             }
         }
 
+        /**
+         * 将目标任务指派给选中的团队成员，并回到父界面。
+         *
+         * @param uuid 目标成员 UUID
+         * @param name 目标成员显示名称
+         */
         private void applyAssignTo(String uuid, String name) {
             targetTask.setAssigneeUuid(uuid);
             targetTask.setAssigneeName(name);
@@ -2575,8 +2678,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         @Override
         public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
             if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
-                if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
-                    int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+                if (filteredMembers != null && !filteredMembers.isEmpty()) {
+                    int maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
                     if (amount < 0 && scrollOffset < maxOffset) {
                         scrollOffset++;
                         updatePlayerButtons();
