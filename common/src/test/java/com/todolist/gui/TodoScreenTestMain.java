@@ -40,6 +40,9 @@ public final class TodoScreenTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldInitializeWithDefaultPersonalProject", TodoScreenTestMain::shouldInitializeWithDefaultPersonalProject);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowOnlyMyViewInPersonalSpace", TodoScreenTestMain::shouldShowOnlyMyViewInPersonalSpace);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUnassignedAllAndMineViewsInTeamSpace", TodoScreenTestMain::shouldShowUnassignedAllAndMineViewsInTeamSpace);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleCompletedSectionWithoutChangingCurrentView", TodoScreenTestMain::shouldToggleCompletedSectionWithoutChangingCurrentView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
@@ -74,6 +77,72 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals("PERSONAL", screen.getViewModeNameForTest(), "默认项目初始化后应保持个人视图");
         GuiTestSupport.assertEquals(personalProject.getId(), ops.getActiveProjectId(), "初始化后应记录当前激活项目");
         GuiTestSupport.assertEquals(personalProject.getId(), ops.getActiveProjectSyncCalls().get(0), "初始化后应向桥接层同步当前激活项目");
+    }
+
+    /**
+     * 验证个人空间只暴露“我的”视图，并保持当前视图为“我的”。
+     */
+    private static void shouldShowOnlyMyViewInPersonalSpace() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
+        GuiTestSupport.assertEquals(List.of("MY"), screen.getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
+        GuiTestSupport.assertEquals("MY", screen.getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
+    }
+
+    /**
+     * 验证团队空间会暴露“待分配 / 全部 / 我的”三个视图，并默认落在“待分配”。
+     */
+    private static void shouldShowUnassignedAllAndMineViewsInTeamSpace() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-dev", "Dev Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+
+        GuiTestSupport.assertEquals("TEAM", screen.getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
+        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), screen.getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
+        GuiTestSupport.assertEquals("UNASSIGNED", screen.getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
+    }
+
+    /**
+     * 验证折叠已完成分组不会改变当前空间视图。
+     */
+    private static void shouldToggleCompletedSectionWithoutChangingCurrentView() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-dev", "Dev Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
+        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
+
+        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
+
+        screen.toggleCompletedSectionForTest();
+
+        GuiTestSupport.assertTrue(screen.isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
+        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
+
+        screen.toggleCompletedSectionForTest();
+
+        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
+        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
     }
 
     /**

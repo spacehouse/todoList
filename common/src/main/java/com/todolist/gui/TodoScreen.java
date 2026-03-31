@@ -53,6 +53,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         TEAM_ASSIGNED
     }
 
+    /**
+     * 主界面的空间维度，区分个人空间与团队空间。
+     */
+    private enum SpaceMode {
+        PERSONAL,
+        TEAM
+    }
+
+    /**
+     * 主界面的任务视图维度，统一个人与团队空间的可见视图语义。
+     */
+    private enum TaskViewOption {
+        MY,
+        UNASSIGNED,
+        ALL
+    }
+
     private final Screen parent;
     private ProjectManager projectManager;
     private ProjectListWidget projectListWidget;
@@ -64,6 +81,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private final List<Notification> notifications = new ArrayList<>();
 
     private ViewMode viewMode = ViewMode.PERSONAL;
+    private SpaceMode currentSpaceMode = SpaceMode.PERSONAL;
+    private TaskViewOption currentTaskViewOption = TaskViewOption.MY;
+    private boolean completedExpanded;
 
     // Input fields
     private EditBox searchField;
@@ -121,6 +141,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         Project.Scope projectScopeFilter;
         String currentProjectId;
         ViewMode viewMode;
+        SpaceMode spaceMode;
+        TaskViewOption taskViewOption;
+        boolean completedExpanded;
         int currentPriorityFilter;
         String currentFilter;
         String searchQuery;
@@ -184,6 +207,46 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     String getViewModeNameForTest() {
         return viewMode.name();
+    }
+
+    /**
+     * 返回当前空间模式名称，供同包测试代码断言个人/团队空间切换语义。
+     *
+     * @return 当前空间模式名称
+     */
+    String getCurrentSpaceModeNameForTest() {
+        return currentSpaceMode.name();
+    }
+
+    /**
+     * 返回当前可见任务视图选项快照，供同包测试代码断言空间与视图映射关系。
+     *
+     * @return 当前可见任务视图选项名称列表
+     */
+    List<String> getVisibleTaskViewOptionNamesForTest() {
+        List<String> names = new ArrayList<>();
+        for (TaskViewOption option : buildVisibleViewOptions(currentSpaceMode)) {
+            names.add(option.name());
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * 返回当前任务视图选项名称，供同包测试代码断言视图切换语义。
+     *
+     * @return 当前任务视图选项名称
+     */
+    String getCurrentTaskViewOptionNameForTest() {
+        return currentTaskViewOption.name();
+    }
+
+    /**
+     * 返回已完成分组是否展开，供同包测试代码断言折叠状态切换。
+     *
+     * @return true 表示已完成分组已展开
+     */
+    boolean isCompletedSectionExpandedForTest() {
+        return completedExpanded;
     }
 
     /**
@@ -354,6 +417,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 切换已完成分组展开状态，供同包测试代码断言状态切换不会影响当前视图。
+     */
+    void toggleCompletedSectionForTest() {
+        toggleCompletedSection();
+    }
+
+    /**
      * 打开指定任务的上下文菜单，供同包测试代码断言菜单行为。
      *
      * @param task 目标任务
@@ -492,21 +562,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             rememberSelectedProject(currentProject);
             projectScopeFilter = currentProject.getScope();
         }
+        syncViewStateForCurrentProject();
         
         // Ensure taskManager matches currentProject
         if (currentProject != null) {
-            if (!teamProjectsEnabled || currentProject.getScope() == Project.Scope.PERSONAL) {
+            if (currentSpaceMode == SpaceMode.PERSONAL) {
                 taskManager = personalTaskManager;
-                viewMode = ViewMode.PERSONAL;
             } else {
                 taskManager = teamTaskManager;
-                if (viewMode == ViewMode.PERSONAL) {
-                    viewMode = ViewMode.TEAM_UNASSIGNED;
-                }
             }
         } else {
             taskManager = personalTaskManager;
-            viewMode = ViewMode.PERSONAL;
         }
 
         syncHudViewForProject(currentProject);
@@ -525,6 +591,98 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
+    /**
+     * 根据当前项目与旧视图模式同步新的空间与任务视图状态。
+     */
+    private void syncViewStateForCurrentProject() {
+        currentSpaceMode = resolveSpaceMode(currentProject);
+        List<TaskViewOption> visibleOptions = buildVisibleViewOptions(currentSpaceMode);
+        TaskViewOption resolvedOption = currentSpaceMode == SpaceMode.TEAM && viewMode == ViewMode.PERSONAL
+                ? resolveDefaultViewForSpace(currentSpaceMode)
+                : resolveTaskViewOptionFromLegacy(viewMode);
+        if (!visibleOptions.contains(resolvedOption)) {
+            resolvedOption = resolveDefaultViewForSpace(currentSpaceMode);
+        }
+        currentTaskViewOption = resolvedOption;
+        syncLegacyViewModeFromState();
+    }
+
+    /**
+     * 根据项目解析当前空间模式。
+     *
+     * @param project 当前项目
+     * @return 解析后的空间模式
+     */
+    private SpaceMode resolveSpaceMode(Project project) {
+        if (project == null || project.getScope() == Project.Scope.PERSONAL || !teamProjectsEnabled) {
+            return SpaceMode.PERSONAL;
+        }
+        return SpaceMode.TEAM;
+    }
+
+    /**
+     * 构建当前空间下可见的任务视图选项。
+     *
+     * @param spaceMode 当前空间模式
+     * @return 当前空间下可见的任务视图选项
+     */
+    private List<TaskViewOption> buildVisibleViewOptions(SpaceMode spaceMode) {
+        if (spaceMode == SpaceMode.TEAM) {
+            return List.of(TaskViewOption.UNASSIGNED, TaskViewOption.ALL, TaskViewOption.MY);
+        }
+        return List.of(TaskViewOption.MY);
+    }
+
+    /**
+     * 返回当前空间下的默认任务视图选项。
+     *
+     * @param spaceMode 当前空间模式
+     * @return 默认任务视图选项
+     */
+    private TaskViewOption resolveDefaultViewForSpace(SpaceMode spaceMode) {
+        return spaceMode == SpaceMode.TEAM ? TaskViewOption.UNASSIGNED : TaskViewOption.MY;
+    }
+
+    /**
+     * 将旧的视图模式映射到新的任务视图选项。
+     *
+     * @param legacyViewMode 旧的视图模式
+     * @return 对应的新任务视图选项
+     */
+    private TaskViewOption resolveTaskViewOptionFromLegacy(ViewMode legacyViewMode) {
+        if (legacyViewMode == ViewMode.TEAM_UNASSIGNED) {
+            return TaskViewOption.UNASSIGNED;
+        }
+        if (legacyViewMode == ViewMode.TEAM_ALL) {
+            return TaskViewOption.ALL;
+        }
+        return TaskViewOption.MY;
+    }
+
+    /**
+     * 将新的空间与任务视图状态反向同步到旧的视图模式。
+     */
+    private void syncLegacyViewModeFromState() {
+        if (currentSpaceMode == SpaceMode.PERSONAL) {
+            viewMode = ViewMode.PERSONAL;
+            return;
+        }
+        if (currentTaskViewOption == TaskViewOption.ALL) {
+            viewMode = ViewMode.TEAM_ALL;
+        } else if (currentTaskViewOption == TaskViewOption.UNASSIGNED) {
+            viewMode = ViewMode.TEAM_UNASSIGNED;
+        } else {
+            viewMode = ViewMode.TEAM_ASSIGNED;
+        }
+    }
+
+    /**
+     * 切换已完成分组展开状态。
+     */
+    private void toggleCompletedSection() {
+        completedExpanded = !completedExpanded;
+    }
+
     private void applyLastGuiState() {
         if (lastGuiState == null || projectManager == null) return;
 
@@ -538,9 +696,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         preferredPersonalProjectId = lastGuiState.lastPersonalProjectId;
         preferredTeamProjectId = lastGuiState.lastTeamProjectId;
+        completedExpanded = lastGuiState.completedExpanded;
 
         if (lastGuiState.viewMode != null) {
             viewMode = lastGuiState.viewMode;
+        }
+        if (lastGuiState.spaceMode != null) {
+            currentSpaceMode = lastGuiState.spaceMode;
+        }
+        if (lastGuiState.taskViewOption != null) {
+            currentTaskViewOption = lastGuiState.taskViewOption;
         }
         if (!teamProjectsEnabled && viewMode != ViewMode.PERSONAL) {
             viewMode = ViewMode.PERSONAL;
@@ -570,6 +735,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         s.projectScopeFilter = projectScopeFilter;
         s.currentProjectId = currentProject == null ? null : currentProject.getId();
         s.viewMode = viewMode;
+        s.spaceMode = currentSpaceMode;
+        s.taskViewOption = currentTaskViewOption;
+        s.completedExpanded = completedExpanded;
         s.currentPriorityFilter = currentPriorityFilter;
         s.currentFilter = currentFilter;
         s.searchQuery = searchQuery;
@@ -677,9 +845,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void rebuildUI() {
-        if (!teamProjectsEnabled && viewMode != ViewMode.PERSONAL) {
-            viewMode = ViewMode.PERSONAL;
-        }
+        syncViewStateForCurrentProject();
         selectedTask = null;
         if (currentFilter == null || currentFilter.isEmpty()) {
             currentFilter = "active";
@@ -2267,6 +2433,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     private void switchView(ViewMode mode) {
         this.viewMode = mode;
+        syncViewStateForCurrentProject();
         this.selectedTask = null;
         ModConfig config = ModConfig.getInstance();
         if (this.viewMode == ViewMode.PERSONAL) {
@@ -2280,17 +2447,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void syncHudViewForProject(Project project) {
         ModConfig config = ModConfig.getInstance();
-        if (project == null || project.getScope() == Project.Scope.PERSONAL) {
+        currentSpaceMode = resolveSpaceMode(project);
+        if (currentSpaceMode == SpaceMode.PERSONAL) {
+            currentTaskViewOption = TaskViewOption.MY;
+            syncLegacyViewModeFromState();
             config.setHudDefaultView("PERSONAL");
             return;
         }
         ViewMode configView = parseHudViewMode(config.getHudDefaultView());
-        if (this.viewMode == ViewMode.PERSONAL) {
-            this.viewMode = configView;
+        TaskViewOption resolvedOption = configView == ViewMode.PERSONAL
+                ? resolveDefaultViewForSpace(currentSpaceMode)
+                : resolveTaskViewOptionFromLegacy(configView);
+        if (!buildVisibleViewOptions(currentSpaceMode).contains(resolvedOption)) {
+            resolvedOption = resolveDefaultViewForSpace(currentSpaceMode);
         }
-        if (this.viewMode == ViewMode.PERSONAL) {
-            this.viewMode = ViewMode.TEAM_UNASSIGNED;
-        }
+        currentTaskViewOption = resolvedOption;
+        syncLegacyViewModeFromState();
         config.setHudDefaultView(this.viewMode.name());
     }
     
@@ -2311,7 +2483,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         if (project == null) {
             this.taskManager = this.personalTaskManager;
-            this.viewMode = ViewMode.PERSONAL;
+            currentSpaceMode = SpaceMode.PERSONAL;
+            currentTaskViewOption = TaskViewOption.MY;
+            syncLegacyViewModeFromState();
             ClientBridge.ops().setActiveProjectId(null);
             ClientBridge.ops().sendSetActiveProjectId(null);
             ClientBridge.saveLastActiveProjectId(null);
@@ -2331,12 +2505,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         
         if (project.getScope() == Project.Scope.PERSONAL) {
             this.taskManager = this.personalTaskManager;
-            this.viewMode = ViewMode.PERSONAL;
+            currentSpaceMode = SpaceMode.PERSONAL;
+            currentTaskViewOption = TaskViewOption.MY;
+            syncLegacyViewModeFromState();
         } else {
             this.taskManager = this.teamTaskManager;
-            if (this.viewMode == ViewMode.PERSONAL) {
-                this.viewMode = ViewMode.TEAM_UNASSIGNED;
+            currentSpaceMode = SpaceMode.TEAM;
+            if (currentTaskViewOption == TaskViewOption.MY && viewMode == ViewMode.PERSONAL) {
+                currentTaskViewOption = TaskViewOption.UNASSIGNED;
             }
+            syncLegacyViewModeFromState();
         }
         syncHudViewForProject(project);
         
