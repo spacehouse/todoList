@@ -892,6 +892,50 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 返回任务分配弹窗当前的滚动偏移，供同包测试代码校验滚动边界。
+     *
+     * @param screen 任务分配弹窗
+     * @return 当前滚动偏移
+     */
+    int getAssignPlayerScrollOffsetForTest(Screen screen) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
+            return 0;
+        }
+        return assignPlayerScreen.getScrollOffsetForTest();
+    }
+
+    /**
+     * 返回任务分配弹窗当前可见的成员行数，供同包测试代码计算最大滚动范围。
+     *
+     * @param screen 任务分配弹窗
+     * @return 当前可见成员行数
+     */
+    int getAssignPlayerVisibleRowsForTest(Screen screen) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
+            return 0;
+        }
+        return assignPlayerScreen.getVisibleRowsForTest();
+    }
+
+    /**
+     * 模拟滚轮滚动任务分配弹窗中的成员列表，供同包测试代码驱动列表滚动。
+     *
+     * @param screen 任务分配弹窗
+     * @param steps 滚动步数；正数表示向下滚动列表
+     */
+    void scrollAssignPlayerListForTest(Screen screen, int steps) {
+        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
+            return;
+        }
+        double listCenterX = assignPlayerScreen.getListCenterXForTest();
+        double listCenterY = assignPlayerScreen.getListCenterYForTest();
+        int totalSteps = Math.max(0, steps);
+        for (int i = 0; i < totalSteps; i++) {
+            assignPlayerScreen.mouseScrolled(listCenterX, listCenterY, -1.0D);
+        }
+    }
+
+    /**
      * 向任务分配弹窗的搜索框写入内容，供同包测试代码驱动候选人过滤。
      *
      * @param screen 任务分配弹窗
@@ -3678,6 +3722,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private List<AssignableMember> allMembers;
         private List<AssignableMember> filteredMembers;
         private Button[] playerButtons;
+        private Button cancelButton;
+        private MemberSelectionDialogLayout dialogLayout;
         private int scrollOffset;
         private int visibleRows;
         private int listX;
@@ -3698,22 +3744,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (minecraft == null) {
                 return;
             }
-            int guiWidth = Math.max(200, Math.min(320, this.width - 20));
-            int x = (this.width - guiWidth) / 2;
-            int topY = Math.max(20, this.height / 6);
-            int searchHeight = 20;
-            int cancelButtonHeight = 20;
-            int buttonGap = 10;
-            rowHeight = 22;
-            int availableListHeight = this.height - topY - searchHeight - 6 - buttonGap - cancelButtonHeight;
-            int maxRowsByHeight = Math.max(1, availableListHeight / rowHeight);
-            visibleRows = Math.min(8, maxRowsByHeight);
-            listWidth = guiWidth;
-            listX = x;
-            listY = topY + searchHeight + 6;
-            listHeight = visibleRows * rowHeight;
+            dialogLayout = buildDialogLayout();
+            applyDialogLayout(dialogLayout);
 
-            searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+            searchField = new EditBox(this.font, dialogLayout.dialogX(), dialogLayout.searchY(),
+                    dialogLayout.dialogWidth(), dialogLayout.searchHeight(), Component.empty());
             searchField.setHint(Component.translatable("gui.todolist.member.name"));
             searchField.setValue("");
             this.addRenderableWidget(searchField);
@@ -3730,24 +3765,86 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     if (entry != null) {
                         applyAssignTo(entry.uuid, entry.displayName);
                     }
-                }).bounds(x, btnY, guiWidth, 20).build();
+                }).bounds(dialogLayout.dialogX(), btnY, dialogLayout.dialogWidth(), 20).build();
                 btn.active = false;
                 btn.visible = false;
                 this.addRenderableWidget(btn);
                 playerButtons[i] = btn;
             }
 
-            int cancelY = listY + listHeight + buttonGap;
-            Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+            cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
                 minecraft.setScreen(parentScreen);
-            }).bounds(x, cancelY, guiWidth, cancelButtonHeight).build();
-            this.addRenderableWidget(cancel);
+            }).bounds(dialogLayout.cancelX(), dialogLayout.cancelY(),
+                    dialogLayout.cancelWidth(), dialogLayout.cancelHeight()).build();
+            this.addRenderableWidget(cancelButton);
 
             searchField.setResponder(text -> {
                 updateFilteredPlayers();
             });
             updateFilteredPlayers();
             this.setFocused(searchField);
+        }
+
+        /**
+         * 构建当前窗口尺寸下的任务分配弹窗布局。
+         *
+         * @return 响应式布局快照
+         */
+        private MemberSelectionDialogLayout buildDialogLayout() {
+            return MemberSelectionDialogLayout.create(this.width, this.height);
+        }
+
+        /**
+         * 将布局快照中的坐标同步到当前界面字段，供渲染、滚动与测试复用。
+         *
+         * @param layout 当前窗口下的任务分配弹窗布局
+         */
+        private void applyDialogLayout(MemberSelectionDialogLayout layout) {
+            if (layout == null) {
+                return;
+            }
+            rowHeight = layout.rowHeight();
+            visibleRows = layout.visibleRows();
+            listWidth = layout.listWidth();
+            listX = layout.listX();
+            listY = layout.listY();
+            listHeight = layout.listHeight();
+        }
+
+        /**
+         * 返回当前任务分配弹窗的滚动偏移，供同包测试代码校验滚动边界。
+         *
+         * @return 当前滚动偏移
+         */
+        private int getScrollOffsetForTest() {
+            return scrollOffset;
+        }
+
+        /**
+         * 返回当前任务分配弹窗的可见行数，供同包测试代码计算最大滚动范围。
+         *
+         * @return 当前可见行数
+         */
+        private int getVisibleRowsForTest() {
+            return visibleRows;
+        }
+
+        /**
+         * 返回当前任务分配弹窗列表区域中心点 X 坐标，供同包测试代码驱动滚轮事件。
+         *
+         * @return 列表区域中心点 X 坐标
+         */
+        private double getListCenterXForTest() {
+            return dialogLayout == null ? listX + (listWidth / 2.0D) : dialogLayout.getListCenterX();
+        }
+
+        /**
+         * 返回当前任务分配弹窗列表区域中心点 Y 坐标，供同包测试代码驱动滚轮事件。
+         *
+         * @return 列表区域中心点 Y 坐标
+         */
+        private double getListCenterYForTest() {
+            return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
         }
 
         /**
@@ -3829,16 +3926,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (playerButtons == null) {
                 return;
             }
-            int maxOffset = 0;
-            if (filteredMembers != null) {
-                maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
-            }
-            if (scrollOffset > maxOffset) {
-                scrollOffset = maxOffset;
-            }
-            if (scrollOffset < 0) {
-                scrollOffset = 0;
-            }
+            scrollOffset = clampMemberScrollOffset();
             for (int i = 0; i < playerButtons.length; i++) {
                 Button btn = playerButtons[i];
                 AssignableMember entry = getMemberForRow(i);
@@ -3852,6 +3940,26 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     btn.setMessage(Component.nullToEmpty(entry.displayName));
                 }
             }
+        }
+
+        /**
+         * 将任务分配弹窗的滚动偏移限制在候选成员列表的有效范围内。
+         *
+         * @return 修正后的滚动偏移
+         */
+        private int clampMemberScrollOffset() {
+            int totalItems = filteredMembers == null ? 0 : filteredMembers.size();
+            return MemberSelectionDialogLayout.clampScrollOffset(scrollOffset, totalItems, visibleRows);
+        }
+
+        /**
+         * 返回任务分配弹窗候选成员列表允许的最大滚动偏移。
+         *
+         * @return 最大滚动偏移
+         */
+        private int getMaxMemberScrollOffset() {
+            int totalItems = filteredMembers == null ? 0 : filteredMembers.size();
+            return MemberSelectionDialogLayout.getMaxScrollOffset(totalItems, visibleRows);
         }
 
         /**
@@ -3871,9 +3979,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         @Override
         public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-            if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
+            if (dialogLayout != null && dialogLayout.isInsideList(mouseX, mouseY)) {
                 if (filteredMembers != null && !filteredMembers.isEmpty()) {
-                    int maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
+                    int maxOffset = getMaxMemberScrollOffset();
                     if (amount < 0 && scrollOffset < maxOffset) {
                         scrollOffset++;
                         updatePlayerButtons();

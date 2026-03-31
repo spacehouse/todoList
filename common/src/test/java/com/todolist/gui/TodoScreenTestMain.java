@@ -27,6 +27,11 @@ public final class TodoScreenTestMain {
     private static final UUID BOB_ID = UUID.fromString("20000000-0000-0000-0000-000000000003");
     private static final UUID CHARLIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000004");
     private static final UUID EXTERNAL_OWNER_ID = UUID.fromString("20000000-0000-0000-0000-000000000005");
+    private static final UUID DAVID_ID = UUID.fromString("20000000-0000-0000-0000-000000000006");
+    private static final UUID ERIN_ID = UUID.fromString("20000000-0000-0000-0000-000000000007");
+    private static final UUID FRANK_ID = UUID.fromString("20000000-0000-0000-0000-000000000008");
+    private static final UUID GRACE_ID = UUID.fromString("20000000-0000-0000-0000-000000000009");
+    private static final UUID HEIDI_ID = UUID.fromString("20000000-0000-0000-0000-00000000000a");
 
     /**
      * 工具类不需要实例化。
@@ -72,6 +77,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOpenContextMenuAndApplyPriorityAction", TodoScreenTestMain::shouldOpenContextMenuAndApplyPriorityAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSearchAndAssignPlayerFromAssignScreen", TodoScreenTestMain::shouldSearchAndAssignPlayerFromAssignScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldListOfflineProjectMembersInAssignScreen", TodoScreenTestMain::shouldListOfflineProjectMembersInAssignScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClampAssignDialogScrollOffsetWhenMembersOverflow", TodoScreenTestMain::shouldClampAssignDialogScrollOffsetWhenMembersOverflow);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepAssignDialogCancelButtonInsideSmallScreen", TodoScreenTestMain::shouldKeepAssignDialogCancelButtonInsideSmallScreen);
     }
 
@@ -806,7 +812,45 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 校验小窗口下“指派他人”弹窗会压缩成员列表高度，确保取消按钮仍位于界面内部。
+     * 验证“指派他人”弹窗在候选成员过多时会启用滚动列表，并将滚动偏移限制在最后一屏范围内。
+     */
+    private static void shouldClampAssignDialogScrollOffsetWhenMembersOverflow() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-assign-overflow", "Assign Overflow Team");
+        teamProject.addMember(ALICE_ID.toString(), Project.ProjectRole.MEMBER, "alice");
+        teamProject.addMember(BOB_ID.toString(), Project.ProjectRole.MEMBER, "bob");
+        teamProject.addMember(CHARLIE_ID.toString(), Project.ProjectRole.MEMBER, "charlie");
+        teamProject.addMember(DAVID_ID.toString(), Project.ProjectRole.MEMBER, "david");
+        teamProject.addMember(ERIN_ID.toString(), Project.ProjectRole.MEMBER, "erin");
+        teamProject.addMember(FRANK_ID.toString(), Project.ProjectRole.MEMBER, "frank");
+        teamProject.addMember(GRACE_ID.toString(), Project.ProjectRole.MEMBER, "grace");
+        teamProject.addMember(HEIDI_ID.toString(), Project.ProjectRole.MEMBER, "heidi");
+        installOnlinePlayers(minecraft, createPlayerInfo(OWNER_ID, "owner"));
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Assign Overflow Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+
+        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        ScreenDriver.init(minecraft, assignScreen);
+
+        int candidateCount = screen.getAssignablePlayerNamesForTest(assignScreen).size();
+        int visibleRows = screen.getAssignPlayerVisibleRowsForTest(assignScreen);
+        GuiTestSupport.assertTrue(candidateCount > visibleRows, "候选成员超出可见行数时才能验证滚动列表");
+
+        screen.scrollAssignPlayerListForTest(assignScreen, candidateCount + 2);
+
+        int expectedMaxOffset = candidateCount - visibleRows;
+        GuiTestSupport.assertEquals(expectedMaxOffset, screen.getAssignPlayerScrollOffsetForTest(assignScreen), "指派列表滚动时应停在最后一屏，不应越过可见范围");
+    }
+
+    /**
+     * 验证小窗口下“指派他人”弹窗会压缩成员列表高度，确保底部取消按钮仍位于界面内部。
      */
     private static void shouldKeepAssignDialogCancelButtonInsideSmallScreen() {
         GuiTestSupport.resetState();

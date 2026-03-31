@@ -43,6 +43,8 @@ public final class AddMemberScreenTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("AddMemberScreenTestMain.shouldExcludeOwnerAndExistingMembersFromCandidateList", AddMemberScreenTestMain::shouldExcludeOwnerAndExistingMembersFromCandidateList);
         GuiTestSupport.runTestCase("AddMemberScreenTestMain.shouldFilterBySearchAndResetScrollOffset", AddMemberScreenTestMain::shouldFilterBySearchAndResetScrollOffset);
+        GuiTestSupport.runTestCase("AddMemberScreenTestMain.shouldKeepCancelButtonInsideSmallScreen", AddMemberScreenTestMain::shouldKeepCancelButtonInsideSmallScreen);
+        GuiTestSupport.runTestCase("AddMemberScreenTestMain.shouldClampScrollableCandidateListWhenOverflowing", AddMemberScreenTestMain::shouldClampScrollableCandidateListWhenOverflowing);
         GuiTestSupport.runTestCase("AddMemberScreenTestMain.shouldSendAddMemberAndOptimisticallyUpdateParent", AddMemberScreenTestMain::shouldSendAddMemberAndOptimisticallyUpdateParent);
     }
 
@@ -105,7 +107,64 @@ public final class AddMemberScreenTestMain {
     }
 
     /**
-     * 校验点击成员按钮会发送添加成员请求，并同步更新父界面的项目成员列表。
+     * 验证小窗口下新增成员弹窗会压缩列表高度，确保底部取消按钮仍完整位于界面内部。
+     */
+    private static void shouldKeepCancelButtonInsideSmallScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        AddMemberScreen screen = new AddMemberScreen(ScreenDriver.createParentScreen("parent"), project.getId());
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(EXISTING_MEMBER_ID, "member-one"),
+                createPlayerInfo(ALICE_ID, "alice"),
+                createPlayerInfo(BOB_ID, "bob"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 320, 170);
+
+        List<Button> buttons = ScreenDriver.getButtons(screen);
+        GuiTestSupport.assertTrue(!buttons.isEmpty(), "新增成员弹窗初始化后应创建按钮");
+        Button cancelButton = buttons.get(buttons.size() - 1);
+        GuiTestSupport.assertTrue(cancelButton.getY() + cancelButton.getHeight() <= 170, "小窗口下取消按钮不应被挤出界面底部");
+    }
+
+    /**
+     * 验证候选成员超出可见行数时会启用滚动列表，并且滚动偏移会被限制在有效范围内。
+     */
+    private static void shouldClampScrollableCandidateListWhenOverflowing() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        AddMemberScreen screen = new AddMemberScreen(ScreenDriver.createParentScreen("parent"), project.getId());
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(EXISTING_MEMBER_ID, "member-one"),
+                createPlayerInfo(ALICE_ID, "alice"),
+                createPlayerInfo(BOB_ID, "bob"),
+                createPlayerInfo(CAROL_ID, "carol"),
+                createPlayerInfo(DAVE_ID, "dave"),
+                createPlayerInfo(ERIN_ID, "erin"),
+                createPlayerInfo(FRANK_ID, "frank"),
+                createPlayerInfo(GRACE_ID, "grace"),
+                createPlayerInfo(HEIDI_ID, "heidi"),
+                createPlayerInfo(IVAN_ID, "ivan"));
+
+        ScreenDriver.init(minecraft, screen);
+
+        int visibleRows = screen.getPlayerButtonsForTest().length;
+        int filteredCount = screen.getFilteredPlayersForTest().size();
+        GuiTestSupport.assertTrue(filteredCount > visibleRows, "候选成员超出可见行数时才能验证滚动列表");
+
+        for (int i = 0; i < filteredCount + 2; i++) {
+            screen.mouseScrolled(screen.getListCenterXForTest(), screen.getListCenterYForTest(), -1.0D);
+        }
+
+        int expectedMaxOffset = filteredCount - visibleRows;
+        GuiTestSupport.assertEquals(expectedMaxOffset, screen.getScrollOffsetForTest(), "滚动列表时应停在最后一屏，不应越过可见范围");
+    }
+
+    /**
+     * 验证点击成员按钮会发送添加成员请求，并同步更新父界面的项目成员列表。
      */
     private static void shouldSendAddMemberAndOptimisticallyUpdateParent() {
         RecordingClientOps ops = GuiTestSupport.resetState();

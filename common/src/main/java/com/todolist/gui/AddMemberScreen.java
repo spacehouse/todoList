@@ -25,6 +25,8 @@ public class AddMemberScreen extends Screen {
     private List<net.minecraft.client.multiplayer.PlayerInfo> allPlayers;
     private List<net.minecraft.client.multiplayer.PlayerInfo> filteredPlayers;
     private Button[] playerButtons;
+    private Button cancelButton;
+    private MemberSelectionDialogLayout dialogLayout;
     private int scrollOffset;
     private int visibleRows;
     private int listX;
@@ -84,7 +86,7 @@ public class AddMemberScreen extends Screen {
      * @return 成员列表区域中心点 X 坐标
      */
     double getListCenterXForTest() {
-        return listX + (listWidth / 2.0D);
+        return dialogLayout == null ? listX + (listWidth / 2.0D) : dialogLayout.getListCenterX();
     }
 
     /**
@@ -93,7 +95,7 @@ public class AddMemberScreen extends Screen {
      * @return 成员列表区域中心点 Y 坐标
      */
     double getListCenterYForTest() {
-        return listY + (listHeight / 2.0D);
+        return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
     }
 
     @Override
@@ -101,19 +103,11 @@ public class AddMemberScreen extends Screen {
         if (minecraft == null || minecraft.getConnection() == null) {
             return;
         }
-        int guiWidth = Math.max(200, Math.min(320, this.width - 20));
-        int x = (this.width - guiWidth) / 2;
-        int topY = Math.max(20, this.height / 6);
-        int searchHeight = 20;
-        rowHeight = 22;
-        int maxRowsByHeight = Math.max(4, (this.height - topY - 70) / rowHeight);
-        visibleRows = Math.min(8, maxRowsByHeight);
-        listWidth = guiWidth;
-        listX = x;
-        listY = topY + searchHeight + 6;
-        listHeight = visibleRows * rowHeight;
+        dialogLayout = buildDialogLayout();
+        applyDialogLayout(dialogLayout);
 
-        searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+        searchField = new EditBox(this.font, dialogLayout.dialogX(), dialogLayout.searchY(),
+                dialogLayout.dialogWidth(), dialogLayout.searchHeight(), Component.empty());
         searchField.setHint(Component.translatable("gui.todolist.member.name"));
         searchField.setValue("");
         this.addRenderableWidget(searchField);
@@ -132,18 +126,18 @@ public class AddMemberScreen extends Screen {
                 if (entry != null) {
                     addMember(entry);
                 }
-            }).bounds(x, btnY, guiWidth, 20).build();
+            }).bounds(dialogLayout.dialogX(), btnY, dialogLayout.dialogWidth(), 20).build();
             btn.active = false;
             btn.visible = false;
             this.addRenderableWidget(btn);
             playerButtons[i] = btn;
         }
 
-        int cancelY = listY + listHeight + 10;
-        Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
             minecraft.setScreen(parent);
-        }).bounds(x, cancelY, guiWidth, 20).build();
-        this.addRenderableWidget(cancel);
+        }).bounds(dialogLayout.cancelX(), dialogLayout.cancelY(),
+                dialogLayout.cancelWidth(), dialogLayout.cancelHeight()).build();
+        this.addRenderableWidget(cancelButton);
 
         searchField.setResponder(text -> {
             updateFilteredPlayers();
@@ -190,6 +184,32 @@ public class AddMemberScreen extends Screen {
         updatePlayerButtons();
     }
 
+    /**
+     * 构建当前窗口尺寸下的成员选择弹窗布局。
+     *
+     * @return 响应式布局快照
+     */
+    private MemberSelectionDialogLayout buildDialogLayout() {
+        return MemberSelectionDialogLayout.create(this.width, this.height);
+    }
+
+    /**
+     * 将布局快照中的坐标同步到当前界面字段，供渲染与测试复用。
+     *
+     * @param layout 当前窗口下的成员选择弹窗布局
+     */
+    private void applyDialogLayout(MemberSelectionDialogLayout layout) {
+        if (layout == null) {
+            return;
+        }
+        rowHeight = layout.rowHeight();
+        visibleRows = layout.visibleRows();
+        listWidth = layout.listWidth();
+        listX = layout.listX();
+        listY = layout.listY();
+        listHeight = layout.listHeight();
+    }
+
     private boolean isAlreadyMember(Project project, UUID playerId) {
         if (project == null || playerId == null) {
             return false;
@@ -206,16 +226,7 @@ public class AddMemberScreen extends Screen {
         if (playerButtons == null) {
             return;
         }
-        int maxOffset = 0;
-        if (filteredPlayers != null) {
-            maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
-        }
-        if (scrollOffset > maxOffset) {
-            scrollOffset = maxOffset;
-        }
-        if (scrollOffset < 0) {
-            scrollOffset = 0;
-        }
+        scrollOffset = clampPlayerScrollOffset();
         for (int i = 0; i < playerButtons.length; i++) {
             Button btn = playerButtons[i];
             net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(i);
@@ -230,6 +241,26 @@ public class AddMemberScreen extends Screen {
                 btn.setMessage(Component.nullToEmpty(name));
             }
         }
+    }
+
+    /**
+     * 将新增成员弹窗的滚动偏移限制在候选列表的有效范围内。
+     *
+     * @return 修正后的滚动偏移
+     */
+    private int clampPlayerScrollOffset() {
+        int totalItems = filteredPlayers == null ? 0 : filteredPlayers.size();
+        return MemberSelectionDialogLayout.clampScrollOffset(scrollOffset, totalItems, visibleRows);
+    }
+
+    /**
+     * 返回新增成员弹窗候选列表允许的最大滚动偏移。
+     *
+     * @return 最大滚动偏移
+     */
+    private int getMaxPlayerScrollOffset() {
+        int totalItems = filteredPlayers == null ? 0 : filteredPlayers.size();
+        return MemberSelectionDialogLayout.getMaxScrollOffset(totalItems, visibleRows);
     }
 
     private void addMember(net.minecraft.client.multiplayer.PlayerInfo entry) {
@@ -248,9 +279,9 @@ public class AddMemberScreen extends Screen {
     
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
+        if (dialogLayout != null && dialogLayout.isInsideList(mouseX, mouseY)) {
             if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
-                int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+                int maxOffset = getMaxPlayerScrollOffset();
                 if (amount < 0 && scrollOffset < maxOffset) {
                     scrollOffset++;
                     updatePlayerButtons();
