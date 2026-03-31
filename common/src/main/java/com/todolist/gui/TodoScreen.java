@@ -980,7 +980,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskListWidget = new TaskListWidget(this.minecraft, contentX, listTop, contentWidth, listHeight);
         boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
         taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
-        taskListWidget.setTasks(filteredTasks);
+        taskListWidget.setSections(buildTaskPaneSections());
         taskListWidget.setOnTaskToggleCompletion(task -> {
             if (task.isCompleted()) return;
             boolean wasCompleted = task.isCompleted();
@@ -1627,12 +1627,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (!selectedTask.belongsToProject(projectId)) {
             return false;
         }
-        if (filteredTasks == null) {
-            return true;
-        }
-        for (Task t : filteredTasks) {
-            if (t != null && selectedId.equals(t.getId())) {
-                return true;
+        for (TaskListWidget.SectionModel section : buildTaskPaneSections()) {
+            if (section == null) {
+                continue;
+            }
+            for (Task task : section.getTasks()) {
+                if (task != null && selectedId.equals(task.getId())) {
+                    return true;
+                }
             }
         }
         return false;
@@ -2329,7 +2331,125 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             filteredTasks = result;
         }
-        if (taskListWidget != null) taskListWidget.setTasks(filteredTasks);
+        if (taskListWidget != null) {
+            taskListWidget.setSections(buildTaskPaneSections());
+        }
+    }
+
+    /**
+     * 构建当前任务区分段数据，为“未完成 + 已完成折叠分组”提供基础模型。
+     *
+     * @return 当前任务区分段列表
+     */
+    private List<TaskListWidget.SectionModel> buildTaskPaneSections() {
+        List<TaskListWidget.SectionModel> sections = new ArrayList<>();
+        List<Task> activeTasks = filteredTasks == null ? List.of() : List.copyOf(filteredTasks);
+
+        if ("completed".equals(currentFilter)) {
+            sections.add(new TaskListWidget.SectionModel(
+                    "completed",
+                    Component.translatable("gui.todolist.completed").getString(),
+                    activeTasks,
+                    false,
+                    true
+            ));
+            return sections;
+        }
+
+        sections.add(new TaskListWidget.SectionModel(
+                "active",
+                Component.translatable("gui.todolist.active").getString(),
+                activeTasks,
+                false,
+                true
+        ));
+
+        List<Task> completedTasks = buildCompletedTasksForCurrentView();
+        sections.add(new TaskListWidget.SectionModel(
+                "completed",
+                Component.translatable("gui.todolist.completed").getString() + " " + completedTasks.size() + " 项",
+                completedTasks,
+                true,
+                completedExpanded
+        ));
+        return sections;
+    }
+
+    /**
+     * 构建当前项目和当前视图下的已完成任务列表，用于主任务区底部折叠分组。
+     *
+     * @return 当前可见的已完成任务列表
+     */
+    private List<Task> buildCompletedTasksForCurrentView() {
+        if (taskManager == null || currentProject == null) {
+            return List.of();
+        }
+        List<Task> completedTasks = taskManager.getCompletedTasks();
+        List<Task> priorityFiltered = applyPriorityFilterToTasks(completedTasks);
+        List<Task> scopedTasks = applyAssignedFilterIfNeeded(priorityFiltered);
+        return applySearchQueryToTasks(scopedTasks);
+    }
+
+    /**
+     * 对指定任务列表复用当前优先级筛选条件。
+     *
+     * @param source 待筛选的任务列表
+     * @return 优先级筛选后的任务列表
+     */
+    private List<Task> applyPriorityFilterToTasks(List<Task> source) {
+        List<Task> input = source == null ? List.of() : source;
+        if (currentPriorityFilter == 0) {
+            return new ArrayList<>(input);
+        }
+        Task.Priority targetPriority = Task.Priority.MEDIUM;
+        if (currentPriorityFilter == 1) {
+            targetPriority = Task.Priority.HIGH;
+        } else if (currentPriorityFilter == 2) {
+            targetPriority = Task.Priority.MEDIUM;
+        } else if (currentPriorityFilter == 3) {
+            targetPriority = Task.Priority.LOW;
+        }
+        List<Task> result = new ArrayList<>();
+        for (Task task : input) {
+            if (task != null && task.getPriority() == targetPriority) {
+                result.add(task);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 对指定任务列表复用当前搜索关键字。
+     *
+     * @param source 待筛选的任务列表
+     * @return 搜索筛选后的任务列表
+     */
+    private List<Task> applySearchQueryToTasks(List<Task> source) {
+        List<Task> input = source == null ? List.of() : source;
+        if (searchQuery == null || searchQuery.isEmpty()) {
+            return new ArrayList<>(input);
+        }
+        String q = searchQuery;
+        List<Task> result = new ArrayList<>();
+        for (Task task : input) {
+            if (task == null) {
+                continue;
+            }
+            String title = task.getTitle() == null ? "" : task.getTitle().toLowerCase();
+            String desc = task.getDescription() == null ? "" : task.getDescription().toLowerCase();
+            boolean matchText = title.contains(q) || desc.contains(q);
+            boolean matchTag = false;
+            for (String tag : task.getTags()) {
+                if (tag != null && tag.toLowerCase().contains(q)) {
+                    matchTag = true;
+                    break;
+                }
+            }
+            if (matchText || matchTag) {
+                result.add(task);
+            }
+        }
+        return result;
     }
 
     private String getFieldValue(EditBox field, String hint) {
