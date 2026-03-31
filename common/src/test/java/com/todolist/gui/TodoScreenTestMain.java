@@ -48,6 +48,11 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen", TodoScreenTestMain::shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEnterDetailTitleEditModeAfterClickingTitle", TodoScreenTestMain::shouldEnterDetailTitleEditModeAfterClickingTitle);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCloseOverlayDetailDrawerFromCloseButton", TodoScreenTestMain::shouldCloseOverlayDetailDrawerFromCloseButton);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
@@ -313,6 +318,130 @@ public final class TodoScreenTestMain {
     /**
      * 验证切换到团队项目后会更新当前项目与视图，并同步激活项目。
      */
+    /**
+     * 校验个人空间详情抽屉会隐藏团队操作按钮。
+     */
+    private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Personal Detail Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "个人项目下应保持个人空间语义");
+        GuiTestSupport.assertFalse(screen.isClaimButtonVisibleForTest(), "个人空间详情抽屉不应显示领取按钮");
+        GuiTestSupport.assertFalse(screen.isAbandonButtonVisibleForTest(), "个人空间详情抽屉不应显示放弃按钮");
+        GuiTestSupport.assertFalse(screen.isAssignOthersButtonVisibleForTest(), "个人空间详情抽屉不应显示指派他人按钮");
+    }
+
+    /**
+     * 校验团队空间详情抽屉会显示纵向排列的团队操作按钮。
+     */
+    private static void shouldShowVerticalTeamActionButtonsInTeamDetailDrawer() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-detail-buttons", "Detail Buttons Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 480, 300);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Team Detail Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertTrue(screen.isClaimButtonVisibleForTest(), "团队空间详情抽屉应显示领取按钮");
+        GuiTestSupport.assertTrue(screen.isAbandonButtonVisibleForTest(), "团队空间详情抽屉应显示放弃按钮");
+        GuiTestSupport.assertTrue(screen.isAssignOthersButtonVisibleForTest(), "团队空间详情抽屉应显示指派他人按钮");
+
+        int[] claimBounds = screen.getClaimButtonBoundsForTest();
+        int[] abandonBounds = screen.getAbandonButtonBoundsForTest();
+        int[] assignBounds = screen.getAssignOthersButtonBoundsForTest();
+        GuiTestSupport.assertEquals(claimBounds[0], abandonBounds[0], "团队按钮应保持同一列左对齐");
+        GuiTestSupport.assertEquals(abandonBounds[0], assignBounds[0], "团队按钮应保持同一列左对齐");
+        GuiTestSupport.assertTrue(claimBounds[1] + claimBounds[3] <= abandonBounds[1], "放弃按钮应位于领取按钮下方");
+        GuiTestSupport.assertTrue(abandonBounds[1] + abandonBounds[3] <= assignBounds[1], "指派按钮应位于放弃按钮下方");
+    }
+
+    /**
+     * 校验详情抽屉的关闭按钮会独占顶部一行。
+     */
+    private static void shouldLayoutDetailDrawerCloseRowSeparately() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-detail-layout", "Detail Layout Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 480, 300);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Detail Layout Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        int[] closeBounds = screen.getDetailCloseButtonBoundsForTest();
+        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
+        assertRectInsideScreen(closeBounds, 480, 300, "详情抽屉关闭按钮应位于屏幕内");
+        assertRectInsideScreen(titleBounds, 480, 300, "详情抽屉标题输入框应位于屏幕内");
+        GuiTestSupport.assertTrue(closeBounds[1] + closeBounds[3] <= titleBounds[1], "关闭按钮应独占顶部一行并位于标题输入框上方");
+    }
+
+    /**
+     * 校验详情标题默认只读，点击后才进入编辑态。
+     */
+    private static void shouldEnterDetailTitleEditModeAfterClickingTitle() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Editable Detail Title");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertFalse(screen.isDetailTitleEditableForTest(), "详情标题默认应处于只读态");
+
+        screen.beginDetailTitleEditingForTest();
+
+        GuiTestSupport.assertTrue(screen.isDetailTitleEditableForTest(), "点击标题后应进入可编辑状态");
+        ScreenDriver.setText(screen.getTitleFieldForTest(), "Editable Detail Title Updated");
+        GuiTestSupport.assertEquals("Editable Detail Title Updated", task.getTitle(), "编辑详情标题后应同步更新选中任务");
+    }
+
+    /**
+     * 校验紧凑窗口下点击关闭按钮会收起覆盖式详情抽屉并清空选中项。
+     */
+    private static void shouldCloseOverlayDetailDrawerFromCloseButton() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-detail-close", "Detail Close Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 220);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Overlay Close Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "关闭前紧凑窗口详情抽屉应已显示");
+
+        screen.clickDetailCloseButtonForTest();
+
+        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "点击关闭按钮后覆盖式详情抽屉应收起");
+        GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "点击关闭按钮后不应保留选中任务");
+    }
+
     private static void shouldSwitchProjectToTeamScopeAndSyncActiveProject() {
         RecordingClientOps ops = GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -674,7 +803,7 @@ public final class TodoScreenTestMain {
      * @param title 任务标题
      */
     private static void addTaskViaInput(TodoScreen screen, String title) {
-        ScreenDriver.setText(screen.getTitleFieldForTest(), title);
+        ScreenDriver.setText(screen.getQuickAddFieldForTest(), title);
         addTaskViaEnter(screen);
     }
 
@@ -684,7 +813,7 @@ public final class TodoScreenTestMain {
      * @param screen 待操作界面
      */
     private static void addTaskViaEnter(TodoScreen screen) {
-        screen.getTitleFieldForTest().setFocused(true);
+        screen.getQuickAddFieldForTest().setFocused(true);
         ScreenDriver.pressEnter(screen);
     }
 

@@ -177,6 +177,33 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
+    /**
+     * 详情抽屉草稿对象，集中维护当前选中任务的编辑态和显示态。
+     */
+    private static final class TaskDetailDraft {
+        private final String taskId;
+        private String title;
+        private String description;
+        private String tags;
+        private boolean titleEditing;
+
+        /**
+         * 创建一个与选中任务绑定的详情草稿。
+         *
+         * @param taskId 任务标识
+         * @param title 标题文本
+         * @param description 描述文本
+         * @param tags 标签文本
+         */
+        private TaskDetailDraft(String taskId, String title, String description, String tags) {
+            this.taskId = taskId;
+            this.title = title == null ? "" : title;
+            this.description = description == null ? "" : description;
+            this.tags = tags == null ? "" : tags;
+            this.titleEditing = false;
+        }
+    }
+
     private final Screen parent;
     private ProjectManager projectManager;
     private ProjectListWidget projectListWidget;
@@ -194,11 +221,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     // Input fields
     private EditBox searchField;
+    private EditBox quickAddField;
     private EditBox titleField;
     private MultiLineEditBox descField;
     private EditBox tagField;
 
     // Buttons
+    private Button detailCloseButton;
     private Button claimButton;
     private Button abandonButton;
     private Button assignOthersButton;
@@ -251,6 +280,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private boolean sidebarOverlayVisible;
     private boolean detailOverlayVisible;
     private MainLayoutMetrics layoutMetrics;
+    private TaskDetailDraft detailDraft;
+    private boolean syncingDetailWidgets;
 
     private static class LastGuiState {
         Project.Scope projectScopeFilter;
@@ -491,6 +522,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 返回底部快速新增输入框，供同包测试代码驱动新增任务流程。
+     *
+     * @return 底部快速新增输入框
+     */
+    EditBox getQuickAddFieldForTest() {
+        return quickAddField;
+    }
+
+    /**
      * 返回任务描述输入框，供同包测试代码写入任务描述。
      *
      * @return 任务描述输入框
@@ -624,6 +664,103 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     void toggleSidebarOverlayForTest() {
         toggleSidebarOverlay();
+    }
+
+    /**
+     * 返回详情标题当前是否允许直接编辑，供测试验证“点击后进入编辑态”语义。
+     *
+     * @return true 表示详情标题已进入编辑态
+     */
+    boolean isDetailTitleEditableForTest() {
+        return detailDraft != null && detailDraft.titleEditing;
+    }
+
+    /**
+     * 触发详情标题进入编辑态，供测试模拟点击标题的行为。
+     */
+    void beginDetailTitleEditingForTest() {
+        beginDetailTitleEditing();
+    }
+
+    /**
+     * 触发详情抽屉关闭按钮，供测试验证抽屉收起逻辑。
+     */
+    void clickDetailCloseButtonForTest() {
+        if (detailCloseButton != null) {
+            detailCloseButton.onPress();
+        }
+    }
+
+    /**
+     * 返回详情抽屉关闭按钮的边界，供测试验证布局。
+     *
+     * @return 关闭按钮边界数组
+     */
+    int[] getDetailCloseButtonBoundsForTest() {
+        return toWidgetBounds(detailCloseButton);
+    }
+
+    /**
+     * 返回详情标题输入框的边界，供测试验证布局。
+     *
+     * @return 标题输入框边界数组
+     */
+    int[] getDetailTitleFieldBoundsForTest() {
+        return toWidgetBounds(titleField);
+    }
+
+    /**
+     * 返回领取按钮当前是否可见。
+     *
+     * @return true 表示领取按钮可见
+     */
+    boolean isClaimButtonVisibleForTest() {
+        return claimButton != null && claimButton.visible;
+    }
+
+    /**
+     * 返回放弃按钮当前是否可见。
+     *
+     * @return true 表示放弃按钮可见
+     */
+    boolean isAbandonButtonVisibleForTest() {
+        return abandonButton != null && abandonButton.visible;
+    }
+
+    /**
+     * 返回“指派他人”按钮当前是否可见。
+     *
+     * @return true 表示指派他人按钮可见
+     */
+    boolean isAssignOthersButtonVisibleForTest() {
+        return assignOthersButton != null && assignOthersButton.visible;
+    }
+
+    /**
+     * 返回领取按钮的边界，供测试验证纵向布局。
+     *
+     * @return 领取按钮边界数组
+     */
+    int[] getClaimButtonBoundsForTest() {
+        return toWidgetBounds(claimButton);
+    }
+
+    /**
+     * 返回放弃按钮的边界，供测试验证纵向布局。
+     *
+     * @return 放弃按钮边界数组
+     */
+    int[] getAbandonButtonBoundsForTest() {
+        return toWidgetBounds(abandonButton);
+    }
+
+    /**
+     * 返回“指派他人”按钮的边界，供测试验证纵向布局。
+     *
+     * @return 指派他人按钮边界数组
+     */
+    int[] getAssignOthersButtonBoundsForTest() {
+        return toWidgetBounds(assignOthersButton);
     }
 
     /**
@@ -1235,17 +1372,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             refreshTaskList();
         });
 
-        titleField = new EditBox(this.font, contentX, inputRowY, contentWidth, inputRowHeight, Component.empty());
-        titleField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
-        titleField.setValue("");
-        titleField.setMaxLength(100);
-        this.addRenderableWidget(titleField);
+        quickAddField = new EditBox(this.font, contentX, inputRowY, contentWidth, inputRowHeight, Component.empty());
+        quickAddField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
+        quickAddField.setValue("");
+        quickAddField.setMaxLength(100);
+        this.addRenderableWidget(quickAddField);
 
         int rightInnerPadding = 4;
         int rightFieldWidth = Math.max(60, rightPanelWidth - rightInnerPadding * 2);
         int rightPanelTop = detailBounds.y;
         int rightPanelBottom = detailBounds.y + detailBounds.height;
-        int rightCurrentY = rightPanelTop;
         int rightSectionGap = 6;
         int textH = this.font.lineHeight;
         int assignButtonWidth = rightFieldWidth;
@@ -1253,6 +1389,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int assignButtonGap = 4;
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
         int assignsX = rightPanelX + rightInnerPadding;
+        int closeRowY = rightPanelTop + rightInnerPadding;
+        int closeButtonSize = 20;
+        int closeButtonX = Math.max(assignsX, rightPanelX + rightPanelWidth - rightInnerPadding - closeButtonSize);
+
+        detailCloseButton = Button.builder(Component.literal("X"), b -> clearSelectedTask())
+                .bounds(closeButtonX, closeRowY, closeButtonSize, closeButtonSize)
+                .build();
+        this.addRenderableWidget(detailCloseButton);
+
+        int titleFieldY = closeRowY + closeButtonSize + rightSectionGap;
+        titleField = new EditBox(this.font, assignsX, titleFieldY, rightFieldWidth, 20, Component.empty());
+        titleField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
+        titleField.setValue("");
+        titleField.setMaxLength(100);
+        titleField.setEditable(false);
+        this.addRenderableWidget(titleField);
 
         int teamButtonsTop = rightPanelBottom;
         if (showAssignButtons) {
@@ -1261,11 +1413,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         int tagFieldY = teamButtonsTop - rightSectionGap - 20;
-        int minTagFieldY = rightCurrentY + textH + 2 + 30;
+        int minTagFieldY = titleFieldY + 20 + textH + rightSectionGap + 32;
         if (tagFieldY < minTagFieldY) {
             tagFieldY = minTagFieldY;
         }
-        int descFieldY = rightCurrentY + textH + 2;
+        int descFieldY = titleFieldY + 20 + textH + 2 + rightSectionGap;
         int descFieldBottom = tagFieldY - rightSectionGap - textH - 2;
         int descFieldHeight = Math.max(28, descFieldBottom - descFieldY);
         descField = new MultiLineEditBox(
@@ -1317,40 +1469,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         applyResponsiveWidgetVisibility();
 
         // Listeners
-        titleField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
-                selectedTask.setTitle(text);
-                markUnsaved();
-            }
-        });
+        titleField.setResponder(this::onDetailTitleChanged);
         descField.setValueListener(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
-                selectedTask.setDescription(text);
-                markUnsaved();
-            }
+            onDetailDescriptionChanged(text);
         });
-        tagField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted()) {
-                String value = getFieldValue(tagField, "");
-                if (value.isEmpty()) selectedTask.clearTags();
-                else {
-                    List<String> tags = new ArrayList<>();
-                    for (String part : value.split(",")) {
-                        String t = part.trim();
-                        if (!t.isEmpty()) tags.add(t);
-                    }
-                    selectedTask.setTags(tags);
-                }
-                markUnsaved();
-            }
-        });
+        tagField.setResponder(this::onDetailTagsChanged);
         searchField.setResponder(text -> {
             searchQuery = text == null ? "" : text.trim().toLowerCase();
             applySearchFilter();
         });
 
         filterTasks(currentFilter);
-        this.setFocused(titleField);
+        syncDetailWidgetsFromState();
+        this.setFocused(quickAddField);
         updateButtonStates();
     }
 
@@ -1591,14 +1722,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
 
-        if (descField != null) {
-            descField.visible = detailVisible;
-            descField.active = detailVisible && descField.active;
+        if (quickAddField != null) {
+            quickAddField.visible = true;
+            quickAddField.active = true;
         }
-        if (tagField != null) {
-            tagField.visible = detailVisible;
-            tagField.active = detailVisible;
-        }
+        applyDetailWidgetEditability();
         if (claimButton != null) {
             claimButton.visible = detailVisible && claimButton.visible;
             claimButton.active = detailVisible && claimButton.active;
@@ -1674,16 +1802,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         super.render(context, mouseX, mouseY, delta);
 
-        int labelX = titleField != null ? titleField.getX() - 40 : 0;
         int color = 0xFFFFFFFF;
         int textH = this.font.lineHeight;
 
-        /*
-        if (titleField != null) {
-            int ty = titleField.getY() + (titleField.getHeight() - textH) / 2;
-            context.drawString(this.font, Component.translatable("gui.todolist.label.title"), labelX, ty, color, false);
+        if (quickAddField != null && quickAddField.visible) {
+            int plusY = quickAddField.getY() + (quickAddField.getHeight() - textH) / 2;
+            context.drawString(this.font, "+", Math.max(4, quickAddField.getX() - 10), plusY, color, false);
         }
-        */
         if (descField != null && descField.visible) {
             int dy = descField.getY() - textH - 2;
             context.drawString(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
@@ -1857,7 +1982,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
-            if (titleField != null && titleField.isFocused()) {
+            if (quickAddField != null && quickAddField.isFocused()) {
                 if (!isAddTaskAllowedInCurrentView()) {
                     addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
                     return true;
@@ -1876,9 +2001,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private boolean isClickInEditArea(double mouseX, double mouseY) {
-        if (titleField != null && titleField.isMouseOver(mouseX, mouseY)) return true;
+        if (quickAddField != null && quickAddField.isMouseOver(mouseX, mouseY)) return true;
+        if (titleField != null && titleField.visible && titleField.isMouseOver(mouseX, mouseY)) return true;
         if (descField != null && descField.visible && descField.isMouseOver(mouseX, mouseY)) return true;
         if (tagField != null && tagField.visible && tagField.isMouseOver(mouseX, mouseY)) return true;
+        if (detailCloseButton != null && detailCloseButton.visible && detailCloseButton.isMouseOver(mouseX, mouseY)) return true;
         if (claimButton != null && claimButton.visible && claimButton.isMouseOver(mouseX, mouseY)) return true;
         if (abandonButton != null && abandonButton.visible && abandonButton.isMouseOver(mouseX, mouseY)) return true;
         if (assignOthersButton != null && assignOthersButton.visible && assignOthersButton.isMouseOver(mouseX, mouseY)) return true;
@@ -1918,6 +2045,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
                 return true;
             }
+        }
+
+        if (button == 0
+                && titleField != null
+                && titleField.visible
+                && titleField.isMouseOver(mouseX, mouseY)
+                && (detailDraft == null || !detailDraft.titleEditing)) {
+            beginDetailTitleEditing();
+            return true;
         }
 
         boolean cleared = false;
@@ -2012,9 +2148,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 return;
             }
         }
-        String title = getFieldValue(titleField, "");
-        String desc = getFieldValue(descField, "");
-        String tagsStr = getFieldValue(tagField, "");
+        String title = getFieldValue(quickAddField, "");
+        String desc = "";
 
         if (!title.isEmpty()) {
             Task task = taskManager.addTask(title, desc);
@@ -2038,19 +2173,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
             }
 
-            // Parse and add tags (comma-separated)
-            if (!tagsStr.isEmpty()) {
-                String[] tags = tagsStr.split(",");
-                for (String tag : tags) {
-                    String trimmedTag = tag.trim();
-                    if (!trimmedTag.isEmpty()) {
-                        task.addTag(trimmedTag);
-                    }
-                }
-            }
-
             clearSelectedTask();
             selectedPriority = Task.Priority.MEDIUM;
+            if (quickAddField != null) {
+                quickAddField.setValue("");
+            }
 
             markUnsaved();
             refreshTaskList();
@@ -2075,28 +2202,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
         }
         selectedPriority = task.getPriority();
-        titleField.setValue(task.getTitle());
-        descField.setValue(task.getDescription());
-
-        // Display tags as comma-separated string
-        if (task.getTags() != null && !task.getTags().isEmpty()) {
-            String tagsStr = String.join(",", task.getTags());
-            tagField.setValue(tagsStr);
-        } else {
-            tagField.setValue("");
-        }
-
+        detailDraft = createDetailDraft(task);
         taskListWidget.setSelectedTask(task);
+        syncDetailWidgetsFromState();
         updateButtonStates();
         applyResponsiveWidgetVisibility();
-        boolean editable = canEditTask(task);
-        titleField.setEditable(editable);
-        descField.active = editable;
-        tagField.setEditable(editable);
     }
 
     private void clearSelectedTask() {
         selectedTask = null;
+        detailDraft = null;
         if (layoutMetrics != null && layoutMetrics.detailOverlay) {
             detailOverlayVisible = false;
             layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
@@ -2104,20 +2219,161 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskListWidget != null) {
             taskListWidget.clearSelection();
         }
-        if (titleField != null) {
-            titleField.setValue("");
-            titleField.setEditable(true);
-        }
-        if (descField != null) {
-            descField.setValue("");
-            descField.active = true;
-        }
-        if (tagField != null) {
-            tagField.setValue("");
-            tagField.setEditable(true);
-        }
+        syncDetailWidgetsFromState();
         updateButtonStates();
         applyResponsiveWidgetVisibility();
+    }
+
+    /**
+     * 基于当前选中任务创建一份详情抽屉草稿。
+     *
+     * @param task 当前选中任务
+     * @return 对应的详情草稿；当任务为空时返回 null
+     */
+    private TaskDetailDraft createDetailDraft(Task task) {
+        if (task == null) {
+            return null;
+        }
+        return new TaskDetailDraft(task.getId(), task.getTitle(), task.getDescription(), joinTaskTags(task));
+    }
+
+    /**
+     * 将当前详情草稿同步到界面控件，避免选择切换时残留旧内容。
+     */
+    private void syncDetailWidgetsFromState() {
+        syncingDetailWidgets = true;
+        try {
+            if (titleField != null) {
+                titleField.setValue(detailDraft == null ? "" : detailDraft.title);
+            }
+            if (descField != null) {
+                descField.setValue(detailDraft == null ? "" : detailDraft.description);
+            }
+            if (tagField != null) {
+                tagField.setValue(detailDraft == null ? "" : detailDraft.tags);
+            }
+        } finally {
+            syncingDetailWidgets = false;
+        }
+        applyDetailWidgetEditability();
+    }
+
+    /**
+     * 按当前抽屉状态更新标题、描述和标签的可编辑性。
+     */
+    private void applyDetailWidgetEditability() {
+        boolean detailVisible = isDetailPanelVisible() || (layoutMetrics == null || !layoutMetrics.detailOverlay);
+        boolean editable = detailVisible && canEditSelectedTaskDetails();
+        if (titleField != null) {
+            boolean titleEditing = editable && detailDraft != null && detailDraft.titleEditing;
+            titleField.setEditable(titleEditing);
+            titleField.active = detailVisible;
+            titleField.visible = detailVisible;
+        }
+        if (descField != null) {
+            descField.active = editable;
+            descField.visible = detailVisible;
+        }
+        if (tagField != null) {
+            tagField.setEditable(editable);
+            tagField.visible = detailVisible;
+        }
+        if (detailCloseButton != null) {
+            boolean showCloseButton = detailVisible && selectedTask != null;
+            detailCloseButton.visible = showCloseButton;
+            detailCloseButton.active = showCloseButton;
+        }
+    }
+
+    /**
+     * 判断当前选中任务是否允许在详情抽屉中编辑基础字段。
+     *
+     * @return true 表示当前任务可编辑
+     */
+    private boolean canEditSelectedTaskDetails() {
+        return selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask);
+    }
+
+    /**
+     * 让详情标题进入编辑态，供点击标题或测试驱动复用。
+     */
+    private void beginDetailTitleEditing() {
+        if (detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.titleEditing = true;
+        applyDetailWidgetEditability();
+        if (titleField != null) {
+            titleField.setFocused(true);
+            this.setFocused(titleField);
+        }
+    }
+
+    /**
+     * 处理详情标题变更，并同步回当前选中任务。
+     *
+     * @param text 最新标题文本
+     */
+    private void onDetailTitleChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.title = text == null ? "" : text;
+        selectedTask.setTitle(detailDraft.title);
+        markUnsaved();
+    }
+
+    /**
+     * 处理详情描述变更，并同步回当前选中任务。
+     *
+     * @param text 最新描述文本
+     */
+    private void onDetailDescriptionChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.description = text == null ? "" : text;
+        selectedTask.setDescription(detailDraft.description);
+        markUnsaved();
+    }
+
+    /**
+     * 处理详情标签变更，并同步回当前选中任务。
+     *
+     * @param text 最新标签文本
+     */
+    private void onDetailTagsChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.tags = text == null ? "" : text;
+        String value = getFieldValue(tagField, "");
+        if (value.isEmpty()) {
+            selectedTask.clearTags();
+        } else {
+            List<String> tags = new ArrayList<>();
+            for (String part : value.split(",")) {
+                String tag = part.trim();
+                if (!tag.isEmpty()) {
+                    tags.add(tag);
+                }
+            }
+            selectedTask.setTags(tags);
+        }
+        markUnsaved();
+    }
+
+    /**
+     * 将任务标签拼接成详情抽屉使用的逗号分隔文本。
+     *
+     * @param task 目标任务
+     * @return 逗号分隔后的标签文本
+     */
+    private String joinTaskTags(Task task) {
+        if (task == null || task.getTags() == null || task.getTags().isEmpty()) {
+            return "";
+        }
+        return String.join(",", task.getTags());
     }
 
     private boolean isSelectedTaskValid() {
@@ -2959,6 +3215,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
         return result;
+    }
+
+    /**
+     * 将控件转换为统一的边界数组，供测试代码读取布局信息。
+     *
+     * @param widget 目标控件
+     * @return 依次包含 x、y、width、height 的边界数组
+     */
+    private int[] toWidgetBounds(net.minecraft.client.gui.components.AbstractWidget widget) {
+        if (widget == null) {
+            return new int[] {0, 0, 0, 0};
+        }
+        return new int[] {widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight()};
     }
 
     private String getFieldValue(EditBox field, String hint) {
