@@ -477,6 +477,69 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 返回项目列表区域边界，供测试验证底部操作区固定布局。
+     *
+     * @return 项目列表区域边界数组
+     */
+    int[] getProjectListBoundsForTest() {
+        return projectListWidget == null ? new int[] {0, 0, 0, 0} : projectListWidget.getBoundsForTest();
+    }
+
+    /**
+     * 返回新增项目按钮边界。
+     *
+     * @return 新增项目按钮边界数组
+     */
+    int[] getAddProjectButtonBoundsForTest() {
+        return toWidgetBounds(addProjectBtn);
+    }
+
+    /**
+     * 返回编辑项目按钮边界。
+     *
+     * @return 编辑项目按钮边界数组
+     */
+    int[] getEditProjectButtonBoundsForTest() {
+        return toWidgetBounds(editProjectBtn);
+    }
+
+    /**
+     * 返回删除项目按钮边界。
+     *
+     * @return 删除项目按钮边界数组
+     */
+    int[] getDeleteProjectButtonBoundsForTest() {
+        return toWidgetBounds(deleteProjectBtn);
+    }
+
+    /**
+     * 返回“申请加入”按钮当前是否可见。
+     *
+     * @return true 表示申请加入按钮可见
+     */
+    boolean isApplyJoinProjectButtonVisibleForTest() {
+        return applyJoinProjectBtn != null && applyJoinProjectBtn.visible;
+    }
+
+    /**
+     * 返回删除项目按钮当前是否可见。
+     *
+     * @return true 表示删除项目按钮可见
+     */
+    boolean isDeleteProjectButtonVisibleForTest() {
+        return deleteProjectBtn != null && deleteProjectBtn.visible;
+    }
+
+    /**
+     * 返回编辑项目按钮当前文案，供测试验证“编辑/查看”降级语义。
+     *
+     * @return 编辑项目按钮文案
+     */
+    String getEditProjectButtonTextForTest() {
+        return editProjectBtn == null ? "" : editProjectBtn.getMessage().getString();
+    }
+
+    /**
      * 返回当前状态筛选值，供同包测试代码断言过滤逻辑。
      *
      * @return 当前状态筛选值
@@ -555,6 +618,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     EditBox getSearchFieldForTest() {
         return searchField;
+    }
+
+    /**
+     * 返回项目搜索输入框，供测试验证侧栏过滤与底部按钮布局。
+     *
+     * @return 项目搜索输入框
+     */
+    EditBox getProjectSearchFieldForTest() {
+        return projectSearchField;
     }
 
     /**
@@ -2770,55 +2842,72 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     private void updateProjectList() {
         if (projectListWidget == null) return;
+        projectListWidget.setProjects(buildVisibleProjectsForSidebar());
+        projectListWidget.setSelectedProject(currentProject);
+        updateProjectActionButtons();
+    }
+
+    /**
+     * 按当前空间筛选、搜索条件和默认项目兜底规则，构建侧栏可见项目列表。
+     *
+     * @return 当前侧栏应显示的项目列表
+     */
+    private List<Project> buildVisibleProjectsForSidebar() {
         List<Project> all = new ArrayList<>();
         all.addAll(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
         all.addAll(projectManager.getProjectsByScope(Project.Scope.TEAM));
-        
+
         Project defaultProject = null;
-        for (Project p : all) {
-            if (p == null) continue;
-            if (p.getScope() != projectScopeFilter) continue;
-            if (projectScopeFilter == Project.Scope.PERSONAL && p.isDefaultPersonalProject()) {
-                defaultProject = p;
+        for (Project project : all) {
+            if (project == null || project.getScope() != projectScopeFilter) {
+                continue;
+            }
+            if (projectScopeFilter == Project.Scope.PERSONAL && project.isDefaultPersonalProject()) {
+                defaultProject = project;
                 break;
             }
-            if (projectScopeFilter == Project.Scope.TEAM && p.isDefaultTeamProject()) {
-                defaultProject = p;
+            if (projectScopeFilter == Project.Scope.TEAM && project.isDefaultTeamProject()) {
+                defaultProject = project;
                 break;
             }
         }
 
         List<Project> filtered = new ArrayList<>();
-        String q = projectSearchQuery.toLowerCase().trim();
-        
-        for (Project p : all) {
-            // Scope filter
-            if (p.getScope() != projectScopeFilter) continue;
-            
-            // Name filter
-            String searchableName = ProjectNameFormatter.toDisplayText(p).getString().toLowerCase();
-            if (!q.isEmpty() && !searchableName.contains(q)) continue;
-            
-            filtered.add(p);
+        String query = projectSearchQuery == null ? "" : projectSearchQuery.toLowerCase().trim();
+        for (Project project : all) {
+            if (project == null || project.getScope() != projectScopeFilter) {
+                continue;
+            }
+            String searchableName = ProjectNameFormatter.toDisplayText(project).getString().toLowerCase();
+            if (!query.isEmpty() && !searchableName.contains(query)) {
+                continue;
+            }
+            filtered.add(project);
         }
 
-        if (defaultProject != null) {
-            boolean exists = false;
-            String id = defaultProject.getId();
-            for (Project p : filtered) {
-                if (p != null && id != null && id.equals(p.getId())) {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                filtered.add(0, defaultProject);
+        if (defaultProject != null && !containsProject(filtered, defaultProject.getId())) {
+            filtered.add(0, defaultProject);
+        }
+        return filtered;
+    }
+
+    /**
+     * 判断目标项目是否已经存在于候选列表中。
+     *
+     * @param projects 候选项目列表
+     * @param projectId 目标项目标识
+     * @return true 表示候选列表已包含目标项目
+     */
+    private boolean containsProject(List<Project> projects, String projectId) {
+        if (projects == null || projectId == null || projectId.isEmpty()) {
+            return false;
+        }
+        for (Project project : projects) {
+            if (project != null && projectId.equals(project.getId())) {
+                return true;
             }
         }
-        
-        projectListWidget.setProjects(filtered);
-        projectListWidget.setSelectedProject(currentProject);
-        updateProjectActionButtons();
+        return false;
     }
 
     private void updateProjectActionButtons() {
@@ -2832,6 +2921,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             deleteProjectBtn.active = false;
             applyJoinProjectBtn.visible = false;
             applyJoinProjectBtn.active = false;
+            syncBottomProjectButtonsState();
             return;
         }
         if (currentProject.getScope() != Project.Scope.TEAM) {
@@ -2841,6 +2931,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             deleteProjectBtn.active = canDeleteCurrentProject();
             applyJoinProjectBtn.visible = false;
             applyJoinProjectBtn.active = false;
+            syncBottomProjectButtonsState();
             return;
         }
         Role role = getCurrentRole();
@@ -2854,12 +2945,37 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             deleteProjectBtn.active = false;
             applyJoinProjectBtn.visible = true;
             applyJoinProjectBtn.active = true;
+            syncBottomProjectButtonsState();
             return;
         }
         applyJoinProjectBtn.visible = false;
         applyJoinProjectBtn.active = false;
         deleteProjectBtn.visible = true;
         deleteProjectBtn.active = canDeleteCurrentProject();
+        syncBottomProjectButtonsState();
+    }
+
+    /**
+     * 统一按当前侧栏可见性刷新底部项目操作区，避免滚动列表影响按钮显隐。
+     */
+    private void syncBottomProjectButtonsState() {
+        boolean sidebarVisible = layoutMetrics == null || layoutMetrics.sidebarVisible;
+        if (addProjectBtn != null) {
+            addProjectBtn.visible = sidebarVisible;
+            addProjectBtn.active = sidebarVisible;
+        }
+        if (editProjectBtn != null) {
+            editProjectBtn.visible = sidebarVisible;
+            editProjectBtn.active = sidebarVisible && editProjectBtn.active;
+        }
+        if (deleteProjectBtn != null) {
+            deleteProjectBtn.visible = sidebarVisible && deleteProjectBtn.visible;
+            deleteProjectBtn.active = sidebarVisible && deleteProjectBtn.active;
+        }
+        if (applyJoinProjectBtn != null) {
+            applyJoinProjectBtn.visible = sidebarVisible && applyJoinProjectBtn.visible;
+            applyJoinProjectBtn.active = sidebarVisible && applyJoinProjectBtn.active;
+        }
     }
     
     private Component getProjectScopeText() {

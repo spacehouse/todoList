@@ -26,6 +26,7 @@ public final class TodoScreenTestMain {
     private static final UUID ALICE_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
     private static final UUID BOB_ID = UUID.fromString("20000000-0000-0000-0000-000000000003");
     private static final UUID CHARLIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000004");
+    private static final UUID EXTERNAL_OWNER_ID = UUID.fromString("20000000-0000-0000-0000-000000000005");
 
     /**
      * 工具类不需要实例化。
@@ -53,6 +54,9 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEnterDetailTitleEditModeAfterClickingTitle", TodoScreenTestMain::shouldEnterDetailTitleEditModeAfterClickingTitle);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCloseOverlayDetailDrawerFromCloseButton", TodoScreenTestMain::shouldCloseOverlayDetailDrawerFromCloseButton);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepProjectActionButtonsPinnedAtSidebarBottom", TodoScreenTestMain::shouldKeepProjectActionButtonsPinnedAtSidebarBottom);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowApplyJoinButtonForNonMemberTeamProject", TodoScreenTestMain::shouldShowApplyJoinButtonForNonMemberTeamProject);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseViewLabelForReadOnlyTeamProjectMember", TodoScreenTestMain::shouldUseViewLabelForReadOnlyTeamProjectMember);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
@@ -442,6 +446,78 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "点击关闭按钮后不应保留选中任务");
     }
 
+    /**
+     * 校验项目搜索不会把底部操作按钮从侧栏底部挤走。
+     */
+    private static void shouldKeepProjectActionButtonsPinnedAtSidebarBottom() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        createPersonalProject("personal-alpha", "Alpha");
+        createPersonalProject("personal-beta", "Beta");
+        createPersonalProject("personal-gamma", "Gamma");
+
+        int[] listBoundsBefore = screen.getProjectListBoundsForTest();
+        int[] addBoundsBefore = screen.getAddProjectButtonBoundsForTest();
+        int[] editBoundsBefore = screen.getEditProjectButtonBoundsForTest();
+        int[] deleteBoundsBefore = screen.getDeleteProjectButtonBoundsForTest();
+
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "zz-not-found");
+
+        int[] listBoundsAfter = screen.getProjectListBoundsForTest();
+        int[] addBoundsAfter = screen.getAddProjectButtonBoundsForTest();
+        int[] editBoundsAfter = screen.getEditProjectButtonBoundsForTest();
+        int[] deleteBoundsAfter = screen.getDeleteProjectButtonBoundsForTest();
+
+        GuiTestSupport.assertEquals(addBoundsBefore[1], addBoundsAfter[1], "项目搜索后新增按钮应保持固定在侧栏底部");
+        GuiTestSupport.assertEquals(editBoundsBefore[1], editBoundsAfter[1], "项目搜索后编辑按钮应保持固定在侧栏底部");
+        GuiTestSupport.assertEquals(deleteBoundsBefore[1], deleteBoundsAfter[1], "项目搜索后删除按钮应保持固定在侧栏底部");
+        GuiTestSupport.assertEquals(listBoundsBefore[1], listBoundsAfter[1], "项目搜索不应改变列表起始位置");
+        GuiTestSupport.assertTrue(listBoundsAfter[1] + listBoundsAfter[3] <= addBoundsAfter[1], "项目列表滚动区不应覆盖底部操作按钮区");
+    }
+
+    /**
+     * 校验非成员查看团队项目时会显示“申请加入”，并隐藏删除按钮。
+     */
+    private static void shouldShowApplyJoinButtonForNonMemberTeamProject() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project outsiderProject = createExternalTeamProject("team-outsider", "Outsider Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(outsiderProject);
+
+        GuiTestSupport.assertTrue(screen.isApplyJoinProjectButtonVisibleForTest(), "非成员团队项目应显示申请加入按钮");
+        GuiTestSupport.assertFalse(screen.isDeleteProjectButtonVisibleForTest(), "非成员团队项目不应显示删除按钮");
+    }
+
+    /**
+     * 校验普通成员进入团队项目时，编辑按钮文案会降级为“查看”。
+     */
+    private static void shouldUseViewLabelForReadOnlyTeamProjectMember() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project memberProject = createExternalTeamProject("team-member-readonly", "Readonly Team");
+        memberProject.addMember(OWNER_ID.toString(), Project.ProjectRole.MEMBER, "owner");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(memberProject);
+
+        GuiTestSupport.assertEquals("gui.todolist.project.view", screen.getEditProjectButtonTextForTest(), "普通成员进入团队项目时编辑按钮应降级为查看语义");
+        GuiTestSupport.assertFalse(screen.isApplyJoinProjectButtonVisibleForTest(), "已加入团队项目后不应继续显示申请加入按钮");
+        GuiTestSupport.assertTrue(screen.isDeleteProjectButtonVisibleForTest(), "已加入团队项目后应恢复删除按钮区域");
+    }
+
     private static void shouldSwitchProjectToTeamScopeAndSyncActiveProject() {
         RecordingClientOps ops = GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -791,6 +867,34 @@ public final class TodoScreenTestMain {
      */
     private static Project createTeamProject(String id, String name) {
         Project project = new Project(name, Project.Scope.TEAM, OWNER_ID.toString());
+        project.setId(id);
+        TodoListCommon.getProjectManager().addProject(project);
+        return project;
+    }
+
+    /**
+     * 创建一个额外的个人项目，供项目侧栏测试使用。
+     *
+     * @param id 项目标识
+     * @param name 项目名称
+     * @return 创建后的个人项目
+     */
+    private static Project createPersonalProject(String id, String name) {
+        Project project = new Project(name, Project.Scope.PERSONAL, OWNER_ID.toString());
+        project.setId(id);
+        TodoListCommon.getProjectManager().addProject(project);
+        return project;
+    }
+
+    /**
+     * 创建一个由外部玩家拥有的团队项目，默认不包含当前测试玩家成员身份。
+     *
+     * @param id 项目标识
+     * @param name 项目名称
+     * @return 创建后的团队项目
+     */
+    private static Project createExternalTeamProject(String id, String name) {
+        Project project = new Project(name, Project.Scope.TEAM, EXTERNAL_OWNER_ID.toString());
         project.setId(id);
         TodoListCommon.getProjectManager().addProject(project);
         return project;

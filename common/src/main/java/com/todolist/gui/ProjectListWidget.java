@@ -101,6 +101,15 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         return List.copyOf(projects);
     }
 
+    /**
+     * 返回项目列表的布局边界，供同包测试验证侧栏滚动区尺寸。
+     *
+     * @return 依次包含 x、y、width、height 的边界数组
+     */
+    int[] getBoundsForTest() {
+        return new int[] {x, y, width, height};
+    }
+
     private void rebuildProjects() {
         ModConfig config = ModConfig.getInstance();
         List<Project> starred = new ArrayList<>();
