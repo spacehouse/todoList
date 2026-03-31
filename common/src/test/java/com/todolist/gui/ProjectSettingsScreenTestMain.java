@@ -35,6 +35,10 @@ public final class ProjectSettingsScreenTestMain {
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldAllowProjectManagerToSaveTeamProject", ProjectSettingsScreenTestMain::shouldAllowProjectManagerToSaveTeamProject);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldDisableEditingForRegularMember", ProjectSettingsScreenTestMain::shouldDisableEditingForRegularMember);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldRefreshVisibleMembersAfterProjectChanged", ProjectSettingsScreenTestMain::shouldRefreshVisibleMembersAfterProjectChanged);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldShowTopRightScopeBadgeForTeamProject", ProjectSettingsScreenTestMain::shouldShowTopRightScopeBadgeForTeamProject);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldToggleAllowMemberCreateFromButton", ProjectSettingsScreenTestMain::shouldToggleAllowMemberCreateFromButton);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldRenderRoleAndRemoveActionsOnRightSide", ProjectSettingsScreenTestMain::shouldRenderRoleAndRemoveActionsOnRightSide);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldFilterMemberListWithSearchBar", ProjectSettingsScreenTestMain::shouldFilterMemberListWithSearchBar);
     }
 
     /**
@@ -112,6 +116,93 @@ public final class ProjectSettingsScreenTestMain {
      *
      * @return 测试项目
      */
+    /**
+     * 校验团队项目设置页会在右上角展示范围标识。
+     */
+    private static void shouldShowTopRightScopeBadgeForTeamProject() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 240);
+
+        GuiTestSupport.assertEquals("gui.todolist.scope.team", screen.getScopeBadgeTextForTest(), "团队项目应显示团队范围标识");
+        int[] cardBounds = screen.getDialogBoundsForTest();
+        int[] badgeBounds = screen.getScopeBadgeBoundsForTest();
+        GuiTestSupport.assertTrue(badgeBounds[0] >= cardBounds[0] + cardBounds[2] / 2, "范围标识应位于卡片右上区域");
+        GuiTestSupport.assertTrue(badgeBounds[1] >= cardBounds[1], "范围标识纵向位置应位于标题区内");
+    }
+
+    /**
+     * 校验允许成员创建任务按钮可切换开关，并在保存时写回项目。
+     */
+    private static void shouldToggleAllowMemberCreateFromButton() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertFalse(project.isAllowMemberCreate(), "初始团队项目不应允许成员创建任务");
+        GuiTestSupport.assertEquals("gui.todolist.config.toggle.off", screen.getAllowMemberCreateStateKeyForTest(), "初始开关状态应为关闭");
+
+        ScreenDriver.click(screen.getAllowMemberCreateButtonForTest());
+        GuiTestSupport.assertEquals("gui.todolist.config.toggle.on", screen.getAllowMemberCreateStateKeyForTest(), "点击后开关状态应切换为开启");
+
+        ScreenDriver.click(screen.getSaveButtonForTest());
+        GuiTestSupport.assertTrue(project.isAllowMemberCreate(), "保存后应写回允许成员创建任务状态");
+        GuiTestSupport.assertEquals(1, ops.getUpdateProjectCalls().size(), "切换并保存后应发送一次项目更新");
+    }
+
+    /**
+     * 校验成员行右侧会同时显示角色切换和移出按钮，并且都可操作。
+     */
+    private static void shouldRenderRoleAndRemoveActionsOnRightSide() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(MEMBER_ID, "alice"));
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 240);
+
+        int[] roleBounds = screen.getMemberRoleButtonBoundsForTest(1);
+        int[] removeBounds = screen.getMemberRemoveButtonBoundsForTest(1);
+        int[] listBounds = screen.getMemberListBoundsForTest();
+        GuiTestSupport.assertTrue(roleBounds[0] >= listBounds[0] + listBounds[2] / 2, "角色按钮应位于成员行右侧");
+        GuiTestSupport.assertTrue(removeBounds[0] > roleBounds[0], "移出按钮应位于角色按钮右边");
+
+        screen.clickMemberRoleButtonForTest(1);
+        GuiTestSupport.assertEquals(1, ops.getUpdateMemberRoleCalls().size(), "点击角色按钮后应发送角色更新请求");
+
+        screen.clickMemberRemoveButtonForTest(1);
+        GuiTestSupport.assertEquals(1, ops.getRemoveMemberCalls().size(), "点击移出按钮后应发送移出成员请求");
+    }
+
+    /**
+     * 校验成员搜索栏会按输入实时过滤成员列表。
+     */
+    private static void shouldFilterMemberListWithSearchBar() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        project.addMember(BOB_ID.toString(), Project.ProjectRole.MEMBER, "bob");
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(MEMBER_ID, "alice"),
+                createPlayerInfo(BOB_ID, "bob"));
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        ScreenDriver.init(minecraft, screen);
+        ScreenDriver.setText(screen.getMemberSearchFieldForTest(), "bo");
+
+        GuiTestSupport.assertEquals(List.of("bob"), screen.getVisibleMemberNamesForTest(), "成员搜索应只保留匹配项");
+    }
+
     private static Project createTeamProject() {
         Project project = new Project("Team Alpha", Project.Scope.TEAM, OWNER_ID.toString());
         project.setId("team-alpha");

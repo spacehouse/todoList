@@ -144,6 +144,7 @@
   "gui.todolist.member.name": "Player Name",
   "gui.todolist.label.member_name": "Player Name:",
   "gui.todolist.member.search": "Search members...",
+  "gui.todolist.remove_member": "Remove",
   "gui.todolist.role.manager": "Project Manager",
   "gui.todolist.role.lead": "Lead",
   "gui.todolist.role.member": "Member",

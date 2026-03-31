@@ -144,6 +144,7 @@
   "gui.todolist.member.name": "玩家名称",
   "gui.todolist.label.member_name": "玩家名称:",
   "gui.todolist.member.search": "搜索成员...",
+  "gui.todolist.remove_member": "移出",
   "gui.todolist.role.manager": "项目经理",
   "gui.todolist.role.lead": "负责人",
   "gui.todolist.role.member": "成员",
