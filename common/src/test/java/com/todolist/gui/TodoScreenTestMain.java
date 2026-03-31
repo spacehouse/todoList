@@ -43,6 +43,11 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowOnlyMyViewInPersonalSpace", TodoScreenTestMain::shouldShowOnlyMyViewInPersonalSpace);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUnassignedAllAndMineViewsInTeamSpace", TodoScreenTestMain::shouldShowUnassignedAllAndMineViewsInTeamSpace);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleCompletedSectionWithoutChangingCurrentView", TodoScreenTestMain::shouldToggleCompletedSectionWithoutChangingCurrentView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineThreeColumnLayoutOnLargeScreen", TodoScreenTestMain::shouldUseInlineThreeColumnLayoutOnLargeScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineDetailPanelOnMediumScreen", TodoScreenTestMain::shouldUseInlineDetailPanelOnMediumScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen", TodoScreenTestMain::shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
@@ -143,6 +148,166 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
         GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
+    }
+
+    /**
+     * 验证大窗口下主界面保持左栏、中栏、右侧详情三栏常驻布局。
+     */
+    private static void shouldUseInlineThreeColumnLayoutOnLargeScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-large", "Layout Large Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 480, 300);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Large Layout Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertEquals("LARGE", screen.getResponsiveTierNameForTest(), "大窗口应命中 LARGE 档位");
+        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "大窗口下项目侧栏不应进入覆盖模式");
+        GuiTestSupport.assertFalse(screen.isDetailPanelOverlayForTest(), "大窗口下详情区不应进入覆盖模式");
+        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "大窗口下项目侧栏应保持可见");
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "大窗口下详情区应保持可见");
+
+        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 480, 300, "大窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 480, 300, "大窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 480, 300, "大窗口下详情区边界应位于屏幕内");
+
+        int[] sidebarBounds = screen.getProjectSidebarBoundsForTest();
+        int[] contentBounds = screen.getContentAreaBoundsForTest();
+        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        GuiTestSupport.assertTrue(sidebarBounds[0] + sidebarBounds[2] <= contentBounds[0], "大窗口下左栏应位于主内容区左侧");
+        GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] <= detailBounds[0], "大窗口下详情区应位于主内容区右侧");
+    }
+
+    /**
+     * 验证中等窗口下主界面仍保持详情区常驻，但右侧宽度会比大窗口更紧凑。
+     */
+    private static void shouldUseInlineDetailPanelOnMediumScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-medium", "Layout Medium Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 420, 250);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Medium Layout Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertEquals("MEDIUM", screen.getResponsiveTierNameForTest(), "中等窗口应命中 MEDIUM 档位");
+        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "中等窗口下项目侧栏不应进入覆盖模式");
+        GuiTestSupport.assertFalse(screen.isDetailPanelOverlayForTest(), "中等窗口下详情区仍应常驻");
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "中等窗口下选中任务后详情区应保持可见");
+
+        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 420, 250, "中等窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 420, 250, "中等窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 420, 250, "中等窗口下详情区边界应位于屏幕内");
+    }
+
+    /**
+     * 验证紧凑窗口下右侧详情区改为覆盖式展示，但主列表仍保持在屏幕内。
+     */
+    private static void shouldUseOverlayDetailPanelOnCompactScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-compact", "Layout Compact Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 220);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Compact Layout Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertEquals("COMPACT", screen.getResponsiveTierNameForTest(), "紧凑窗口应命中 COMPACT 档位");
+        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "紧凑窗口下项目侧栏仍应常驻");
+        GuiTestSupport.assertTrue(screen.isDetailPanelOverlayForTest(), "紧凑窗口下详情区应进入覆盖模式");
+        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "紧凑窗口下项目侧栏应保持可见");
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "选中任务后详情覆盖层应显示");
+
+        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 360, 220, "紧凑窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 360, 220, "紧凑窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 360, 220, "紧凑窗口下详情区边界应位于屏幕内");
+
+        int[] contentBounds = screen.getContentAreaBoundsForTest();
+        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] > detailBounds[0], "覆盖式详情区应与主内容区发生水平覆盖，而不是继续压缩主内容区");
+    }
+
+    /**
+     * 验证极小窗口下项目侧栏与详情区都切换为覆盖式，且仍可通过切换按钮访问项目区。
+     */
+    private static void shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-minimal", "Layout Minimal Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 300, 190);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Minimal Layout Task");
+
+        GuiTestSupport.assertEquals("MINIMAL", screen.getResponsiveTierNameForTest(), "极小窗口应命中 MINIMAL 档位");
+        GuiTestSupport.assertTrue(screen.isProjectSidebarOverlayForTest(), "极小窗口下项目侧栏应进入覆盖模式");
+        GuiTestSupport.assertTrue(screen.isDetailPanelOverlayForTest(), "极小窗口下详情区应进入覆盖模式");
+        GuiTestSupport.assertFalse(screen.isProjectSidebarVisibleForTest(), "极小窗口初始化时项目侧栏覆盖层应默认收起");
+        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "未选中任务时极小窗口详情覆盖层应默认收起");
+        GuiTestSupport.assertTrue(screen.isSidebarToggleButtonVisibleForTest(), "极小窗口下应提供项目侧栏切换按钮");
+
+        screen.toggleSidebarOverlayForTest();
+
+        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "点击切换后极小窗口项目侧栏覆盖层应显示");
+        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 300, 190, "极小窗口下项目侧栏覆盖层边界应位于屏幕内");
+        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 300, 190, "极小窗口下主内容区边界应位于屏幕内");
+
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "极小窗口选中任务后详情覆盖层应显示");
+        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 300, 190, "极小窗口下详情覆盖层边界应位于屏幕内");
+
+        int[] contentBounds = screen.getContentAreaBoundsForTest();
+        int[] sidebarBounds = screen.getProjectSidebarBoundsForTest();
+        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        GuiTestSupport.assertTrue(contentBounds[0] < sidebarBounds[0] + sidebarBounds[2], "极小窗口下项目侧栏应覆盖到主内容区之上");
+        GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] > detailBounds[0], "极小窗口下详情区应覆盖到主内容区之上");
+    }
+
+    /**
+     * 验证紧凑窗口下删除当前选中任务后，覆盖式详情区会一起收起，避免留下空抽屉。
+     */
+    private static void shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-compact-delete", "Layout Compact Delete Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 220);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Compact Delete Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+
+        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "删除前紧凑窗口详情覆盖层应已显示");
+
+        screen.openTaskContextMenuForTest(task);
+        screen.clickContextMenuItemForTest(3);
+
+        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "删除选中任务后详情覆盖层应自动收起");
+        GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "删除选中任务后不应残留选中项");
     }
 
     /**
@@ -521,6 +686,24 @@ public final class TodoScreenTestMain {
     private static void addTaskViaEnter(TodoScreen screen) {
         screen.getTitleFieldForTest().setFocused(true);
         ScreenDriver.pressEnter(screen);
+    }
+
+    /**
+     * 断言矩形区域完全位于给定屏幕范围内。
+     *
+     * @param bounds 待校验的矩形边界
+     * @param screenWidth 屏幕宽度
+     * @param screenHeight 屏幕高度
+     * @param message 断言失败提示
+     */
+    private static void assertRectInsideScreen(int[] bounds, int screenWidth, int screenHeight, String message) {
+        GuiTestSupport.assertTrue(bounds != null && bounds.length == 4, message + "（边界数据无效）");
+        GuiTestSupport.assertTrue(bounds[0] >= 0, message + "（x 不应小于 0）");
+        GuiTestSupport.assertTrue(bounds[1] >= 0, message + "（y 不应小于 0）");
+        GuiTestSupport.assertTrue(bounds[2] >= 0, message + "（宽度不应小于 0）");
+        GuiTestSupport.assertTrue(bounds[3] >= 0, message + "（高度不应小于 0）");
+        GuiTestSupport.assertTrue(bounds[0] + bounds[2] <= screenWidth, message + "（右边界超出屏幕）");
+        GuiTestSupport.assertTrue(bounds[1] + bounds[3] <= screenHeight, message + "（底边界超出屏幕）");
     }
 
     /**

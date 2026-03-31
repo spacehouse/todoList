@@ -70,6 +70,113 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         ALL
     }
 
+    /**
+     * 主界面的响应式档位，按窗口宽高综合决定布局降级策略。
+     */
+    private enum ResponsiveTier {
+        LARGE,
+        MEDIUM,
+        COMPACT,
+        MINIMAL
+    }
+
+    /**
+     * 简单矩形布局对象，记录某个区域的边界信息。
+     */
+    private static final class LayoutRect {
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
+
+        /**
+         * 创建一个矩形边界对象。
+         *
+         * @param x 左上角横坐标
+         * @param y 左上角纵坐标
+         * @param width 区域宽度
+         * @param height 区域高度
+         */
+        private LayoutRect(int x, int y, int width, int height) {
+            this.x = Math.max(0, x);
+            this.y = Math.max(0, y);
+            this.width = Math.max(0, width);
+            this.height = Math.max(0, height);
+        }
+
+        /**
+         * 判断坐标是否位于当前矩形内部。
+         *
+         * @param mouseX 鼠标横坐标
+         * @param mouseY 鼠标纵坐标
+         * @return true 表示命中当前区域
+         */
+        private boolean contains(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        }
+
+        /**
+         * 以测试友好的数组形式返回矩形边界。
+         *
+         * @return 依次包含 x、y、width、height 的数组
+         */
+        private int[] toArray() {
+            return new int[] {x, y, width, height};
+        }
+    }
+
+    /**
+     * 主界面布局快照，集中保存响应式断点和三栏区域边界。
+     */
+    private static final class MainLayoutMetrics {
+        private final ResponsiveTier responsiveTier;
+        private final LayoutRect sidebarBounds;
+        private final LayoutRect contentBounds;
+        private final LayoutRect detailBounds;
+        private final boolean sidebarOverlay;
+        private final boolean detailOverlay;
+        private final boolean sidebarVisible;
+        private final boolean detailVisible;
+        private final int padding;
+        private final int gap;
+
+        /**
+         * 创建一次主界面布局计算结果。
+         *
+         * @param responsiveTier 当前响应式档位
+         * @param sidebarBounds 项目侧栏边界
+         * @param contentBounds 主内容区边界
+         * @param detailBounds 详情区边界
+         * @param sidebarOverlay 项目侧栏是否覆盖显示
+         * @param detailOverlay 详情区是否覆盖显示
+         * @param sidebarVisible 项目侧栏当前是否可见
+         * @param detailVisible 详情区当前是否可见
+         * @param padding 外层边距
+         * @param gap 面板间距
+         */
+        private MainLayoutMetrics(ResponsiveTier responsiveTier,
+                                  LayoutRect sidebarBounds,
+                                  LayoutRect contentBounds,
+                                  LayoutRect detailBounds,
+                                  boolean sidebarOverlay,
+                                  boolean detailOverlay,
+                                  boolean sidebarVisible,
+                                  boolean detailVisible,
+                                  int padding,
+                                  int gap) {
+            this.responsiveTier = responsiveTier;
+            this.sidebarBounds = sidebarBounds;
+            this.contentBounds = contentBounds;
+            this.detailBounds = detailBounds;
+            this.sidebarOverlay = sidebarOverlay;
+            this.detailOverlay = detailOverlay;
+            this.sidebarVisible = sidebarVisible;
+            this.detailVisible = detailVisible;
+            this.padding = padding;
+            this.gap = gap;
+        }
+    }
+
     private final Screen parent;
     private ProjectManager projectManager;
     private ProjectListWidget projectListWidget;
@@ -95,6 +202,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private Button claimButton;
     private Button abandonButton;
     private Button assignOthersButton;
+    private Button saveButton;
+    private Button cancelButton;
+    private Button sidebarToggleButton;
 
     // Selected priority for new/edited tasks
     private Task.Priority selectedPriority = Task.Priority.MEDIUM;
@@ -107,6 +217,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     // Project Search & Toggle
     private EditBox projectSearchField;
+    private Button addProjectBtn;
     private Button projectScopeButton;
     private Button editProjectBtn;
     private Button deleteProjectBtn;
@@ -136,6 +247,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private int contextMenuWidth;
     private int contextMenuItemHeight = 18;
     private List<ContextMenuItem> contextMenuItems = new ArrayList<>();
+    private ResponsiveTier responsiveTier = ResponsiveTier.LARGE;
+    private boolean sidebarOverlayVisible;
+    private boolean detailOverlayVisible;
+    private MainLayoutMetrics layoutMetrics;
 
     private static class LastGuiState {
         Project.Scope projectScopeFilter;
@@ -247,6 +362,87 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     boolean isCompletedSectionExpandedForTest() {
         return completedExpanded;
+    }
+
+    /**
+     * 返回当前主界面的响应式档位名称，供测试断言断点命中结果。
+     *
+     * @return 当前响应式档位名称
+     */
+    String getResponsiveTierNameForTest() {
+        return responsiveTier.name();
+    }
+
+    /**
+     * 返回项目侧栏当前是否以覆盖式布局呈现。
+     *
+     * @return true 表示项目侧栏处于覆盖模式
+     */
+    boolean isProjectSidebarOverlayForTest() {
+        return layoutMetrics != null && layoutMetrics.sidebarOverlay;
+    }
+
+    /**
+     * 返回详情区当前是否以覆盖式布局呈现。
+     *
+     * @return true 表示详情区处于覆盖模式
+     */
+    boolean isDetailPanelOverlayForTest() {
+        return layoutMetrics != null && layoutMetrics.detailOverlay;
+    }
+
+    /**
+     * 返回项目侧栏当前是否可见。
+     *
+     * @return true 表示项目侧栏可见
+     */
+    boolean isProjectSidebarVisibleForTest() {
+        return layoutMetrics != null && layoutMetrics.sidebarVisible;
+    }
+
+    /**
+     * 返回详情区当前是否可见。
+     *
+     * @return true 表示详情区可见
+     */
+    boolean isDetailPanelVisibleForTest() {
+        return layoutMetrics != null && layoutMetrics.detailVisible;
+    }
+
+    /**
+     * 返回项目侧栏切换按钮当前是否可见。
+     *
+     * @return true 表示项目侧栏切换按钮可见
+     */
+    boolean isSidebarToggleButtonVisibleForTest() {
+        return sidebarToggleButton != null && sidebarToggleButton.visible;
+    }
+
+    /**
+     * 返回项目侧栏区域边界，供测试验证响应式布局。
+     *
+     * @return 侧栏边界数组
+     */
+    int[] getProjectSidebarBoundsForTest() {
+        return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.sidebarBounds.toArray();
+    }
+
+    /**
+     * 返回主内容区边界，供测试验证响应式布局。
+     *
+     * @return 主内容区边界数组
+     */
+    int[] getContentAreaBoundsForTest() {
+        return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.contentBounds.toArray();
+    }
+
+    /**
+     * 返回详情区边界，供测试验证响应式布局。
+     *
+     * @return 详情区边界数组
+     */
+    int[] getDetailPanelBoundsForTest() {
+        return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.detailBounds.toArray();
     }
 
     /**
@@ -421,6 +617,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     void toggleCompletedSectionForTest() {
         toggleCompletedSection();
+    }
+
+    /**
+     * 切换项目侧栏覆盖层显示状态，供测试驱动极小窗口交互。
+     */
+    void toggleSidebarOverlayForTest() {
+        toggleSidebarOverlay();
     }
 
     /**
@@ -861,85 +1064,119 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.clearWidgets();
 
         ModConfig config = ModConfig.getInstance();
+        responsiveTier = resolveResponsiveTier(this.width, this.height);
+        syncOverlayStateForResponsiveTier();
 
-        int viewportMargin = 4;
-        int maxGuiWidth = Math.max(300, this.width - viewportMargin * 2);
-        int maxGuiHeight = Math.max(200, this.height - viewportMargin * 2);
-        int guiWidth = clampInt(config.getGuiWidth(), 300, maxGuiWidth);
-        int guiHeight = clampInt(config.getGuiHeight(), 200, maxGuiHeight);
-        int x = (this.width - guiWidth) / 2;
-        int y = (this.height - guiHeight) / 2;
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-
-        int padding = clampInt(config.getPadding(), 6, 20);
-        int e = clampInt(config.getElementSpacing(), 4, 12);
-        int sidebarGap = 8;
-        int minSidebarWidth = 90;
-        int maxSidebarWidth = Math.max(minSidebarWidth, Math.min(220, guiWidth / 3));
-        int sidebarWidth = clampInt(config.getProjectSidebarWidth(), minSidebarWidth, maxSidebarWidth);
-
-        int minContentWidth = 160;
-        int minRightPanelWidth = 72;
-        int maxRightPanelWidth = 120;
-        int rightPanelWidth = clampInt(96, minRightPanelWidth, maxRightPanelWidth);
-        int contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        if (contentWidth < minContentWidth) {
-            int need = minContentWidth - contentWidth;
-            sidebarWidth = Math.max(minSidebarWidth, sidebarWidth - need);
-            contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        }
-        if (contentWidth < minContentWidth) {
-            int need = minContentWidth - contentWidth;
-            rightPanelWidth = Math.max(minRightPanelWidth, rightPanelWidth - need);
-            contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        }
-        contentWidth = Math.max(minContentWidth, contentWidth);
-
-        int topBarY = y + padding + 10; // Extra 10px margin for Title
+        layoutMetrics = buildMainLayoutMetrics(config);
+        int padding = layoutMetrics.padding;
+        int panelGap = layoutMetrics.gap;
+        int topBarGap = clampInt(config.getElementSpacing(), 4, 12);
+        int topBarY = Math.max(24, padding + 16);
         int topBarHeight = 20;
-        int topBarGap = e;
         int secondRowY = topBarY + topBarHeight + topBarGap;
         int secondRowHeight = 20;
-        int listTop = secondRowY + secondRowHeight + topBarGap;
-        int bottomBarHeight = 20;
-        int bottomBarY = y + guiHeight - padding - bottomBarHeight;
         int inputRowHeight = 20;
+        int bottomBarHeight = 20;
+        int bottomBarY = this.height - padding - bottomBarHeight;
         int inputRowY = bottomBarY - topBarGap - inputRowHeight;
-        int sidebarTopY = topBarY;
+        int listTop = secondRowY + secondRowHeight + topBarGap;
+        int listBottom = inputRowY - Math.max(8, topBarGap + 2);
+        int listHeight = Math.max(0, listBottom - listTop);
 
-        int rowHeight = 20;
-        // int minTaskListHeight = Math.max(rowHeight * 2, Math.max(40, config.getTaskItemHeight() * 2));
-        int listInputGap = Math.max(8, topBarGap + 2);
-        int listBottom = inputRowY - listInputGap;
-        int availableListHeight = Math.max(0, listBottom - listTop);
-        int listHeight = availableListHeight; // Strictly use available height to avoid overlap
+        LayoutRect sidebarBounds = layoutMetrics.sidebarBounds;
+        LayoutRect contentBounds = layoutMetrics.contentBounds;
+        LayoutRect detailBounds = layoutMetrics.detailBounds;
 
-        int sidebarScopeBtnHeight = 20;
-        int sidebarSearchHeight = 16;
-        int gap10 = 8;
-        int projListY = sidebarTopY + sidebarScopeBtnHeight + gap10 + sidebarSearchHeight + gap10;
-        int projBtnGap = 5;
-        int projectButtonsHeight = 20 * 3 + projBtnGap * 2;
-        int sidebarBottomButtonsY = y + guiHeight - padding - projectButtonsHeight;
-        int sidebarListBottom = sidebarBottomButtonsY - gap10;
-        // int minSidebarListHeight = rowHeight * 2;
-        int sidebarListHeight = Math.max(0, sidebarListBottom - projListY);
+        int sidebarTopY = sidebarBounds.y;
+        int sidebarWidth = sidebarBounds.width;
+        int contentX = contentBounds.x;
+        int contentWidth = contentBounds.width;
+        int rightPanelX = detailBounds.x;
+        int rightPanelWidth = detailBounds.width;
 
-        int contentX = x + padding + sidebarWidth + sidebarGap;
-        int rightPanelX = contentX + contentWidth + sidebarGap;
+        int overlayToggleWidth = layoutMetrics.sidebarOverlay ? 56 : 0;
+        sidebarToggleButton = Button.builder(Component.translatable("gui.todolist.project.sidebar"), b -> toggleSidebarOverlay())
+                .bounds(contentX, topBarY, overlayToggleWidth, topBarHeight).build();
+        sidebarToggleButton.visible = layoutMetrics.sidebarOverlay;
+        sidebarToggleButton.active = layoutMetrics.sidebarOverlay;
+        this.addRenderableWidget(sidebarToggleButton);
 
-        // Scope Toggle
+        int configButtonWidth = Math.max(56, Math.min(84, this.font.width(Component.translatable("gui.todolist.config.title")) + 16));
+        configButton = Button.builder(Component.translatable("gui.todolist.config.title"), b -> this.minecraft.setScreen(new ConfigScreen(this)))
+                .bounds(contentX + contentWidth - configButtonWidth, topBarY, configButtonWidth, topBarHeight).build();
+        this.addRenderableWidget(configButton);
+
+        int filterGap = 4;
+        int filtersX = contentX + (layoutMetrics.sidebarOverlay ? overlayToggleWidth + filterGap : 0);
+        int filtersY = topBarY;
+        int btnH = 20;
+        int availableBeforeConfig = Math.max(80, configButton.getX() - filterGap - filtersX);
+        int minBtnW = 56;
+        int maxBtnW = 120;
+        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.font.width(getViewToggleText()) + 16));
+        int priorityBtnWidth = Math.min(108, Math.max(minBtnW, this.font.width(getPriorityFilterText()) + 16));
+        int statusBtnWidth = Math.min(108, Math.max(minBtnW, this.font.width(getStatusFilterText()) + 16));
+        int totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
+        int guard = 0;
+        while (totalW > availableBeforeConfig && guard++ < 200) {
+            if (viewBtnWidth >= priorityBtnWidth && viewBtnWidth >= statusBtnWidth && viewBtnWidth > minBtnW) {
+                viewBtnWidth -= 4;
+            } else if (priorityBtnWidth >= statusBtnWidth && priorityBtnWidth > minBtnW) {
+                priorityBtnWidth -= 4;
+            } else if (statusBtnWidth > minBtnW) {
+                statusBtnWidth -= 4;
+            } else {
+                break;
+            }
+            totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
+        }
+
+        viewToggleButton = Button.builder(getViewToggleText(), b -> {
+            if (viewMode == ViewMode.PERSONAL) {
+                return;
+            }
+            if (viewMode == ViewMode.TEAM_UNASSIGNED) {
+                switchView(ViewMode.TEAM_ALL);
+            } else if (viewMode == ViewMode.TEAM_ALL) {
+                switchView(ViewMode.TEAM_ASSIGNED);
+            } else {
+                switchView(ViewMode.TEAM_UNASSIGNED);
+            }
+        }).bounds(filtersX, filtersY, viewBtnWidth, btnH).build();
+        viewToggleButton.active = viewMode != ViewMode.PERSONAL;
+        this.addRenderableWidget(viewToggleButton);
+
+        int priorityBtnX = filtersX + viewBtnWidth + filterGap;
+        filterPriorityButton = Button.builder(getPriorityFilterText(), button -> {
+            currentPriorityFilter = (currentPriorityFilter + 1) % 4;
+            button.setMessage(getPriorityFilterText());
+            applyPriorityFilter();
+        }).bounds(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
+        this.addRenderableWidget(filterPriorityButton);
+
+        int statusBtnX = priorityBtnX + priorityBtnWidth + filterGap;
+        filterStatusButton = Button.builder(getStatusFilterText(), button -> {
+            filterTasks("completed".equals(currentFilter) ? "active" : "completed");
+        }).bounds(statusBtnX, filtersY, statusBtnWidth, btnH).build();
+        this.addRenderableWidget(filterStatusButton);
+
+        searchField = new EditBox(this.font, contentX, secondRowY, contentWidth, secondRowHeight, Component.empty());
+        searchField.setHint(Component.translatable("gui.todolist.input.search.placeholder"));
+        searchField.setValue(searchQuery);
+        this.addRenderableWidget(searchField);
+
         projectScopeButton = Button.builder(getProjectScopeText(), b -> {
-            if (!teamProjectsEnabled) return;
+            if (!teamProjectsEnabled) {
+                return;
+            }
             projectScopeFilter = (projectScopeFilter == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
             Project targetProject = getPreferredProjectForScope(projectScopeFilter);
             switchProject(targetProject);
-        }).bounds(x + padding, sidebarTopY, sidebarWidth, sidebarScopeBtnHeight).build();
+        }).bounds(sidebarBounds.x, sidebarTopY, sidebarWidth, 20).build();
         projectScopeButton.active = teamProjectsEnabled;
         this.addRenderableWidget(projectScopeButton);
-        
-        projectSearchField = new EditBox(this.font, x + padding, sidebarTopY + sidebarScopeBtnHeight + gap10, sidebarWidth, sidebarSearchHeight, Component.translatable("gui.todolist.project.search"));
+
+        projectSearchField = new EditBox(this.font, sidebarBounds.x, sidebarTopY + 28, sidebarWidth, 20, Component.translatable("gui.todolist.project.search"));
         projectSearchField.setHint(Component.translatable("gui.todolist.project.search"));
         projectSearchField.setValue(projectSearchQuery);
         projectSearchField.setResponder(text -> {
@@ -948,41 +1185,45 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         });
         this.addRenderableWidget(projectSearchField);
 
-        projectListWidget = new ProjectListWidget(this.minecraft, x + padding, projListY, sidebarWidth, sidebarListHeight);
-        updateProjectList(); 
+        int projectButtonGap = 4;
+        int projectButtonWidth = Math.max(28, (sidebarWidth - projectButtonGap * 2) / 3);
+        int projectButtonsY = sidebarBounds.y + sidebarBounds.height - 20;
+        int projectListY = sidebarTopY + 56;
+        int projectListHeight = Math.max(0, projectButtonsY - 8 - projectListY);
+
+        projectListWidget = new ProjectListWidget(this.minecraft, sidebarBounds.x, projectListY, sidebarWidth, projectListHeight);
+        updateProjectList();
         projectListWidget.setScrollOffset(savedProjectListScrollOffset);
         projectListWidget.setSelectedProject(currentProject);
         projectListWidget.setOnProjectSelected(this::switchProject);
-        this.addRenderableWidget(projectListWidget);
-        
-        int projBtnY = sidebarBottomButtonsY;
 
-        Button addProjectBtn = Button.builder(Component.translatable("gui.todolist.add"), b -> onAddProject())
-                .bounds(x + padding, projBtnY, sidebarWidth, 20).build();
+        addProjectBtn = Button.builder(Component.translatable("gui.todolist.add"), b -> onAddProject())
+                .bounds(sidebarBounds.x, projectButtonsY, projectButtonWidth, 20).build();
         this.addRenderableWidget(addProjectBtn);
 
         editProjectBtn = Button.builder(Component.translatable("gui.todolist.edit"), b -> onProjectSettings())
-                .bounds(x + padding, projBtnY + 20 + projBtnGap, sidebarWidth, 20).build();
+                .bounds(sidebarBounds.x + projectButtonWidth + projectButtonGap, projectButtonsY, projectButtonWidth, 20).build();
         editProjectBtn.active = currentProject != null;
         this.addRenderableWidget(editProjectBtn);
 
+        int deleteButtonX = sidebarBounds.x + (projectButtonWidth + projectButtonGap) * 2;
         deleteProjectBtn = Button.builder(Component.translatable("gui.todolist.delete"), b -> onProjectDelete())
-                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
+                .bounds(deleteButtonX, projectButtonsY, projectButtonWidth, 20).build();
         this.addRenderableWidget(deleteProjectBtn);
 
         applyJoinProjectBtn = Button.builder(Component.translatable("gui.todolist.project.join.apply"), b -> onApplyJoinProject())
-                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
+                .bounds(deleteButtonX, projectButtonsY, projectButtonWidth, 20).build();
         this.addRenderableWidget(applyJoinProjectBtn);
-
         updateProjectActionButtons();
 
-        // 2. Task List
         taskListWidget = new TaskListWidget(this.minecraft, contentX, listTop, contentWidth, listHeight);
         boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
         taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
         taskListWidget.setSections(buildTaskPaneSections());
         taskListWidget.setOnTaskToggleCompletion(task -> {
-            if (task.isCompleted()) return;
+            if (task.isCompleted()) {
+                return;
+            }
             boolean wasCompleted = task.isCompleted();
             toggleTaskCompletion(task);
             if (!wasCompleted && task.isCompleted()) {
@@ -994,12 +1235,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             refreshTaskList();
         });
 
-        // 3. Input Fields
-        int labelWidth = 0; // Remove "Title:" label space
-        int fieldX = contentX + labelWidth;
-        int fieldWidth = Math.max(120, contentWidth - labelWidth);
-
-        titleField = new EditBox(this.font, fieldX, inputRowY, fieldWidth, 20, Component.empty());
+        titleField = new EditBox(this.font, contentX, inputRowY, contentWidth, inputRowHeight, Component.empty());
         titleField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
         titleField.setValue("");
         titleField.setMaxLength(100);
@@ -1007,8 +1243,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         int rightInnerPadding = 4;
         int rightFieldWidth = Math.max(60, rightPanelWidth - rightInnerPadding * 2);
-        int rightPanelTop = topBarY; // Align with top bar
-        int rightPanelBottom = inputRowY + inputRowHeight;
+        int rightPanelTop = detailBounds.y;
+        int rightPanelBottom = detailBounds.y + detailBounds.height;
         int rightCurrentY = rightPanelTop;
         int rightSectionGap = 6;
         int textH = this.font.lineHeight;
@@ -1017,11 +1253,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int assignButtonGap = 4;
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
         int assignsX = rightPanelX + rightInnerPadding;
-
-        configButton = Button.builder(Component.translatable("gui.todolist.config.title"), b -> this.minecraft.setScreen(new ConfigScreen(this)))
-                .bounds(assignsX, rightCurrentY, rightFieldWidth, 20).build();
-        this.addRenderableWidget(configButton);
-        rightCurrentY += 20 + rightSectionGap;
 
         int teamButtonsTop = rightPanelBottom;
         if (showAssignButtons) {
@@ -1070,92 +1301,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         assignOthersButton.active = false;
         this.addRenderableWidget(assignOthersButton);
 
-        // 6. Save/Cancel
-        int saveCancelWidth = 90;
+        int saveCancelWidth = Math.max(64, Math.min(90, (contentWidth - 5) / 2));
         int saveCancelGap = 5;
         int totalSaveCancelWidth = saveCancelWidth * 2 + saveCancelGap;
-        int saveCancelX = x + (guiWidth - totalSaveCancelWidth) / 2;
+        int saveCancelX = contentX + Math.max(0, (contentWidth - totalSaveCancelWidth) / 2);
 
-        Button saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> onSaveTasks())
+        saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> onSaveTasks())
                 .bounds(saveCancelX, bottomBarY, saveCancelWidth, 20).build();
         this.addRenderableWidget(saveButton);
 
-        Button cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onCancel())
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onCancel())
                 .bounds(saveCancelX + saveCancelWidth + saveCancelGap, bottomBarY, saveCancelWidth, 20).build();
         this.addRenderableWidget(cancelButton);
 
-        // 7. Filter Row (View/Priority/Status/Config)
-        int filterGap = 4;
-        int filterLabelW = 0; // Remove "Filter:" label
-        int filtersX = contentX + filterLabelW;
-        int filtersY = topBarY;
-        int btnH = 20;
-
-        // this.addRenderableWidget(new TextLabelWidget(contentX, filtersY + (btnH - 8) / 2, Component.translatable("gui.todolist.label.filter"), 0xFFFFFF));
-
-        int availableBeforeConfig = contentWidth - filterLabelW;
-        int minBtnW = 70;
-        int maxBtnW = 140;
-        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.font.width(getViewToggleText()) + 16));
-        int priorityBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getPriorityFilterText()) + 16));
-        int statusBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getStatusFilterText()) + 16));
-        int totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        int maxW = Math.max(0, availableBeforeConfig - filterGap);
-        int guard = 0;
-        while (totalW > maxW && guard++ < 200) {
-            if (viewBtnWidth >= priorityBtnWidth && viewBtnWidth >= statusBtnWidth && viewBtnWidth > minBtnW) {
-                viewBtnWidth -= 4;
-            } else if (priorityBtnWidth >= statusBtnWidth && priorityBtnWidth > minBtnW) {
-                priorityBtnWidth -= 4;
-            } else if (statusBtnWidth > minBtnW) {
-                statusBtnWidth -= 4;
-            } else {
-                break;
-            }
-            totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        }
-
-        viewToggleButton = Button.builder(getViewToggleText(), b -> {
-            if (viewMode == ViewMode.PERSONAL) {
-                return;
-            }
-            if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-                switchView(ViewMode.TEAM_ALL);
-            } else if (viewMode == ViewMode.TEAM_ALL) {
-                switchView(ViewMode.TEAM_ASSIGNED);
-            } else {
-                switchView(ViewMode.TEAM_UNASSIGNED);
-            }
-        }).bounds(filtersX, filtersY, viewBtnWidth, btnH).build();
-        viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-        this.addRenderableWidget(viewToggleButton);
-
-        int priorityBtnX = filtersX + viewBtnWidth + filterGap;
-        filterPriorityButton = Button.builder(getPriorityFilterText(), button -> {
-            currentPriorityFilter = (currentPriorityFilter + 1) % 4;
-            button.setMessage(getPriorityFilterText());
-            applyPriorityFilter();
-        }).bounds(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
-        this.addRenderableWidget(filterPriorityButton);
-
-        int statusBtnX = priorityBtnX + priorityBtnWidth + filterGap;
-        filterStatusButton = Button.builder(getStatusFilterText(), button -> {
-            filterTasks("completed".equals(currentFilter) ? "active" : "completed");
-        }).bounds(statusBtnX, filtersY, statusBtnWidth, btnH).build();
-        this.addRenderableWidget(filterStatusButton);
-        
-        // 9. Search Field
-        int searchY = secondRowY;
-        
-        // Search Label & Field
-        int searchLabelWidth = 0; // Remove "Search:" label
-        int searchFieldX = contentX + searchLabelWidth;
-        int searchFieldWidth = Math.max(120, contentWidth - searchLabelWidth);
-        
-        searchField = new EditBox(this.font, searchFieldX, searchY, searchFieldWidth, 20, Component.empty());
-        searchField.setHint(Component.translatable("gui.todolist.input.search.placeholder"));
-        searchField.setValue(searchQuery);
-        this.addRenderableWidget(searchField);
+        applyResponsiveWidgetVisibility();
 
         // Listeners
         titleField.setResponder(text -> {
@@ -1195,6 +1354,301 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         updateButtonStates();
     }
 
+    /**
+     * 根据窗口宽高解析当前主界面的响应式档位。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param screenHeight 当前屏幕高度
+     * @return 解析后的响应式档位
+     */
+    private ResponsiveTier resolveResponsiveTier(int screenWidth, int screenHeight) {
+        ResponsiveTier widthTier = resolveWidthTier(screenWidth);
+        ResponsiveTier heightTier = resolveHeightTier(screenHeight);
+        return widthTier.ordinal() >= heightTier.ordinal() ? widthTier : heightTier;
+    }
+
+    /**
+     * 按宽度解析响应式档位。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @return 宽度对应的档位
+     */
+    private ResponsiveTier resolveWidthTier(int screenWidth) {
+        if (screenWidth >= 460) {
+            return ResponsiveTier.LARGE;
+        }
+        if (screenWidth >= 380) {
+            return ResponsiveTier.MEDIUM;
+        }
+        if (screenWidth >= 320) {
+            return ResponsiveTier.COMPACT;
+        }
+        return ResponsiveTier.MINIMAL;
+    }
+
+    /**
+     * 按高度解析响应式档位。
+     *
+     * @param screenHeight 当前屏幕高度
+     * @return 高度对应的档位
+     */
+    private ResponsiveTier resolveHeightTier(int screenHeight) {
+        if (screenHeight >= 280) {
+            return ResponsiveTier.LARGE;
+        }
+        if (screenHeight >= 240) {
+            return ResponsiveTier.MEDIUM;
+        }
+        if (screenHeight >= 200) {
+            return ResponsiveTier.COMPACT;
+        }
+        return ResponsiveTier.MINIMAL;
+    }
+
+    /**
+     * 根据当前档位同步覆盖层展开状态，保证小窗口布局不会挤出屏幕。
+     */
+    private void syncOverlayStateForResponsiveTier() {
+        if (responsiveTier != ResponsiveTier.MINIMAL) {
+            sidebarOverlayVisible = false;
+        }
+        if (responsiveTier == ResponsiveTier.LARGE || responsiveTier == ResponsiveTier.MEDIUM) {
+            detailOverlayVisible = false;
+        } else if (selectedTask == null) {
+            detailOverlayVisible = false;
+        } else {
+            detailOverlayVisible = true;
+        }
+    }
+
+    /**
+     * 计算当前主界面的三栏布局边界。
+     *
+     * @param config 当前配置对象
+     * @return 主界面布局快照
+     */
+    private MainLayoutMetrics buildMainLayoutMetrics(ModConfig config) {
+        int padding = resolveLayoutPadding(config);
+        int gap = responsiveTier == ResponsiveTier.LARGE ? 10 : 8;
+        int panelTop = Math.max(24, padding + 16);
+        int bottomBarHeight = 20;
+        int inputRowHeight = 20;
+        int topBarGap = clampInt(config.getElementSpacing(), 4, 12);
+        int bottomBarY = this.height - padding - bottomBarHeight;
+        int inputRowY = bottomBarY - topBarGap - inputRowHeight;
+        int panelBottom = inputRowY + inputRowHeight;
+        int panelHeight = Math.max(0, panelBottom - panelTop);
+
+        boolean sidebarOverlay = responsiveTier == ResponsiveTier.MINIMAL;
+        boolean detailOverlay = responsiveTier == ResponsiveTier.COMPACT || responsiveTier == ResponsiveTier.MINIMAL;
+        boolean sidebarVisible = !sidebarOverlay || sidebarOverlayVisible;
+        boolean detailVisible = !detailOverlay || (selectedTask != null && detailOverlayVisible);
+
+        int availableWidth = Math.max(120, this.width - padding * 2);
+        int minContentWidth = switch (responsiveTier) {
+            case LARGE -> Math.min(180, Math.max(160, availableWidth));
+            case MEDIUM -> Math.min(140, Math.max(132, availableWidth));
+            case COMPACT -> Math.min(160, Math.max(136, availableWidth));
+            case MINIMAL -> Math.min(150, Math.max(120, availableWidth));
+        };
+        int sidebarWidth = resolveSidebarWidth(config, availableWidth);
+        int detailWidth = resolveDetailWidth(availableWidth);
+
+        if (!detailOverlay && !sidebarOverlay) {
+            int inlineAvailable = availableWidth - gap * 2;
+            int desiredTotal = sidebarWidth + detailWidth + minContentWidth;
+            if (desiredTotal > inlineAvailable) {
+                int overflow = desiredTotal - inlineAvailable;
+                int detailShrink = Math.min(overflow, Math.max(0, detailWidth - 120));
+                detailWidth -= detailShrink;
+                overflow -= detailShrink;
+                if (overflow > 0) {
+                    int sidebarShrink = Math.min(overflow, Math.max(0, sidebarWidth - 96));
+                    sidebarWidth -= sidebarShrink;
+                }
+            }
+        }
+
+        int inlineSidebarWidth = sidebarOverlay ? 0 : sidebarWidth;
+        int inlineDetailWidth = detailOverlay ? 0 : detailWidth;
+        int contentWidth = availableWidth - inlineSidebarWidth - inlineDetailWidth;
+        if (!sidebarOverlay) {
+            contentWidth -= gap;
+        }
+        if (!detailOverlay) {
+            contentWidth -= gap;
+        }
+        contentWidth = Math.max(Math.min(minContentWidth, availableWidth), contentWidth);
+
+        int contentX = padding + (sidebarOverlay ? 0 : sidebarWidth + gap);
+        LayoutRect sidebarBounds = new LayoutRect(padding, panelTop, Math.min(sidebarWidth, availableWidth), panelHeight);
+        LayoutRect contentBounds = new LayoutRect(contentX, panelTop, Math.min(contentWidth, availableWidth), panelHeight);
+
+        int detailX = detailOverlay
+                ? Math.max(padding, this.width - padding - detailWidth)
+                : contentBounds.x + contentBounds.width + gap;
+        LayoutRect detailBounds = new LayoutRect(detailX, panelTop, Math.min(detailWidth, availableWidth), panelHeight);
+
+        return new MainLayoutMetrics(
+                responsiveTier,
+                sidebarBounds,
+                contentBounds,
+                detailBounds,
+                sidebarOverlay,
+                detailOverlay,
+                sidebarVisible,
+                detailVisible,
+                padding,
+                gap
+        );
+    }
+
+    /**
+     * 计算当前档位下的外层边距。
+     *
+     * @param config 当前配置对象
+     * @return 经过断点修正的边距
+     */
+    private int resolveLayoutPadding(ModConfig config) {
+        int basePadding = clampInt(config.getPadding(), 6, 20);
+        return switch (responsiveTier) {
+            case LARGE -> Math.max(10, basePadding);
+            case MEDIUM -> Math.max(8, Math.min(basePadding, 12));
+            case COMPACT -> Math.max(6, Math.min(basePadding, 10));
+            case MINIMAL -> Math.max(4, Math.min(basePadding, 8));
+        };
+    }
+
+    /**
+     * 计算当前档位下的项目侧栏宽度。
+     *
+     * @param config 当前配置对象
+     * @param availableWidth 可用宽度
+     * @return 适配后的侧栏宽度
+     */
+    private int resolveSidebarWidth(ModConfig config, int availableWidth) {
+        return switch (responsiveTier) {
+            case LARGE -> clampInt(config.getProjectSidebarWidth(), 112, Math.min(156, Math.max(112, availableWidth / 3)));
+            case MEDIUM -> clampInt(config.getProjectSidebarWidth(), 104, Math.min(136, Math.max(104, availableWidth / 3)));
+            case COMPACT -> clampInt(config.getProjectSidebarWidth(), 96, Math.min(124, Math.max(96, availableWidth / 3)));
+            case MINIMAL -> clampInt(Math.max(132, availableWidth - 84), 132, Math.max(132, Math.min(200, availableWidth - 8)));
+        };
+    }
+
+    /**
+     * 计算当前档位下的详情区宽度。
+     *
+     * @param availableWidth 可用宽度
+     * @return 适配后的详情区宽度
+     */
+    private int resolveDetailWidth(int availableWidth) {
+        return switch (responsiveTier) {
+            case LARGE -> clampInt(150, 132, Math.max(132, Math.min(180, availableWidth / 2)));
+            case MEDIUM -> clampInt(132, 120, Math.max(120, Math.min(156, availableWidth / 2)));
+            case COMPACT -> clampInt(Math.max(148, availableWidth / 2), 148, Math.max(148, Math.min(180, availableWidth - 24)));
+            case MINIMAL -> clampInt(Math.max(156, availableWidth - 72), 156, Math.max(156, availableWidth - 8));
+        };
+    }
+
+    /**
+     * 根据当前布局快照更新覆盖层可见性和相关控件状态。
+     */
+    private void applyResponsiveWidgetVisibility() {
+        if (layoutMetrics == null) {
+            return;
+        }
+        boolean sidebarVisible = layoutMetrics.sidebarVisible;
+        boolean detailVisible = layoutMetrics.detailVisible;
+
+        if (projectScopeButton != null) {
+            projectScopeButton.visible = sidebarVisible;
+            projectScopeButton.active = sidebarVisible && teamProjectsEnabled;
+        }
+        if (projectSearchField != null) {
+            projectSearchField.visible = sidebarVisible;
+            projectSearchField.active = sidebarVisible;
+        }
+        if (addProjectBtn != null) {
+            addProjectBtn.visible = sidebarVisible;
+            addProjectBtn.active = sidebarVisible;
+        }
+        if (editProjectBtn != null) {
+            editProjectBtn.visible = sidebarVisible;
+            if (!sidebarVisible) {
+                editProjectBtn.active = false;
+            }
+        }
+        if (deleteProjectBtn != null) {
+            if (!sidebarVisible) {
+                deleteProjectBtn.visible = false;
+                deleteProjectBtn.active = false;
+            }
+        }
+        if (applyJoinProjectBtn != null) {
+            if (!sidebarVisible) {
+                applyJoinProjectBtn.visible = false;
+                applyJoinProjectBtn.active = false;
+            }
+        }
+
+        if (descField != null) {
+            descField.visible = detailVisible;
+            descField.active = detailVisible && descField.active;
+        }
+        if (tagField != null) {
+            tagField.visible = detailVisible;
+            tagField.active = detailVisible;
+        }
+        if (claimButton != null) {
+            claimButton.visible = detailVisible && claimButton.visible;
+            claimButton.active = detailVisible && claimButton.active;
+        }
+        if (abandonButton != null) {
+            abandonButton.visible = detailVisible && abandonButton.visible;
+            abandonButton.active = detailVisible && abandonButton.active;
+        }
+        if (assignOthersButton != null) {
+            assignOthersButton.visible = detailVisible && assignOthersButton.visible;
+            assignOthersButton.active = detailVisible && assignOthersButton.active;
+        }
+        if (sidebarToggleButton != null) {
+            sidebarToggleButton.visible = layoutMetrics.sidebarOverlay;
+            sidebarToggleButton.active = layoutMetrics.sidebarOverlay;
+        }
+    }
+
+    /**
+     * 切换极小窗口下的项目侧栏覆盖层。
+     */
+    private void toggleSidebarOverlay() {
+        if (responsiveTier != ResponsiveTier.MINIMAL) {
+            return;
+        }
+        sidebarOverlayVisible = !sidebarOverlayVisible;
+        layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
+        updateProjectActionButtons();
+        updateButtonStates();
+        applyResponsiveWidgetVisibility();
+    }
+
+    /**
+     * 返回项目侧栏当前是否可见。
+     *
+     * @return true 表示项目侧栏可见
+     */
+    private boolean isSidebarPanelVisible() {
+        return layoutMetrics != null && layoutMetrics.sidebarVisible;
+    }
+
+    /**
+     * 返回详情区当前是否可见。
+     *
+     * @return true 表示详情区可见
+     */
+    private boolean isDetailPanelVisible() {
+        return layoutMetrics != null && layoutMetrics.detailVisible;
+    }
+
     private void toggleTaskCompletion(Task task) {
         if (!canToggleCompletion(task)) {
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
@@ -1212,8 +1666,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         Component title = hasUnsavedChanges ? Component.translatable("gui.todolist.title.unsaved") : TITLE;
         context.drawString(this.font, title, (this.width - this.font.width(title)) / 2, 10, 0xFFFFFFFF, false);
 
+        renderLayoutPanels(context);
         if (taskListWidget != null) taskListWidget.render(context, mouseX, mouseY, delta);
-        if (projectListWidget != null) projectListWidget.render(context, mouseX, mouseY, delta);
+        if (projectListWidget != null && isSidebarPanelVisible()) {
+            projectListWidget.render(context, mouseX, mouseY, delta);
+        }
 
         super.render(context, mouseX, mouseY, delta);
 
@@ -1227,11 +1684,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             context.drawString(this.font, Component.translatable("gui.todolist.label.title"), labelX, ty, color, false);
         }
         */
-        if (descField != null) {
+        if (descField != null && descField.visible) {
             int dy = descField.getY() - textH - 2;
             context.drawString(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
         }
-        if (tagField != null) {
+        if (tagField != null && tagField.visible) {
             int zy = tagField.getY() - textH - 2;
             context.drawString(this.font, Component.translatable("gui.todolist.label.tags"), tagField.getX(), zy, color, false);
         }
@@ -1244,6 +1701,41 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         */
         renderTaskContextMenu(context, mouseX, mouseY);
         renderNotifications(context);
+    }
+
+    /**
+     * 绘制主界面的面板背景，帮助覆盖式侧栏和详情区与主内容区分层显示。
+     *
+     * @param context 当前绘制上下文
+     */
+    private void renderLayoutPanels(GuiGraphics context) {
+        if (layoutMetrics == null) {
+            return;
+        }
+        renderPanelBackground(context, layoutMetrics.contentBounds, false);
+        if (isSidebarPanelVisible()) {
+            renderPanelBackground(context, layoutMetrics.sidebarBounds, layoutMetrics.sidebarOverlay);
+        }
+        if (isDetailPanelVisible()) {
+            renderPanelBackground(context, layoutMetrics.detailBounds, layoutMetrics.detailOverlay);
+        }
+    }
+
+    /**
+     * 绘制单个面板背景和描边。
+     *
+     * @param context 当前绘制上下文
+     * @param bounds 面板边界
+     * @param overlay 当前面板是否为覆盖式
+     */
+    private void renderPanelBackground(GuiGraphics context, LayoutRect bounds, boolean overlay) {
+        if (bounds == null || bounds.width <= 0 || bounds.height <= 0) {
+            return;
+        }
+        int fillColor = overlay ? 0xD91A1A1A : 0x8C111111;
+        int outlineColor = overlay ? 0xCCB8B8B8 : 0x66888888;
+        context.fill(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, fillColor);
+        context.renderOutline(bounds.x, bounds.y, bounds.width, bounds.height, outlineColor);
     }
 
     private void renderNotifications(GuiGraphics context) {
@@ -1385,11 +1877,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private boolean isClickInEditArea(double mouseX, double mouseY) {
         if (titleField != null && titleField.isMouseOver(mouseX, mouseY)) return true;
-        if (descField != null && descField.isMouseOver(mouseX, mouseY)) return true;
-        if (tagField != null && tagField.isMouseOver(mouseX, mouseY)) return true;
-        if (claimButton != null && claimButton.isMouseOver(mouseX, mouseY)) return true;
-        if (abandonButton != null && abandonButton.isMouseOver(mouseX, mouseY)) return true;
-        if (assignOthersButton != null && assignOthersButton.isMouseOver(mouseX, mouseY)) return true;
+        if (descField != null && descField.visible && descField.isMouseOver(mouseX, mouseY)) return true;
+        if (tagField != null && tagField.visible && tagField.isMouseOver(mouseX, mouseY)) return true;
+        if (claimButton != null && claimButton.visible && claimButton.isMouseOver(mouseX, mouseY)) return true;
+        if (abandonButton != null && abandonButton.visible && abandonButton.isMouseOver(mouseX, mouseY)) return true;
+        if (assignOthersButton != null && assignOthersButton.visible && assignOthersButton.isMouseOver(mouseX, mouseY)) return true;
         if (isInsideContextMenu(mouseX, mouseY)) return true;
         return false;
     }
@@ -1399,11 +1891,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (handleContextMenuClick(mouseX, mouseY, button)) {
             return true;
         }
+        if (button == 0 && layoutMetrics != null && layoutMetrics.sidebarOverlay && layoutMetrics.sidebarVisible
+                && !layoutMetrics.sidebarBounds.contains(mouseX, mouseY)
+                && (sidebarToggleButton == null || !sidebarToggleButton.isMouseOver(mouseX, mouseY))) {
+            sidebarOverlayVisible = false;
+            layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
+            applyResponsiveWidgetVisibility();
+        }
         if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
             closeTaskContextMenu();
             return true;
         }
-        if (projectListWidget != null && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+        if (projectListWidget != null && isSidebarPanelVisible() && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
             closeTaskContextMenu();
             return true;
         }
@@ -1440,7 +1939,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskListWidget != null) {
             handled = taskListWidget.mouseScrolled(mouseX, mouseY, 0, amount);
         }
-        if (!handled && projectListWidget != null) {
+        if (!handled && projectListWidget != null && isSidebarPanelVisible()) {
             handled = projectListWidget.mouseScrolled(mouseX, mouseY, amount);
         }
         if (!handled) {
@@ -1562,9 +2061,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (selectedTask != null) {
             String id = selectedTask.getId();
             taskManager.deleteTask(id);
-            selectedTask = null;
+            clearSelectedTask();
             closeTaskContextMenu();
-            updateButtonStates();
             markUnsaved();
             refreshTaskList();
         }
@@ -1572,6 +2070,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void selectTask(Task task) {
         selectedTask = task;
+        if (layoutMetrics != null && layoutMetrics.detailOverlay) {
+            detailOverlayVisible = true;
+            layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
+        }
         selectedPriority = task.getPriority();
         titleField.setValue(task.getTitle());
         descField.setValue(task.getDescription());
@@ -1586,6 +2088,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         taskListWidget.setSelectedTask(task);
         updateButtonStates();
+        applyResponsiveWidgetVisibility();
         boolean editable = canEditTask(task);
         titleField.setEditable(editable);
         descField.active = editable;
@@ -1594,6 +2097,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void clearSelectedTask() {
         selectedTask = null;
+        if (layoutMetrics != null && layoutMetrics.detailOverlay) {
+            detailOverlayVisible = false;
+            layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
+        }
         if (taskListWidget != null) {
             taskListWidget.clearSelection();
         }
@@ -1610,6 +2117,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             tagField.setEditable(true);
         }
         updateButtonStates();
+        applyResponsiveWidgetVisibility();
     }
 
     private boolean isSelectedTaskValid() {
@@ -1657,26 +2165,28 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
         Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate);
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
+        boolean detailVisible = isDetailPanelVisible() || (layoutMetrics == null || !layoutMetrics.detailOverlay);
         if (claimButton != null) {
-            claimButton.visible = showAssignButtons;
+            claimButton.visible = detailVisible && showAssignButtons;
             boolean canClaim = hasSelection
                     && PermissionCenter.canPerform(Operation.CLAIM_TASK, role, context);
-            claimButton.active = showAssignButtons && canClaim;
+            claimButton.active = detailVisible && showAssignButtons && canClaim;
         }
         if (abandonButton != null) {
-            abandonButton.visible = showAssignButtons;
+            abandonButton.visible = detailVisible && showAssignButtons;
             boolean canAbandon = hasSelection
                     && PermissionCenter.canPerform(Operation.ABANDON_TASK, role, context);
-            abandonButton.active = showAssignButtons && canAbandon;
+            abandonButton.active = detailVisible && showAssignButtons && canAbandon;
         }
         if (assignOthersButton != null) {
             boolean showAssignOthers = showAssignButtons
                     && PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, context);
-            assignOthersButton.visible = showAssignOthers;
-            boolean canAssignOthers = showAssignOthers && hasSelection;
+            assignOthersButton.visible = detailVisible && showAssignOthers;
+            boolean canAssignOthers = detailVisible && showAssignOthers && hasSelection;
             assignOthersButton.active = canAssignOthers;
         }
         rebuildContextMenuIfNeeded();
+        applyResponsiveWidgetVisibility();
     }
 
     private void setSelectedPriority(Task.Priority priority) {
@@ -1745,11 +2255,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         taskManager.deleteTask(task.getId());
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(task.getId())) {
-            selectedTask = null;
+            clearSelectedTask();
         }
         markUnsaved();
         refreshTaskList();
-        updateButtonStates();
         closeTaskContextMenu();
     }
 
@@ -2554,7 +3063,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private void switchView(ViewMode mode) {
         this.viewMode = mode;
         syncViewStateForCurrentProject();
-        this.selectedTask = null;
+        clearSelectedTask();
         ModConfig config = ModConfig.getInstance();
         if (this.viewMode == ViewMode.PERSONAL) {
             config.setHudDefaultView("PERSONAL");
@@ -2598,6 +3107,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             savedProjectListScrollOffset = projectListWidget.getScrollOffset();
         }
         this.selectedTask = null;
+        this.detailOverlayVisible = false;
+        this.sidebarOverlayVisible = false;
         this.currentProject = project;
         rememberSelectedProject(project);
 

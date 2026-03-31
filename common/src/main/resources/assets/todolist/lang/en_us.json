@@ -60,6 +60,7 @@
   "gui.todolist.project.default.team": "Team Project",
   "gui.todolist.project.toggle.personal": "Personal Projects",
   "gui.todolist.project.toggle.team": "Team Projects",
+  "gui.todolist.project.sidebar": "Projects",
   "gui.todolist.project.view": "View",
   "gui.todolist.project.allow_member_create": "Members can create tasks: %s",
   "gui.todolist.config.sort_by_priority": "Sort by Priority:",

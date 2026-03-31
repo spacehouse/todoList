@@ -60,6 +60,7 @@
   "gui.todolist.project.default.team": "团队项目",
   "gui.todolist.project.toggle.personal": "个人项目",
   "gui.todolist.project.toggle.team": "团队项目",
+  "gui.todolist.project.sidebar": "项目",
   "gui.todolist.project.view": "查看",
   "gui.todolist.project.allow_member_create": "成员可创建任务: %s",
   "gui.todolist.config.sort_by_priority": "按优先级排序:",
