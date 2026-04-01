@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * TodoHudRenderer 离线自测入口：覆盖 HUD 视图回退、任务筛选、缓存清理与面板高度语义。
+ * TodoHudRenderer 离线自测入口：覆盖 HUD 视图回退、任务筛选、视觉元数据与高度语义。
  */
 public final class TodoHudRendererTestMain {
     private static final UUID OWNER_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
@@ -33,12 +33,16 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterUnassignedTasksInTeamUnassignedView", TodoHudRendererTestMain::shouldFilterUnassignedTasksInTeamUnassignedView);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterAssignedTasksFromCurrentTeamProject", TodoHudRendererTestMain::shouldFilterAssignedTasksFromCurrentTeamProject);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterStarredProjectsInTeamAllView", TodoHudRendererTestMain::shouldFilterStarredProjectsInTeamAllView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRenderPriorityAsColorBlockMetadata", TodoHudRendererTestMain::shouldRenderPriorityAsColorBlockMetadata);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRespectTodoAndDoneLimitsSeparately", TodoHudRendererTestMain::shouldRespectTodoAndDoneLimitsSeparately);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowHiddenCountSummaryWhenCollapsedOrTruncated", TodoHudRendererTestMain::shouldShowHiddenCountSummaryWhenCollapsedOrTruncated);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldReserveRowForHiddenCountWhenHeightIsTight", TodoHudRendererTestMain::shouldReserveRowForHiddenCountWhenHeightIsTight);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldClearCachesWhenForceRefreshing", TodoHudRendererTestMain::shouldClearCachesWhenForceRefreshing);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldChangePanelHeightWhenTogglingExpanded", TodoHudRendererTestMain::shouldChangePanelHeightWhenTogglingExpanded);
     }
 
     /**
-     * 校验团队项目能力关闭时，HUD 团队视图会回退为个人视图。
+     * 验证团队项目能力关闭时，HUD 团队视图会回退为个人视图。
      */
     private static void shouldFallbackToPersonalViewWhenTeamProjectsDisabled() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -53,7 +57,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 校验 TEAM_UNASSIGNED 视图会只保留未指派的团队任务。
+     * 验证 TEAM_UNASSIGNED 视图只保留未指派的团队任务。
      */
     private static void shouldFilterUnassignedTasksInTeamUnassignedView() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -76,7 +80,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 校验 TEAM_ASSIGNED + CURRENT 组合会只保留当前团队项目中分配给自己的任务。
+     * 验证 TEAM_ASSIGNED + CURRENT 组合只保留当前团队项目中分配给自己的任务。
      */
     private static void shouldFilterAssignedTasksFromCurrentTeamProject() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -103,7 +107,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 校验 TEAM_ALL + STARRED 组合会只保留加星团队项目中的已分派任务。
+     * 验证 TEAM_ALL + STARRED 组合只保留加星团队项目中的已分派任务。
      */
     private static void shouldFilterStarredProjectsInTeamAllView() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -129,7 +133,121 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 校验强制刷新会立即清空当前缓存任务与任务行渲染缓存。
+     * 验证 HUD 任务行会暴露色块优先级元数据，而不是依赖优先级文本图标。
+     */
+    private static void shouldRenderPriorityAsColorBlockMetadata() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-priority", "HUD Priority");
+        Task task = createTeamTask("Priority Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        task.addTag("Alpha");
+        ops.getTeamTaskManager().addTask(task);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(Task.Priority.HIGH.getColor(), renderer.getPriorityBlockColorForTest(task.getId()), "HUD 优先级应改为与主界面一致的色块颜色");
+        GuiTestSupport.assertEquals("", renderer.getPriorityTextForTest(task.getId()), "HUD 任务行不应再依赖优先级文本图标");
+        GuiTestSupport.assertTrue(renderer.getRowTitleOffsetForTest(task.getId()) > 8, "HUD 标题应位于优先级色块和前置标签之后");
+    }
+
+    /**
+     * 验证待办数与已办数上限会分别生效，不互相挤占配额。
+     */
+    private static void shouldRespectTodoAndDoneLimitsSeparately() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+        config.setHudTodoLimit(1);
+        config.setHudDoneLimit(2);
+        config.setHudMaxHeight(400);
+
+        Project project = createTeamProject("hud-limits", "HUD Limits");
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, true));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, true));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done C", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true));
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(1, renderer.getShownPendingCountForTest(), "待办上限应独立控制未完成任务显示数量");
+        GuiTestSupport.assertEquals(2, renderer.getShownDoneCountForTest(), "已办上限应独立控制已完成任务显示数量");
+        GuiTestSupport.assertEquals(2, renderer.getHiddenCountForTest(), "超出待办和已办上限的任务应统一计入隐藏数量");
+    }
+
+    /**
+     * 验证折叠态摘要和截断态隐藏计数文本语义稳定。
+     */
+    private static void shouldShowHiddenCountSummaryWhenCollapsedOrTruncated() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+        config.setHudTodoLimit(1);
+        config.setHudDoneLimit(1);
+        config.setHudMaxHeight(400);
+        config.setHudDefaultExpanded(true);
+
+        Project project = createTeamProject("hud-summary", "HUD Summary");
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true));
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertTrue(renderer.getHiddenCountTextForTest().contains("2"), "展开态被截断时应显示隐藏任务计数");
+
+        renderer.toggleExpanded();
+
+        GuiTestSupport.assertTrue(renderer.getCollapsedSummaryTextForTest().contains("2"), "折叠态应显示待办与已办摘要");
+    }
+
+    /**
+     * 验证内容区高度紧张时，HUD 仍会预留一行显示隐藏任务计数。
+     */
+    private static void shouldReserveRowForHiddenCountWhenHeightIsTight() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+        config.setHudTodoLimit(9);
+        config.setHudDoneLimit(0);
+        config.setHudMaxHeight(120);
+        config.setHudDefaultExpanded(true);
+
+        Project project = createTeamProject("hud-tight-height", "HUD Tight Height");
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending C", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending D", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending E", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending F", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending G", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending H", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Pending I", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false));
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(7, renderer.getShownPendingCountForTest(), "最小 HUD 高度下应预留一行给隐藏计数，而不是把全部可用行都挤给任务");
+        GuiTestSupport.assertEquals(2, renderer.getHiddenCountForTest(), "被预留行挤出的任务也应计入隐藏数量");
+        GuiTestSupport.assertTrue(renderer.getHiddenCountTextForTest().contains("2"), "高度不足时仍应显示隐藏任务计数");
+    }
+
+    /**
+     * 验证强制刷新会立即清空当前缓存任务与任务行渲染缓存。
      */
     private static void shouldClearCachesWhenForceRefreshing() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -156,7 +274,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 校验 HUD 折叠与展开状态会影响当前面板高度计算结果。
+     * 验证 HUD 折叠与展开状态会影响当前面板高度计算结果。
      */
     private static void shouldChangePanelHeightWhenTogglingExpanded() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -189,7 +307,7 @@ public final class TodoHudRendererTestMain {
     /**
      * 创建带默认窗口参数的假客户端，供 HUD 自测复用。
      *
-     * @return 具备 HUD 测试支撑的假客户端
+     * @return 具备 HUD 测试支持的假客户端
      */
     private static FakeMinecraftClient createMinecraft() {
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -213,7 +331,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 创建一条带项目与指派信息的团队任务，减少重复样板代码。
+     * 创建一条带项目与指派信息的团队任务。
      *
      * @param title 任务标题
      * @param projectId 所属项目 ID
