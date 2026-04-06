@@ -33,6 +33,11 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded", TaskListWidgetTestMain::shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepScrollOffsetInsideScrollableTaskArea", TaskListWidgetTestMain::shouldKeepScrollOffsetInsideScrollableTaskArea);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedRowsSeparatedFromActiveRows", TaskListWidgetTestMain::shouldKeepCompletedRowsSeparatedFromActiveRows);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldStartDraggingOnlyForActiveTasks", TaskListWidgetTestMain::shouldStartDraggingOnlyForActiveTasks);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldUpdateDropTargetWhileDragging", TaskListWidgetTestMain::shouldUpdateDropTargetWhileDragging);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlyCurrentVisibleActiveTasks", TaskListWidgetTestMain::shouldReorderOnlyCurrentVisibleActiveTasks);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedSectionUnchangedAfterReorder", TaskListWidgetTestMain::shouldKeepCompletedSectionUnchangedAfterReorder);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldAutoScrollWhenDraggingNearListEdge", TaskListWidgetTestMain::shouldAutoScrollWhenDraggingNearListEdge);
     }
 
     /**
@@ -211,6 +216,150 @@ public final class TaskListWidgetTestMain {
                 widget.getRowDebugSnapshotForTest(),
                 "已完成分组应始终位于未完成分组之后，且不能与未完成任务混排"
         );
+    }
+
+    /**
+     * 创建测试任务对象，减少重复样板代码。
+     *
+     * @param id 任务 ID
+     * @param title 任务标题
+     * @return 测试任务对象
+     */
+    /**
+     * 校验仅未完成任务允许进入拖拽态，已完成任务不能作为拖拽起点。
+     */
+    private static void shouldStartDraggingOnlyForActiveTasks() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task active = createTask("task-active", "Active");
+        Task done = createTask("task-done", "Done");
+        done.setCompleted(true);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成", List.of(active), false, true),
+                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+        ));
+        widget.setOnTaskReorder(tasks -> {
+        });
+
+        int interactX = widget.getInteractXForTest();
+        int activeY = widget.getTaskRowCenterYForTest(active.getId());
+        widget.mouseClicked(interactX, activeY, 0);
+        widget.mouseDragged(interactX, activeY + widget.getTaskItemHeightForTest(), 0, 0, widget.getTaskItemHeightForTest());
+        GuiTestSupport.assertTrue(widget.isTaskDraggingForTest(), "未完成任务应允许进入拖拽态");
+        widget.mouseReleased(interactX, activeY + widget.getTaskItemHeightForTest(), 0);
+
+        int doneY = widget.getTaskRowCenterYForTest(done.getId());
+        widget.mouseClicked(interactX, doneY, 0);
+        widget.mouseDragged(interactX, doneY - widget.getTaskItemHeightForTest(), 0, 0, -widget.getTaskItemHeightForTest());
+        GuiTestSupport.assertFalse(widget.isTaskDraggingForTest(), "已完成任务不应允许进入拖拽态");
+    }
+
+    /**
+     * 校验拖拽过程中会持续更新当前落点索引。
+     */
+    private static void shouldUpdateDropTargetWhileDragging() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task alpha = createTask("task-alpha", "Alpha");
+        Task beta = createTask("task-beta", "Beta");
+        Task gamma = createTask("task-gamma", "Gamma");
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, beta, gamma), false, true)));
+        widget.setOnTaskReorder(tasks -> {
+        });
+
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(alpha.getId());
+        int targetY = widget.getTaskRowCenterYForTest(gamma.getId()) + widget.getTaskItemHeightForTest() / 2;
+
+        widget.mouseClicked(interactX, startY, 0);
+        widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+
+        GuiTestSupport.assertTrue(widget.isTaskDraggingForTest(), "拖拽移动超过阈值后应进入拖拽态");
+        GuiTestSupport.assertEquals(3, widget.getDropTargetIndexForTest(), "拖拽到列表底部时应更新为末尾落点索引");
+    }
+
+    /**
+     * 校验拖拽释放后仅对当前可见未完成任务列表输出重排结果。
+     */
+    private static void shouldReorderOnlyCurrentVisibleActiveTasks() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task alpha = createTask("task-alpha", "Alpha");
+        Task gamma = createTask("task-gamma", "Gamma");
+        AtomicReference<List<String>> reorderedIds = new AtomicReference<>(List.of());
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, gamma), false, true)));
+        widget.setOnTaskReorder(tasks -> reorderedIds.set(tasks.stream().map(Task::getId).toList()));
+
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(gamma.getId());
+        int targetY = widget.getTaskRowCenterYForTest(alpha.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        widget.mouseClicked(interactX, startY, 0);
+        widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        widget.mouseReleased(interactX, targetY, 0);
+
+        GuiTestSupport.assertEquals(List.of("task-gamma", "task-alpha"), reorderedIds.get(), "释放拖拽后应输出当前可见未完成任务的新顺序");
+    }
+
+    /**
+     * 校验重排未完成分组时不会破坏已完成分组的结构和顺序。
+     */
+    private static void shouldKeepCompletedSectionUnchangedAfterReorder() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task alpha = createTask("task-alpha", "Alpha");
+        Task beta = createTask("task-beta", "Beta");
+        Task done = createTask("task-done", "Done");
+        done.setCompleted(true);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, beta), false, true),
+                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+        ));
+        widget.setOnTaskReorder(tasks -> {
+        });
+
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(beta.getId());
+        int targetY = widget.getTaskRowCenterYForTest(alpha.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        widget.mouseClicked(interactX, startY, 0);
+        widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        widget.mouseReleased(interactX, targetY, 0);
+
+        GuiTestSupport.assertEquals(
+                List.of("HEADER:未完成", "TASK:task-beta", "TASK:task-alpha", "HEADER:已完成 1 项", "TASK:task-done"),
+                widget.getRowDebugSnapshotForTest(),
+                "重排未完成分组后应保持已完成分组原样不变"
+        );
+    }
+
+    /**
+     * 校验拖拽靠近列表边缘时会触发自动滚动。
+     */
+    private static void shouldAutoScrollWhenDraggingNearListEdge() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        List<Task> tasks = new ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            tasks.add(createTask("task-" + index, "Task " + index));
+        }
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", tasks, false, true)));
+        widget.setOnTaskReorder(reordered -> {
+        });
+
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(tasks.get(0).getId());
+        int targetY = widget.getHeight() - 1;
+
+        widget.mouseClicked(interactX, startY, 0);
+        widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+
+        GuiTestSupport.assertTrue(widget.getScrollOffsetForTest() > 0, "拖拽靠近底部边缘时应触发自动向下滚动");
     }
 
     /**

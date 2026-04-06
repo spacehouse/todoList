@@ -23,6 +23,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -736,6 +737,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     void toggleSidebarOverlayForTest() {
         toggleSidebarOverlay();
+    }
+
+    /**
+     * 返回当前任务列表组件，供同包测试直接驱动拖拽交互。
+     *
+     * @return 当前任务列表组件
+     */
+    TaskListWidget getTaskListWidgetForTest() {
+        return taskListWidget;
     }
 
     /**
@@ -1472,6 +1482,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskListWidget = new TaskListWidget(this.minecraft, contentX, listTop, contentWidth, listHeight);
         boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
         taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
+        taskListWidget.setTaskReorderEnabled(isTaskReorderAllowedInCurrentView());
         taskListWidget.setSections(buildTaskPaneSections());
         taskListWidget.setOnTaskToggleCompletion(task -> {
             if (task.isCompleted()) {
@@ -1487,6 +1498,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             refreshTaskList();
         });
+        taskListWidget.setOnTaskReorder(this::onManualReorderActiveTasks);
 
         quickAddField = new EditBox(this.font, contentX, inputRowY, contentWidth, inputRowHeight, Component.empty());
         quickAddField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
@@ -2201,9 +2213,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (taskListWidget != null && taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (taskListWidget != null) taskListWidget.mouseReleased(mouseX, mouseY, button);
-        return false;
+        if (taskListWidget != null && taskListWidget.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -2735,6 +2757,56 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
+    /**
+     * 处理当前可见未完成任务的手动重排结果，并同步未保存状态与列表刷新。
+     *
+     * @param reorderedActiveTasks 当前可见未完成任务的新顺序
+     */
+    private void onManualReorderActiveTasks(List<Task> reorderedActiveTasks) {
+        if (!isTaskReorderAllowedInCurrentView() || taskManager == null || reorderedActiveTasks == null || reorderedActiveTasks.size() < 2) {
+            return;
+        }
+        List<String> orderedTaskIds = reorderedActiveTasks.stream()
+                .filter(Objects::nonNull)
+                .map(Task::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (orderedTaskIds.size() < 2) {
+            return;
+        }
+        if (!taskManager.reorderTasks(orderedTaskIds)) {
+            return;
+        }
+        if (selectedTask != null && selectedTask.getId() != null) {
+            Task refreshedSelectedTask = taskManager.getTask(selectedTask.getId());
+            if (refreshedSelectedTask != null) {
+                selectedTask = refreshedSelectedTask;
+            }
+        }
+        markUnsaved();
+        refreshTaskList();
+    }
+
+    /**
+     * 判断当前视图是否允许执行未完成任务的手动排序。
+     *
+     * @return true 表示当前视图允许拖拽排序
+     */
+    private boolean isTaskReorderAllowedInCurrentView() {
+        if (currentProject == null) {
+            return false;
+        }
+        if (viewMode == ViewMode.PERSONAL) {
+            return true;
+        }
+        Role role = getCurrentRole();
+        ViewScope scope = getCurrentViewScope();
+        boolean projectMember = isCurrentPlayerProjectMember();
+        boolean allowMemberCreate = currentProject.isAllowMemberCreate();
+        return PermissionCenter.canPerform(Operation.EDIT_TASK, role,
+                new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate));
+    }
+
     public static boolean hasPersonalUnsavedChanges() {
         return personalHasUnsavedChanges;
     }
@@ -3257,6 +3329,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             filteredTasks = result;
         }
         if (taskListWidget != null) {
+            taskListWidget.setTaskReorderEnabled(isTaskReorderAllowedInCurrentView());
             taskListWidget.setSections(buildTaskPaneSections());
         }
     }

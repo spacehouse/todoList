@@ -196,7 +196,16 @@ public class TaskListWidget implements Renderable {
     private String selectedTaskId;
     private int taskItemHeight;
     private boolean teamAllViewForNonOp;
+    private boolean taskReorderEnabled = true;
     private Consumer<Task> onTaskToggleCompletion;
+    private Consumer<List<Task>> onTaskReorder;
+    private Task pendingDragTask;
+    private String pendingDragSectionId;
+    private double pendingDragStartX;
+    private double pendingDragStartY;
+    private Task draggedTask;
+    private String draggedTaskSectionId;
+    private int dragTargetIndex = -1;
 
     /**
      * 创建任务列表组件。
@@ -226,6 +235,8 @@ public class TaskListWidget implements Renderable {
      */
     public void setTasks(List<Task> tasks) {
         int previousScroll = this.scrollBar.getValue();
+        clearPendingTaskDrag();
+        clearTaskDragState();
         this.tasks = tasks == null ? new ArrayList<>() : new ArrayList<>(tasks);
         this.sections = List.of(new SectionModel("default", "", this.tasks, false, true));
         rebuildDisplayRows(previousScroll);
@@ -238,6 +249,8 @@ public class TaskListWidget implements Renderable {
      */
     public void setSections(List<SectionModel> sections) {
         int previousScroll = this.scrollBar.getValue();
+        clearPendingTaskDrag();
+        clearTaskDragState();
         this.sections = sections == null ? new ArrayList<>() : new ArrayList<>(sections);
         List<Task> mergedTasks = new ArrayList<>();
         for (SectionModel section : this.sections) {
@@ -261,6 +274,28 @@ public class TaskListWidget implements Renderable {
      */
     public void setOnTaskToggleCompletion(Consumer<Task> callback) {
         this.onTaskToggleCompletion = callback;
+    }
+
+    /**
+     * 设置任务拖拽重排回调。
+     *
+     * @param callback 拖拽完成后的重排结果回调
+     */
+    public void setOnTaskReorder(Consumer<List<Task>> callback) {
+        this.onTaskReorder = callback;
+    }
+
+    /**
+     * 设置当前列表是否允许发起任务拖拽重排。
+     *
+     * @param enabled true 表示允许拖拽排序
+     */
+    public void setTaskReorderEnabled(boolean enabled) {
+        this.taskReorderEnabled = enabled;
+        if (!enabled) {
+            clearPendingTaskDrag();
+            clearTaskDragState();
+        }
     }
 
     @Override
@@ -307,6 +342,8 @@ public class TaskListWidget implements Renderable {
                 renderTaskRow(context, textRenderer, config, row.task, rowIndex, rowY, mouseX, mouseY);
             }
         }
+
+        renderDragIndicator(context);
     }
 
     /**
@@ -431,6 +468,13 @@ public class TaskListWidget implements Renderable {
             }
         }
 
+        if (draggedTask != null && taskIndex >= 0 && taskIndex < displayRows.size()) {
+            DisplayRow row = displayRows.get(taskIndex);
+            if (row.task != null && draggedTask.getId().equals(row.task.getId())) {
+                return 0xFF303030;
+            }
+        }
+
         if (taskIndex == selectedTaskIndex) {
             return config.getSelectedBackgroundColor();
         }
@@ -443,7 +487,37 @@ public class TaskListWidget implements Renderable {
         return 0xFF1A1A1A;
     }
 
+    /**
+     * 渲染拖拽中的插入指示线，帮助用户预览落点。
+     *
+     * @param context 当前绘制上下文
+     */
+    private void renderDragIndicator(net.minecraft.client.gui.GuiGraphics context) {
+        if (draggedTask == null || dragTargetIndex < 0) {
+            return;
+        }
+        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId);
+        if (rowIndexes.isEmpty()) {
+            return;
+        }
+        int clampedIndex = Math.max(0, Math.min(dragTargetIndex, rowIndexes.size()));
+        int lineY;
+        if (clampedIndex >= rowIndexes.size()) {
+            int lastRowIndex = rowIndexes.get(rowIndexes.size() - 1);
+            lineY = y + (lastRowIndex - scrollBar.getValue() + 1) * taskItemHeight;
+        } else {
+            lineY = y + (rowIndexes.get(clampedIndex) - scrollBar.getValue()) * taskItemHeight;
+        }
+        if (lineY < y || lineY > y + height) {
+            return;
+        }
+        int indicatorLeft = x + 8;
+        int indicatorRight = scrollBar.getBarX() - 4;
+        context.fill(indicatorLeft, lineY - 1, indicatorRight, lineY + 1, 0xFF55FFFF);
+    }
+
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        clearPendingTaskDrag();
         if (mouseX >= x && mouseX < x + width &&
             mouseY >= y && mouseY < y + height) {
             boolean clickOnScrollBar = button == 0
@@ -478,6 +552,12 @@ public class TaskListWidget implements Renderable {
                     }
                     return true;
                 }
+                if (button == 0 && canHandleTaskReorder() && canStartDrag(row.task)) {
+                    pendingDragTask = row.task;
+                    pendingDragSectionId = row.sectionId;
+                    pendingDragStartX = mouseX;
+                    pendingDragStartY = mouseY;
+                }
             }
 
             return false;
@@ -487,14 +567,45 @@ public class TaskListWidget implements Renderable {
 
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         // 滚动条拖拽在 render() 方法中处理
-        return scrollBar.isDragging();
+        if (scrollBar.isDragging()) {
+            return true;
+        }
+        if (button != 0) {
+            return false;
+        }
+        if (draggedTask != null) {
+            updateTaskDrag(mouseX, mouseY);
+            return true;
+        }
+        if (pendingDragTask == null || pendingDragSectionId == null) {
+            return false;
+        }
+        double deltaXValue = mouseX - pendingDragStartX;
+        double deltaYValue = mouseY - pendingDragStartY;
+        double distanceSquared = deltaXValue * deltaXValue + deltaYValue * deltaYValue;
+        if (distanceSquared < 9.0D) {
+            return false;
+        }
+        beginTaskDrag(pendingDragTask, mouseX, mouseY);
+        updateTaskDrag(mouseX, mouseY);
+        clearPendingTaskDrag();
+        return true;
     }
 
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        boolean handled = false;
         if (button == 0) {
-            scrollBar.setIsDragging(false);
+            if (scrollBar.isDragging()) {
+                scrollBar.setIsDragging(false);
+                handled = true;
+            }
+            if (draggedTask != null) {
+                finishTaskDrag();
+                handled = true;
+            }
+            clearPendingTaskDrag();
         }
-        return false;
+        return handled;
     }
 
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
@@ -583,6 +694,280 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
+     * 判断给定任务是否允许作为拖拽起点。
+     *
+     * @param task 目标任务
+     * @return true 表示该任务允许开始拖拽
+     */
+    boolean canStartDrag(Task task) {
+        return task != null && !task.isCompleted();
+    }
+
+    /**
+     * 初始化一次任务拖拽会话。
+     *
+     * @param task 被拖拽的任务
+     * @param mouseX 当前鼠标 X 坐标
+     * @param mouseY 当前鼠标 Y 坐标
+     */
+    void beginTaskDrag(Task task, double mouseX, double mouseY) {
+        if (!canHandleTaskReorder() || !canStartDrag(task)) {
+            return;
+        }
+        draggedTask = task;
+        draggedTaskSectionId = pendingDragSectionId;
+        dragTargetIndex = resolveDropIndex(mouseY);
+    }
+
+    /**
+     * 更新拖拽过程中的落点和自动滚动状态。
+     *
+     * @param mouseX 当前鼠标 X 坐标
+     * @param mouseY 当前鼠标 Y 坐标
+     */
+    void updateTaskDrag(double mouseX, double mouseY) {
+        if (draggedTask == null) {
+            return;
+        }
+        autoScrollWhileDragging(mouseY);
+        dragTargetIndex = resolveDropIndex(mouseY);
+    }
+
+    /**
+     * 结束当前拖拽会话，并在顺序变化时触发回调。
+     */
+    void finishTaskDrag() {
+        if (draggedTask == null) {
+            return;
+        }
+        List<Task> sectionTasks = getDraggableTasksForSection(draggedTaskSectionId);
+        List<Task> reorderedTasks = reorderActiveTasks(sectionTasks, draggedTask.getId(), dragTargetIndex);
+        boolean changed = !sameTaskOrder(sectionTasks, reorderedTasks);
+        if (changed) {
+            applySectionTaskOrder(draggedTaskSectionId, reorderedTasks);
+            if (onTaskReorder != null) {
+                onTaskReorder.accept(List.copyOf(reorderedTasks));
+            }
+        }
+        clearTaskDragState();
+    }
+
+    /**
+     * 根据鼠标纵坐标解析当前拖拽应插入到的目标索引。
+     *
+     * @param mouseY 当前鼠标 Y 坐标
+     * @return 当前拖拽目标索引
+     */
+    int resolveDropIndex(double mouseY) {
+        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId);
+        if (rowIndexes.isEmpty()) {
+            return -1;
+        }
+        for (int index = 0; index < rowIndexes.size(); index++) {
+            int rowIndex = rowIndexes.get(index);
+            double rowMiddleY = y + (rowIndex - scrollBar.getValue()) * taskItemHeight + taskItemHeight / 2.0D;
+            if (mouseY < rowMiddleY) {
+                return index;
+            }
+        }
+        return rowIndexes.size();
+    }
+
+    /**
+     * 计算拖拽后当前可见未完成任务的新顺序。
+     *
+     * @param tasks 当前可见未完成任务列表
+     * @param draggedTaskId 被拖拽任务 ID
+     * @param targetIndex 目标插入索引
+     * @return 重排后的任务列表
+     */
+    List<Task> reorderActiveTasks(List<Task> tasks, String draggedTaskId, int targetIndex) {
+        List<Task> input = tasks == null ? new ArrayList<>() : new ArrayList<>(tasks);
+        if (draggedTaskId == null || input.size() < 2) {
+            return input;
+        }
+        int sourceIndex = -1;
+        Task dragged = null;
+        for (int index = 0; index < input.size(); index++) {
+            Task candidate = input.get(index);
+            if (candidate != null && draggedTaskId.equals(candidate.getId())) {
+                sourceIndex = index;
+                dragged = candidate;
+                break;
+            }
+        }
+        if (sourceIndex < 0 || dragged == null) {
+            return input;
+        }
+        int insertIndex = Math.max(0, Math.min(targetIndex, input.size()));
+        input.remove(sourceIndex);
+        if (insertIndex > sourceIndex) {
+            insertIndex--;
+        }
+        insertIndex = Math.max(0, Math.min(insertIndex, input.size()));
+        input.add(insertIndex, dragged);
+        return input;
+    }
+
+    /**
+     * 判断当前是否满足处理拖拽重排的基础条件。
+     *
+     * @return true 表示当前允许处理拖拽重排
+     */
+    private boolean canHandleTaskReorder() {
+        return taskReorderEnabled && onTaskReorder != null;
+    }
+
+    /**
+     * 清理尚未进入正式拖拽态的候选拖拽信息。
+     */
+    private void clearPendingTaskDrag() {
+        pendingDragTask = null;
+        pendingDragSectionId = null;
+        pendingDragStartX = 0.0D;
+        pendingDragStartY = 0.0D;
+    }
+
+    /**
+     * 清理当前拖拽态及其落点缓存。
+     */
+    private void clearTaskDragState() {
+        draggedTask = null;
+        draggedTaskSectionId = null;
+        dragTargetIndex = -1;
+    }
+
+    /**
+     * 在拖拽靠近列表边缘时自动调整滚动偏移。
+     *
+     * @param mouseY 当前鼠标 Y 坐标
+     */
+    private void autoScrollWhileDragging(double mouseY) {
+        if (scrollBar.getMaxValue() <= 0) {
+            return;
+        }
+        int edgePadding = Math.max(8, taskItemHeight / 2);
+        if (mouseY <= y + edgePadding) {
+            scrollBar.offsetValue(-1);
+        } else if (mouseY >= y + height - edgePadding) {
+            scrollBar.offsetValue(1);
+        }
+    }
+
+    /**
+     * 收集当前拖拽分段内所有可拖拽任务行的显示索引。
+     *
+     * @param sectionId 目标分段 ID
+     * @return 可拖拽任务行索引列表
+     */
+    private List<Integer> collectDraggableRowIndexes(String sectionId) {
+        List<Integer> rowIndexes = new ArrayList<>();
+        if (sectionId == null || displayRows == null) {
+            return rowIndexes;
+        }
+        for (int index = 0; index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType == RowType.TASK
+                    && row.task != null
+                    && sectionId.equals(row.sectionId)
+                    && canStartDrag(row.task)) {
+                rowIndexes.add(index);
+            }
+        }
+        return rowIndexes;
+    }
+
+    /**
+     * 返回指定分段内当前可拖拽的任务列表。
+     *
+     * @param sectionId 分段 ID
+     * @return 当前可拖拽的任务列表
+     */
+    private List<Task> getDraggableTasksForSection(String sectionId) {
+        List<Task> sectionTasks = new ArrayList<>();
+        if (sectionId == null || sections == null) {
+            return sectionTasks;
+        }
+        for (SectionModel section : sections) {
+            if (section == null || !sectionId.equals(section.id)) {
+                continue;
+            }
+            for (Task task : section.tasks) {
+                if (canStartDrag(task)) {
+                    sectionTasks.add(task);
+                }
+            }
+            break;
+        }
+        return sectionTasks;
+    }
+
+    /**
+     * 将重排结果写回当前分段模型，保证控件内部快照立即同步。
+     *
+     * @param sectionId 分段 ID
+     * @param reorderedTasks 重排后的任务列表
+     */
+    private void applySectionTaskOrder(String sectionId, List<Task> reorderedTasks) {
+        if (sectionId == null || reorderedTasks == null) {
+            return;
+        }
+        List<SectionModel> updatedSections = new ArrayList<>();
+        for (SectionModel section : sections) {
+            if (section == null) {
+                continue;
+            }
+            if (!sectionId.equals(section.id)) {
+                updatedSections.add(section);
+                continue;
+            }
+            List<Task> mergedSectionTasks = new ArrayList<>();
+            int reorderedIndex = 0;
+            for (Task task : section.tasks) {
+                if (canStartDrag(task) && reorderedIndex < reorderedTasks.size()) {
+                    mergedSectionTasks.add(reorderedTasks.get(reorderedIndex++));
+                } else {
+                    mergedSectionTasks.add(task);
+                }
+            }
+            updatedSections.add(new SectionModel(section.id, section.title, mergedSectionTasks, section.expandable, section.expanded));
+        }
+        int previousScroll = scrollBar.getValue();
+        this.sections = updatedSections;
+        List<Task> mergedTasks = new ArrayList<>();
+        for (SectionModel section : this.sections) {
+            if (section != null) {
+                mergedTasks.addAll(section.tasks);
+            }
+        }
+        this.tasks = mergedTasks;
+        rebuildDisplayRows(previousScroll);
+    }
+
+    /**
+     * 判断两组任务列表的顺序是否完全一致。
+     *
+     * @param before 调整前列表
+     * @param after 调整后列表
+     * @return true 表示顺序完全一致
+     */
+    private boolean sameTaskOrder(List<Task> before, List<Task> after) {
+        if (before == null || after == null || before.size() != after.size()) {
+            return false;
+        }
+        for (int index = 0; index < before.size(); index++) {
+            Task beforeTask = before.get(index);
+            Task afterTask = after.get(index);
+            String beforeId = beforeTask == null ? null : beforeTask.getId();
+            String afterId = afterTask == null ? null : afterTask.getId();
+            if (!java.util.Objects.equals(beforeId, afterId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * 返回当前渲染行快照，供同包测试代码断言分组顺序。
      *
      * @return 当前渲染行调试快照
@@ -624,6 +1009,62 @@ public class TaskListWidget implements Renderable {
      */
     int getMaxScrollOffsetForTest() {
         return scrollBar.getMaxValue();
+    }
+
+    /**
+     * 返回当前是否处于任务拖拽中，供测试断言拖拽状态切换。
+     *
+     * @return true 表示当前存在活动中的任务拖拽
+     */
+    boolean isTaskDraggingForTest() {
+        return draggedTask != null;
+    }
+
+    /**
+     * 返回当前拖拽落点索引，供测试断言拖拽目标更新。
+     *
+     * @return 当前拖拽落点索引；未拖拽时返回 -1
+     */
+    int getDropTargetIndexForTest() {
+        return dragTargetIndex;
+    }
+
+    /**
+     * 返回任务列表内部可用于交互的横坐标，供测试稳定构造点击和拖拽输入。
+     *
+     * @return 任务内容区域内的测试用横坐标
+     */
+    int getInteractXForTest() {
+        return x + 30;
+    }
+
+    /**
+     * 返回指定任务当前可见行的中心纵坐标，供测试稳定命中任务行。
+     *
+     * @param taskId 任务 ID
+     * @return 当前任务行中心纵坐标；未命中时返回 -1
+     */
+    int getTaskRowCenterYForTest(String taskId) {
+        if (taskId == null || displayRows == null) {
+            return -1;
+        }
+        for (int index = 0; index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
+                int visibleRowIndex = index - scrollBar.getValue();
+                return y + visibleRowIndex * taskItemHeight + taskItemHeight / 2;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 直接设置当前滚动偏移，供测试覆盖拖拽自动滚动边界。
+     *
+     * @param offset 目标滚动偏移
+     */
+    void setScrollOffsetForTest(int offset) {
+        scrollBar.setValue(offset);
     }
 
     public int getHeight() {

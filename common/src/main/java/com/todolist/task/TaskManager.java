@@ -48,10 +48,13 @@ public class TaskManager {
     /**
      * 获取所有任务并按优先级从高到低排序返回。
      */
+    /**
+     * 按当前稳定顺序返回全部任务。
+     *
+     * @return 当前顺序下的全部任务列表
+     */
     public List<Task> getAllTasks() {
-        List<Task> list = new ArrayList<>(tasks.values());
-        list.sort((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal());
-        return list;
+        return new ArrayList<>(tasks.values());
     }
 
     /**
@@ -113,20 +116,28 @@ public class TaskManager {
     /**
      * Get completed tasks
      */
+    /**
+     * 按当前稳定顺序返回已完成任务。
+     *
+     * @return 已完成任务列表
+     */
     public List<Task> getCompletedTasks() {
         return tasks.values().stream()
                 .filter(Task::isCompleted)
-                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
                 .collect(Collectors.toList());
     }
 
     /**
      * Get incomplete tasks
      */
+    /**
+     * 按当前稳定顺序返回未完成任务。
+     *
+     * @return 未完成任务列表
+     */
     public List<Task> getIncompleteTasks() {
         return tasks.values().stream()
                 .filter(t -> !t.isCompleted())
-                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
                 .collect(Collectors.toList());
     }
 
@@ -148,11 +159,67 @@ public class TaskManager {
     /**
      * Get tasks by project ID
      */
+    /**
+     * 按当前稳定顺序返回指定项目下的任务。
+     *
+     * @param projectId 项目 ID
+     * @return 指定项目下的任务列表
+     */
     public List<Task> getTasksByProject(String projectId) {
         return tasks.values().stream()
                 .filter(t -> Objects.equals(t.getProjectId(), projectId))
-                .sorted((a, b) -> b.getPriority().ordinal() - a.getPriority().ordinal())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 仅重排给定任务子集在整体列表中的相对顺序，同时保持其他任务原位不变。
+     *
+     * @param orderedTaskIds 目标顺序下的任务 ID 列表
+     * @return true 表示任务顺序发生变化
+     */
+    public boolean reorderTasks(List<String> orderedTaskIds) {
+        if (orderedTaskIds == null || orderedTaskIds.size() < 2) {
+            return false;
+        }
+        LinkedHashSet<String> targetIds = new LinkedHashSet<>();
+        for (String taskId : orderedTaskIds) {
+            if (taskId != null && tasks.containsKey(taskId)) {
+                targetIds.add(taskId);
+            }
+        }
+        if (targetIds.size() < 2) {
+            return false;
+        }
+
+        List<Task> reorderedSubset = new ArrayList<>();
+        for (String taskId : targetIds) {
+            reorderedSubset.add(tasks.get(taskId));
+        }
+
+        LinkedHashMap<String, Task> rebuiltTasks = new LinkedHashMap<>();
+        Iterator<Task> reorderedIterator = reorderedSubset.iterator();
+        boolean changed = false;
+
+        for (Map.Entry<String, Task> entry : tasks.entrySet()) {
+            if (targetIds.contains(entry.getKey())) {
+                Task nextTask = reorderedIterator.next();
+                rebuiltTasks.put(nextTask.getId(), nextTask);
+                if (!changed && !Objects.equals(nextTask.getId(), entry.getKey())) {
+                    changed = true;
+                }
+                continue;
+            }
+            rebuiltTasks.put(entry.getKey(), entry.getValue());
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        tasks.clear();
+        tasks.putAll(rebuiltTasks);
+        notifyListeners(TaskChangeType.BATCH_UPDATED, null);
+        return true;
     }
 
     /**

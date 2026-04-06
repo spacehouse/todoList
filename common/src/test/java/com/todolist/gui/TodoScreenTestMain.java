@@ -65,6 +65,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMarkUnsavedAfterManualReorder", TodoScreenTestMain::shouldMarkUnsavedAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTasksBySearchAndStatus", TodoScreenTestMain::shouldFilterTasksBySearchAndStatus);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksAndClearUnsavedState", TodoScreenTestMain::shouldSavePersonalTasksAndClearUnsavedState);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld", TodoScreenTestMain::shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld);
@@ -599,6 +600,48 @@ public final class TodoScreenTestMain {
     /**
      * 验证搜索与状态筛选可以共同作用，并返回预期任务。
      */
+    /**
+     * 验证手动拖拽排序后会标记未保存状态，并同步当前任务顺序。
+     */
+    private static void shouldMarkUnsavedAfterManualReorder() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Alpha");
+        addTaskViaInput(screen, "Beta");
+        addTaskViaInput(screen, "Gamma");
+        screen.saveTasksForTest();
+        GuiTestSupport.assertFalse(screen.hasUnsavedChangesForTest(), "保存后应先清除未保存状态");
+
+        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        Task gamma = screen.getFilteredTasksForTest().stream()
+                .filter(task -> "Gamma".equals(task.getTitle()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到 Gamma 任务"));
+        Task alpha = screen.getFilteredTasksForTest().stream()
+                .filter(task -> "Alpha".equals(task.getTitle()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到 Alpha 任务"));
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(gamma.getId());
+        int targetY = widget.getTaskRowCenterYForTest(alpha.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        screen.mouseClicked(interactX, startY, 0);
+        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        screen.mouseReleased(interactX, targetY, 0);
+
+        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "手动拖拽排序后应重新标记为未保存");
+        GuiTestSupport.assertEquals(
+                List.of("Gamma", "Alpha", "Beta"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "手动拖拽排序后当前任务管理器应保留新的任务顺序"
+        );
+    }
+
     private static void shouldFilterTasksBySearchAndStatus() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
