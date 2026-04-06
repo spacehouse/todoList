@@ -704,6 +704,25 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
+     * 记录一次待启动的任务拖拽，供外层界面在自定义点击链路下显式同步拖拽起点。
+     *
+     * @param task 目标任务
+     * @param sectionId 所属分段 ID
+     * @param mouseX 鼠标按下时的 X 坐标
+     * @param mouseY 鼠标按下时的 Y 坐标
+     */
+    void armPendingTaskDrag(Task task, String sectionId, double mouseX, double mouseY) {
+        clearPendingTaskDrag();
+        if (!canHandleTaskReorder() || !canStartDrag(task)) {
+            return;
+        }
+        pendingDragTask = task;
+        pendingDragSectionId = sectionId == null ? "" : sectionId;
+        pendingDragStartX = mouseX;
+        pendingDragStartY = mouseY;
+    }
+
+    /**
      * 初始化一次任务拖拽会话。
      *
      * @param task 被拖拽的任务

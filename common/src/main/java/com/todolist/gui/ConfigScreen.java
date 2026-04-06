@@ -1,7 +1,12 @@
 package com.todolist.gui;
 
+import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.client.ClientPlatformAdapter;
+import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
+import com.todolist.project.Project;
+import com.todolist.project.ProjectNameFormatter;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -10,11 +15,8 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * 配置界面：负责编辑 HUD 配置草稿、预览 HUD 位置，并在保存时统一写回配置。
+ * 配置界面，回退为改造前的旧版 HUD 配置表单与整屏预览布局。
  */
 public class ConfigScreen extends Screen {
 
@@ -50,10 +52,6 @@ public class ConfigScreen extends Screen {
     private boolean hudVisibleValue;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
-    private HudConfigDraft draft;
-    private ConfigLayout layout;
-    private List<ConfigRowModel> configRows = new ArrayList<>();
-    private int configListScrollOffset;
 
     /**
      * 创建配置界面。
@@ -66,7 +64,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回 HUD 宽度输入框，供测试写入宽度值。
+     * 返回 HUD 宽度输入框，供测试写入宽度。
      *
      * @return HUD 宽度输入框
      */
@@ -75,7 +73,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回 HUD 最大高度输入框，供测试写入高度值。
+     * 返回 HUD 最大高度输入框，供测试写入高度。
      *
      * @return HUD 最大高度输入框
      */
@@ -84,16 +82,16 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回 HUD 显示切换按钮，供测试触发显隐切换。
+     * 返回 HUD 可见性按钮，供测试点击。
      *
-     * @return HUD 显示按钮
+     * @return HUD 可见性按钮
      */
     Button getHudVisibilityButtonForTest() {
         return hudVisibilityButton;
     }
 
     /**
-     * 返回 HUD 项目来源切换按钮，供测试驱动来源切换。
+     * 返回 HUD 项目来源按钮，供测试点击。
      *
      * @return HUD 项目来源按钮
      */
@@ -102,7 +100,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回保存按钮，供测试直接触发保存流程。
+     * 返回保存按钮，供测试触发保存。
      *
      * @return 保存按钮
      */
@@ -111,7 +109,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回取消按钮，供测试直接触发取消流程。
+     * 返回取消按钮，供测试触发取消。
      *
      * @return 取消按钮
      */
@@ -120,7 +118,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回当前草稿中的 HUD 可见值。
+     * 返回 HUD 可见状态，供测试断言。
      *
      * @return true 表示 HUD 可见
      */
@@ -129,7 +127,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回当前草稿中的 HUD 项目来源值。
+     * 返回 HUD 项目来源值，供测试断言。
      *
      * @return HUD 项目来源值
      */
@@ -138,27 +136,27 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回当前预览是否使用自定义位置。
+     * 返回当前是否启用自定义预览定位。
      *
-     * @return true 表示使用自定义位置
+     * @return true 表示已切换到自定义预览定位
      */
     boolean isPreviewUseCustomForTest() {
         return previewUseCustom;
     }
 
     /**
-     * 返回预览矩形左上角 X 坐标。
+     * 返回预览命中矩形 X 坐标。
      *
-     * @return 预览矩形左上角 X 坐标
+     * @return 预览矩形 X 坐标
      */
     int getPreviewRectXForTest() {
         return previewRectX;
     }
 
     /**
-     * 返回预览矩形左上角 Y 坐标。
+     * 返回预览命中矩形 Y 坐标。
      *
-     * @return 预览矩形左上角 Y 坐标
+     * @return 预览矩形 Y 坐标
      */
     int getPreviewRectYForTest() {
         return previewRectY;
@@ -201,103 +199,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 返回当前配置页列数，供测试验证单双列切换。
-     *
-     * @return 当前配置页列数
-     */
-    int getConfigColumnCountForTest() {
-        return layout == null ? 0 : layout.columns();
-    }
-
-    /**
-     * 返回配置列表区域边界，供测试验证滚动区位置。
-     *
-     * @return 配置列表边界 [x, y, width, height]
-     */
-    int[] getConfigListBoundsForTest() {
-        if (layout == null) {
-            return new int[] {0, 0, 0, 0};
-        }
-        return new int[] {layout.configListX(), layout.configListY(), layout.configListWidth(), layout.configListHeight()};
-    }
-
-    /**
-     * 返回预览面板边界，供测试验证固定预览区位置。
-     *
-     * @return 预览面板边界 [x, y, width, height]
-     */
-    int[] getPreviewPanelBoundsForTest() {
-        if (layout == null) {
-            return new int[] {0, 0, 0, 0};
-        }
-        return new int[] {layout.previewPanelX(), layout.previewPanelY(), layout.previewPanelWidth(), layout.previewPanelHeight()};
-    }
-
-    /**
-     * 返回配置区当前是否溢出。
-     *
-     * @return 若配置区超出可见高度则返回 true
-     */
-    boolean isConfigListOverflowingForTest() {
-        return isConfigListOverflowing();
-    }
-
-    /**
-     * 返回配置区中心点 X 坐标，供测试驱动滚轮事件。
-     *
-     * @return 配置区中心点 X 坐标
-     */
-    double getConfigListCenterXForTest() {
-        return layout == null ? 0.0D : layout.getConfigListCenterX();
-    }
-
-    /**
-     * 返回配置区中心点 Y 坐标，供测试驱动滚轮事件。
-     *
-     * @return 配置区中心点 Y 坐标
-     */
-    double getConfigListCenterYForTest() {
-        return layout == null ? 0.0D : layout.getConfigListCenterY();
-    }
-
-    /**
-     * 返回当前配置区滚动偏移。
-     *
-     * @return 当前配置区滚动偏移
-     */
-    int getConfigListScrollOffsetForTest() {
-        return configListScrollOffset;
-    }
-
-    /**
-     * 返回当前配置区允许的最大滚动偏移。
-     *
-     * @return 最大滚动偏移
-     */
-    int getConfigListMaxScrollOffsetForTest() {
-        return getConfigListMaxScrollOffset();
-    }
-
-    /**
-     * 返回草稿中的预览块 X 坐标。
-     *
-     * @return 草稿中的预览块 X 坐标
-     */
-    int getDraftPreviewHudXForTest() {
-        return draft == null ? previewHudX : draft.previewHudX;
-    }
-
-    /**
-     * 返回草稿中的预览块 Y 坐标。
-     *
-     * @return 草稿中的预览块 Y 坐标
-     */
-    int getDraftPreviewHudYForTest() {
-        return draft == null ? previewHudY : draft.previewHudY;
-    }
-
-    /**
-     * 同步测试读取用的预览矩形边界。
+     * 同步预览矩形到当前 HUD 绝对坐标，供测试拖拽复用。
      */
     void syncPreviewRectForTest() {
         previewRectX = previewHudX;
@@ -305,126 +207,179 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 初始化配置页中的草稿、组件和响应式布局。
+     * 初始化旧版配置表单与预览区域。
      */
     @Override
     protected void init() {
-        if (draft == null) {
-            draft = loadDraftFromConfig();
-        } else {
-            syncDraftFromWidgets();
-        }
-        configListScrollOffset = 0;
-        configRows = new ArrayList<>();
+        ModConfig config = ModConfig.getInstance();
+        int guiWidth = clampInt(this.width - 40, 360, 560);
+        int x = (this.width - guiWidth) / 2;
+        int y = Math.max(36, this.height / 6 + 10);
+        int row = 0;
+        int rowHeight = 25;
+        int fieldHeight = 20;
 
-        hudWidthField = new EditBox(this.font, 0, 0, 120, 20, Component.empty());
-        hudWidthField.setValue(Integer.toString(draft.hudWidth));
+        int columnGap = 20;
+        int columnWidth = (guiWidth - columnGap) / 2;
+        int leftLabelWidth = 80;
+        int rightLabelWidth = 80;
+        int leftFieldWidth = columnWidth - leftLabelWidth;
+        int rightFieldWidth = columnWidth - rightLabelWidth;
+        int leftFieldX = x + leftLabelWidth;
+        int rightFieldX = x + columnWidth + columnGap + rightLabelWidth;
+
+        hudWidthField = new EditBox(this.font, leftFieldX, y + row * rowHeight, leftFieldWidth, fieldHeight, Component.empty());
+        hudWidthField.setValue(Integer.toString(config.getHudWidth()));
         this.addRenderableWidget(hudWidthField);
 
-        hudMaxHeightField = new EditBox(this.font, 0, 0, 120, 20, Component.empty());
-        hudMaxHeightField.setValue(Integer.toString(draft.hudMaxHeight));
+        hudMaxHeightField = new EditBox(this.font, rightFieldX, y + row * rowHeight, rightFieldWidth, fieldHeight, Component.empty());
+        hudMaxHeightField.setValue(Integer.toString(config.getHudMaxHeight()));
         this.addRenderableWidget(hudMaxHeightField);
+        row++;
 
-        hudTodoLimitSlider = new IntSliderWidget(0, 0, 120, 20, 0, 30, draft.hudTodoLimit);
+        hudTodoLimitSlider = new IntSliderWidget(leftFieldX, y + row * rowHeight, leftFieldWidth, fieldHeight, 0, 30, config.getHudTodoLimit());
+        hudDoneLimitSlider = new IntSliderWidget(rightFieldX, y + row * rowHeight, rightFieldWidth, fieldHeight, 0, 30, config.getHudDoneLimit());
         this.addRenderableWidget(hudTodoLimitSlider);
-
-        hudDoneLimitSlider = new IntSliderWidget(0, 0, 120, 20, 0, 30, draft.hudDoneLimit);
         this.addRenderableWidget(hudDoneLimitSlider);
+        row++;
 
-        hudOpacitySlider = new DoubleStepSliderWidget(0, 0, 120, 20, 0.0, 1.0, 0.1, draft.hudOpacity);
-        this.addRenderableWidget(hudOpacitySlider);
-
-        hudShowWhenEmptyValue = draft.hudShowWhenEmpty;
+        hudShowWhenEmptyValue = config.isHudShowWhenEmpty();
         hudShowWhenEmptyButton = Button.builder(Component.empty(), button -> {
-            draft.hudShowWhenEmpty = !draft.hudShowWhenEmpty;
-            hudShowWhenEmptyValue = draft.hudShowWhenEmpty;
+            hudShowWhenEmptyValue = !hudShowWhenEmptyValue;
             updateHudShowWhenEmptyButtonLabel();
-        }).bounds(0, 0, 120, 20).build();
+        }).bounds(leftFieldX, y + row * rowHeight, leftFieldWidth, fieldHeight).build();
         this.addRenderableWidget(hudShowWhenEmptyButton);
 
-        hudVisibleValue = draft.hudVisible;
+        hudVisibleValue = ClientBridge.ops().isHudVisible();
         hudVisibilityButton = Button.builder(Component.empty(), button -> {
-            draft.hudVisible = !draft.hudVisible;
-            hudVisibleValue = draft.hudVisible;
+            hudVisibleValue = !hudVisibleValue;
+            ClientBridge.ops().setHudVisible(hudVisibleValue);
             updateHudVisibilityButtonLabel();
-        }).bounds(0, 0, 120, 20).build();
+        }).bounds(rightFieldX, y + row * rowHeight, rightFieldWidth, fieldHeight).build();
         this.addRenderableWidget(hudVisibilityButton);
+        row++;
 
-        hudProjectSourceValue = normalizeHudProjectSource(draft.hudProjectSource);
+        hudOpacitySlider = new DoubleStepSliderWidget(leftFieldX, y + row * rowHeight, leftFieldWidth, fieldHeight, 0.0D, 1.0D, 0.1D, config.getHudOpacity());
+        this.addRenderableWidget(hudOpacitySlider);
+        row++;
+
+        hudProjectSourceValue = normalizeHudProjectSource(config.getHudProjectSource());
         hudProjectSourceIndex = resolveHudProjectSourceIndex(hudProjectSourceValue);
+        int sourceLabelWidth = this.font.width(Component.translatable("gui.todolist.config.hud_project_source"));
+        int sourceButtonX = x + sourceLabelWidth + 10;
+        int sourceButtonWidth = Math.max(80, guiWidth - (sourceButtonX - x));
         hudProjectSourceButton = Button.builder(Component.empty(), button -> {
             hudProjectSourceIndex = (hudProjectSourceIndex + 1) % HudProjectSourceOptions.VALUES.length;
             hudProjectSourceValue = HudProjectSourceOptions.VALUES[hudProjectSourceIndex];
-            draft.hudProjectSource = hudProjectSourceValue;
             updateHudProjectSourceButtonLabel();
-        }).bounds(0, 0, 120, 20).build();
+        }).bounds(sourceButtonX, y + row * rowHeight, sourceButtonWidth, fieldHeight).build();
         this.addRenderableWidget(hudProjectSourceButton);
-
-        saveButton = Button.builder(Component.translatable("gui.todolist.config.save_apply"), button -> applyAndReturn())
-                .bounds(0, 0, 100, 20).build();
-        this.addRenderableWidget(saveButton);
-
-        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> this.minecraft.setScreen(parent))
-                .bounds(0, 0, 100, 20).build();
-        this.addRenderableWidget(cancelButton);
+        row++;
 
         updateHudShowWhenEmptyButtonLabel();
         updateHudVisibilityButtonLabel();
         updateHudProjectSourceButtonLabel();
 
-        configRows = buildConfigRows();
-        layout = computeResponsiveLayout();
-        applyLayout();
-        this.setFocused(hudWidthField);
+        previewUseCustom = config.isHudUseCustomPosition();
+        previewHudWidth = Math.max(1, config.getHudWidth());
+        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        syncPreviewPositionFromConfig(config);
+
+        int buttonY = y + row * rowHeight + 30;
+        saveButton = Button.builder(Component.translatable("gui.todolist.config.save_apply"), button -> applyAndReturn())
+                .bounds(x, buttonY, guiWidth / 2 - 5, 20)
+                .build();
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> this.minecraft.setScreen(parent))
+                .bounds(x + guiWidth / 2 + 5, buttonY, guiWidth / 2 - 5, 20)
+                .build();
+        this.addRenderableWidget(saveButton);
+        this.addRenderableWidget(cancelButton);
     }
 
     /**
-     * 渲染配置界面，并在渲染前刷新布局和预览状态。
+     * 渲染旧版表单与 HUD 预览。
      *
-     * @param context 当前绘制上下文
+     * @param context 绘制上下文
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param delta 帧间插值
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        syncDraftFromWidgets();
-        layout = computeResponsiveLayout();
-        applyLayout();
-
         this.renderBackground(context);
-        drawLayoutShell(context);
         super.render(context, mouseX, mouseY, delta);
-        drawConfigRowLabels(context);
-        drawPreviewPanel(context);
+
+        int guiWidth = clampInt(this.width - 40, 360, 560);
+        int x = (this.width - guiWidth) / 2;
+        int y = Math.max(36, this.height / 6 + 10);
+        int textHeight = this.font.lineHeight;
+        context.drawString(this.font, title, x, y - 36, 0xFFFFFFFF, false);
+
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_width"), hudWidthField, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_max_height"), hudMaxHeightField, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_todo_limit"), hudTodoLimitSlider, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_done_limit"), hudDoneLimitSlider, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_show_when_empty"), hudShowWhenEmptyButton, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_visibility"), hudVisibilityButton, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textHeight);
+
+        previewHudWidth = Math.max(1, parseIntSafe(hudWidthField.getValue(), ModConfig.getInstance().getHudWidth()));
+        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        if (previewUseCustom) {
+            applyPreviewAnchorsToAbsolutePosition();
+        } else {
+            syncPreviewPositionFromConfig(ModConfig.getInstance());
+        }
+
+        previewRectX = previewHudX;
+        previewRectY = previewHudY;
+
+        double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
+        int alpha = (int) Math.round(clampRatio(opacity) * 255.0D);
+        context.fill(previewHudX, previewHudY, previewHudX + previewHudWidth, previewHudY + previewHudHeight, alpha << 24);
+        context.renderOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
+
+        Component previewTitle = Component.translatable("gui.todolist.config.hud_preview.title");
+        Component previewHint = Component.translatable("gui.todolist.config.hud_preview.hint");
+        int centerX = previewHudX + previewHudWidth / 2;
+        int centerY = previewHudY + previewHudHeight / 2;
+        int totalTextHeight = textHeight * 2 + 2;
+        int startY = centerY - totalTextHeight / 2;
+        context.drawString(this.font, previewTitle, centerX - this.font.width(previewTitle) / 2, startY, 0xFFFFFF, false);
+        context.drawString(this.font, previewHint, centerX - this.font.width(previewHint) / 2, startY + textHeight + 2, 0xFFFFFF, false);
     }
 
     /**
-     * 处理点击事件，并支持拖拽 HUD 预览块。
+     * 处理 HUD 预览块点击，进入拖拽模式。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param button 鼠标按键
-     * @return 若点击命中预览块则返回 true
+     * @return 若命中预览块则返回 true
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && mouseX >= previewRectX && mouseX <= previewRectX + previewHudWidth
-                && mouseY >= previewRectY && mouseY <= previewRectY + previewHudHeight) {
-            draggingHud = true;
-            dragOffsetX = (int) mouseX - previewRectX;
-            dragOffsetY = (int) mouseY - previewRectY;
-            if (draft != null) {
-                draft.previewUseCustom = true;
+        if (button == 0) {
+            int x = (int) mouseX;
+            int y = (int) mouseY;
+            if (x >= previewRectX && x <= previewRectX + previewHudWidth
+                    && y >= previewRectY && y <= previewRectY + previewHudHeight) {
+                draggingHud = true;
+                dragOffsetX = x - previewRectX;
+                dragOffsetY = y - previewRectY;
+                if (!previewUseCustom) {
+                    updatePreviewAnchorsFromAbsolutePosition();
+                }
+                previewUseCustom = true;
+                return true;
             }
-            previewUseCustom = true;
-            return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     /**
-     * 结束预览块拖拽状态。
+     * 结束预览拖拽状态。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
@@ -441,468 +396,188 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 在预览工作区内拖拽 HUD 预览块，并同步写回草稿位置。
+     * 拖拽 HUD 预览块，并同步新的预览锚点。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param button 鼠标按键
-     * @param deltaX 本次拖拽 X 增量
-     * @param deltaY 本次拖拽 Y 增量
-     * @return 若本次拖拽移动了预览块则返回 true
+     * @param deltaX 鼠标 X 偏移
+     * @param deltaY 鼠标 Y 偏移
+     * @return 若处理了拖拽则返回 true
      */
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (button == 0 && draggingHud && layout != null) {
-            int workspaceMaxX = layout.previewWorkspaceX() + Math.max(0, layout.previewWorkspaceWidth() - previewHudWidth);
-            int workspaceMaxY = layout.previewWorkspaceY() + Math.max(0, layout.previewWorkspaceHeight() - previewHudHeight);
-            previewHudX = clampInt((int) mouseX - dragOffsetX, layout.previewWorkspaceX(), workspaceMaxX);
-            previewHudY = clampInt((int) mouseY - dragOffsetY, layout.previewWorkspaceY(), workspaceMaxY);
-            syncDraftPreviewPositionFromBlock();
+        if (button == 0 && draggingHud) {
+            int newX = (int) mouseX - dragOffsetX;
+            int newY = (int) mouseY - dragOffsetY;
+            previewHudX = clampPreviewCoordinate(newX, this.width, previewHudWidth);
+            previewHudY = clampPreviewCoordinate(newY, this.height, previewHudHeight);
+            updatePreviewAnchorsFromAbsolutePosition();
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     /**
-     * 只在配置区内部处理滚轮滚动，保持预览区固定。
-     *
-     * @param mouseX 鼠标 X 坐标
-     * @param mouseY 鼠标 Y 坐标
-     * @param amount 滚轮偏移量
-     * @return 若本次滚动用于配置列表则返回 true
-     */
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (layout != null && layout.isInsideConfigList(mouseX, mouseY) && isConfigListOverflowing()) {
-            if (amount < 0.0D) {
-                configListScrollOffset += 24;
-            } else if (amount > 0.0D) {
-                configListScrollOffset -= 24;
-            }
-            configListScrollOffset = clampInt(configListScrollOffset, 0, getConfigListMaxScrollOffset());
-            applyLayout();
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, amount);
-    }
-
-    /**
-     * 保存当前草稿并返回父界面。
+     * 保存当前旧版配置表单并返回父界面。
      */
     private void applyAndReturn() {
-        syncDraftFromWidgets();
-        persistDraft(draft);
-        this.minecraft.setScreen(parent);
-    }
-
-    /**
-     * 从当前配置和客户端桥接层中加载 HUD 配置草稿。
-     *
-     * @return 新创建的 HUD 配置草稿
-     */
-    private HudConfigDraft loadDraftFromConfig() {
         ModConfig config = ModConfig.getInstance();
-        HudConfigDraft loadedDraft = new HudConfigDraft();
-        loadedDraft.hudWidth = config.getHudWidth();
-        loadedDraft.hudMaxHeight = config.getHudMaxHeight();
-        loadedDraft.hudTodoLimit = config.getHudTodoLimit();
-        loadedDraft.hudDoneLimit = config.getHudDoneLimit();
-        loadedDraft.hudOpacity = config.getHudOpacity();
-        loadedDraft.hudShowWhenEmpty = config.isHudShowWhenEmpty();
-        loadedDraft.hudVisible = ClientBridge.ops().isHudVisible();
-        loadedDraft.hudProjectSource = normalizeHudProjectSource(config.getHudProjectSource());
-        loadedDraft.previewUseCustom = config.isHudUseCustomPosition();
-        loadedDraft.previewHorizontalAnchor = config.hasHudCustomAnchors()
-                ? config.getHudCustomHorizontalAnchor() : ModConfig.HudHorizontalAnchor.RIGHT;
-        loadedDraft.previewVerticalAnchor = config.hasHudCustomAnchors()
-                ? config.getHudCustomVerticalAnchor() : ModConfig.HudVerticalAnchor.TOP;
-        loadedDraft.previewHorizontalMargin = config.hasHudCustomAnchors() ? config.getHudCustomHorizontalMargin() : 6;
-        loadedDraft.previewVerticalMargin = config.hasHudCustomAnchors() ? config.getHudCustomVerticalMargin() : 6;
-        loadedDraft.previewHudX = 0;
-        loadedDraft.previewHudY = 0;
-        return loadedDraft;
-    }
+        config.setHudWidth(parseIntSafe(hudWidthField.getValue(), config.getHudWidth()));
+        config.setHudMaxHeight(parseIntSafe(hudMaxHeightField.getValue(), config.getHudMaxHeight()));
+        config.setHudTodoLimit(hudTodoLimitSlider.getIntValue());
+        config.setHudDoneLimit(hudDoneLimitSlider.getIntValue());
+        config.setHudOpacity(hudOpacitySlider.getDoubleValue());
+        config.setHudShowWhenEmpty(hudShowWhenEmptyValue);
+        config.setHudProjectSource(hudProjectSourceValue);
 
-    /**
-     * 构建配置项模型列表，统一描述标签和对应组件。
-     *
-     * @return 配置项模型列表
-     */
-    private List<ConfigRowModel> buildConfigRows() {
-        List<ConfigRowModel> rows = new ArrayList<>();
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_width"), hudWidthField));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_max_height"), hudMaxHeightField));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_todo_limit"), hudTodoLimitSlider));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_done_limit"), hudDoneLimitSlider));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_show_when_empty"), hudShowWhenEmptyButton));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_visibility"), hudVisibilityButton));
-        rows.add(new ConfigRowModel(Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton));
-        return rows;
-    }
-
-    /**
-     * 计算当前窗口尺寸下的配置页响应式布局。
-     *
-     * @return 当前窗口下的布局快照
-     */
-    private ConfigLayout computeResponsiveLayout() {
-        int outerPadding = 12;
-        int panelGap = 8;
-        int titleX = outerPadding;
-        int titleY = 14;
-        int contentTop = titleY + 20;
-        int buttonHeight = 20;
-        int buttonGap = 8;
-        int buttonY = height - outerPadding - buttonHeight;
-        int buttonWidth = Math.max(72, (width - outerPadding * 2 - buttonGap) / 2);
-        int columns = width >= 420 ? 2 : 1;
-
-        int previewPanelX;
-        int previewPanelY;
-        int previewPanelWidth;
-        int previewPanelHeight;
-        int configListX = outerPadding;
-        int configListY = contentTop;
-        int configListWidth;
-        int configListHeight;
-
-        if (columns == 2) {
-            previewPanelWidth = clampInt(width / 3, 150, 200);
-            previewPanelX = width - outerPadding - previewPanelWidth;
-            previewPanelY = contentTop;
-            previewPanelHeight = Math.max(96, buttonY - panelGap - previewPanelY);
-            configListWidth = Math.max(140, previewPanelX - panelGap - outerPadding);
-            configListHeight = Math.max(72, buttonY - panelGap - configListY);
-        } else {
-            previewPanelWidth = Math.max(160, width - outerPadding * 2);
-            previewPanelHeight = clampInt(height / 3, 72, 96);
-            previewPanelX = outerPadding;
-            previewPanelY = buttonY - panelGap - previewPanelHeight;
-            configListWidth = previewPanelWidth;
-            configListHeight = Math.max(44, previewPanelY - panelGap - configListY);
-        }
-
-        int workspacePadding = 10;
-        int previewWorkspaceX = previewPanelX + workspacePadding;
-        int previewWorkspaceY = previewPanelY + 24;
-        int previewWorkspaceWidth = Math.max(60, previewPanelWidth - workspacePadding * 2);
-        int previewWorkspaceHeight = Math.max(34, previewPanelHeight - 34);
-        int saveButtonX = outerPadding;
-        int cancelButtonX = saveButtonX + buttonWidth + buttonGap;
-
-        return new ConfigLayout(columns, titleX, titleY, configListX, configListY, configListWidth, configListHeight,
-                previewPanelX, previewPanelY, previewPanelWidth, previewPanelHeight,
-                previewWorkspaceX, previewWorkspaceY, previewWorkspaceWidth, previewWorkspaceHeight,
-                saveButtonX, buttonY, buttonWidth, cancelButtonX, buttonY, buttonWidth, buttonHeight);
-    }
-
-    /**
-     * 将布局快照同步到组件、滚动区和预览块。
-     */
-    private void applyLayout() {
-        if (layout == null) {
-            return;
-        }
-        configListScrollOffset = clampInt(configListScrollOffset, 0, getConfigListMaxScrollOffset());
-        saveButton.setX(layout.saveButtonX());
-        saveButton.setY(layout.saveButtonY());
-        saveButton.setWidth(layout.saveButtonWidth());
-        cancelButton.setX(layout.cancelButtonX());
-        cancelButton.setY(layout.cancelButtonY());
-        cancelButton.setWidth(layout.cancelButtonWidth());
-        layoutConfigRows();
-        updatePreviewFromDraft(draft);
-    }
-
-    /**
-     * 按当前列数和滚动偏移重排配置项组件。
-     */
-    private void layoutConfigRows() {
-        if (layout == null || configRows == null) {
-            return;
-        }
-        int columns = Math.max(1, layout.columns());
-        int columnGap = columns == 2 ? 8 : 0;
-        int cellWidth = columns == 2
-                ? Math.max(80, (layout.configListWidth() - columnGap) / 2)
-                : layout.configListWidth();
-        int rowHeight = 38;
-        int listBottom = layout.configListY() + layout.configListHeight();
-
-        for (int index = 0; index < configRows.size(); index++) {
-            ConfigRowModel row = configRows.get(index);
-            int rowIndex = index / columns;
-            int columnIndex = index % columns;
-            int baseX = layout.configListX() + columnIndex * (cellWidth + columnGap);
-            int baseY = layout.configListY() + rowIndex * rowHeight - configListScrollOffset;
-            int labelY = baseY;
-            int slotY = baseY + 14;
-            AbstractWidget widget = row.widget();
-            boolean visible = slotY + widget.getHeight() >= layout.configListY() && labelY <= listBottom;
-            row.updateLayout(baseX, labelY, baseX, slotY, cellWidth, visible);
-            widget.setX(baseX);
-            widget.setY(slotY);
-            widget.setWidth(cellWidth);
-            widget.visible = visible;
-            widget.active = visible;
-        }
-    }
-
-    /**
-     * 将当前组件状态同步回草稿，避免布局重算丢失编辑值。
-     */
-    private void syncDraftFromWidgets() {
-        if (draft == null) {
-            return;
-        }
-        ModConfig config = ModConfig.getInstance();
-        if (hudWidthField != null) {
-            draft.hudWidth = parseIntSafe(hudWidthField.getValue(), config.getHudWidth());
-        }
-        if (hudMaxHeightField != null) {
-            draft.hudMaxHeight = parseIntSafe(hudMaxHeightField.getValue(), config.getHudMaxHeight());
-        }
-        if (hudTodoLimitSlider != null) {
-            draft.hudTodoLimit = hudTodoLimitSlider.getIntValue();
-        }
-        if (hudDoneLimitSlider != null) {
-            draft.hudDoneLimit = hudDoneLimitSlider.getIntValue();
-        }
-        if (hudOpacitySlider != null) {
-            draft.hudOpacity = hudOpacitySlider.getDoubleValue();
-        }
-        draft.hudShowWhenEmpty = hudShowWhenEmptyValue;
-        draft.hudVisible = hudVisibleValue;
-        draft.hudProjectSource = normalizeHudProjectSource(hudProjectSourceValue);
-    }
-
-    /**
-     * 根据草稿刷新预览块尺寸和位置。
-     *
-     * @param currentDraft 当前 HUD 配置草稿
-     */
-    private void updatePreviewFromDraft(HudConfigDraft currentDraft) {
-        if (layout == null || currentDraft == null) {
-            return;
-        }
-        previewHudWidth = clampInt(currentDraft.hudWidth, 80, Math.max(80, layout.previewWorkspaceWidth() - 4));
-        previewHudHeight = clampInt(calculatePreviewHeight(currentDraft), 34, Math.max(34, layout.previewWorkspaceHeight() - 4));
-
-        if (currentDraft.previewUseCustom) {
-            int resolvedX = resolvePreviewCoordinate(currentDraft.previewHorizontalAnchor,
-                    currentDraft.previewHorizontalMargin, layout.previewWorkspaceWidth(), previewHudWidth);
-            int resolvedY = resolvePreviewCoordinate(currentDraft.previewVerticalAnchor,
-                    currentDraft.previewVerticalMargin, layout.previewWorkspaceHeight(), previewHudHeight);
-            previewHudX = layout.previewWorkspaceX() + resolvedX;
-            previewHudY = layout.previewWorkspaceY() + resolvedY;
-            previewUseCustom = true;
-        } else {
-            previewHudX = layout.previewWorkspaceX() + Math.max(0, layout.previewWorkspaceWidth() - previewHudWidth - 6);
-            previewHudY = layout.previewWorkspaceY() + 6;
-            previewUseCustom = false;
-        }
-        previewRectX = previewHudX;
-        previewRectY = previewHudY;
-        currentDraft.previewHudX = previewHudX;
-        currentDraft.previewHudY = previewHudY;
-    }
-
-    /**
-     * 将预览块当前绝对位置转换成草稿中的锚点和边距信息。
-     */
-    private void syncDraftPreviewPositionFromBlock() {
-        if (draft == null || layout == null) {
-            return;
-        }
-        int relativeX = previewHudX - layout.previewWorkspaceX();
-        int relativeY = previewHudY - layout.previewWorkspaceY();
-        int rightMargin = Math.max(0, layout.previewWorkspaceWidth() - previewHudWidth - relativeX);
-        int bottomMargin = Math.max(0, layout.previewWorkspaceHeight() - previewHudHeight - relativeY);
-
-        if (relativeX <= rightMargin) {
-            draft.previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.LEFT;
-            draft.previewHorizontalMargin = Math.max(0, relativeX);
-        } else {
-            draft.previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.RIGHT;
-            draft.previewHorizontalMargin = rightMargin;
-        }
-        if (relativeY <= bottomMargin) {
-            draft.previewVerticalAnchor = ModConfig.HudVerticalAnchor.TOP;
-            draft.previewVerticalMargin = Math.max(0, relativeY);
-        } else {
-            draft.previewVerticalAnchor = ModConfig.HudVerticalAnchor.BOTTOM;
-            draft.previewVerticalMargin = bottomMargin;
-        }
-
-        previewHorizontalAnchor = draft.previewHorizontalAnchor;
-        previewVerticalAnchor = draft.previewVerticalAnchor;
-        previewHorizontalMargin = draft.previewHorizontalMargin;
-        previewVerticalMargin = draft.previewVerticalMargin;
-        draft.previewUseCustom = true;
-        previewUseCustom = true;
-        draft.previewHudX = previewHudX;
-        draft.previewHudY = previewHudY;
-        previewRectX = previewHudX;
-        previewRectY = previewHudY;
-    }
-
-    /**
-     * 将草稿统一写回配置对象和客户端桥接层。
-     *
-     * @param currentDraft 当前 HUD 配置草稿
-     */
-    private void persistDraft(HudConfigDraft currentDraft) {
-        if (currentDraft == null) {
-            return;
-        }
-        ModConfig config = ModConfig.getInstance();
-        config.setHudWidth(currentDraft.hudWidth);
-        config.setHudMaxHeight(currentDraft.hudMaxHeight);
-        config.setHudTodoLimit(currentDraft.hudTodoLimit);
-        config.setHudDoneLimit(currentDraft.hudDoneLimit);
-        config.setHudOpacity(currentDraft.hudOpacity);
-        config.setHudShowWhenEmpty(currentDraft.hudShowWhenEmpty);
-        config.setHudProjectSource(currentDraft.hudProjectSource);
-        if (currentDraft.previewUseCustom) {
+        previewHudWidth = Math.max(1, config.getHudWidth());
+        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        if (previewUseCustom) {
             config.updateHudCustomPosition(previewHudX, previewHudY, this.width, this.height, previewHudWidth, previewHudHeight);
         } else {
             config.setHudUseCustomPosition(false);
         }
-        ClientBridge.ops().setHudVisible(currentDraft.hudVisible);
+        ClientBridge.ops().setHudVisible(hudVisibleValue);
+        this.minecraft.setScreen(parent);
     }
 
     /**
-     * 计算当前配置区总内容高度。
+     * 按当前配置刷新预览绝对坐标。
      *
-     * @return 配置区总内容高度
+     * @param config 当前模组配置
      */
-    private int getConfigListContentHeight() {
-        if (layout == null || configRows == null || configRows.isEmpty()) {
-            return 0;
-        }
-        int columns = Math.max(1, layout.columns());
-        int rowCount = (configRows.size() + columns - 1) / columns;
-        return rowCount * 38;
-    }
-
-    /**
-     * 计算配置区允许的最大滚动偏移。
-     *
-     * @return 最大滚动偏移
-     */
-    private int getConfigListMaxScrollOffset() {
-        if (layout == null) {
-            return 0;
-        }
-        return Math.max(0, getConfigListContentHeight() - layout.configListHeight());
-    }
-
-    /**
-     * 判断配置区内容是否溢出可见高度。
-     *
-     * @return 若溢出则返回 true
-     */
-    private boolean isConfigListOverflowing() {
-        return getConfigListMaxScrollOffset() > 0;
-    }
-
-    /**
-     * 绘制配置页壳层，包括标题、配置区、预览区和底部按钮容器。
-     *
-     * @param context 当前绘制上下文
-     */
-    private void drawLayoutShell(GuiGraphics context) {
-        if (layout == null) {
-            return;
-        }
-        context.drawString(this.font, title, layout.titleX(), layout.titleY(), 0xFFFFFFFF, false);
-        context.fill(layout.configListX(), layout.configListY(),
-                layout.configListX() + layout.configListWidth(), layout.configListY() + layout.configListHeight(), 0x88101010);
-        context.renderOutline(layout.configListX(), layout.configListY(), layout.configListWidth(), layout.configListHeight(), 0xFF5A5A5A);
-        context.fill(layout.previewPanelX(), layout.previewPanelY(),
-                layout.previewPanelX() + layout.previewPanelWidth(), layout.previewPanelY() + layout.previewPanelHeight(), 0x88202020);
-        context.renderOutline(layout.previewPanelX(), layout.previewPanelY(), layout.previewPanelWidth(), layout.previewPanelHeight(), 0xFF7A7A7A);
-        context.drawString(this.font, Component.translatable("gui.todolist.config.hud_preview.title"),
-                layout.previewPanelX() + 10, layout.previewPanelY() + 8, 0xFFFFFFFF, false);
-    }
-
-    /**
-     * 绘制当前可见配置项的标签文本。
-     *
-     * @param context 当前绘制上下文
-     */
-    private void drawConfigRowLabels(GuiGraphics context) {
-        if (configRows == null) {
-            return;
-        }
-        for (ConfigRowModel row : configRows) {
-            if (!row.visible()) {
-                continue;
+    private void syncPreviewPositionFromConfig(ModConfig config) {
+        previewHudWidth = Math.max(1, previewHudWidth);
+        previewHudHeight = Math.max(1, previewHudHeight);
+        if (previewUseCustom) {
+            if (config.hasHudCustomAnchors()) {
+                previewHorizontalAnchor = config.getHudCustomHorizontalAnchor();
+                previewVerticalAnchor = config.getHudCustomVerticalAnchor();
+                previewHorizontalMargin = config.getHudCustomHorizontalMargin();
+                previewVerticalMargin = config.getHudCustomVerticalMargin();
+                applyPreviewAnchorsToAbsolutePosition();
+            } else {
+                previewHudX = resolveLegacyPreviewCoordinate(
+                        config.getHudCustomX(),
+                        config.getHudCustomXRatio(),
+                        config.hasHudCustomPositionRatios(),
+                        this.width,
+                        previewHudWidth
+                );
+                previewHudY = resolveLegacyPreviewCoordinate(
+                        config.getHudCustomY(),
+                        config.getHudCustomYRatio(),
+                        config.hasHudCustomPositionRatios(),
+                        this.height,
+                        previewHudHeight
+                );
+                updatePreviewAnchorsFromAbsolutePosition();
             }
-            context.drawString(this.font, row.label(), row.labelX(), row.labelY(), 0xFFDDDDDD, false);
+        } else {
+            ModConfig.HudPlacement placement = config.resolveHudPlacement(this.width, this.height, previewHudWidth, previewHudHeight);
+            previewHudX = placement.getX();
+            previewHudY = placement.getY();
+            updatePreviewAnchorsFromAbsolutePosition();
         }
     }
 
     /**
-     * 绘制预览面板中的 HUD 预览块和提示文本。
+     * 解析当前实际 HUD 高度，用于更准确地保存预览位置。
      *
-     * @param context 当前绘制上下文
+     * @return 当前 HUD 高度
      */
-    private void drawPreviewPanel(GuiGraphics context) {
-        if (layout == null) {
-            return;
+    private int resolveActualHudHeight() {
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            return Math.max(1, renderer.getCurrentPanelHeight());
         }
-        context.fill(layout.previewWorkspaceX(), layout.previewWorkspaceY(),
-                layout.previewWorkspaceX() + layout.previewWorkspaceWidth(),
-                layout.previewWorkspaceY() + layout.previewWorkspaceHeight(), 0x660A0A0A);
-        context.renderOutline(layout.previewWorkspaceX(), layout.previewWorkspaceY(),
-                layout.previewWorkspaceWidth(), layout.previewWorkspaceHeight(), 0xFF4A4A4A);
-
-        int alpha = (int) Math.round(clampDouble(draft == null ? 0.85D : draft.hudOpacity, 0.0D, 1.0D) * 255.0D);
-        int fillColor = (alpha << 24) | 0x003A3A3A;
-        context.fill(previewHudX, previewHudY, previewHudX + previewHudWidth, previewHudY + previewHudHeight, fillColor);
-        context.renderOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
-
-        Component previewTitle = Component.translatable("gui.todolist.config.hud_preview.title");
-        Component previewHint = Component.translatable("gui.todolist.config.hud_preview.hint");
-        int textY = previewHudY + Math.max(4, (previewHudHeight - (font.lineHeight * 2 + 2)) / 2);
-        context.drawCenteredString(this.font, previewTitle, previewHudX + previewHudWidth / 2, textY, 0xFFFFFFFF);
-        context.drawCenteredString(this.font, previewHint, previewHudX + previewHudWidth / 2, textY + font.lineHeight + 2, 0xFFE6E6E6);
+        return Math.max(1, previewHudHeight == 0 ? 40 : previewHudHeight);
     }
 
     /**
-     * 根据当前草稿估算预览块高度，保证预览在小窗口下仍可完整显示。
+     * 从旧版绝对值或比例值还原预览坐标。
      *
-     * @param currentDraft 当前 HUD 配置草稿
-     * @return 预览块高度
+     * @param absoluteCoordinate 旧版绝对坐标
+     * @param ratioCoordinate 旧版比例坐标
+     * @param preferRatio 是否优先使用比例坐标
+     * @param screenSize 屏幕尺寸
+     * @param hudSize HUD 尺寸
+     * @return 裁剪后的绝对坐标
      */
-    private int calculatePreviewHeight(HudConfigDraft currentDraft) {
-        int lineCount = Math.max(2, Math.min(4, currentDraft.hudTodoLimit + Math.min(1, currentDraft.hudDoneLimit)));
-        return 26 + lineCount * 6;
+    private int resolveLegacyPreviewCoordinate(int absoluteCoordinate, double ratioCoordinate, boolean preferRatio,
+                                               int screenSize, int hudSize) {
+        if (preferRatio) {
+            int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+            return clampPreviewCoordinate((int) Math.round(clampRatio(ratioCoordinate) * maxCoordinate), screenSize, hudSize);
+        }
+        return clampPreviewCoordinate(absoluteCoordinate, screenSize, hudSize);
     }
 
     /**
-     * 根据锚点和边距计算预览块在工作区内的相对坐标。
+     * 将比例值裁剪到 0 到 1。
      *
-     * @param anchor 当前使用的锚点
-     * @param margin 当前使用的边距
-     * @param workspaceSize 工作区尺寸
-     * @param blockSize 预览块尺寸
-     * @return 预览块相对工作区的坐标
+     * @param ratio 原始比例
+     * @return 裁剪后的比例
      */
-    private int resolvePreviewCoordinate(Object anchor, int margin, int workspaceSize, int blockSize) {
-        boolean useTrailingAnchor = anchor == ModConfig.HudHorizontalAnchor.RIGHT || anchor == ModConfig.HudVerticalAnchor.BOTTOM;
-        int resolved = useTrailingAnchor ? workspaceSize - blockSize - margin : margin;
-        return clampInt(resolved, 0, Math.max(0, workspaceSize - blockSize));
+    private static double clampRatio(double ratio) {
+        if (ratio < 0.0D) {
+            return 0.0D;
+        }
+        if (ratio > 1.0D) {
+            return 1.0D;
+        }
+        return ratio;
     }
 
     /**
-     * 解析整型输入，失败时回退到安全值。
+     * 根据当前绝对坐标刷新预览锚点和边距。
+     */
+    private void updatePreviewAnchorsFromAbsolutePosition() {
+        previewHudX = clampPreviewCoordinate(previewHudX, this.width, previewHudWidth);
+        previewHudY = clampPreviewCoordinate(previewHudY, this.height, previewHudHeight);
+
+        int leftMargin = previewHudX;
+        int rightMargin = Math.max(0, this.width - Math.max(0, previewHudWidth) - previewHudX);
+        if (leftMargin <= rightMargin) {
+            previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.LEFT;
+            previewHorizontalMargin = leftMargin;
+        } else {
+            previewHorizontalAnchor = ModConfig.HudHorizontalAnchor.RIGHT;
+            previewHorizontalMargin = rightMargin;
+        }
+
+        int topMargin = previewHudY;
+        int bottomMargin = Math.max(0, this.height - Math.max(0, previewHudHeight) - previewHudY);
+        if (topMargin <= bottomMargin) {
+            previewVerticalAnchor = ModConfig.HudVerticalAnchor.TOP;
+            previewVerticalMargin = topMargin;
+        } else {
+            previewVerticalAnchor = ModConfig.HudVerticalAnchor.BOTTOM;
+            previewVerticalMargin = bottomMargin;
+        }
+    }
+
+    /**
+     * 根据当前锚点和边距恢复预览绝对坐标。
+     */
+    private void applyPreviewAnchorsToAbsolutePosition() {
+        int resolvedX = previewHorizontalAnchor == ModConfig.HudHorizontalAnchor.LEFT
+                ? previewHorizontalMargin
+                : this.width - Math.max(0, previewHudWidth) - previewHorizontalMargin;
+        int resolvedY = previewVerticalAnchor == ModConfig.HudVerticalAnchor.TOP
+                ? previewVerticalMargin
+                : this.height - Math.max(0, previewHudHeight) - previewVerticalMargin;
+        previewHudX = clampPreviewCoordinate(resolvedX, this.width, previewHudWidth);
+        previewHudY = clampPreviewCoordinate(resolvedY, this.height, previewHudHeight);
+    }
+
+    /**
+     * 安全解析整型输入。
      *
-     * @param value 原始输入文本
+     * @param value 原始输入
      * @param fallback 回退值
-     * @return 解析后的整型值
+     * @return 解析结果或回退值
      */
     private int parseIntSafe(String value, int fallback) {
         try {
@@ -924,7 +599,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 刷新 HUD 显示按钮文案。
+     * 刷新 HUD 可见性按钮文案。
      */
     private void updateHudVisibilityButtonLabel() {
         if (hudVisibilityButton == null) {
@@ -941,12 +616,18 @@ public class ConfigScreen extends Screen {
         if (hudProjectSourceButton == null) {
             return;
         }
-        String value = normalizeHudProjectSource(hudProjectSourceValue);
-        if ("CURRENT".equalsIgnoreCase(value)) {
-            hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.current_selected_fallback"));
+        if ("CURRENT".equalsIgnoreCase(hudProjectSourceValue)) {
+            Project.Scope scope = resolveHudScope();
+            Project project = getActiveProject(scope);
+            Component projectName = getProjectDisplayName(project);
+            if (projectName != null && !projectName.getString().trim().isEmpty()) {
+                hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.current_selected", projectName.getString()));
+            } else {
+                hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.current_selected_fallback"));
+            }
             return;
         }
-        if ("STARRED".equalsIgnoreCase(value)) {
+        if ("STARRED".equalsIgnoreCase(hudProjectSourceValue)) {
             hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.starred"));
             return;
         }
@@ -954,7 +635,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 规范化 HUD 项目来源值，避免空值导致按钮状态异常。
+     * 规范化 HUD 项目来源值。
      *
      * @param source 原始来源值
      * @return 规范化后的来源值
@@ -972,10 +653,10 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 解析 HUD 项目来源在选项数组中的索引。
+     * 解析 HUD 项目来源索引。
      *
      * @param source 当前来源值
-     * @return 对应的索引
+     * @return 对应索引
      */
     private int resolveHudProjectSourceIndex(String source) {
         for (int index = 0; index < HudProjectSourceOptions.VALUES.length; index++) {
@@ -987,7 +668,59 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 将整型值限制在给定范围内。
+     * 根据 HUD 默认视图解析当前项目作用域。
+     *
+     * @return 对应的项目作用域
+     */
+    private Project.Scope resolveHudScope() {
+        String view = ModConfig.getInstance().getHudDefaultView();
+        if ("TEAM_UNASSIGNED".equalsIgnoreCase(view)
+                || "TEAM_ALL".equalsIgnoreCase(view)
+                || "TEAM_ASSIGNED".equalsIgnoreCase(view)) {
+            return Project.Scope.TEAM;
+        }
+        return Project.Scope.PERSONAL;
+    }
+
+    /**
+     * 获取当前作用域下的激活项目。
+     *
+     * @param scope 目标作用域
+     * @return 当前激活项目
+     */
+    private static Project getActiveProject(Project.Scope scope) {
+        return ClientBridge.getActiveProject(TodoListCommon.getProjectManager(), scope);
+    }
+
+    /**
+     * 获取项目显示名称。
+     *
+     * @param project 目标项目
+     * @return 项目显示文本
+     */
+    private static Component getProjectDisplayName(Project project) {
+        return ProjectNameFormatter.toDisplayText(project);
+    }
+
+    /**
+     * 绘制位于控件左侧的标签文本。
+     *
+     * @param context 绘制上下文
+     * @param label 标签文本
+     * @param widget 目标控件
+     * @param textHeight 文本高度
+     */
+    private void drawLabelForWidget(GuiGraphics context, Component label, AbstractWidget widget, int textHeight) {
+        if (widget == null || !widget.visible) {
+            return;
+        }
+        int labelY = widget.getY() + (widget.getHeight() - textHeight) / 2;
+        int labelX = Math.max(8, widget.getX() - this.font.width(label) - 8);
+        context.drawString(this.font, label, labelX, labelY, 0xFFFFFF, false);
+    }
+
+    /**
+     * 将整型值裁剪到指定范围。
      *
      * @param value 原始值
      * @param min 最小值
@@ -1008,38 +741,39 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 将浮点值限制在给定范围内。
+     * 将预览坐标裁剪到当前屏幕范围内。
      *
-     * @param value 原始值
-     * @param min 最小值
-     * @param max 最大值
-     * @return 裁剪后的值
+     * @param coordinate 原始坐标
+     * @param screenSize 屏幕尺寸
+     * @param hudSize HUD 尺寸
+     * @return 合法的预览坐标
      */
-    private static double clampDouble(double value, double min, double max) {
-        if (value < min) {
-            return min;
+    private static int clampPreviewCoordinate(int coordinate, int screenSize, int hudSize) {
+        int maxCoordinate = Math.max(0, screenSize - Math.max(0, hudSize));
+        if (coordinate < 0) {
+            return 0;
         }
-        if (value > max) {
-            return max;
+        if (coordinate > maxCoordinate) {
+            return maxCoordinate;
         }
-        return value;
+        return coordinate;
     }
 
     /**
-     * HUD 项目来源选项集合。
+     * HUD 项目来源常量集合。
      */
     private static final class HudProjectSourceOptions {
         private static final String[] VALUES = new String[] {"CURRENT", "STARRED", "ALL"};
 
         /**
-         * 私有构造方法，避免工具类被实例化。
+         * 私有构造方法，避免工具类实例化。
          */
         private HudProjectSourceOptions() {
         }
     }
 
     /**
-     * 整型步进滑块：用于待办数和已办数配置。
+     * 整型滑块控件，用于待办数和已办数设置。
      */
     private static class IntSliderWidget extends AbstractSliderButton {
         private final int min;
@@ -1064,9 +798,9 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 按整型值设置滑块内部比例值。
+         * 根据整型值设置滑块比例。
          *
-         * @param value 目标整型值
+         * @param value 目标值
          */
         private void setValueFromInt(int value) {
             int clamped = Math.max(min, Math.min(max, value));
@@ -1075,7 +809,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 返回当前滑块代表的整型值。
+         * 返回当前整型值。
          *
          * @return 当前整型值
          */
@@ -1089,7 +823,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 根据当前整型值刷新滑块文本。
+         * 刷新滑块显示文本。
          */
         @Override
         protected void updateMessage() {
@@ -1097,7 +831,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 当前滑块不需要额外的应用逻辑。
+         * 当前滑块不需要额外提交逻辑。
          */
         @Override
         protected void applyValue() {
@@ -1105,7 +839,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 双精度步进滑块：用于透明度配置。
+     * 浮点步进滑块控件，用于透明度设置。
      */
     private static class DoubleStepSliderWidget extends AbstractSliderButton {
         private final double min;
@@ -1113,7 +847,7 @@ public class ConfigScreen extends Screen {
         private final double step;
 
         /**
-         * 创建双精度步进滑块。
+         * 创建浮点步进滑块。
          *
          * @param x 组件 X 坐标
          * @param y 组件 Y 坐标
@@ -1133,30 +867,36 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 按双精度值设置滑块内部比例值。
+         * 根据浮点值设置滑块比例。
          *
-         * @param value 目标双精度值
+         * @param value 目标值
          */
         private void setValueFromDouble(double value) {
-            double clamped = clampDouble(value, min, max);
+            double clamped = Math.max(min, Math.min(max, value));
             double stepped = Math.round(clamped / step) * step;
-            this.value = max == min ? 0.0D : clampDouble((stepped - min) / (max - min), 0.0D, 1.0D);
+            this.value = max == min ? 0.0D : clampRatio((stepped - min) / (max - min));
             updateMessage();
         }
 
         /**
-         * 返回当前滑块代表的双精度值。
+         * 返回当前浮点值。
          *
-         * @return 当前双精度值
+         * @return 当前浮点值
          */
         double getDoubleValue() {
-            double raw = min + clampDouble(this.value, 0.0D, 1.0D) * (max - min);
+            double raw = min + clampRatio(this.value) * (max - min);
             double stepped = Math.round(raw / step) * step;
-            return clampDouble(stepped, min, max);
+            if (stepped < min) {
+                return min;
+            }
+            if (stepped > max) {
+                return max;
+            }
+            return stepped;
         }
 
         /**
-         * 根据当前双精度值刷新滑块文本。
+         * 刷新滑块显示文本。
          */
         @Override
         protected void updateMessage() {
@@ -1164,7 +904,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 当前滑块不需要额外的应用逻辑。
+         * 当前滑块不需要额外提交逻辑。
          */
         @Override
         protected void applyValue() {

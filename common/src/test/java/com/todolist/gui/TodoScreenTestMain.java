@@ -626,6 +626,7 @@ public final class TodoScreenTestMain {
                 .filter(task -> "Alpha".equals(task.getTitle()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到 Alpha 任务"));
+        widget.ensureVisible(gamma);
         int interactX = widget.getInteractXForTest();
         int startY = widget.getTaskRowCenterYForTest(gamma.getId());
         int targetY = widget.getTaskRowCenterYForTest(alpha.getId()) - widget.getTaskItemHeightForTest() / 2;
@@ -664,11 +665,24 @@ public final class TodoScreenTestMain {
                 .orElseThrow(() -> new AssertionError("应能找到 Alpha 任务"));
         alpha.setCompleted(true);
 
-        ScreenDriver.click(screen.getFilterStatusButtonForTest());
+        screen.switchProjectForTest(screen.getCurrentProjectForTest());
 
-        GuiTestSupport.assertEquals("completed", screen.getCurrentFilterForTest(), "点击状态筛选按钮后应切换到已完成筛选");
-        GuiTestSupport.assertEquals(1, screen.getFilteredTasksForTest().size(), "已完成筛选后只应保留完成任务");
-        GuiTestSupport.assertEquals("Alpha", screen.getFilteredTasksForTest().get(0).getTitle(), "已完成筛选后应返回 Alpha 任务");
+        GuiTestSupport.assertTrue(screen.getFilterStatusButtonForTest() == null, "待办界面不应再显示状态筛选按钮");
+        GuiTestSupport.assertEquals("active", screen.getCurrentFilterForTest(), "当前筛选状态应固定为未完成列表");
+        GuiTestSupport.assertEquals(1, screen.getFilteredTasksForTest().size(), "未完成列表中只应保留未完成任务");
+        GuiTestSupport.assertEquals("Beta", screen.getFilteredTasksForTest().get(0).getTitle(), "未完成列表中应只显示 Beta");
+
+        List<String> collapsedRows = screen.getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(3, collapsedRows.size(), "默认收起时应包含两个分组标题和一条未完成任务");
+        GuiTestSupport.assertTrue(collapsedRows.get(0).startsWith("HEADER:"), "第一行应为未完成分组标题");
+        GuiTestSupport.assertEquals("TASK:" + screen.getFilteredTasksForTest().get(0).getId(), collapsedRows.get(1), "收起时应仅显示 Beta 任务");
+        GuiTestSupport.assertTrue(collapsedRows.get(2).startsWith("HEADER:"), "最后一行应为已完成分组标题");
+
+        screen.toggleCompletedSectionForTest();
+
+        List<String> expandedRows = screen.getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(4, expandedRows.size(), "展开已完成分组后应额外显示已完成任务");
+        GuiTestSupport.assertEquals("TASK:" + alpha.getId(), expandedRows.get(3), "展开已完成分组后应显示 Alpha 任务");
     }
 
     /**

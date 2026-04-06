@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -55,16 +56,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 主界面的空间维度，区分个人空间与团队空间。
-     */
+     * 濞戞捁宕甸弲顐︽閵忋垺鐣辩紒灞炬そ濡法绱掗弶鎴濐唺闁挎稑鑻亸顖炲礆閸℃洟鍤嬪ù婊嗘閳规牠姊荤紙鐘电憿闁搞儯鍨藉Σ锔剧矚濞差亝锛熼柕?     */
     private enum SpaceMode {
         PERSONAL,
         TEAM
     }
 
     /**
-     * 主界面的任务视图维度，统一个人与团队空间的可见视图语义。
-     */
+     * 濞戞捁宕甸弲顐︽閵忋垺鐣卞ù鐘侯嚙婵喓鎲撮崱妤佺缂備焦娼欑€规娊鏁嶅畝鈧划鐑樼▔閳ь剚绋夐鍐╃溄濞戞挸楠稿ú鐔兼⒓閻旇　鏁勯梻鍌氼嚟濞堟垿宕ｉ婵愭綄閻熸瑥妫楀ù妯兼嫚椤撴繄鐤呴柕?     */
     private enum TaskViewOption {
         MY,
         UNASSIGNED,
@@ -72,8 +71,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 主界面的响应式档位，按窗口宽高综合决定布局降级策略。
-     */
+     * 濞戞捁宕甸弲顐︽閵忋垺鐣遍柛婵嗙Т缁ㄦ彃顕ｈ箛鏂烩偓鍌涙媴瀹ュ繒绀夐柟绋款槺閻涖儵宕ｉ敐鍜佸晬濡ゅ倹顭囬幃锝夊触閸繂鏋€閻庤鑹剧粩椋庝沪閳ь剟姊藉鍥崜缂佹稒鐗滈弳鎰板Υ?     */
     private enum ResponsiveTier {
         LARGE,
         MEDIUM,
@@ -82,8 +80,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 简单矩形布局对象，记录某个区域的边界信息。
-     */
+     * 缂佺姭鍋撻柛妤佹礈閻撯晞銇愰姀鐘殿伌閻忕偐鍋撻悗鐢殿攰閽栧嫰鏁嶅畝鍐惧敹鐟滅増娲橀悡鍥ㄧ▔椤忓嫬闅橀柛鈺冨枔濞堟垶娼忛崷顓熸珪濞ｅ洠鍓濇导鍛村Υ?     */
     private static final class LayoutRect {
         private final int x;
         private final int y;
@@ -91,12 +88,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private final int height;
 
         /**
-         * 创建一个矩形边界对象。
-         *
-         * @param x 左上角横坐标
-         * @param y 左上角纵坐标
-         * @param width 区域宽度
-         * @param height 区域高度
+         * 闁告帗绋戠紓鎾寸▔閳ь剚绋夐鍡欏彁鐟滆埇鍨肩粩鐔兼偩鐏炵瓔鍤犻悹鐏烘壋鍋?         *
+         * @param x 鐎归潻缂氱粭鍌滄喆閹烘拋顓㈠锤閹邦厾鍨?
+         * @param y 鐎归潻缂氱粭鍌滄喆閹烘梹妫婚柛褎鍔栭悥?
+         * @param width 闁告牕鎼悡娆戔偓纭呮鐎?
+         * @param height 闁告牕鎼悡娆愵殗濡搫顔?
          */
         private LayoutRect(int x, int y, int width, int height) {
             this.x = Math.max(0, x);
@@ -106,29 +102,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 判断坐标是否位于当前矩形内部。
-         *
-         * @param mouseX 鼠标横坐标
-         * @param mouseY 鼠标纵坐标
-         * @return true 表示命中当前区域
+         * 闁告帇鍊栭弻鍥锤閹邦厾鍨奸柡鍕靛灠閹焦鎷呭鍕壘鐟滅増鎸告晶鐘绘儗閳轰浇鍩岄柛鎰嚇閸庢挳濡?         *
+         * @param mouseX 濮捬呭У閻栵絽螣椤忓嫭缍忛柡?         * @param mouseY 濮捬呭У閻栵絿鐥棃娑欑稄闁?         * @return true 閻炴稏鍔庨妵姘跺川閹存帟鍘憸鐗堟尭婢х娀宕犻崫鍕幍
          */
         private boolean contains(double mouseX, double mouseY) {
             return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
         }
 
         /**
-         * 以测试友好的数组形式返回矩形边界。
-         *
-         * @return 依次包含 x、y、width、height 的数组
-         */
+         * 濞寸姰鍎茬粊瀵告嫚閺囩偛鍑犲┑鍌滄櫕濞堟垿寮幍顔剧煁鐟滆埇鍨圭槐鈩冩交閺傛寧绀€闁活厸鏅涢懜鐗堟綇閸︻厽娅曢柕?         *
+         * @return 濞撴碍绻冮濂稿礌閸涱厽鍎?x闁靛棔绨滈柕鍡曠皻idth闁靛棔寮揺ight 闁汇劌瀚弳鐔虹磼?         */
         private int[] toArray() {
             return new int[] {x, y, width, height};
         }
     }
 
     /**
-     * 主界面布局快照，集中保存响应式断点和三栏区域边界。
-     */
+     * 濞戞捁宕甸弲顐︽閵忕姷顏撮悘鐐╁亾闊浂鍋嗛崣搴ㄦ晬瀹€鍕偁濞戞搩鍘虹换姘扁偓娑櫭幖閿嬫償閺傝法纭€闁哄偆鍘鹃崑锝夊椽鐏炶偐鐟忛柡宥呯箰鐏忣垶宕洪悢鑽ょ彾闁伙絽琚埀?     */
     private static final class MainLayoutMetrics {
         private final ResponsiveTier responsiveTier;
         private final LayoutRect sidebarBounds;
@@ -142,18 +132,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private final int gap;
 
         /**
-         * 创建一次主界面布局计算结果。
-         *
-         * @param responsiveTier 当前响应式档位
-         * @param sidebarBounds 项目侧栏边界
-         * @param contentBounds 主内容区边界
-         * @param detailBounds 详情区边界
-         * @param sidebarOverlay 项目侧栏是否覆盖显示
-         * @param detailOverlay 详情区是否覆盖显示
-         * @param sidebarVisible 项目侧栏当前是否可见
-         * @param detailVisible 详情区当前是否可见
-         * @param padding 外层边距
-         * @param gap 面板间距
+         * 闁告帗绋戠紓鎾寸▔閳ь剙鈻庨垾鎻掔槣闁伙絽鐭傚鎵暜閸愩劎婀伴悹渚婄磿閻ｈ崵绱掗幘瀵镐函闁?         *
+         * @param responsiveTier 鐟滅増鎸告晶鐘诲传瀹ュ懐瀹夌€殿喖绻戦妴鍌涙媴?         * @param sidebarBounds 濡炪倕婀卞ú鐗堢瑹瑜庨悥顔芥綇閸︻厽娅?
+         * @param contentBounds 濞戞捁顕ч崬瀵糕偓鍦嚀鐏忣垱娼忛崷顓熸珪
+         * @param detailBounds 閻犲浄闄勯崕蹇涘礌妤﹁法鐝堕柣?         * @param sidebarOverlay 濡炪倕婀卞ú鐗堢瑹瑜庨悥顕€寮伴姘剨閻熸洖妫涘ú濠囧及閸撗佷粵
+         * @param detailOverlay 閻犲浄闄勯崕蹇涘礌閻戞ɑ笑闁告熬绠掗々顐︽儎閺嶃劍鈻旂紒鈧?         * @param sidebarVisible 濡炪倕婀卞ú鐗堢瑹瑜庨悥顔裤亹閹惧啿顤呴柡鍕靛灠閹線宕ｉ婵愭綄
+         * @param detailVisible 閻犲浄闄勯崕蹇涘礌閸濆嫮绉奸柛鎾崇У濡叉悂宕ラ敃鈧ぐ鑼喆?         * @param padding 濠㈣埖鐗曢惇鐗堟綇绾懐鐛?
+         * @param gap 闂傚牄鍨哄姗€姊荤壕瀣崺
          */
         private MainLayoutMetrics(ResponsiveTier responsiveTier,
                                   LayoutRect sidebarBounds,
@@ -179,8 +164,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 详情抽屉草稿对象，集中维护当前选中任务的编辑态和显示态。
-     */
+     * 閻犲浄闄勯崕蹇涘箮閽樺婧勯柤钘夘槺椤牏鈧數顢婇挅鍕晬瀹€鍕偁濞戞搩鍘惧ǎ顕€骞庨妶鍛Ъ闁告挸绉归埀顒€顦懙鎴炵鐠囨彃顫ら柣銊ュ缁鳖亝娼忛幋鐐╁亾娴ｅ憡瀚查柡鍕⒔閵囨岸骞€娴ｇ鍋?     */
     private static final class TaskDetailDraft {
         private final String taskId;
         private String title;
@@ -189,12 +173,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         private boolean titleEditing;
 
         /**
-         * 创建一个与选中任务绑定的详情草稿。
-         *
-         * @param taskId 任务标识
-         * @param title 标题文本
-         * @param description 描述文本
-         * @param tags 标签文本
+         * 闁告帗绋戠紓鎾寸▔閳ь剚绋夐鍐憿闂侇偄顦懙鎴炵鐠囨彃顫ょ紓浣瑰灥閻ｉ箖鎯冮崟顕呭殜闁诡垰鎳撳畷蹇曠矙鐟併倐鍋?         *
+         * @param taskId 濞寸姾顕ф慨鐔煎冀閸ヮ亞妲?
+         * @param title 闁哄秴娲。浠嬪棘閸ャ劍鎷?
+         * @param description 闁硅绻楅崼顏堝棘閸ャ劍鎷?
+         * @param tags 闁哄秴娲ㄩ鐑藉棘閸ャ劍鎷?
          */
         private TaskDetailDraft(String taskId, String title, String description, String tags) {
             this.taskId = taskId;
@@ -241,14 +224,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     // Filter buttons
     private Button filterStatusButton;
-    private Button filterPriorityButton; // Unified priority button
+    private Button filterPriorityButton;
     private Button viewToggleButton;
     private Button configButton;
     
     // Project Search & Toggle
     private EditBox projectSearchField;
     private Button addProjectBtn;
-    private Button projectScopeButton;
+    private Button personalSpaceButton;
+    private Button teamSpaceButton;
+    private Button myViewButton;
+    private Button unassignedViewButton;
+    private Button allViewButton;
     private Button editProjectBtn;
     private Button deleteProjectBtn;
     private Button applyJoinProjectBtn;
@@ -262,6 +249,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
     
     private Task selectedTask;
+    private Task pendingClickSelectionTask;
+    private boolean taskRowDragInProgress;
+    private List<String> taskRowDragOrderSnapshot = List.of();
     private List<Task> filteredTasks = new ArrayList<>();
     private List<Task> baseFilteredTasks = new ArrayList<>();
     private String currentFilter = "active";
@@ -313,7 +303,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
 
     /**
-     * 创建主界面，并在关闭时返回到父界面。
+     * 闁告帗绋戠紓鎾寸▔閼姐倖娅曢梻鍫緛缁辨繈鐛捄鐑樿含闁稿繑濞婂Λ鎾籍閹壆绠查柛銉у仜閸╁矂鎮ラ崜浣规珪闂傚牜娼块埀?
      */
     public TodoScreen(Screen parent) {
         super(TITLE);
@@ -321,7 +311,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 重置主界面的静态运行态，供同包测试代码隔离用例。
+     * 闂佹彃绉堕悿鍡樼▔閼姐倖娅曢梻鍫涘灮濞堟垿妫冨▎鎰ㄥ亾娴ｇ晫绠ラ悶娑樻湰閳ь兛绶ょ槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绶氬▓褏绮嬮懡銈嗘殢濞撴艾顑冮埀?
      */
     static void resetGuiStateForTest() {
         personalHasUnsavedChanges = false;
@@ -330,45 +320,43 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回当前项目，供同包测试代码断言项目切换与恢复逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭銈呮贡濞蹭即鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓寮鈾€鏋呭銈呮贡濞蹭即宕氶崶銊ュ簥濞戞挸瀛╂禒顔藉緞瀹ュ鍋撻弰蹇曞竼闁?
      *
-     * @return 当前项目；不存在时返回 null
+     * @return 鐟滅増鎸告晶鐘炽亜閸︻厽绐楅柨娑欑◥缁楀鈧稒锚濠€顏堝籍閹壆绠查柛?null
      */
     Project getCurrentProjectForTest() {
         return currentProject;
     }
 
     /**
-     * 返回当前选中任务，供同包测试代码断言选择逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴梺顐㈩槷閼垫垶绂掔拠鎻掝潳闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣闁哄偆鍙€閳诲牓鏌呮径瀣仴闂侇偅妲掔欢顐﹀Υ?
      *
-     * @return 当前选中任务；不存在时返回 null
+     * @return 鐟滅増鎸告晶鐘绘焻婢跺鍘ù鐘侯嚙婵喖鏁嶅☉妤冪憹閻庢稒锚濠€顏堝籍閹壆绠查柛?null
      */
     Task getSelectedTaskForTest() {
         return selectedTask;
     }
 
     /**
-     * 返回当前视图模式名称，供同包测试代码断言视图恢复逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴悷娆忔濞存ê螣閳ュ磭纭€闁告艾绉惰ⅷ闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣闁哄偆鍙€閳诲牏鎲撮崱妤佺闁诡厹鍨归ˇ鏌ユ焻閺勫繒甯嗛柕?
      *
-     * @return 当前视图模式名称
+     * @return 鐟滅増鎸告晶鐘垫喆閸℃绂堟俊顖椻偓宕囩闁告艾绉惰ⅷ
      */
     String getViewModeNameForTest() {
         return viewMode.name();
     }
 
     /**
-     * 返回当前空间模式名称，供同包测试代码断言个人/团队空间切换语义。
-     *
-     * @return 当前空间模式名称
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呯紒灞炬そ濡灝螣閳ュ磭纭€闁告艾绉惰ⅷ闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣闁哄偆鍙€閳诲牊绋夐鍐╃溄/闁搞儯鍨藉Σ锔剧矚濞差亝锛熼柛鎺戞处瀹曡尙鎷犻婵堢枀闁?     *
+     * @return 鐟滅増鎸告晶鐘电矚濞差亝锛熸俊顖椻偓宕囩闁告艾绉惰ⅷ
      */
     String getCurrentSpaceModeNameForTest() {
         return currentSpaceMode.name();
     }
 
     /**
-     * 返回当前可见任务视图选项快照，供同包测试代码断言空间与视图映射关系。
-     *
-     * @return 当前可见任务视图选项名称列表
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴柛娆樺灥椤棙绂掔拠鎻掝潳閻熸瑥妫楀ù姗€鏌呮径鎰┾偓宥堢疀椤愩倕寮鹃柨娑樺缁剁敻宕ョ仦钘夌樁婵炴潙顑堥惁顖涚閿濆洨鍨抽柡鍌ゅ弨閳诲牏绮氬ú顏咃紵濞戞挸姘﹂～瀣炊閻愵剚衼閻忓繐瀚崣褏鍖栧Ч鍥ｅ亾?     *
+     * @return 鐟滅増鎸告晶鐘诲矗椤栨繍娼屽ù鐘侯嚙婵喓鎲撮崱妤佺闂侇偄顦甸妴宥夊触瀹ュ泦鐐哄礆濡ゅ嫨鈧?
      */
     List<String> getVisibleTaskViewOptionNamesForTest() {
         List<String> names = new ArrayList<>();
@@ -379,297 +367,272 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回当前任务视图选项名称，供同包测试代码断言视图切换语义。
-     *
-     * @return 当前任务视图选项名称
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喓鎲撮崱妤佺闂侇偄顦甸妴宥夊触瀹ュ泦鐐烘晬鐏炶偐杩旈柛姘嫰鐎垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓寮鈾€鏋呴悷娆忔濞存﹢宕氶崶銊ュ簥閻犲浂鍘虹粻鐔煎Υ?     *
+     * @return 鐟滅増鎸告晶鐘崇鐠囨彃顫ら悷娆忔濞存﹢鏌呮径鎰┾偓宥夊触瀹ュ泦?
      */
     String getCurrentTaskViewOptionNameForTest() {
         return currentTaskViewOption.name();
     }
 
     /**
-     * 返回已完成分组是否展开，供同包测试代码断言折叠状态切换。
-     *
-     * @return true 表示已完成分组已展开
+     * 閺夆晜鏌ㄥú鏍ь啅閹绘帞鏆氶柟瀛樺姇閸ㄥ海绱掗崟顒佇﹂柛姘剧畱閻秴顕ｉ埀顒勬晬鐏炶偐杩旈柛姘嫰鐎垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓寮鈾€鏋呴柟鑸得ぐ鏃堟偐閼哥鍋撴担绋跨€奸柟璇℃娇閳?     *
+     * @return true 閻炴稏鍔庨妵姘啅閹绘帞鏆氶柟瀛樺姇閸ㄥ海绱掗崟顐㈠殥閻忕偞娲栫槐?
      */
     boolean isCompletedSectionExpandedForTest() {
         return completedExpanded;
     }
 
     /**
-     * 返回当前主界面的响应式档位名称，供测试断言断点命中结果。
-     *
-     * @return 当前响应式档位名称
-     */
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭☉鎾瑰吹閺咁偊妫冮姀銏＄暠闁告繂绉寸花鎻掝嚕韫囨柣鈧倹鎷呭鍛€崇紒澶婂簻缁辨繃绗熷☉娆戙偞閻犲洦娲橀弻鍥╂嚊閳ь剟寮鐘蹭化闁告稒鍨濋懙鎴犵磼閹惧浜柕?     *
+     * @return 鐟滅増鎸告晶鐘诲传瀹ュ懐瀹夌€殿喖绻戦妴鍌涙媴瀹ュ懏鍊崇紒?     */
     String getResponsiveTierNameForTest() {
         return responsiveTier.name();
     }
 
     /**
-     * 返回项目侧栏当前是否以覆盖式布局呈现。
-     *
-     * @return true 表示项目侧栏处于覆盖模式
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楀〒姘€鍕焿鐟滅増鎸告晶鐘诲及椤栨碍鍎婂ù鐘劥椤╊偊鎯勯弽褏纭€閻㈩垰鍟惇顒勫川閸垹绠涢柕?     *
+     * @return true 閻炴稏鍔庨妵姘亜閸︻厽绐楀〒姘€鍕焿濠㈣泛瀚花顒傛啺閸℃瑦纾版俊顖椻偓宕囩
      */
     boolean isProjectSidebarOverlayForTest() {
         return layoutMetrics != null && layoutMetrics.sidebarOverlay;
     }
 
     /**
-     * 返回详情区当前是否以覆盖式布局呈现。
-     *
-     * @return true 表示详情区处于覆盖模式
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柛鏍ф惈缂嶅宕滃鍡樞﹂柛姘剧細娴滄帞鎲伴崱娆愮０鐎殿喖绻愮粩椋庝沪閳ь剟宕ㄩ崼銏犵疀闁?     *
+     * @return true 閻炴稏鍔庨妵姘辨嫚閿旇棄鍓伴柛鏍ф惈椤︹晜绂嶆惔銈庢船闁烩晜鐗楄啯鐎?     */
     boolean isDetailPanelOverlayForTest() {
         return layoutMetrics != null && layoutMetrics.detailOverlay;
     }
 
     /**
-     * 返回项目侧栏当前是否可见。
-     *
-     * @return true 表示项目侧栏可见
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楀〒姘€鍕焿鐟滅増鎸告晶鐘诲及椤栨碍鍎婇柛娆樺灥椤棝濡?     *
+     * @return true 閻炴稏鍔庨妵姘亜閸︻厽绐楀〒姘€鍕焿闁告瑯鍨甸～?
      */
     boolean isProjectSidebarVisibleForTest() {
         return layoutMetrics != null && layoutMetrics.sidebarVisible;
     }
 
     /**
-     * 返回详情区当前是否可见。
-     *
-     * @return true 表示详情区可见
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柛鏍ф惈缂嶅宕滃鍡樞﹂柛姘剧畱瑜拌尙鎲存担纰樺亾?     *
+     * @return true 閻炴稏鍔庨妵姘辨嫚閿旇棄鍓伴柛鏍ф惈瑜拌尙鎲?     */
     boolean isDetailPanelVisibleForTest() {
         return layoutMetrics != null && layoutMetrics.detailVisible;
     }
 
     /**
-     * 返回项目侧栏切换按钮当前是否可见。
-     *
-     * @return true 表示项目侧栏切换按钮可见
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楀〒姘€鍕焿闁告帒娲﹀畷鏌ュ箰婢舵劖灏︾憸鐗堟尭婢х娀寮伴姘剨闁告瑯鍨甸～鍡涘Υ?     *
+     * @return true 閻炴稏鍔庨妵姘亜閸︻厽绐楀〒姘€鍕焿闁告帒娲﹀畷鏌ュ箰婢舵劖灏﹂柛娆樺灥椤?
      */
     boolean isSidebarToggleButtonVisibleForTest() {
         return sidebarToggleButton != null && sidebarToggleButton.visible;
     }
 
     /**
-     * 返回项目侧栏区域边界，供测试验证响应式布局。
-     *
-     * @return 侧栏边界数组
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楀〒姘€鍕焿闁告牕鎼悡娆愭綇閸︻厽娅曢柨娑樺缁堕潧霉鐎ｎ厾妲稿Δ鐘茬焷閻﹀宕鍛畨鐎殿喖绻愮粩椋庝沪閳ь剟濡?     *
+     * @return 濞撴皜鍕焿閺夊牆婀遍弲顐﹀极閹殿喚鐭?
      */
     int[] getProjectSidebarBoundsForTest() {
         return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.sidebarBounds.toArray();
     }
 
     /**
-     * 返回主内容区边界，供测试验证响应式布局。
-     *
-     * @return 主内容区边界数组
+     * 閺夆晜鏌ㄥú鏍ㄧ▔鐠囨彃鏁堕悗鍦嚀鐏忣垱娼忛崷顓熸珪闁挎稑濂旂欢闈浢圭€ｎ厾妲稿Δ鐘茬焷閻﹀宕鍛畨鐎殿喖绻愮粩椋庝沪閳ь剟濡?     *
+     * @return 濞戞捁顕ч崬瀵糕偓鍦嚀鐏忣垱娼忛崷顓熸珪闁轰焦澹嗙划?
      */
     int[] getContentAreaBoundsForTest() {
         return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.contentBounds.toArray();
     }
 
     /**
-     * 返回详情区边界，供测试验证响应式布局。
-     *
-     * @return 详情区边界数组
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柛鏍細缁旂喖鎮惧畝瀣濞撴碍绋掔粊瀵告嫚閺囥垻宕ｉ悹鍥︾閹奸攱鎯旈弬璺ㄧ閻㈩垰鍟惇顒勫Υ?     *
+     * @return 閻犲浄闄勯崕蹇涘礌妤﹁法鐝堕柣锝呮湰閺嗙喓绱?     */
     int[] getDetailPanelBoundsForTest() {
         return layoutMetrics == null ? new int[] {0, 0, 0, 0} : layoutMetrics.detailBounds.toArray();
     }
 
     /**
-     * 返回项目列表区域边界，供测试验证底部操作区固定布局。
-     *
-     * @return 项目列表区域边界数组
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楅柛鎺擃殙閵嗗啴宕犻崫鍕幍閺夊牆婀遍弲顐︽晬鐏炶偐杩旀繛鏉戭儓閻︻垱顨ュ畝鍐閹煎瓨娲熼崕鎾箼瀹ュ嫮绋婇柛鏍ф惈濞存劗鈧鑹剧粩椋庝沪閳ь剟濡?     *
+     * @return 濡炪倕婀卞ú浼村礆濡ゅ嫨鈧啴宕犻崫鍕幍閺夊牆婀遍弲顐﹀极閹殿喚鐭?
      */
     int[] getProjectListBoundsForTest() {
         return projectListWidget == null ? new int[] {0, 0, 0, 0} : projectListWidget.getBoundsForTest();
     }
 
     /**
-     * 返回新增项目按钮边界。
-     *
-     * @return 新增项目按钮边界数组
+     * 閺夆晜鏌ㄥú鏍棘閺夋鏉诲銈呮贡濞蹭即骞愭径鎰唉閺夊牆婀遍弲顐﹀Υ?     *
+     * @return 闁哄倹婢橀·鍐┿亜閸︻厽绐楅柟绋款樀閹歌櫕娼忛崷顓熸珪闁轰焦澹嗙划?
      */
     int[] getAddProjectButtonBoundsForTest() {
         return toWidgetBounds(addProjectBtn);
     }
 
     /**
-     * 返回编辑项目按钮边界。
-     *
-     * @return 编辑项目按钮边界数组
+     * 閺夆晜鏌ㄥú鏍磽閺嶎剛甯嗗銈呮贡濞蹭即骞愭径鎰唉閺夊牆婀遍弲顐﹀Υ?     *
+     * @return 缂傚倹鐗炵欢顐ｃ亜閸︻厽绐楅柟绋款樀閹歌櫕娼忛崷顓熸珪闁轰焦澹嗙划?
      */
     int[] getEditProjectButtonBoundsForTest() {
         return toWidgetBounds(editProjectBtn);
     }
 
     /**
-     * 返回删除项目按钮边界。
-     *
-     * @return 删除项目按钮边界数组
+     * 閺夆晜鏌ㄥú鏍礆閻樼粯鐝熷銈呮贡濞蹭即骞愭径鎰唉閺夊牆婀遍弲顐﹀Υ?     *
+     * @return 闁告帞濞€濞呭孩銇勯崷顓熺獥闁圭顦甸幐铏綇閸︻厽娅曢柡浣瑰缁?
      */
     int[] getDeleteProjectButtonBoundsForTest() {
         return toWidgetBounds(deleteProjectBtn);
     }
 
     /**
-     * 返回“申请加入”按钮当前是否可见。
-     *
-     * @return true 表示申请加入按钮可见
+     * 閺夆晜鏌ㄥú鏍灳濠婂懏鏆ら悹鍥у槻婵偤宕楅妷鈶╁亾濠靛洤鐦婚梺绛嬪枛缂嶅宕滃鍡樞﹂柛姘剧畱瑜拌尙鎲存担纰樺亾?     *
+     * @return true 閻炴稏鍔庨妵姘舵偨鐎圭媭鍤為柛鏃傚Т閸欏棝骞愭径鎰唉闁告瑯鍨甸～?
      */
     boolean isApplyJoinProjectButtonVisibleForTest() {
         return applyJoinProjectBtn != null && applyJoinProjectBtn.visible;
     }
 
     /**
-     * 返回删除项目按钮当前是否可见。
-     *
-     * @return true 表示删除项目按钮可见
+     * 閺夆晜鏌ㄥú鏍礆閻樼粯鐝熷銈呮贡濞蹭即骞愭径鎰唉鐟滅増鎸告晶鐘诲及椤栨碍鍎婇柛娆樺灥椤棝濡?     *
+     * @return true 閻炴稏鍔庨妵姘跺礆閻樼粯鐝熷銈呮贡濞蹭即骞愭径鎰唉闁告瑯鍨甸～?
      */
     boolean isDeleteProjectButtonVisibleForTest() {
         return deleteProjectBtn != null && deleteProjectBtn.visible;
     }
 
     /**
-     * 返回编辑项目按钮当前文案，供测试验证“编辑/查看”降级语义。
-     *
-     * @return 编辑项目按钮文案
+     * 閺夆晜鏌ㄥú鏍磽閺嶎剛甯嗗銈呮贡濞蹭即骞愭径鎰唉鐟滅増鎸告晶鐘诲棘閸ヮ煈鏀抽柨娑樺缁堕潧霉鐎ｎ厾妲稿Δ鐘茬焷閻﹀鍨惧鍛そ閺?闁哄被鍎冲﹢鍛村灳濠靛顎栫紒鐙欏棭鍤斿☉鏂款槶閳?     *
+     * @return 缂傚倹鐗炵欢顐ｃ亜閸︻厽绐楅柟绋款樀閹告娊寮崶顭戞敵
      */
     String getEditProjectButtonTextForTest() {
         return editProjectBtn == null ? "" : editProjectBtn.getMessage().getString();
     }
 
     /**
-     * 返回当前状态筛选值，供同包测试代码断言过滤逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴柣妯垮煐閳ь兛鑳堕悺顐︽焻婢跺ň鍋撶涵椋庣濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担瑙勭劷閻熷皝鍋撻弶鈺佹处閹躲倝鏌呴弰蹇曞竼闁?
      *
-     * @return 当前状态筛选值
+     * @return 鐟滅増鎸告晶鐘绘偐閼哥鍋撴担铏规懀闂侇偄顦埀?
      */
     String getCurrentFilterForTest() {
         return currentFilter;
     }
 
     /**
-     * 返回当前优先级筛选值，供同包测试代码断言过滤逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鍏济崢娑氱棯瑜忛悺顐︽焻婢跺ň鍋撶涵椋庣濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担瑙勭劷閻熷皝鍋撻弶鈺佹处閹躲倝鏌呴弰蹇曞竼闁?
      *
-     * @return 当前优先级筛选值
+     * @return 鐟滅増鎸告晶鐘冲濡搫甯ョ紒鐙欏懐鎽ｉ梺顐㈩槸閳?
      */
     int getCurrentPriorityFilterForTest() {
         return currentPriorityFilter;
     }
 
     /**
-     * 返回当前搜索关键字，供同包测试代码断言搜索恢复逻辑。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴柟鍏肩矌閸屻劑宕楅幎鑺ユ殯閻庢稒顨愮槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕鐒﹂弻鍥╂嚊閳ь剟骞栧鍛亶闁诡厹鍨归ˇ鏌ユ焻閺勫繒甯嗛柕?
      *
-     * @return 当前搜索关键字
+     * @return 鐟滅増鎸告晶鐘诲箹濠婂懎鍋嶉柛蹇斿▕閺侇厾鈧?
      */
     String getSearchQueryForTest() {
         return searchQuery;
     }
 
     /**
-     * 返回当前通知数量，供同包测试代码断言提示行为。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴梺顐ｆ皑閻擄繝寮导鏉戞闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣闁哄偆鍙€閳诲牓骞撻幇顔轰粵閻炴稑濂旂拹鐔煎Υ?
      *
-     * @return 当前通知数量
+     * @return 鐟滅増鎸告晶鐘绘焻濮樿京鍙€闁轰椒鍗抽崳?
      */
     int getNotificationCountForTest() {
         return notifications.size();
     }
 
     /**
-     * 返回任务标题输入框，供同包测试代码写入任务标题。
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柡宥呮喘椤ｈ姤娼忛幘鍐插汲婵℃妫寸槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绀侀崯鎾诲礂閵夈倖宕查柛鏂哄墲閻栵絾锛愬Ο绯曞亾?
      *
-     * @return 任务标题输入框
+     * @return 濞寸姾顕ф慨鐔煎冀閸ヮ剦鏆弶鍫熸尭閸欏棗顩?
      */
     EditBox getTitleFieldForTest() {
         return titleField;
     }
 
     /**
-     * 返回底部快速新增输入框，供同包测试代码驱动新增任务流程。
-     *
-     * @return 底部快速新增输入框
+     * 閺夆晜鏌ㄥú鏍ㄦ償閺囥垹鍔ラ煫鍥跺亰閳ь剛鍠愰弻濠冩櫠閻愬墎缈婚柛蹇嬪劜椤㈠鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粍銇欓崡鐐残楅柡鍌涙緲椤ゅ啯绂掔拠鎻掝潳婵炵繝鑳堕埢濂稿Υ?     *
+     * @return 閹煎瓨娲熼崕纾嬬疀椤愶腹鍋撻悢鍛婄厐濠⒀呭仩缁额參宕楅妷锔绘敱
      */
     EditBox getQuickAddFieldForTest() {
         return quickAddField;
     }
 
     /**
-     * 返回任务描述输入框，供同包测试代码写入任务描述。
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柟璇茬箺閸亝娼忛幘鍐插汲婵℃妫寸槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绀侀崯鎾诲礂閵夈倖宕查柛鏂哄墲瀵寧娼婚懜顑藉亾?
      *
-     * @return 任务描述输入框
+     * @return 濞寸姾顕ф慨鐔煎箵韫囨艾鐗氶弶鍫熸尭閸欏棗顩?
      */
     MultiLineEditBox getDescFieldForTest() {
         return descField;
     }
 
     /**
-     * 返回任务标签输入框，供同包测试代码写入标签内容。
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柡宥呮川椤掗攱娼忛幘鍐插汲婵℃妫寸槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绀侀崯鎾诲礂閵夛妇鍨肩紒娑欏劤閸炲鈧懓绠嶉埀?
      *
-     * @return 任务标签输入框
+     * @return 濞寸姾顕ф慨鐔煎冀閸モ晩鍔弶鍫熸尭閸欏棗顩?
      */
     EditBox getTagFieldForTest() {
         return tagField;
     }
 
     /**
-     * 返回搜索输入框，供同包测试代码驱动搜索筛选。
+     * 閺夆晜鏌ㄥú鏍箹濠婂懎鍋嶉弶鍫熸尭閸欏棗顩奸崱顓犵濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆笟鈧埞宥夊礉閵婏附鍋濈紒渚垮灮閻☆偊鏌呮径鍫氬亾?
      *
-     * @return 搜索输入框
+     * @return 闁瑰吋绮庨崒銊︽綇閹惧啿寮虫俊?
      */
     EditBox getSearchFieldForTest() {
         return searchField;
     }
 
     /**
-     * 返回项目搜索输入框，供测试验证侧栏过滤与底部按钮布局。
-     *
-     * @return 项目搜索输入框
-     */
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楅柟鍏肩矌閸屻劍娼忛幘鍐插汲婵℃妫寸槐婵囩瑹濞戞瑧銈撮悹鍥ㄦ礋閻涙瑧鎷犳担閿嬫珷闁哄秴绻楃换鍐煥閵堝嫮鐟㈤幖瀛樻礋閸庢挳骞愭径鎰唉閻㈩垰鍟惇顒勫Υ?     *
+     * @return 濡炪倕婀卞ú浼村箹濠婂懎鍋嶉弶鍫熸尭閸欏棗顩?     */
     EditBox getProjectSearchFieldForTest() {
         return projectSearchField;
     }
 
     /**
-     * 返回状态筛选按钮，供同包测试代码切换完成/未完成筛选。
+     * 閺夆晜鏌ㄥú鏍偐閼哥鍋撴担铏规懀闂侇偄顦扮€垫粓鏌﹂鍡欑濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担绋跨€奸柟骞垮灩閻ｎ剟骞?闁哄牜浜滈悾顒勫箣閹邦喚鎽ｉ梺顐㈩槶閳?
      *
-     * @return 状态筛选按钮
+     * @return 闁绘鍩栭埀顑胯兌閻☆偊鏌呮径瀣樆闂?
      */
     Button getFilterStatusButtonForTest() {
         return filterStatusButton;
     }
 
     /**
-     * 返回优先级筛选按钮，供同包测试代码切换优先级筛选。
+     * 閺夆晜鏌ㄥú鏍ㄥ濡搫甯ョ紒鐙欏懐鎽ｉ梺顐㈩槹鐎垫粓鏌﹂鍡欑濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担绋跨€奸柟璇℃線缁鳖參宕楅崼銏ょ崜缂佹稒鐩埀顒€顦埀?
      *
-     * @return 优先级筛选按钮
+     * @return 濞村吋锚閸樻稓鐥閻☆偊鏌呮径瀣樆闂?
      */
     Button getFilterPriorityButtonForTest() {
         return filterPriorityButton;
     }
 
     /**
-     * 返回当前是否存在未保存改动，供同包测试代码断言保存与关闭语义。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴柡鍕靛灠閹胶鈧稒锚濠€顏堝嫉椤忓啰绠介悗娑櫳戦弫濂稿礉椤帞绀夊〒姘☉閹捇宕犻崨顔俱偞閻犲洦娲戦崬顒勬儘娴ｈ鐒介悷灏佸亾濞ｅ洦绻傞悺銊︾▔鎼粹€冲綘闂傚偆鍙€椤曘垺绋婃径鍫氬亾?
      *
-     * @return true 表示当前存在未保存改动
+     * @return true 閻炴稏鍔庨妵姘炽亹閹惧啿顤呴悗娑櫭﹢顏堝嫉椤忓啰绠介悗娑櫳戦弫濂稿礉?
      */
     boolean hasUnsavedChangesForTest() {
         return hasUnsavedChanges;
     }
 
     /**
-     * 返回当前筛选结果任务快照，供同包测试代码断言过滤与上下文菜单行为。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呯紒娑欑洴閳ь剙顦辩划銊╁几濠娾偓閹广垽宕濋垾铏渐闁绘挆宥囩濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担瑙勭劷閻熷皝鍋撻弶鈺佹处閹躲倖绋夋惔婵堢憪濞戞挸顑嗛弸鍐嚕濠婂啫绀嬮悶娑樺鐠愮喖濡?
      *
-     * @return 当前筛选结果任务快照
+     * @return 鐟滅増鎸告晶鐘电驳濞戔懇鍋撴径宀€娉㈤柡瀣矆閹广垽宕濋垾铏渐闁?
      */
     List<Task> getFilteredTasksForTest() {
         return List.copyOf(filteredTasks);
     }
 
     /**
-     * 返回当前任务管理器中的全部任务快照，供同包测试代码断言保存与关闭后的数据状态。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喓绮婚敍鍕€為柛锝冨妺閼垫垿鎯冮崟顐㈠伎闂侇喓鍔嬮幑銏ゅ礉閳ヨ櫕褰ラ柣鎾楀秶绀夊〒姘☉閹捇宕犻崨顔俱偞閻犲洦娲戦崬顒勬儘娴ｈ鐒介悷灏佸亾濞ｅ洦绻傞悺銊︾▔鎼粹€冲綘闂傚偆鍘奸幃妤呮儍閸曨剚娈堕柟璇″枤婵悂骞€娴ｇ鍋?
      *
-     * @return 当前任务管理器中的全部任务快照
+     * @return 鐟滅増鎸告晶鐘崇鐠囨彃顫ょ紒鐙呯磿閹﹪宕抽妸銈堝幀闁汇劌瀚崣蹇涙焾閵娿倖宕查柛鏂衡偓铏渐闁?
      */
     List<Task> getCurrentManagerTasksForTest() {
         if (taskManager == null) {
@@ -679,9 +642,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回当前上下文菜单项文本快照，供同包测试代码断言菜单内容。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭☉鎾筹梗缁楀懘寮崶顏勭秴闁告娲熼妴宥夊棘閸ャ劍鎷遍煫鍥跺亞閸欏酣鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓寮鈾€鏋呴柤鎸庣矊瀹曠喖宕橀崨顓у晣闁?
      *
-     * @return 当前上下文菜单项文本快照
+     * @return 鐟滅増鎸告晶鐘崇▔婵犱胶鐟撻柡鍌氭穿瑜板秹宕￠弴顫偓宥夊棘閸ャ劍鎷遍煫鍥跺亞閸?
      */
     List<String> getContextMenuItemTextsForTest() {
         List<String> texts = new ArrayList<>();
@@ -692,81 +655,75 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回当前是否显示任务上下文菜单，供同包测试代码断言菜单行为。
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呴柡鍕靛灠閹線寮伴崜褋浠涘ù鐘侯嚙婵喐绋夋繝浣虹憮闁哄倸娲╄ぐ宥夊础閺囶亞绀夊〒姘☉閹捇宕犻崨顔俱偞閻犲洦娲戦崬顒勬儘娴ｈ鐒介悷灏佸亾闁兼寧绮屽畷鐔烘偘鐏炶壈绀嬮柕?
      *
-     * @return true 表示当前显示任务上下文菜单
+     * @return true 閻炴稏鍔庨妵姘炽亹閹惧啿顤呴柡鍕⒔閵囨碍绂掔拠鎻掝潳濞戞挸锕ｇ粭鍛村棘閸ヮ亜缍呴柛?
      */
     boolean hasContextMenuForTest() {
         return hasContextMenu();
     }
 
     /**
-     * 切换当前项目，供同包测试代码直接覆盖项目切换主路径。
+     * 闁告帒娲﹀畷鑼躲亹閹惧啿顤呭銈呮贡濞蹭即鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓鎯勭€涙ê澶嶉悷鏇炴濞插﹥銇勯崷顓熺獥闁告帒娲﹀畷鍙夌▔閺勫繒鐔呯€垫澘瀚ㄩ埀?
      *
-     * @param project 目标项目；传入 null 表示清空当前项目
+     * @param project 闁烩晩鍠楅悥锝嗐亜閸︻厽绐楅柨娑欑◥缁卞爼宕?null 閻炴稏鍔庨妵姘€掗崨顖楁晞鐟滅増鎸告晶鐘炽亜閸︻厽绐?
      */
     void switchProjectForTest(Project project) {
         switchProject(project);
     }
 
     /**
-     * 选中指定任务，供同包测试代码直接覆盖编辑相关分支。
+     * 闂侇偄顦懙鎴﹀箰閸パ呮毎濞寸姾顕ф慨鐔兼晬鐏炶偐杩旈柛姘嫰鐎垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓鎯勭€涙ê澶嶉悷鏇炴濞插﹦绱撻弽顒傚竼闁烩晝顭堥崣褔宕氶崱妯绘殰闁?
      *
-     * @param task 目标任务
+     * @param task 闁烩晩鍠楅悥锝嗙鐠囨彃顫?
      */
     void selectTaskForTest(Task task) {
         selectTask(task);
     }
 
     /**
-     * 触发保存流程，供同包测试代码断言保存后的状态与桥接调用。
+     * 閻熸瑱绠戣ぐ鍌涚┍濠靛棛鎽犳繛缈犺兌閳诲ジ鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粓寮鈾€鏋呭ǎ鍥ㄧ箓閻°劑宕ユ惔锝嗙暠闁绘鍩栭埀顑挎缁楀苯顩奸妷锕€澶嶉悹瀣暟閺併倝濡?
      */
     void saveTasksForTest() {
         onSaveTasks();
     }
 
     /**
-     * 切换已完成分组展开状态，供同包测试代码断言状态切换不会影响当前视图。
-     */
+     * 闁告帒娲﹀畷鎻掝啅閹绘帞鏆氶柟瀛樺姇閸ㄥ海绱掗崟顐ゆ綌鐎殿喒鍋撻柣妯垮煐閳ь兛绶ょ槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕鐒﹂弻鍥╂嚊閳ь剟鎮╅懜纰樺亾娴ｇ鐎奸柟璇℃線缁楀瀵煎顒€顨涢柛婵嗙Т缂嶅宕滃鍫綊闁搞儰鍕橀埀?     */
     void toggleCompletedSectionForTest() {
         toggleCompletedSection();
+        applySearchFilter();
     }
 
     /**
-     * 切换项目侧栏覆盖层显示状态，供测试驱动极小窗口交互。
-     */
+     * 闁告帒娲﹀畷鍙夈亜閸︻厽绐楀〒姘€鍕焿閻熸洖妫涘ú濠勪沪閸屾稒鈻旂紒鈧搹鐟靶﹂柟顑跨筏缁辨繃绗熷☉娆戙偞閻犲洦娲熼埞宥夊礉閵婏妇鈧剛浜歌箛鏇犲炊闁告瑱绲煎锔界閹哄鍋?     */
     void toggleSidebarOverlayForTest() {
         toggleSidebarOverlay();
     }
 
     /**
-     * 返回当前任务列表组件，供同包测试直接驱动拖拽交互。
-     *
-     * @return 当前任务列表组件
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喖宕氬Δ鍕┾偓鍐磼閸曨亝顐介柨娑樺缁剁敻宕ョ仦钘夌樁婵炴潙顑堥惁顖炴儎鐎涙ê澶嶅鐟板船婵晠骞忛弽銊ヮ伡濞存嚎鍊撶花浼村Υ?     *
+     * @return 鐟滅増鎸告晶鐘崇鐠囨彃顫ら柛鎺擃殙閵嗗啰绱掗崟顏咁偨
      */
     TaskListWidget getTaskListWidgetForTest() {
         return taskListWidget;
     }
 
     /**
-     * 返回详情标题当前是否允许直接编辑，供测试验证“点击后进入编辑态”语义。
-     *
-     * @return true 表示详情标题已进入编辑态
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柡宥呮喘椤ｅ€熴亹閹惧啿顤呴柡鍕靛灠閹線宕楁担绛嬪晠闁烩晛鐡ㄧ敮瀵哥磽閺嶎剛甯嗛柨娑樺缁堕潧霉鐎ｎ厾妲稿Δ鐘茬焷閻﹀鍨惧鍛化闁告垼顕ч幃妤佹交濞戞ê寮崇紓鍌涚墳缁额偊骞€娴ｆ祴鍋撳┑濠庡殧濞戞柨顦埀?     *
+     * @return true 閻炴稏鍔庨妵姘辨嫚閿旇棄鍓伴柡宥呮喘椤ｈ棄顔忛懠鍓佺闁稿繈鍎崇槐顏呮綇閹寸偐鍋?     */
     boolean isDetailTitleEditableForTest() {
         return detailDraft != null && detailDraft.titleEditing;
     }
 
     /**
-     * 触发详情标题进入编辑态，供测试模拟点击标题的行为。
-     */
+     * 閻熸瑱绠戣ぐ鍌滄嫚閿旇棄鍓伴柡宥呮喘椤ｈ姤娼诲☉妯哄汲缂傚倹鐗炵欢顐﹀箑娓氬﹦绀夊〒姘⊕缁佸鎷犻弴鐔屼線骞忛悢鍝勪化闁告垹绮悥锝嗭紣濡吋鐣遍悶娑樺鐠愮喖濡?     */
     void beginDetailTitleEditingForTest() {
         beginDetailTitleEditing();
     }
 
     /**
-     * 触发详情抽屉关闭按钮，供测试验证抽屉收起逻辑。
-     */
+     * 閻熸瑱绠戣ぐ鍌滄嫚閿旇棄鍓伴柟鎯版閻粙宕楅幎鑺ワ紨闁圭顦甸幐鎶芥晬鐏炶偐杩旀繛鏉戭儓閻︻垱顨ュ畝鍐闁规儼妫勯惇浠嬪绩閹増宕抽梺顐ｆ缁额偊濡?     */
     void clickDetailCloseButtonForTest() {
         if (detailCloseButton != null) {
             detailCloseButton.onPress();
@@ -774,90 +731,81 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回详情抽屉关闭按钮的边界，供测试验证布局。
-     *
-     * @return 关闭按钮边界数组
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柟鎯版閻粙宕楅幎鑺ワ紨闁圭顦甸幐鎶芥儍閸曨喚鐝堕柣锝呯焿缁辨繃绗熷☉娆戙偞閻犲洦娲熼悰娆戞嫚娴ｅ摜顏撮悘鐐╁亾闁?     *
+     * @return 闁稿繑濞婂Λ鎾箰婢舵劖灏﹂弶鍫濇贡閺咁偊寮幍顔剧煁
      */
     int[] getDetailCloseButtonBoundsForTest() {
         return toWidgetBounds(detailCloseButton);
     }
 
     /**
-     * 返回详情标题输入框的边界，供测试验证布局。
-     *
-     * @return 标题输入框边界数组
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柡宥呮喘椤ｈ姤娼忛幘鍐插汲婵℃妫涘▓鎴炴綇閸︻厽娅曢柨娑樺缁堕潧霉鐎ｎ厾妲稿Δ鐘茬焷閻﹀鏁崘銊ф拱闁?     *
+     * @return 闁哄秴娲。鑺ユ綇閹惧啿寮虫俊妤€妫滅粩鐔兼偩鐏炵偓娈剁紓?     */
     int[] getDetailTitleFieldBoundsForTest() {
         return toWidgetBounds(titleField);
     }
 
     /**
-     * 返回领取按钮当前是否可见。
-     *
-     * @return true 表示领取按钮可见
+     * 閺夆晜鏌ㄥú鏍紣閸℃绲块柟绋款樀閹稿疇銇愰幘鍐差枀闁哄嫷鍨伴幆渚€宕ｉ婵愭綄闁?     *
+     * @return true 閻炴稏鍔庨妵姘紣閸℃绲块柟绋款樀閹告娊宕ｉ婵愭綄
      */
     boolean isClaimButtonVisibleForTest() {
         return claimButton != null && claimButton.visible;
     }
 
     /**
-     * 返回放弃按钮当前是否可见。
-     *
-     * @return true 表示放弃按钮可见
+     * 閺夆晜鏌ㄥú鏍绩閹呯＞闁圭顦甸幐瀹犮亹閹惧啿顤呴柡鍕靛灠閹線宕ｉ婵愭綄闁?     *
+     * @return true 閻炴稏鍔庨妵姘跺绩閹呯＞闁圭顦甸幐鎶藉矗椤栨繍娼?
      */
     boolean isAbandonButtonVisibleForTest() {
         return abandonButton != null && abandonButton.visible;
     }
 
     /**
-     * 返回“指派他人”按钮当前是否可见。
-     *
-     * @return true 表示指派他人按钮可见
+     * 閺夆晜鏌ㄥú鏍灳濠婂嫬鐦规繛鎻掑綖缁剚绂嶇悰鈾€鍋撳┑鍥х樆闂佺瓔鍠栫紞瀣礈瀹ュ棙笑闁告熬绠戣ぐ鑼喆娴ｇ鍋?     *
+     * @return true 閻炴稏鍔庨妵姘跺箰閸ャ劍鐑﹀ù鐘崇墧濮瑰骞愭径鎰唉闁告瑯鍨甸～?
      */
     boolean isAssignOthersButtonVisibleForTest() {
         return assignOthersButton != null && assignOthersButton.visible;
     }
 
     /**
-     * 返回领取按钮的边界，供测试验证纵向布局。
-     *
-     * @return 领取按钮边界数组
+     * 閺夆晜鏌ㄥú鏍紣閸℃绲块柟绋款樀閹告娊鎯冮崟顔剧彾闁伙絽鐭夌槐婵囩瑹濞戞瑧銈撮悹鍥ㄦ礋閻涙瑧鎷犳担鐑樻；闁告碍鍨电粩椋庝沪閳ь剟濡?     *
+     * @return 濡澘妫楄ぐ鍥箰婢舵劖灏﹂弶鍫濇贡閺咁偊寮幍顔剧煁
      */
     int[] getClaimButtonBoundsForTest() {
         return toWidgetBounds(claimButton);
     }
 
     /**
-     * 返回放弃按钮的边界，供测试验证纵向布局。
-     *
-     * @return 放弃按钮边界数组
+     * 閺夆晜鏌ㄥú鏍绩閹呯＞闁圭顦甸幐鎶芥儍閸曨喚鐝堕柣锝呯焿缁辨繃绗熷☉娆戙偞閻犲洦娲熼悰娆戞嫚娴ｇ儤妫婚柛姘灥缁旈浠﹂埀顒勫Υ?     *
+     * @return 闁衡偓閹呯＞闁圭顦甸幐铏綇閸︻厽娅曢柡浣瑰缁?
      */
     int[] getAbandonButtonBoundsForTest() {
         return toWidgetBounds(abandonButton);
     }
 
     /**
-     * 返回“指派他人”按钮的边界，供测试验证纵向布局。
-     *
-     * @return 指派他人按钮边界数组
+     * 閺夆晜鏌ㄥú鏍灳濠婂嫬鐦规繛鎻掑綖缁剚绂嶇悰鈾€鍋撳┑鍥х樆闂佺瓔鍠氬▓鎴炴綇閸︻厽娅曢柨娑樺缁堕潧霉鐎ｎ厾妲稿Δ鐘茬焷閻﹀鐥棃娑欏€婚悽顖氬暙閻剟濡?     *
+     * @return 闁圭娲﹀ǎ铏閺嶏附鐪介柟绋款樀閹歌櫕娼忛崷顓熸珪闁轰焦澹嗙划?
      */
     int[] getAssignOthersButtonBoundsForTest() {
         return toWidgetBounds(assignOthersButton);
     }
 
     /**
-     * 打开指定任务的上下文菜单，供同包测试代码断言菜单行为。
+     * 闁瑰灚鎸哥槐鎴﹀箰閸パ呮毎濞寸姾顕ф慨鐔兼儍閸曨亞鐟愬☉鎾愁儐閺嬪啴鎳ｅ鍐ㄧ闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣闁哄偆鍙€閳诲牓鎳ｅ鍐ㄧ閻炴稑濂旂拹鐔煎Υ?
      *
-     * @param task 目标任务
+     * @param task 闁烩晩鍠楅悥锝嗙鐠囨彃顫?
      */
     void openTaskContextMenuForTest(Task task) {
         openTaskContextMenu(task, 32, 32);
     }
 
     /**
-     * 点击指定索引的上下文菜单项，供同包测试代码驱动菜单动作。
+     * 闁绘劗鎳撻崵顕€骞愰崶褏鏆扮紒渚垮灩缁扁晠鎯冮崟顏嗙憪濞戞挸顑嗛弸鍐嚕濠婂啫绀嬪銈囨缁辨繃绗熷☉妯诲€遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绶氶埞宥夊礉閵娿劌缍呴柛妤佹礀婵晜鎷呭┃搴撳亾?
      *
-     * @param index 菜单项索引
+     * @param index 闁兼寧绮屽畷鐔搞亜閸︻厼鍋嶇€?
      */
     void clickContextMenuItemForTest(int index) {
         if (!hasContextMenu() || index < 0 || index >= contextMenuItems.size()) {
@@ -873,20 +821,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 创建任务分配弹窗，供同包测试代码覆盖玩家分配流程。
+     * 闁告帗绋戠紓鎾寸鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊闁挎稑濂旂欢鐢稿触鐏炶棄鐦舵繛鏉戭儓閻︻垱绂掗敐鍥╁灣閻熸洖妫涘ú濠囨偝閳轰緡鍟€闁告帒妫濋崢銈吤规担琛℃煠闁?
      *
-     * @param task 目标任务
-     * @return 任务分配弹窗
+     * @param task 闁烩晩鍠楅悥锝嗙鐠囨彃顫?
+     * @return 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
      */
     Screen createAssignPlayerScreenForTest(Task task) {
         return new AssignPlayerScreen(this, task);
     }
 
     /**
-     * 返回任务分配弹窗中的候选玩家名称快照，供同包测试代码断言过滤结果。
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊濞戞搩鍘惧▓鎴﹀磹濞嗘挴鍋撴径灞借礋閻庣娉涢幃鏇犵矓閺夋寧褰ラ柣鎾楀秶绀夊〒姘☉閹捇宕犻崨顔俱偞閻犲洦娲戦崬顒勬儘娴ｈ鐒介悷灏佸亾閺夆晛娲﹂幎銈囩磼閹惧浜柕?
      *
-     * @param screen 任务分配弹窗
-     * @return 候选玩家名称快照
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @return 闁稿﹥鐟╅埀顒€顦辩敮铏光偓纭呮硾閹洜绮旈弶鎸庡渐闁?
      */
     List<String> getAssignablePlayerNamesForTest(Screen screen) {
         if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.filteredMembers == null) {
@@ -902,10 +850,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回任务分配弹窗当前的滚动偏移，供同包测试代码校验滚动边界。
-     *
-     * @param screen 任务分配弹窗
-     * @return 当前滚动偏移
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊鐟滅増鎸告晶鐘绘儍閸曨剛娉婇柛鏂诲妼娴滃摜绮旀导娆戠濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担鍦ⅰ濡ょ姴鏈划鎾礉閵娿劎鐝堕柣锝呰閳?     *
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @return 鐟滅増鎸告晶鐘差煥濮橆剙袟闁稿绻掍簺
      */
     int getAssignPlayerScrollOffsetForTest(Screen screen) {
         if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
@@ -915,10 +862,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回任务分配弹窗当前可见的成员行数，供同包测试代码计算最大滚动范围。
-     *
-     * @param screen 任务分配弹窗
-     * @return 当前可见成员行数
+     * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊鐟滅増鎸告晶鐘诲矗椤栨繍娼岄柣銊ュ閸ㄦ岸宕ㄥΟ娆炬斀闁轰礁搴滅槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕娴囬鍝ョ不濡や焦浠樺鍫嗗嫮娉婇柛鏂诲姀鐎垫牠宕跺ǎ顑藉亾?     *
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @return 鐟滅増鎸告晶鐘诲矗椤栨繍娼岄柟瀛樺姇閹插磭鎮扮仦鐐
      */
     int getAssignPlayerVisibleRowsForTest(Screen screen) {
         if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
@@ -928,11 +874,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 模拟滚轮滚动任务分配弹窗中的成员列表，供同包测试代码驱动列表滚动。
-     *
-     * @param screen 任务分配弹窗
-     * @param steps 滚动步数；正数表示向下滚动列表
-     */
+     * 婵☆垪鍓濈€氭瑥顭ㄥ宕囨瀭婵犲﹥鑹炬慨鈺傜鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊濞戞搩鍘惧▓鎴﹀箣閹邦剚鍠呴柛鎺擃殙閵嗗啴鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粍銇欓崡鐐残楅柛鎺擃殙閵嗗啫顭ㄥ顒€袟闁?     *
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @param steps 婵犲﹥鑹炬慨鈺侇潰閵夛附娈堕柨娑欑⊕椤掓粓寮幏灞烩偓鍐矆閸濆嫭鍊诲☉鎾愁儐缁挳宕濋妸銉ョ仚閻?     */
     void scrollAssignPlayerListForTest(Screen screen, int steps) {
         if (!(screen instanceof AssignPlayerScreen assignPlayerScreen)) {
             return;
@@ -946,10 +890,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 向任务分配弹窗的搜索框写入内容，供同包测试代码驱动候选人过滤。
-     *
-     * @param screen 任务分配弹窗
-     * @param value 搜索关键字
+     * 闁告碍鍨抽幑銏ゅ礉閳ュ啿鐎婚梺鏉跨Т閼村﹦绮ｅΔ鍐╃暠闁瑰吋绮庨崒銊ヮ浖閸℃鏅搁柛蹇嬪劚閸炲鈧湱娅㈢槐婵囩瑹濞戞ɑ鍊遍柛鏍ф噺缁佸鎷犻弴姘暕闁活喕绶氶埞宥夊礉閵娿儮鍋撳▎鎾亾婢跺鐪介弶鈺佹处閹躲倝濡?     *
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @param value 闁瑰吋绮庨崒銊╁礂閹惰姤鏆涢悗?
      */
     void setAssignPlayerSearchForTest(Screen screen, String value) {
         if (screen instanceof AssignPlayerScreen assignPlayerScreen && assignPlayerScreen.searchField != null) {
@@ -958,10 +901,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 点击任务分配弹窗中的指定候选人行，供同包测试代码驱动分配动作。
+     * 闁绘劗鎳撻崵顔界鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊濞戞搩鍘惧▓鎴﹀箰閸パ呮毎闁稿﹥鐟╅埀顒€顦Ч澶屾偘瀹€瀣濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆笟鈧埞宥夊礉閵娿儱鐎婚梺鏉跨Т婵晜鎷呭┃搴撳亾?
      *
-     * @param screen 任务分配弹窗
-     * @param rowIndex 候选人行索引
+     * @param screen 濞寸姾顕ф慨鐔煎礆閸℃稑甯崇€殿喖婀遍悰?
+     * @param rowIndex 闁稿﹥鐟╅埀顒€顦Ч澶屾偘瀹€鈧崒銊ヮ嚕?
      */
     void clickAssignPlayerRowForTest(Screen screen, int rowIndex) {
         if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.playerButtons == null) {
@@ -1058,8 +1001,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 根据当前项目与旧视图模式同步新的空间与任务视图状态。
-     */
+     * 闁哄秷顫夊畵浣姐亹閹惧啿顤呭銈呮贡濞茬増绋夋惔銏★紜閻熸瑥妫楀ù妯何熼垾宕囩闁告艾鏈鐐哄棘閹殿喗鐣辩紒灞炬そ濡寧绋夋惔婵囧床闁告枀銈庢綊闁搞儱澧芥慨鎼佸箑娴ｇ鍋?     */
     private void syncViewStateForCurrentProject() {
         currentSpaceMode = resolveSpaceMode(currentProject);
         List<TaskViewOption> visibleOptions = buildVisibleViewOptions(currentSpaceMode);
@@ -1074,10 +1016,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 根据项目解析当前空间模式。
-     *
-     * @param project 当前项目
-     * @return 解析后的空间模式
+     * 闁哄秷顫夊畵浣广亜閸︻厽绐楅悷娆欑稻閻庡€熴亹閹惧啿顤呯紒灞炬そ濡灝螣閳ュ磭纭€闁?     *
+     * @param project 鐟滅増鎸告晶鐘炽亜閸︻厽绐?
+     * @return 閻熸瑱绲鹃悗浠嬪触鎼达絾鐣辩紒灞炬そ濡灝螣閳ュ磭纭€
      */
     private SpaceMode resolveSpaceMode(Project project) {
         if (project == null || project.getScope() == Project.Scope.PERSONAL || !teamProjectsEnabled) {
@@ -1087,10 +1028,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 构建当前空间下可见的任务视图选项。
-     *
-     * @param spaceMode 当前空间模式
-     * @return 当前空间下可见的任务视图选项
+     * 闁哄瀚紓鎾广亹閹惧啿顤呯紒灞炬そ濡寧绋夌€ｎ亜璁查悷娆庤兌濞堟垶绂掔拠鎻掝潳閻熸瑥妫楀ù姗€鏌呮径鎰┾偓宥夊Υ?     *
+     * @param spaceMode 鐟滅増鎸告晶鐘电矚濞差亝锛熸俊顖椻偓宕囩
+     * @return 鐟滅増鎸告晶鐘电矚濞差亝锛熷☉鎾愁儏瑜拌尙鎲存担鐑樼暠濞寸姾顕ф慨鐔烘喆閸℃绂堥梺顐㈩樀閵?
      */
     private List<TaskViewOption> buildVisibleViewOptions(SpaceMode spaceMode) {
         if (spaceMode == SpaceMode.TEAM) {
@@ -1100,20 +1040,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回当前空间下的默认任务视图选项。
-     *
-     * @param spaceMode 当前空间模式
-     * @return 默认任务视图选项
+     * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呯紒灞炬そ濡寧绋夌€ｎ剚鐣卞娑欘焾椤撶粯绂掔拠鎻掝潳閻熸瑥妫楀ù姗€鏌呮径鎰┾偓宥夊Υ?     *
+     * @param spaceMode 鐟滅増鎸告晶鐘电矚濞差亝锛熸俊顖椻偓宕囩
+     * @return 濮掓稒顭堥缁樼鐠囨彃顫ら悷娆忔濞存﹢鏌呮径鎰┾偓?
      */
     private TaskViewOption resolveDefaultViewForSpace(SpaceMode spaceMode) {
         return spaceMode == SpaceMode.TEAM ? TaskViewOption.UNASSIGNED : TaskViewOption.MY;
     }
 
     /**
-     * 将旧的视图模式映射到新的任务视图选项。
-     *
-     * @param legacyViewMode 旧的视图模式
-     * @return 对应的新任务视图选项
+     * 閻忓繐妫欏Λ顐︽儍閸曨噮娼掗柛銉у亾鑶╃€殿喖绻戝Σ褏浜搁崟顐㈢厒闁哄倹澹嗗▓鎴炵鐠囨彃顫ら悷娆忔濞存﹢鏌呮径鎰┾偓宥夊Υ?     *
+     * @param legacyViewMode 闁哄唲鍛暠閻熸瑥妫楀ù妯何熼垾宕囩
+     * @return 閻庣數鎳撶花鏌ユ儍閸曨剚鐓€濞寸姾顕ф慨鐔烘喆閸℃绂堥梺顐㈩樀閵?
      */
     private TaskViewOption resolveTaskViewOptionFromLegacy(ViewMode legacyViewMode) {
         if (legacyViewMode == ViewMode.TEAM_UNASSIGNED) {
@@ -1126,8 +1064,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 将新的空间与任务视图状态反向同步到旧的视图模式。
-     */
+     * 閻忓繐妫欓弻濠囨儍閸曨厸鏁勯梻鍌滅節缁楀本绂掔拠鎻掝潳閻熸瑥妫楀ù姗€鎮╅懜纰樺亾娴ｇ鍐€闁告碍鍨甸幃鎾愁潰閵夈儱鐓傞柡鍐勫懏鐣遍悷娆忔濞存ê螣閳ュ磭纭€闁?     */
     private void syncLegacyViewModeFromState() {
         if (currentSpaceMode == SpaceMode.PERSONAL) {
             viewMode = ViewMode.PERSONAL;
@@ -1143,8 +1080,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 切换已完成分组展开状态。
-     */
+     * 闁告帒娲﹀畷鎻掝啅閹绘帞鏆氶柟瀛樺姇閸ㄥ海绱掗崟顐ゆ綌鐎殿喒鍋撻柣妯垮煐閳ь兛闄嶉埀?     */
     private void toggleCompletedSection() {
         completedExpanded = !completedExpanded;
     }
@@ -1178,9 +1114,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         currentPriorityFilter = lastGuiState.currentPriorityFilter;
-        if (lastGuiState.currentFilter != null && !lastGuiState.currentFilter.isEmpty()) {
-            currentFilter = lastGuiState.currentFilter;
-        }
+        currentFilter = "active";
         if (lastGuiState.searchQuery != null) {
             searchQuery = lastGuiState.searchQuery;
         }
@@ -1249,7 +1183,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 项目增删改后执行轻量刷新，避免整页重新初始化。
+     * 濡炪倕婀卞ú鐗堟櫠閻愭彃鐏╅柡鈧悷鐗堝€甸柟绗涘棭鏀介弶鐐差煼閸ｆ椽宕氶柨瀣厐闁挎稑鐭傛导鈺呭礂瀹ュ棙娈诲銈囨暬閸ｆ悂寮弶鍨仴濠殿喖顑呯€垫煡濡?
      */
     private void refreshAfterProjectMutation() {
         syncActiveProjectIdWithCurrentProject();
@@ -1260,7 +1194,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 将 activeProjectId 与当前项目状态对齐，避免残留失效项目 ID。
+     * 閻?activeProjectId 濞戞挸楠哥紞瀣礈瀹ュ鈧秹鎯勯鎯﹂柟顑跨椤曨喗顬囬幇鍓佺闂侇剙鐏濋崢銈呪枔鐎ｎ剚娈屽鎯伴哺閺呫儲銇勯崷顓熺獥 ID闁?
      */
     private void syncActiveProjectIdWithCurrentProject() {
         if (currentProject == null || projectManager == null) {
@@ -1284,7 +1218,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 当前项目被删除时，按当前 scope 优先选择一个可用项目，允许为空。
+     * 鐟滅増鎸告晶鐘炽亜閸︻厽绐楅悶姘煎亜閸ㄥ綊姊介妶鍡橆槯闁挎稑鏈€垫粏銇愰幘鍐差枀 scope 濞村吋锚閸樻盯鏌呮径瀣仴濞戞挴鍋撳☉鎿冧簻瑜版煡鎮介妸鈹库偓宥夋儎椤曞棛绀夐柛蹇庢祰椤斿繑绋夐搹鍏夋晞闁?
      */
     private Project resolveFallbackProjectAfterRemoval(Project removedProject) {
         Project preferred = resolvePreferredProjectForCurrentScope();
@@ -1299,7 +1233,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 按当前 scope 选择首选项目，不可用时回退到另一 scope。
+     * 闁圭顦紞瀣礈?scope 闂侇偄顦扮€氥劍锛冮弽顓涘亾婢舵劑鈧秹鎯勯鍡欑濞戞挸绉磋ぐ鏌ユ偨閵婏附顦ч柛銉у仱閳ь兘鍋撻柛鎺撴緲瑜扮喐绋夐埀?scope闁?
      */
     private Project resolvePreferredProjectForCurrentScope() {
         Project preferred = getPreferredProjectForScope(projectScopeFilter);
@@ -1312,10 +1246,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void rebuildUI() {
         syncViewStateForCurrentProject();
-        selectedTask = null;
-        if (currentFilter == null || currentFilter.isEmpty()) {
-            currentFilter = "active";
-        }
+        currentFilter = "active";
         if (searchQuery == null) {
             searchQuery = "";
         }
@@ -1331,24 +1262,21 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         syncOverlayStateForResponsiveTier();
 
         layoutMetrics = buildMainLayoutMetrics(config);
-        int padding = layoutMetrics.padding;
-        int panelGap = layoutMetrics.gap;
-        int topBarGap = clampInt(config.getElementSpacing(), 4, 12);
-        int topBarY = Math.max(24, padding + 16);
-        int topBarHeight = 20;
-        int secondRowY = topBarY + topBarHeight + topBarGap;
-        int secondRowHeight = 20;
-        int inputRowHeight = 20;
-        int bottomBarHeight = 20;
-        int bottomBarY = this.height - padding - bottomBarHeight;
-        int inputRowY = bottomBarY - topBarGap - inputRowHeight;
-        int listTop = secondRowY + secondRowHeight + topBarGap;
-        int listBottom = inputRowY - Math.max(8, topBarGap + 2);
-        int listHeight = Math.max(0, listBottom - listTop);
-
         LayoutRect sidebarBounds = layoutMetrics.sidebarBounds;
         LayoutRect contentBounds = layoutMetrics.contentBounds;
         LayoutRect detailBounds = layoutMetrics.detailBounds;
+        int padding = layoutMetrics.padding;
+        int panelGap = layoutMetrics.gap;
+        int topBarGap = clampInt(config.getElementSpacing(), 4, 12);
+        int topBarY = contentBounds.y + 14;
+        int topBarHeight = 20;
+        int secondRowY = topBarY + topBarHeight + 18;
+        int secondRowHeight = 20;
+        int inputRowHeight = 20;
+        int inputRowY = contentBounds.y + contentBounds.height - inputRowHeight - 10;
+        int listTop = secondRowY + secondRowHeight + topBarGap;
+        int listBottom = inputRowY - Math.max(8, topBarGap + 2);
+        int listHeight = Math.max(0, listBottom - listTop);
 
         int sidebarTopY = sidebarBounds.y;
         int sidebarWidth = sidebarBounds.width;
@@ -1364,82 +1292,81 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         sidebarToggleButton.active = layoutMetrics.sidebarOverlay;
         this.addRenderableWidget(sidebarToggleButton);
 
-        int configButtonWidth = Math.max(56, Math.min(84, this.font.width(Component.translatable("gui.todolist.config.title")) + 16));
+        int actionGap = 6;
+        int configButtonWidth = Math.max(52, Math.min(72, this.font.width(Component.translatable("gui.todolist.config.title")) + 14));
+        int cancelButtonWidth = Math.max(52, Math.min(72, this.font.width(Component.translatable("gui.todolist.cancel")) + 14));
+        int saveButtonWidth = Math.max(52, Math.min(72, this.font.width(Component.translatable("gui.todolist.save")) + 14));
+        int configButtonX = contentX + contentWidth - configButtonWidth;
+        int cancelButtonX = configButtonX - actionGap - cancelButtonWidth;
+        int saveButtonX = cancelButtonX - actionGap - saveButtonWidth;
         configButton = Button.builder(Component.translatable("gui.todolist.config.title"), b -> this.minecraft.setScreen(new ConfigScreen(this)))
-                .bounds(contentX + contentWidth - configButtonWidth, topBarY, configButtonWidth, topBarHeight).build();
+                .bounds(configButtonX, topBarY, configButtonWidth, topBarHeight).build();
         this.addRenderableWidget(configButton);
 
-        int filterGap = 4;
+        int filterGap = 6;
         int filtersX = contentX + (layoutMetrics.sidebarOverlay ? overlayToggleWidth + filterGap : 0);
-        int filtersY = topBarY;
         int btnH = 20;
-        int availableBeforeConfig = Math.max(80, configButton.getX() - filterGap - filtersX);
-        int minBtnW = 56;
-        int maxBtnW = 120;
-        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.font.width(getViewToggleText()) + 16));
-        int priorityBtnWidth = Math.min(108, Math.max(minBtnW, this.font.width(getPriorityFilterText()) + 16));
-        int statusBtnWidth = Math.min(108, Math.max(minBtnW, this.font.width(getStatusFilterText()) + 16));
-        int totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        int guard = 0;
-        while (totalW > availableBeforeConfig && guard++ < 200) {
-            if (viewBtnWidth >= priorityBtnWidth && viewBtnWidth >= statusBtnWidth && viewBtnWidth > minBtnW) {
-                viewBtnWidth -= 4;
-            } else if (priorityBtnWidth >= statusBtnWidth && priorityBtnWidth > minBtnW) {
-                priorityBtnWidth -= 4;
-            } else if (statusBtnWidth > minBtnW) {
-                statusBtnWidth -= 4;
-            } else {
-                break;
-            }
-            totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        }
-
-        viewToggleButton = Button.builder(getViewToggleText(), b -> {
-            if (viewMode == ViewMode.PERSONAL) {
-                return;
-            }
-            if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-                switchView(ViewMode.TEAM_ALL);
-            } else if (viewMode == ViewMode.TEAM_ALL) {
-                switchView(ViewMode.TEAM_ASSIGNED);
-            } else {
-                switchView(ViewMode.TEAM_UNASSIGNED);
-            }
-        }).bounds(filtersX, filtersY, viewBtnWidth, btnH).build();
-        viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-        this.addRenderableWidget(viewToggleButton);
-
-        int priorityBtnX = filtersX + viewBtnWidth + filterGap;
+        int priorityBtnWidth = Math.min(108, Math.max(64, this.font.width(getPriorityFilterText()) + 16));
+        int priorityBtnX = contentX + contentWidth - priorityBtnWidth;
         filterPriorityButton = Button.builder(getPriorityFilterText(), button -> {
             currentPriorityFilter = (currentPriorityFilter + 1) % 4;
             button.setMessage(getPriorityFilterText());
             applyPriorityFilter();
-        }).bounds(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
+        }).bounds(priorityBtnX, secondRowY, priorityBtnWidth, btnH).build();
         this.addRenderableWidget(filterPriorityButton);
 
-        int statusBtnX = priorityBtnX + priorityBtnWidth + filterGap;
-        filterStatusButton = Button.builder(getStatusFilterText(), button -> {
-            filterTasks("completed".equals(currentFilter) ? "active" : "completed");
-        }).bounds(statusBtnX, filtersY, statusBtnWidth, btnH).build();
-        this.addRenderableWidget(filterStatusButton);
+        filterStatusButton = null;
+        viewToggleButton = null;
 
-        searchField = new EditBox(this.font, contentX, secondRowY, contentWidth, secondRowHeight, Component.empty());
+        int searchWidth = Math.max(80, priorityBtnX - filterGap - filtersX);
+        searchField = new EditBox(this.font, filtersX, secondRowY, searchWidth, secondRowHeight, Component.empty());
         searchField.setHint(Component.translatable("gui.todolist.input.search.placeholder"));
         searchField.setValue(searchQuery);
         this.addRenderableWidget(searchField);
 
-        projectScopeButton = Button.builder(getProjectScopeText(), b -> {
+        int sidebarInset = 8;
+        int sidebarInnerX = sidebarBounds.x + sidebarInset;
+        int sidebarInnerWidth = Math.max(80, sidebarWidth - sidebarInset * 2);
+        int spaceButtonsY = sidebarTopY + 28;
+        int spaceButtonGap = 6;
+        int spaceButtonWidth = Math.max(48, (sidebarInnerWidth - spaceButtonGap) / 2);
+        personalSpaceButton = Button.builder(Component.translatable("gui.todolist.scope.personal"), b -> {
+            Project targetProject = getPreferredProjectForScope(Project.Scope.PERSONAL);
+            switchProject(targetProject);
+        }).bounds(sidebarInnerX, spaceButtonsY, spaceButtonWidth, 20).build();
+        this.addRenderableWidget(personalSpaceButton);
+
+        teamSpaceButton = Button.builder(Component.translatable("gui.todolist.scope.team"), b -> {
             if (!teamProjectsEnabled) {
                 return;
             }
-            projectScopeFilter = (projectScopeFilter == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
-            Project targetProject = getPreferredProjectForScope(projectScopeFilter);
+            Project targetProject = getPreferredProjectForScope(Project.Scope.TEAM);
             switchProject(targetProject);
-        }).bounds(sidebarBounds.x, sidebarTopY, sidebarWidth, 20).build();
-        projectScopeButton.active = teamProjectsEnabled;
-        this.addRenderableWidget(projectScopeButton);
+        }).bounds(sidebarInnerX + spaceButtonWidth + spaceButtonGap, spaceButtonsY,
+                sidebarInnerWidth - spaceButtonWidth - spaceButtonGap, 20).build();
+        teamSpaceButton.active = teamProjectsEnabled;
+        this.addRenderableWidget(teamSpaceButton);
 
-        projectSearchField = new EditBox(this.font, sidebarBounds.x, sidebarTopY + 28, sidebarWidth, 20, Component.translatable("gui.todolist.project.search"));
+        int viewButtonsY = spaceButtonsY + 32;
+        myViewButton = Button.builder(Component.literal("\u6211\u7684"), b -> {
+            if (currentSpaceMode == SpaceMode.PERSONAL) {
+                switchView(ViewMode.PERSONAL);
+                return;
+            }
+            switchView(ViewMode.TEAM_ASSIGNED);
+        }).bounds(sidebarInnerX, viewButtonsY, sidebarInnerWidth, 20).build();
+        this.addRenderableWidget(myViewButton);
+
+        unassignedViewButton = Button.builder(Component.literal("\u5f85\u5206\u914d"), b -> switchView(ViewMode.TEAM_UNASSIGNED))
+                .bounds(sidebarInnerX, viewButtonsY + 24, sidebarInnerWidth, 20).build();
+        this.addRenderableWidget(unassignedViewButton);
+
+        allViewButton = Button.builder(Component.translatable("gui.todolist.all"), b -> switchView(ViewMode.TEAM_ALL))
+                .bounds(sidebarInnerX, viewButtonsY + 48, sidebarInnerWidth, 20).build();
+        this.addRenderableWidget(allViewButton);
+
+        int projectSearchY = currentSpaceMode == SpaceMode.TEAM ? viewButtonsY + 86 : viewButtonsY + 38;
+        projectSearchField = new EditBox(this.font, sidebarInnerX, projectSearchY, sidebarInnerWidth, 20, Component.translatable("gui.todolist.project.search"));
         projectSearchField.setHint(Component.translatable("gui.todolist.project.search"));
         projectSearchField.setValue(projectSearchQuery);
         projectSearchField.setResponder(text -> {
@@ -1449,27 +1376,27 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.addRenderableWidget(projectSearchField);
 
         int projectButtonGap = 4;
-        int projectButtonWidth = Math.max(28, (sidebarWidth - projectButtonGap * 2) / 3);
+        int projectButtonWidth = Math.max(28, (sidebarInnerWidth - projectButtonGap * 2) / 3);
         int projectButtonsY = sidebarBounds.y + sidebarBounds.height - 20;
-        int projectListY = sidebarTopY + 56;
+        int projectListY = projectSearchY + 28;
         int projectListHeight = Math.max(0, projectButtonsY - 8 - projectListY);
 
-        projectListWidget = new ProjectListWidget(this.minecraft, sidebarBounds.x, projectListY, sidebarWidth, projectListHeight);
+        projectListWidget = new ProjectListWidget(this.minecraft, sidebarInnerX, projectListY, sidebarInnerWidth, projectListHeight);
         updateProjectList();
         projectListWidget.setScrollOffset(savedProjectListScrollOffset);
         projectListWidget.setSelectedProject(currentProject);
         projectListWidget.setOnProjectSelected(this::switchProject);
 
         addProjectBtn = Button.builder(Component.translatable("gui.todolist.add"), b -> onAddProject())
-                .bounds(sidebarBounds.x, projectButtonsY, projectButtonWidth, 20).build();
+                .bounds(sidebarInnerX, projectButtonsY, projectButtonWidth, 20).build();
         this.addRenderableWidget(addProjectBtn);
 
         editProjectBtn = Button.builder(Component.translatable("gui.todolist.edit"), b -> onProjectSettings())
-                .bounds(sidebarBounds.x + projectButtonWidth + projectButtonGap, projectButtonsY, projectButtonWidth, 20).build();
+                .bounds(sidebarInnerX + projectButtonWidth + projectButtonGap, projectButtonsY, projectButtonWidth, 20).build();
         editProjectBtn.active = currentProject != null;
         this.addRenderableWidget(editProjectBtn);
 
-        int deleteButtonX = sidebarBounds.x + (projectButtonWidth + projectButtonGap) * 2;
+        int deleteButtonX = sidebarInnerX + (projectButtonWidth + projectButtonGap) * 2;
         deleteProjectBtn = Button.builder(Component.translatable("gui.todolist.delete"), b -> onProjectDelete())
                 .bounds(deleteButtonX, projectButtonsY, projectButtonWidth, 20).build();
         this.addRenderableWidget(deleteProjectBtn);
@@ -1484,6 +1411,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
         taskListWidget.setTaskReorderEnabled(isTaskReorderAllowedInCurrentView());
         taskListWidget.setSections(buildTaskPaneSections());
+        if (selectedTask != null) {
+            taskListWidget.setSelectedTask(selectedTask);
+        }
         taskListWidget.setOnTaskToggleCompletion(task -> {
             if (task.isCompleted()) {
                 return;
@@ -1581,17 +1511,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         assignOthersButton.active = false;
         this.addRenderableWidget(assignOthersButton);
 
-        int saveCancelWidth = Math.max(64, Math.min(90, (contentWidth - 5) / 2));
-        int saveCancelGap = 5;
-        int totalSaveCancelWidth = saveCancelWidth * 2 + saveCancelGap;
-        int saveCancelX = contentX + Math.max(0, (contentWidth - totalSaveCancelWidth) / 2);
-
         saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> onSaveTasks())
-                .bounds(saveCancelX, bottomBarY, saveCancelWidth, 20).build();
+                .bounds(saveButtonX, topBarY, saveButtonWidth, 20).build();
         this.addRenderableWidget(saveButton);
 
         cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onCancel())
-                .bounds(saveCancelX + saveCancelWidth + saveCancelGap, bottomBarY, saveCancelWidth, 20).build();
+                .bounds(cancelButtonX, topBarY, cancelButtonWidth, 20).build();
         this.addRenderableWidget(cancelButton);
 
         applyResponsiveWidgetVisibility();
@@ -1614,12 +1539,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 根据窗口宽高解析当前主界面的响应式档位。
-     *
-     * @param screenWidth 当前屏幕宽度
-     * @param screenHeight 当前屏幕高度
-     * @return 解析后的响应式档位
-     */
+     * 闁哄秷顫夊畵浣虹玻濡も偓瑜版稓鈧€涚矙閻濐喚鎲撮敐鍡欌偓鍊熴亹閹惧啿顤呭☉鎾瑰吹閺咁偊妫冮姀銏＄暠闁告繂绉寸花鎻掝嚕韫囨柣鈧倹鎷呭鍐ｅ亾?     *
+     * @param screenWidth 鐟滅増鎸告晶鐘典沪韫囨挾顔庨悗纭呮鐎?
+     * @param screenHeight 鐟滅増鎸告晶鐘典沪韫囨挾顔庡Δ鍌浢€?
+     * @return 閻熸瑱绲鹃悗浠嬪触鎼达絾鐣遍柛婵嗙Т缁ㄦ彃顕ｈ箛鏂烩偓鍌涙媴?     */
     private ResponsiveTier resolveResponsiveTier(int screenWidth, int screenHeight) {
         ResponsiveTier widthTier = resolveWidthTier(screenWidth);
         ResponsiveTier heightTier = resolveHeightTier(screenHeight);
@@ -1627,11 +1550,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 按宽度解析响应式档位。
-     *
-     * @param screenWidth 当前屏幕宽度
-     * @return 宽度对应的档位
-     */
+     * 闁圭顦鏃€鎯旈敃浣囨帡寮搁幇顒佹儥閹煎瓨鏌ㄧ槐鈥愁浖閿濆嫮绉撮柕?     *
+     * @param screenWidth 鐟滅増鎸告晶鐘典沪韫囨挾顔庨悗纭呮鐎?
+     * @return 閻庣妫勭€瑰磭鈧數鎳撶花鏌ユ儍閸曨兙鈧倹鎷?     */
     private ResponsiveTier resolveWidthTier(int screenWidth) {
         if (screenWidth >= 460) {
             return ResponsiveTier.LARGE;
@@ -1646,11 +1567,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 按高度解析响应式档位。
-     *
-     * @param screenHeight 当前屏幕高度
-     * @return 高度对应的档位
-     */
+     * 闁圭顦甸悵顔芥償閿曚絿鎺楀几閹邦剚鎯欓幖瀛樻煥缁扁€愁浖閿濆嫮绉撮柕?     *
+     * @param screenHeight 鐟滅増鎸告晶鐘典沪韫囨挾顔庡Δ鍌浢€?
+     * @return 濡ゅ倹锚鐎瑰磭鈧數鎳撶花鏌ユ儍閸曨兙鈧倹鎷?     */
     private ResponsiveTier resolveHeightTier(int screenHeight) {
         if (screenHeight >= 280) {
             return ResponsiveTier.LARGE;
@@ -1665,8 +1584,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 根据当前档位同步覆盖层展开状态，保证小窗口布局不会挤出屏幕。
-     */
+     * 闁哄秷顫夊畵浣姐亹閹惧啿顤呮俊妤嬬导缂嶅懘宕ョ仦缁㈠妱閻熸洖妫涘ú濠勪沪閸屾氨娼旂€殿喒鍋撻柣妯垮煐閳ь兛绶ょ槐婵囩┍濠靛﹦妲堥悘蹇撶箳閻涖儵宕ｉ敐鍛伌閻忕偐鍋撳☉鎾崇С缁变即骞愰妶鍛瘔閻忕偛绻愮粻鐑藉Υ?     */
     private void syncOverlayStateForResponsiveTier() {
         if (responsiveTier != ResponsiveTier.MINIMAL) {
             sidebarOverlayVisible = false;
@@ -1681,10 +1599,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 计算当前主界面的三栏布局边界。
-     *
-     * @param config 当前配置对象
-     * @return 主界面布局快照
+     * 閻犱緤绱曢悾鏄忋亹閹惧啿顤呭☉鎾瑰吹閺咁偊妫冮姀銏＄暠濞戞挸顦伴悥顔炬暜閸愩劎婀伴弶鍫濇贡閺咁偊濡?     *
+     * @param config 鐟滅増鎸告晶鐘绘煀瀹ュ洨鏋傞悗鐢殿攰閽?
+     * @return 濞戞捁宕甸弲顐︽閵忕姷顏撮悘鐐╁亾闊浂鍋嗛崣?
      */
     private MainLayoutMetrics buildMainLayoutMetrics(ModConfig config) {
         int padding = resolveLayoutPadding(config);
@@ -1701,7 +1618,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean sidebarOverlay = responsiveTier == ResponsiveTier.MINIMAL;
         boolean detailOverlay = responsiveTier == ResponsiveTier.COMPACT || responsiveTier == ResponsiveTier.MINIMAL;
         boolean sidebarVisible = !sidebarOverlay || sidebarOverlayVisible;
-        boolean detailVisible = !detailOverlay || (selectedTask != null && detailOverlayVisible);
+        boolean detailVisible = selectedTask != null && (!detailOverlay || detailOverlayVisible);
 
         int availableWidth = Math.max(120, this.width - padding * 2);
         int minContentWidth = switch (responsiveTier) {
@@ -1713,14 +1630,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         int sidebarWidth = resolveSidebarWidth(config, availableWidth);
         int detailWidth = resolveDetailWidth(availableWidth);
 
-        if (!detailOverlay && !sidebarOverlay) {
-            int inlineAvailable = availableWidth - gap * 2;
-            int desiredTotal = sidebarWidth + detailWidth + minContentWidth;
+        if (!sidebarOverlay) {
+            int inlineAvailable = availableWidth - gap - (detailVisible && !detailOverlay ? gap : 0);
+            int desiredTotal = sidebarWidth + minContentWidth + (detailVisible && !detailOverlay ? detailWidth : 0);
             if (desiredTotal > inlineAvailable) {
                 int overflow = desiredTotal - inlineAvailable;
-                int detailShrink = Math.min(overflow, Math.max(0, detailWidth - 120));
-                detailWidth -= detailShrink;
-                overflow -= detailShrink;
+                if (detailVisible && !detailOverlay) {
+                    int detailShrink = Math.min(overflow, Math.max(0, detailWidth - 120));
+                    detailWidth -= detailShrink;
+                    overflow -= detailShrink;
+                }
                 if (overflow > 0) {
                     int sidebarShrink = Math.min(overflow, Math.max(0, sidebarWidth - 96));
                     sidebarWidth -= sidebarShrink;
@@ -1729,12 +1648,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         int inlineSidebarWidth = sidebarOverlay ? 0 : sidebarWidth;
-        int inlineDetailWidth = detailOverlay ? 0 : detailWidth;
+        int inlineDetailWidth = detailVisible && !detailOverlay ? detailWidth : 0;
         int contentWidth = availableWidth - inlineSidebarWidth - inlineDetailWidth;
         if (!sidebarOverlay) {
             contentWidth -= gap;
         }
-        if (!detailOverlay) {
+        if (detailVisible && !detailOverlay) {
             contentWidth -= gap;
         }
         contentWidth = Math.max(Math.min(minContentWidth, availableWidth), contentWidth);
@@ -1745,8 +1664,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         int detailX = detailOverlay
                 ? Math.max(padding, this.width - padding - detailWidth)
-                : contentBounds.x + contentBounds.width + gap;
-        LayoutRect detailBounds = new LayoutRect(detailX, panelTop, Math.min(detailWidth, availableWidth), panelHeight);
+                : contentBounds.x + contentBounds.width + (detailVisible ? gap : 0);
+        LayoutRect detailBounds = detailVisible
+                ? new LayoutRect(detailX, panelTop, Math.min(detailWidth, availableWidth), panelHeight)
+                : new LayoutRect(detailX, panelTop, 0, panelHeight);
 
         return new MainLayoutMetrics(
                 responsiveTier,
@@ -1763,11 +1684,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 计算当前档位下的外层边距。
-     *
-     * @param config 当前配置对象
-     * @return 经过断点修正的边距
-     */
+     * 閻犱緤绱曢悾鏄忋亹閹惧啿顤呮俊妤嬬导缂嶅懏绋夌€ｎ剚鐣卞鑸电墪閻増娼忕涵鍛崺闁?     *
+     * @param config 鐟滅増鎸告晶鐘绘煀瀹ュ洨鏋傞悗鐢殿攰閽?
+     * @return 缂備礁绻楃换鍐棘椤撶姴浠ǎ鍥跺枟椤掓粓鎯冮崟顔剧彾閻?     */
     private int resolveLayoutPadding(ModConfig config) {
         int basePadding = clampInt(config.getPadding(), 6, 20);
         return switch (responsiveTier) {
@@ -1779,11 +1698,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 计算当前档位下的项目侧栏宽度。
-     *
-     * @param config 当前配置对象
-     * @param availableWidth 可用宽度
-     * @return 适配后的侧栏宽度
+     * 閻犱緤绱曢悾鏄忋亹閹惧啿顤呮俊妤嬬导缂嶅懏绋夌€ｎ剚鐣卞銈呮贡濞茬増绗熻閻栴喚鈧妫勭€规娊濡?     *
+     * @param config 鐟滅増鎸告晶鐘绘煀瀹ュ洨鏋傞悗鐢殿攰閽?
+     * @param availableWidth 闁告瑯鍨抽弫銈団偓纭呮鐎?
+     * @return 闂侇偄鍊块崢銈夊触鎼达絾鐣卞〒姘€鍕焿閻庣妫勭€?
      */
     private int resolveSidebarWidth(ModConfig config, int availableWidth) {
         return switch (responsiveTier) {
@@ -1795,11 +1713,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 计算当前档位下的详情区宽度。
-     *
-     * @param availableWidth 可用宽度
-     * @return 适配后的详情区宽度
-     */
+     * 閻犱緤绱曢悾鏄忋亹閹惧啿顤呮俊妤嬬导缂嶅懏绋夌€ｎ剚鐣遍悹鍥烽檮閸庡繘宕犻崫鍕靛晬閹艰揪璐熼埀?     *
+     * @param availableWidth 闁告瑯鍨抽弫銈団偓纭呮鐎?
+     * @return 闂侇偄鍊块崢銈夊触鎼达絾鐣遍悹鍥烽檮閸庡繘宕犻崫鍕靛晬閹?     */
     private int resolveDetailWidth(int availableWidth) {
         return switch (responsiveTier) {
             case LARGE -> clampInt(150, 132, Math.max(132, Math.min(180, availableWidth / 2)));
@@ -1810,8 +1726,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 根据当前布局快照更新覆盖层可见性和相关控件状态。
-     */
+     * 闁哄秷顫夊畵浣姐亹閹惧啿顤呴悽顖氬暙閻剝绠涢銈呭季闁哄洤鐡ㄩ弻濠勬啺閸℃瑦纾伴悘鐐插€歌ぐ鑼喆娴ｅ厜鍋撹閹蜂即鎯勭粙鍨綘闁硅矇鍌涱偨闁绘鍩栭埀顑块檷閳?     */
     private void applyResponsiveWidgetVisibility() {
         if (layoutMetrics == null) {
             return;
@@ -1819,9 +1734,29 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean sidebarVisible = layoutMetrics.sidebarVisible;
         boolean detailVisible = layoutMetrics.detailVisible;
 
-        if (projectScopeButton != null) {
-            projectScopeButton.visible = sidebarVisible;
-            projectScopeButton.active = sidebarVisible && teamProjectsEnabled;
+        boolean teamSpaceVisible = sidebarVisible && currentSpaceMode == SpaceMode.TEAM;
+        if (personalSpaceButton != null) {
+            personalSpaceButton.visible = sidebarVisible;
+            personalSpaceButton.active = sidebarVisible && currentSpaceMode != SpaceMode.PERSONAL;
+        }
+        if (teamSpaceButton != null) {
+            teamSpaceButton.visible = sidebarVisible;
+            teamSpaceButton.active = sidebarVisible && teamProjectsEnabled && currentSpaceMode != SpaceMode.TEAM;
+        }
+        if (myViewButton != null) {
+            myViewButton.visible = sidebarVisible;
+            myViewButton.setMessage(Component.literal("\u6211\u7684"));
+            myViewButton.active = sidebarVisible && currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.MY;
+        }
+        if (unassignedViewButton != null) {
+            unassignedViewButton.visible = teamSpaceVisible;
+            unassignedViewButton.setMessage(Component.literal("\u5f85\u5206\u914d"));
+            unassignedViewButton.active = teamSpaceVisible && currentTaskViewOption != TaskViewOption.UNASSIGNED;
+        }
+        if (allViewButton != null) {
+            allViewButton.visible = teamSpaceVisible;
+            allViewButton.setMessage(Component.translatable("gui.todolist.all"));
+            allViewButton.active = teamSpaceVisible && currentTaskViewOption != TaskViewOption.ALL;
         }
         if (projectSearchField != null) {
             projectSearchField.visible = sidebarVisible;
@@ -1874,8 +1809,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 切换极小窗口下的项目侧栏覆盖层。
-     */
+     * 闁告帒娲﹀畷鏌ュ几娴ｅ摜姣堢紒鎰殔瑜版稒绋夌€ｎ剚鐣卞銈呮贡濞茬増绗熻閻栴喚鎲伴崱娆愮０閻忕偛鍊堕埀?     */
     private void toggleSidebarOverlay() {
         if (responsiveTier != ResponsiveTier.MINIMAL) {
             return;
@@ -1888,19 +1822,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 返回项目侧栏当前是否可见。
-     *
-     * @return true 表示项目侧栏可见
+     * 閺夆晜鏌ㄥú鏍ㄣ亜閸︻厽绐楀〒姘€鍕焿鐟滅増鎸告晶鐘诲及椤栨碍鍎婇柛娆樺灥椤棝濡?     *
+     * @return true 閻炴稏鍔庨妵姘亜閸︻厽绐楀〒姘€鍕焿闁告瑯鍨甸～?
      */
     private boolean isSidebarPanelVisible() {
         return layoutMetrics != null && layoutMetrics.sidebarVisible;
     }
 
     /**
-     * 返回详情区当前是否可见。
-     *
-     * @return true 表示详情区可见
-     */
+     * 閺夆晜鏌ㄥú鏍嫚閿旇棄鍓伴柛鏍ф惈缂嶅宕滃鍡樞﹂柛姘剧畱瑜拌尙鎲存担纰樺亾?     *
+     * @return true 閻炴稏鍔庨妵姘辨嫚閿旇棄鍓伴柛鏍ф惈瑜拌尙鎲?     */
     private boolean isDetailPanelVisible() {
         return layoutMetrics != null && layoutMetrics.detailVisible;
     }
@@ -1957,10 +1888,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 绘制主界面的面板背景，帮助覆盖式侧栏和详情区与主内容区分层显示。
-     *
-     * @param context 当前绘制上下文
-     */
+     * 缂備焦锚閸╂绋夐懡銈嗘珪闂傚牄鍨诲▓鎴︽閵忊剝绶查柤鍐叉湰濞呮瑩鏁嶇仦钘夌盎闁告柡鏅為々顐︽儎閺嵮呯濞撴皜鍕焿闁告粌鐭侀娑㈠箚閸涱厼闅樺☉鎾崇凹鐎靛矂宕橀崨顓у晣闁告牕鎼崹搴ｄ沪閸屾稒鈻旂紒鈧幁鎺嗗亾?     *
+     * @param context 鐟滅増鎸告晶鐘电磼濡搫鐓戝☉鎾筹梗缁楀懘寮?     */
     private void renderLayoutPanels(GuiGraphics context) {
         if (layoutMetrics == null) {
             return;
@@ -1975,11 +1904,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 绘制单个面板背景和描边。
-     *
-     * @param context 当前绘制上下文
-     * @param bounds 面板边界
-     * @param overlay 当前面板是否为覆盖式
+     * 缂備焦锚閸╂宕￠弴姘跺殝闂傚牄鍨哄姗€鎳楃仦鐐彲闁告粌鏈鎸庢綇楠炲簱鍋?     *
+     * @param context 鐟滅増鎸告晶鐘电磼濡搫鐓戝☉鎾筹梗缁楀懘寮?     * @param bounds 闂傚牄鍨哄妯绘綇閸︻厽娅?
+     * @param overlay 鐟滅増鎸告晶鐘绘閵忊剝绶查柡鍕靛灠閹焦绋夋ウ娆炬船闁烩晜鐗曠槐?
      */
     private void renderPanelBackground(GuiGraphics context, LayoutRect bounds, boolean overlay) {
         if (bounds == null || bounds.width <= 0 || bounds.height <= 0) {
@@ -2064,9 +1991,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 保存当前客户端缓存中的个人任务，并同步到服务端与 HUD。
+     * 濞ｅ洦绻傞悺銊ㄣ亹閹惧啿顤呴悗骞垮灪閸╂稓绮╅婊呭閻庢稒眉閼垫垿鎯冮崟顏堝殝濞存粏妗ㄩ幑銏ゅ礉閳藉懐绀夋鐐舵硾閹挸顫㈤妷銉ョ厒闁哄牆绉存慨鐔虹博椤栨瑧鐟?HUD闁?
      *
-     * @throws Exception 当个人任务保存失败时抛出异常
+     * @throws Exception 鐟滅増鎸烽柌婊勭鏉炵増宕查柛鏂衡偓鑼閻庢稒锚閵囨垹鎷归妷锔筋槯闁硅埖绋戦崵顓烆嚕閸屾氨鍩?
      */
     private void savePersonalTasks() throws Exception {
         if (personalTaskManager == null) {
@@ -2085,9 +2012,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 保存当前客户端缓存中的团队任务，并同步到服务端。
+     * 濞ｅ洦绻傞悺銊ㄣ亹閹惧啿顤呴悗骞垮灪閸╂稓绮╅婊呭閻庢稒眉閼垫垿鎯冮崟顐ｇ闂傚啰鍠嶉幑銏ゅ礉閳藉懐绀夋鐐舵硾閹挸顫㈤妷銉ョ厒闁哄牆绉存慨鐔虹博椤栨ǚ鍋?
      *
-     * @throws Exception 当团队任务保存失败时抛出异常
+     * @throws Exception 鐟滅増鎸稿ú鐔兼⒓閻旇埖宕查柛鏂衡偓鑼閻庢稒锚閵囨垹鎷归妷锔筋槯闁硅埖绋戦崵顓烆嚕閸屾氨鍩?
      */
     private void saveTeamTasks() throws Exception {
         if (teamTaskManager == null) {
@@ -2143,6 +2070,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        syncTaskListReorderState();
         if (handleContextMenuClick(mouseX, mouseY, button)) {
             return true;
         }
@@ -2154,17 +2082,44 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             applyResponsiveWidgetVisibility();
         }
         if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
+            pendingClickSelectionTask = null;
             closeTaskContextMenu();
             return true;
         }
         if (projectListWidget != null && isSidebarPanelVisible() && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+            pendingClickSelectionTask = null;
             closeTaskContextMenu();
             return true;
         }
 
         if (taskListWidget != null) {
+            TaskListWidget.TaskSectionHitResult sectionHit = taskListWidget.getSectionAt(mouseX, mouseY);
+            if (button == 0
+                    && sectionHit != null
+                    && sectionHit.getRowType() == TaskListWidget.RowType.SECTION_HEADER
+                    && "completed".equals(sectionHit.getSectionId())) {
+                toggleCompletedSection();
+                applySearchFilter();
+                pendingClickSelectionTask = null;
+                taskRowDragInProgress = false;
+                taskRowDragOrderSnapshot = List.of();
+                closeTaskContextMenu();
+                return true;
+            }
             Task clickedTask = taskListWidget.getTaskAt((int)mouseX, (int)mouseY);
             if (clickedTask != null) {
+                if (button == 0 && isTaskReorderAllowedInCurrentView() && taskListWidget.canStartDrag(clickedTask)) {
+                    String dragSectionId = sectionHit == null ? "active" : sectionHit.getSectionId();
+                    taskListWidget.armPendingTaskDrag(clickedTask, dragSectionId, mouseX, mouseY);
+                    pendingClickSelectionTask = clickedTask;
+                    taskRowDragInProgress = false;
+                    taskRowDragOrderSnapshot = getCurrentVisibleActiveTaskIds();
+                    closeTaskContextMenu();
+                    return true;
+                }
+                pendingClickSelectionTask = null;
+                taskRowDragInProgress = false;
+                taskRowDragOrderSnapshot = List.of();
                 selectTask(clickedTask);
                 if (button == 1) {
                     openTaskContextMenu(clickedTask, (int) mouseX, (int) mouseY);
@@ -2185,6 +2140,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         boolean cleared = false;
+        pendingClickSelectionTask = null;
+        taskRowDragInProgress = false;
+        taskRowDragOrderSnapshot = List.of();
         if (button == 0 && selectedTask != null && !isClickInEditArea(mouseX, mouseY)) {
             clearSelectedTask();
             cleared = true;
@@ -2193,6 +2151,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             closeTaskContextMenu();
         }
 
+        if (this.minecraft == null || Minecraft.getInstance() == null) {
+            return cleared;
+        }
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
         return handled || cleared;
     }
@@ -2214,7 +2175,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+            if (pendingClickSelectionTask != null || taskListWidget.getDropTargetIndexForTest() >= 0) {
+                taskRowDragInProgress = true;
+                markUnsaved();
+            }
+            pendingClickSelectionTask = null;
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
@@ -2222,9 +2189,38 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseReleased(mouseX, mouseY, button)) {
+            if (taskRowDragInProgress || taskListWidget.getDropTargetIndexForTest() >= 0) {
+                markUnsaved();
+                List<Task> reorderedActiveTasks = taskListWidget.getTasks().stream()
+                        .filter(Objects::nonNull)
+                        .filter(task -> !task.isCompleted())
+                        .toList();
+                List<String> reorderedIds = reorderedActiveTasks.stream()
+                        .map(Task::getId)
+                        .filter(Objects::nonNull)
+                        .toList();
+                if (!reorderedIds.equals(taskRowDragOrderSnapshot)) {
+                    onManualReorderActiveTasks(reorderedActiveTasks);
+                }
+            }
+            pendingClickSelectionTask = null;
+            taskRowDragInProgress = false;
+            taskRowDragOrderSnapshot = List.of();
             return true;
         }
+        if (button == 0 && pendingClickSelectionTask != null) {
+            Task taskToSelect = pendingClickSelectionTask;
+            pendingClickSelectionTask = null;
+            taskRowDragInProgress = false;
+            taskRowDragOrderSnapshot = List.of();
+            selectTask(taskToSelect);
+            return true;
+        }
+        pendingClickSelectionTask = null;
+        taskRowDragInProgress = false;
+        taskRowDragOrderSnapshot = List.of();
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -2240,7 +2236,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 在关闭界面时丢弃未保存的个人任务改动，保持“仅保存按钮落盘”语义。
+     * 闁革负鍔岄崣褔姊婚鐘虫珪闂傚牄鍨哄鍌涚▔閵忕姷纾鹃柡鍫簷缁绘氨鈧稒顭囧▓鎴炵▔椤忓啯鐪藉ù鐘侯嚙婵喖寮ㄩ悷鏉啃楅柨娑樺缁绘岸骞愭担娴嬪亾濠娾偓缁孩绌卞┑鍡欐憼闁圭顦甸幐鎶芥媰閻ｅ本纾搁柍銉︾箚椤曘垺绋婃径鍫氬亾?
      */
     private void discardPersonalTasksOnCloseIfNeeded() {
         if (!personalHasUnsavedChanges || personalTaskManager == null) {
@@ -2335,38 +2331,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void selectTask(Task task) {
         selectedTask = task;
-        if (layoutMetrics != null && layoutMetrics.detailOverlay) {
-            detailOverlayVisible = true;
-            layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
-        }
         selectedPriority = task.getPriority();
         detailDraft = createDetailDraft(task);
-        taskListWidget.setSelectedTask(task);
-        syncDetailWidgetsFromState();
-        updateButtonStates();
-        applyResponsiveWidgetVisibility();
+        detailOverlayVisible = true;
+        rebuildUI();
     }
 
     private void clearSelectedTask() {
         selectedTask = null;
         detailDraft = null;
-        if (layoutMetrics != null && layoutMetrics.detailOverlay) {
-            detailOverlayVisible = false;
-            layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
-        }
-        if (taskListWidget != null) {
-            taskListWidget.clearSelection();
-        }
-        syncDetailWidgetsFromState();
-        updateButtonStates();
-        applyResponsiveWidgetVisibility();
+        detailOverlayVisible = false;
+        rebuildUI();
     }
 
     /**
-     * 基于当前选中任务创建一份详情抽屉草稿。
-     *
-     * @param task 当前选中任务
-     * @return 对应的详情草稿；当任务为空时返回 null
+     * 闁糕晞妗ㄧ花顒冦亹閹惧啿顤呴梺顐㈩槷閼垫垶绂掔拠鎻掝潳闁告帗绋戠紓鎾寸▔閳ь剚绂掗崐鐕佸殜闁诡垰鎳忔繛濠勪沪婢跺骸纾哥紒瀣骏閳?     *
+     * @param task 鐟滅増鎸告晶鐘绘焻婢跺鍘ù鐘侯嚙婵?
+     * @return 閻庣數鎳撶花鏌ユ儍閸曨噮鍤婇柟顖氭嚀瀹曞繒绮欓崠锛勫耿鐟滅増鎸烽幑銏ゅ礉閳ヨ尪绀嬬紒宀€鍎ゅ鍌涙交閺傛寧绀€ null
      */
     private TaskDetailDraft createDetailDraft(Task task) {
         if (task == null) {
@@ -2376,8 +2357,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 将当前详情草稿同步到界面控件，避免选择切换时残留旧内容。
-     */
+     * 閻忓繐妫楃紞瀣礈瀹ュ牜鍤婇柟顖氭嚀瀹曞繒绮欓崹顔藉€辨慨婵勫劚閸╁矂鎮惧畝鍕〃闁硅矇鍌涱偨闁挎稑鐭傛导鈺呭礂瀹ュ鍋撴径瀣仴闁告帒娲﹀畷鏌ュ籍閼哥數鏆欓柣锝嗙懄濡偊宕橀崨顓у晣闁?     */
     private void syncDetailWidgetsFromState() {
         syncingDetailWidgets = true;
         try {
@@ -2397,10 +2377,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 按当前抽屉状态更新标题、描述和标签的可编辑性。
-     */
+     * 闁圭顦紞瀣礈瀹ュ棗鈻曢悘鐐差槺婵悂骞€娴ｈ绾柡鍌滃閻栵絾锛愬Ο绯曞亾娴ｇ懓浼庨弶鈺傛緲閹蜂即寮介崶鈺婂姰闁汇劌瀚ぐ鑼磽閺嶎剛甯嗛柟顑讲鍋?     */
     private void applyDetailWidgetEditability() {
-        boolean detailVisible = isDetailPanelVisible() || (layoutMetrics == null || !layoutMetrics.detailOverlay);
+        boolean detailVisible = layoutMetrics == null ? selectedTask != null : layoutMetrics.detailVisible;
         boolean editable = detailVisible && canEditSelectedTaskDetails();
         if (titleField != null) {
             boolean titleEditing = editable && detailDraft != null && detailDraft.titleEditing;
@@ -2424,17 +2403,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 判断当前选中任务是否允许在详情抽屉中编辑基础字段。
-     *
-     * @return true 表示当前任务可编辑
-     */
+     * 闁告帇鍊栭弻鍥亹閹惧啿顤呴梺顐㈩槷閼垫垶绂掔拠鎻掝潳闁哄嫷鍨伴幆渚€宕楁担绛嬪晠闁革负鍔忛娑㈠箚閸涱喖鈻曢悘鐐差槷閼垫垹绱撻弽顒傚竼闁糕晞娅ｉ、鍛偓娑欘殕椤斿矂濡?     *
+     * @return true 閻炴稏鍔庨妵姘炽亹閹惧啿顤呭ù鐘侯嚙婵喖宕ｉ婊呮そ閺?     */
     private boolean canEditSelectedTaskDetails() {
         return selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask);
     }
 
     /**
-     * 让详情标题进入编辑态，供点击标题或测试驱动复用。
-     */
+     * 閻犱讲鏅為娑㈠箚閸涱喚鍨煎Λ鐗堫焾缁绘﹢宕楅妷褏妞介弶鍫熷灦閳ь兛绶ょ槐婵囩瑹濞戞艾浠柛鎴犵帛閻栵絾锛愬Ο璇茬仐婵炴潙顑堥惁顖涖仚閸楃偛袟濠㈣泛绉堕弫銈夊Υ?     */
     private void beginDetailTitleEditing() {
         if (detailDraft == null || !canEditSelectedTaskDetails()) {
             return;
@@ -2448,10 +2424,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 处理详情标题变更，并同步回当前选中任务。
-     *
-     * @param text 最新标题文本
-     */
+     * 濠㈣泛瀚幃濠勬嫚閿旇棄鍓伴柡宥呮喘椤ｄ粙宕ｅΟ缁樼函闁挎稑鑻懟鐔煎触鐏炵虎鍔勯柛銉у仜缂嶅宕滃澶嗗亾婢跺鍘ù鐘侯嚙婵喖濡?     *
+     * @param text 闁哄牃鍋撻柡鍌滃閻栵絾锛愬Ο缁樼€柡?     */
     private void onDetailTitleChanged(String text) {
         if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
             return;
@@ -2462,10 +2436,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 处理详情描述变更，并同步回当前选中任务。
-     *
-     * @param text 最新描述文本
-     */
+     * 濠㈣泛瀚幃濠勬嫚閿旇棄鍓伴柟璇茬箺閸亪宕ｅΟ缁樼函闁挎稑鑻懟鐔煎触鐏炵虎鍔勯柛銉у仜缂嶅宕滃澶嗗亾婢跺鍘ù鐘侯嚙婵喖濡?     *
+     * @param text 闁哄牃鍋撻柡鍌滃瀵寧娼婚悧鍫熺€柡?     */
     private void onDetailDescriptionChanged(String text) {
         if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
             return;
@@ -2476,10 +2448,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 处理详情标签变更，并同步回当前选中任务。
-     *
-     * @param text 最新标签文本
-     */
+     * 濠㈣泛瀚幃濠勬嫚閿旇棄鍓伴柡宥呮川椤掔兘宕ｅΟ缁樼函闁挎稑鑻懟鐔煎触鐏炵虎鍔勯柛銉у仜缂嶅宕滃澶嗗亾婢跺鍘ù鐘侯嚙婵喖濡?     *
+     * @param text 闁哄牃鍋撻柡鍌滃閻栵絿绮甸悙顒佺€柡?     */
     private void onDetailTagsChanged(String text) {
         if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
             return;
@@ -2502,10 +2472,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 将任务标签拼接成详情抽屉使用的逗号分隔文本。
-     *
-     * @param task 目标任务
-     * @return 逗号分隔后的标签文本
+     * 閻忓繐妫旈幑銏ゅ礉閳╁啰鍨肩紒娑氬亾鐎氶箖骞掗妷锕€鐏囬悹鍥烽檮閸庡繘骞庨挊澶屾簞濞达綀娉曢弫銈夋儍閸曨垪鍋撳Δ鈧ぐ鍧楀礆閸℃稒顓鹃柡鍌氭处濠€浼村Υ?     *
+     * @param task 闁烩晩鍠楅悥锝嗙鐠囨彃顫?
+     * @return 闂侇偅顨呰ぐ鍧楀礆閸℃稒顓鹃柛姘捣濞堟垿寮介崶鈺婂姰闁哄倸娲﹀﹢?
      */
     private String joinTaskTags(Task task) {
         if (task == null || task.getTags() == null || task.getTags().isEmpty()) {
@@ -2559,7 +2528,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
         Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate);
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
-        boolean detailVisible = isDetailPanelVisible() || (layoutMetrics == null || !layoutMetrics.detailOverlay);
+        boolean detailVisible = layoutMetrics == null ? hasSelection : layoutMetrics.detailVisible;
         if (claimButton != null) {
             claimButton.visible = detailVisible && showAssignButtons;
             boolean canClaim = hasSelection
@@ -2758,10 +2727,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 处理当前可见未完成任务的手动重排结果，并同步未保存状态与列表刷新。
-     *
-     * @param reorderedActiveTasks 当前可见未完成任务的新顺序
-     */
+     * 濠㈣泛瀚幃濠呫亹閹惧啿顤呴柛娆樺灥椤棝寮甸鍕殮闁瑰瓨鍔掗幑銏ゅ礉閿涘嫭鐣遍柟闈涱儏婵晠鏌屽鍡楃瑩缂備焦鎸婚悘澶愭晬鐏炲€熷珯闁告艾鏈鐐哄嫉椤忓啰绠介悗娑欘焽婵悂骞€娴ｉ鐟㈤柛鎺擃殙閵嗗啴宕氶柨瀣厐闁?     *
+     * @param reorderedActiveTasks 鐟滅増鎸告晶鐘诲矗椤栨繍娼岄柡鍫簻閻ｎ剟骞嬮幇顏呭床闁告棑绱曞▓鎴﹀棘娴兼番鈧孩鎯?     */
     private void onManualReorderActiveTasks(List<Task> reorderedActiveTasks) {
         if (!isTaskReorderAllowedInCurrentView() || taskManager == null || reorderedActiveTasks == null || reorderedActiveTasks.size() < 2) {
             return;
@@ -2788,9 +2755,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 判断当前视图是否允许执行未完成任务的手动排序。
-     *
-     * @return true 表示当前视图允许拖拽排序
+     * 在鼠标交互前同步任务列表的拖拽排序开关，避免界面状态变更后列表仍保留旧权限快照。
+     */
+    private void syncTaskListReorderState() {
+        if (taskListWidget == null) {
+            return;
+        }
+        taskListWidget.setTaskReorderEnabled(isTaskReorderAllowedInCurrentView());
+    }
+
+    /**
+     * 闁告帇鍊栭弻鍥亹閹惧啿顤呴悷娆忔濞存﹢寮伴姘剨闁稿繋娴囬蹇涘箥瑜戦、鎴﹀嫉椤忓嫮鏆氶柟瀛樺姃閹广垽宕濋敍鍕暠闁归潧顑呮慨鈺呭箳閹烘垹纰嶉柕?     *
+     * @return true 閻炴稏鍔庨妵姘炽亹閹惧啿顤呴悷娆忔濞存﹢宕楁担绛嬪晠闁归攱鐗楃€氬潡骞掗幒鎴犵
      */
     private boolean isTaskReorderAllowedInCurrentView() {
         if (currentProject == null) {
@@ -2964,9 +2940,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 按当前空间筛选、搜索条件和默认项目兜底规则，构建侧栏可见项目列表。
-     *
-     * @return 当前侧栏应显示的项目列表
+     * 闁圭顦紞瀣礈瀹ュ洠鏁勯梻鍌氼嚟閻☆偊鏌呮径鍫氬亾娴ｈ鍋濈紒渚垮灪濞碱垱绂掔捄鐑樺濮掓稒顭堥缁樸亜閸︻厽绐楅柛蹇旂矊缁ㄥ磭鎲撮崟顐㈢仧闁挎稑鏈悗顖氼嚈鏉炵増娅犻柡宥呯箰瑜拌尙鎲存笟鈧妴宥夋儎椤旂厧鐏欓悶娑栧妸閳?     *
+     * @return 鐟滅増鎸告晶鐘崇瑹瑜庨悥顔芥償閺冣偓濡绮堥搹瑙勭暠濡炪倕婀卞ú浼村礆濡ゅ嫨鈧?
      */
     private List<Project> buildVisibleProjectsForSidebar() {
         List<Project> all = new ArrayList<>();
@@ -3008,11 +2983,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 判断目标项目是否已经存在于候选列表中。
-     *
-     * @param projects 候选项目列表
-     * @param projectId 目标项目标识
-     * @return true 表示候选列表已包含目标项目
+     * 闁告帇鍊栭弻鍥儎椤旂晫鍨煎銈呮贡濞蹭即寮伴姘剨鐎规瓕灏欑划锛勨偓娑櫭﹢顏呯鎼粹檧鍋撳▎鎾亾婢跺﹤鐏欓悶娑栧妺閼垫垿濡?     *
+     * @param projects 闁稿﹥鐟╅埀顒€顦甸妴宥夋儎椤旂厧鐏欓悶?     * @param projectId 闁烩晩鍠楅悥锝嗐亜閸︻厽绐楅柡宥呮穿閻?
+     * @return true 閻炴稏鍔庨妵姘跺磹濞嗘挴鍋撴径濠傜仚閻炴稏鍔岄崙锟犲礌閸涱厽鍎撻柣鈺婂枟閻栵絾銇勯崷顓熺獥
      */
     private boolean containsProject(List<Project> projects, String projectId) {
         if (projects == null || projectId == null || projectId.isEmpty()) {
@@ -3072,8 +3045,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 统一按当前侧栏可见性刷新底部项目操作区，避免滚动列表影响按钮显隐。
-     */
+     * 缂備胶鍠嶇粩鎾箰婢跺﹦绉奸柛鎾崇С閺呭爼寮借箛鎾宠閻熸瑤鐒﹂埀顑啫鐓曢柡鍌涙緲缁ㄦ娊鏌堥妸鈹库偓宥夋儎椤旇姤鎯欏ù锝嗙矊鐏忣垶鏁嶅畝鍕級闁稿繐绉电划鎾礉閵娿儱鐏欓悶娑栧妼婵傛牠宕鍡楃樆闂佺瓔鍠楀Ο澶愭⒕閹扳斁鍋?     */
     private void syncBottomProjectButtonsState() {
         boolean sidebarVisible = layoutMetrics == null || layoutMetrics.sidebarVisible;
         if (addProjectBtn != null) {
@@ -3170,7 +3142,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void applyPriorityFilter() {
-        filterTasks(currentFilter);
+        filterTasks("active");
     }
 
     private void onAssignOthers() {
@@ -3189,11 +3161,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 解析团队项目成员在当前客户端上的显示名称，优先使用缓存名称，并在成员在线时刷新为最新玩家名。
+     * 閻熸瑱绲鹃悗浠嬪炊閵忋倖袝濡炪倕婀卞ú浼村箣閹邦剚鍠呴柛锔哄妼缂嶅宕滃鍜佸悅闁规挳顥撻顒佺▔婵犲嫭鐣遍柡鍕⒔閵囨岸宕ュ鍥嗙偤鏁嶇仦鑲╁枠闁稿繐鐗呮繛鍥偨閵娧呭閻庢稒锚閹洜绮旂敮顔剧妤犵偠娉涘﹢顏堝箣閹邦剚鍠呴柛锔哄妿閸ゅ酣寮捄鍝勭厱闁哄倿顣︾拹鐔煎嫉閳ь剟寮幍顔艰礋閻庣娉涢幃鏇㈠Υ?
      *
-     * @param project 当前团队项目
-     * @param memberUuid 成员 UUID
-     * @return 可用于界面展示的成员名称；若没有缓存名称则回退为 UUID
+     * @param project 鐟滅増鎸告晶鐘诲炊閵忋倖袝濡炪倕婀卞ú?
+     * @param memberUuid 闁瑰瓨鍔曢幉?UUID
+     * @return 闁告瑯鍨抽弫銈嗙鎼达絾娅曢梻鍫涘灩閻秶绮堥搹瑙勭暠闁瑰瓨鍔曢幉鎶藉触瀹ュ泦鐐烘晬濞戞粌顏熸繛灞稿墲濠€浣虹磽閹惧磭鎽犻柛姘Ф琚ㄩ柛鎺撶懃濞叉牠鏌呴埀顒佺▔?UUID
      */
     private String resolveProjectMemberDisplayName(Project project, String memberUuid) {
         if (project == null || memberUuid == null || memberUuid.isBlank()) {
@@ -3215,7 +3187,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 }
             }
         } catch (Exception e) {
-            // 忽略非法 UUID 或临时连接状态异常，继续使用缓存名称或 UUID 兜底。
+            // 闊洨鏅弳鎰版閻愬銆?UUID 闁瑰瓨鐗旀径宥夊籍閹壆绠鹃柟鎭掑劤婵悂骞€娴ｅ摜纾介悽顖炴交缁辨繄绱掕閻㈢粯鎷呯捄銊︽殢缂傚倹鎸搁悺銊╁触瀹ュ泦鐐哄箣?UUID 闁稿繑绮岀花鎶藉Υ?
         }
         if (displayName == null || displayName.isBlank()) {
             return memberUuid;
@@ -3224,17 +3196,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 任务指派弹窗中的成员候选项，保存成员 UUID 与当前显示名称。
+     * 濞寸姾顕ф慨鐔煎箰閸ャ劍鐑︾€殿喖婀遍悰銉︾▔椤撶姵鐣遍柟瀛樺姇閹叉娊宕愬▎鎾亾婢舵劑鈧秹鏁嶇仦鑲╃閻庢稒蓱閸ㄦ岸宕?UUID 濞戞挸楠哥紞瀣礈瀹ュ棙鈻旂紒鈧崫鍕€崇紒澶庡焽閳?
      */
     private static final class AssignableMember {
         private final String uuid;
         private final String displayName;
 
         /**
-         * 创建一个可指派成员候选项。
+         * 闁告帗绋戠紓鎾寸▔閳ь剚绋夐鍕闁圭娲﹀ǎ鎶藉箣閹邦剚鍠呴柛濠冪懇閳ь剙顦甸妴宥夊Υ?
          *
-         * @param uuid 成员 UUID
-         * @param displayName 成员显示名称
+         * @param uuid 闁瑰瓨鍔曢幉?UUID
+         * @param displayName 闁瑰瓨鍔曢幉鎶藉及閸撗佷粵闁告艾绉惰ⅷ
          */
         private AssignableMember(String uuid, String displayName) {
             this.uuid = uuid;
@@ -3243,36 +3215,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void filterTasks(String filter) {
-        // If filter is "active" or "completed" or "all", update currentFilter (Tab)
-        if (filter.equals("active") || filter.equals("completed") || filter.equals("all")) {
-            currentFilter = filter;
-        }
-        
-        List<Task> result = new ArrayList<>();
-        // 1. First apply Tab filter
-        switch (currentFilter) {
-            case "all":
-                result = taskManager.getAllTasks();
-                break;
-            case "active":
-                result = taskManager.getIncompleteTasks();
-                break;
-            case "completed":
-                result = taskManager.getCompletedTasks();
-                break;
-            default:
-                // Fallback
-                result = taskManager.getIncompleteTasks();
-                break;
-        }
-        
-        // 2. Apply Priority Filter
+        currentFilter = "active";
+        List<Task> result = taskManager == null ? new ArrayList<>() : taskManager.getIncompleteTasks();
+
         if (currentPriorityFilter != 0) {
             Task.Priority targetPriority = Task.Priority.MEDIUM;
             if (currentPriorityFilter == 1) targetPriority = Task.Priority.HIGH;
             else if (currentPriorityFilter == 2) targetPriority = Task.Priority.MEDIUM;
             else if (currentPriorityFilter == 3) targetPriority = Task.Priority.LOW;
-            
+
             List<Task> priorityFiltered = new ArrayList<>();
             for (Task t : result) {
                 if (t.getPriority() == targetPriority) {
@@ -3281,25 +3232,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             result = priorityFiltered;
         }
-        
-        // 3. Apply View Scope (Assigned/Unassigned)
+
         baseFilteredTasks = applyAssignedFilterIfNeeded(result);
-        
-        // 4. Apply Search
         applySearchFilter();
         if (selectedTask != null && !isSelectedTaskValid()) {
             clearSelectedTask();
         }
-        if (filterStatusButton != null) {
-            filterStatusButton.setMessage(getStatusFilterText());
-        }
-        if (viewToggleButton != null) {
-            viewToggleButton.setMessage(getViewToggleText());
-        }
+        updateViewButtonsState();
     }
 
     private void refreshTaskList() {
-        filterTasks(currentFilter);
+        filterTasks("active");
     }
 
     private void applySearchFilter() {
@@ -3335,24 +3278,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 构建当前任务区分段数据，为“未完成 + 已完成折叠分组”提供基础模型。
-     *
-     * @return 当前任务区分段列表
-     */
+     * 闁哄瀚紓鎾广亹閹惧啿顤呭ù鐘侯嚙婵喖宕犻崫鍕€绘繛鍫濈仛閺嗙喖骞戦鍡欑濞戞捁銆€閳ь剚绮嶅﹢顓犫偓鐟版湰閸?+ 鐎瑰憡褰冮悾顒勫箣閹邦厼顫戦柛娆戝Т閸ㄥ海绱掗崟銊㈠亾濠靛洤绲瑰〒姘☉閻斺偓缁绢厸鍋撴俊顖椻偓宕団偓鐑藉Υ?     *
+     * @return 鐟滅増鎸告晶鐘崇鐠囨彃顫ら柛鏍ф惈閸ㄥ骸鈻撻棃娑樼仚閻?     */
     private List<TaskListWidget.SectionModel> buildTaskPaneSections() {
         List<TaskListWidget.SectionModel> sections = new ArrayList<>();
         List<Task> activeTasks = filteredTasks == null ? List.of() : List.copyOf(filteredTasks);
-
-        if ("completed".equals(currentFilter)) {
-            sections.add(new TaskListWidget.SectionModel(
-                    "completed",
-                    Component.translatable("gui.todolist.completed").getString(),
-                    activeTasks,
-                    false,
-                    true
-            ));
-            return sections;
-        }
 
         sections.add(new TaskListWidget.SectionModel(
                 "active",
@@ -3365,7 +3295,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         List<Task> completedTasks = buildCompletedTasksForCurrentView();
         sections.add(new TaskListWidget.SectionModel(
                 "completed",
-                Component.translatable("gui.todolist.completed").getString() + " " + completedTasks.size() + " 项",
+                Component.translatable("gui.todolist.completed").getString() + " (" + completedTasks.size() + ")",
                 completedTasks,
                 true,
                 completedExpanded
@@ -3374,9 +3304,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 构建当前项目和当前视图下的已完成任务列表，用于主任务区底部折叠分组。
-     *
-     * @return 当前可见的已完成任务列表
+     * 闁哄瀚紓鎾广亹閹惧啿顤呭銈呮贡濞蹭即宕仦鐣岀Ъ闁告挸绉烽～瀣炊閸欍儳鐟撻柣銊ュ閸戯紕鈧懓鏈崹姘鐠囨彃顫ら柛鎺擃殙閵嗗啴鏁嶅畝鈧弫銈嗙鎼存繂鐦滃ù鐘侯嚙婵喖宕犻崫鍕亢闂侇喓鍔嶆慨宀勫矗閻樻彃鐎荤紓浣稿閳?     *
+     * @return 鐟滅増鎸告晶鐘诲矗椤栨繍娼岄柣銊ュ閸戯紕鈧懓鏈崹姘鐠囨彃顫ら柛鎺擃殙閵?
      */
     private List<Task> buildCompletedTasksForCurrentView() {
         if (taskManager == null || currentProject == null) {
@@ -3389,11 +3318,26 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 对指定任务列表复用当前优先级筛选条件。
+     * 返回当前界面中可拖拽的未完成任务顺序快照，用于判断手动排序是否真正改变了顺序。
      *
-     * @param source 待筛选的任务列表
-     * @return 优先级筛选后的任务列表
+     * @return 当前可见未完成任务 ID 顺序
      */
+    private List<String> getCurrentVisibleActiveTaskIds() {
+        if (filteredTasks == null || filteredTasks.isEmpty()) {
+            return List.of();
+        }
+        return filteredTasks.stream()
+                .filter(Objects::nonNull)
+                .filter(task -> !task.isCompleted())
+                .map(Task::getId)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * 閻庝絻顫夌€垫氨鈧鐭幑銏ゅ礉閳ュ啿鐏欓悶娑栧妼椤︽煡鎮介妸銉хЪ闁告挸绉崇槐顓㈠礂閸垽鐛撶紒娑欑洴閳ь剙顦板顖涚闊祴鍋?     *
+     * @param source 鐎垫澘鎳愰悺顐︽焻婢跺本鐣卞ù鐘侯嚙婵喖宕氬Δ鍕┾偓?
+     * @return 濞村吋锚閸樻稓鐥閻☆偊鏌呮径濠冨€甸柣銊ュ閹广垽宕濋垾鍐茬仚閻?     */
     private List<Task> applyPriorityFilterToTasks(List<Task> source) {
         List<Task> input = source == null ? List.of() : source;
         if (currentPriorityFilter == 0) {
@@ -3417,11 +3361,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 对指定任务列表复用当前搜索关键字。
-     *
-     * @param source 待筛选的任务列表
-     * @return 搜索筛选后的任务列表
-     */
+     * 閻庝絻顫夌€垫氨鈧鐭幑銏ゅ礉閳ュ啿鐏欓悶娑栧妼椤︽煡鎮介妸銉хЪ闁告挸绉甸幃宕囨閵忕姴褰犻梺娆惧枛閻⊙囧Υ?     *
+     * @param source 鐎垫澘鎳愰悺顐︽焻婢跺本鐣卞ù鐘侯嚙婵喖宕氬Δ鍕┾偓?
+     * @return 闁瑰吋绮庨崒銊х驳濞戔懇鍋撴径濠冨€甸柣銊ュ閹广垽宕濋垾鍐茬仚閻?     */
     private List<Task> applySearchQueryToTasks(List<Task> source) {
         List<Task> input = source == null ? List.of() : source;
         if (searchQuery == null || searchQuery.isEmpty()) {
@@ -3451,11 +3393,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 将控件转换为统一的边界数组，供测试代码读取布局信息。
-     *
-     * @param widget 目标控件
-     * @return 依次包含 x、y、width、height 的边界数组
-     */
+     * 閻忓繐妫欑敮鑸电閹増绁柟璇℃線鐠愮喓绱掗悢鍓侇伇闁汇劌瀚粩鐔兼偩鐏炵偓娈剁紓浣稿缁辨繃绗熷☉娆戙偞閻犲洦娲戦崬顒勬儘娴ｇ瓔鍤㈤柛娆愮墪缁旈浠﹂埀顒佺┍閳╁啩绱栭柕?     *
+     * @param widget 闁烩晩鍠楅悥锝夊箳瑜屽▎?
+     * @return 濞撴碍绻冮濂稿礌閸涱厽鍎?x闁靛棔绨滈柕鍡曠皻idth闁靛棔寮揺ight 闁汇劌瀚粩鐔兼偩鐏炵偓娈剁紓?     */
     private int[] toWidgetBounds(net.minecraft.client.gui.components.AbstractWidget widget) {
         if (widget == null) {
             return new int[] {0, 0, 0, 0};
@@ -3598,9 +3538,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     
     private void updateViewButtonsState() {
-        if (viewToggleButton != null) {
-            viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-            viewToggleButton.setMessage(getViewToggleText());
+        if (personalSpaceButton != null) {
+            personalSpaceButton.active = currentSpaceMode != SpaceMode.PERSONAL;
+        }
+        if (teamSpaceButton != null) {
+            teamSpaceButton.active = teamProjectsEnabled && currentSpaceMode != SpaceMode.TEAM;
+        }
+        if (myViewButton != null) {
+            myViewButton.setMessage(Component.literal("\u6211\u7684"));
+            myViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.MY;
+        }
+        if (unassignedViewButton != null) {
+            unassignedViewButton.setMessage(Component.literal("\u5f85\u5206\u914d"));
+            unassignedViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.UNASSIGNED;
+        }
+        if (allViewButton != null) {
+            allViewButton.setMessage(Component.translatable("gui.todolist.all"));
+            allViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.ALL;
         }
     }
     
@@ -3655,7 +3609,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 当项目删除时，立即从本地任务管理器硬删除关联任务。
+     * 鐟滅増鎹囬妴宥夋儎椤旂厧鐏╅梻鍕╁€栧鍌炴晬瀹€鈧悵娑㈠础閸忓懐鐭ら柡鍫墮濠€瀛樼鐠囨彃顫ょ紒鐙呯磿閹﹪宕抽妸褉鈧牠宕氶悩缁樼彑闁稿繐鐤囨禒鍫熺鐠囨彃顫ら柕?
      */
     private void hardDeleteTasksForDeletedProject(Project deletedProject) {
         if (deletedProject == null || deletedProject.getId() == null || deletedProject.getId().isEmpty()) {
@@ -3667,7 +3621,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 在指定任务管理器中删除目标项目下全部任务。
+     * 闁革负鍔嶇€垫氨鈧鐭幑銏ゅ礉閿涘嫷鍚€闁荤偛妫楀▍鎺撶▔椤撶偛鐏╅梻鍕╁€楀ú浼村冀閸ヮ兙鈧秹鎯勯鑽ょ憮闁稿繈鍔戦崕瀛樼鐠囨彃顫ら柕?
      */
     private void hardDeleteProjectTasksInManager(TaskManager manager, String deletedProjectId) {
         if (manager == null || deletedProjectId == null || deletedProjectId.isEmpty()) {
@@ -3859,18 +3813,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 构建当前窗口尺寸下的任务分配弹窗布局。
-         *
-         * @return 响应式布局快照
+         * 闁哄瀚紓鎾广亹閹惧啿顤呯紒鎰殔瑜版稓浜搁崫鍕靛殶濞戞挸顑囧▓鎴炵鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊閻㈩垰鍟惇顒勫Υ?         *
+         * @return 闁告繂绉寸花鎻掝嚕韫囨挾顏撮悘鐐╁亾闊浂鍋嗛崣?
          */
         private MemberSelectionDialogLayout buildDialogLayout() {
             return MemberSelectionDialogLayout.create(this.width, this.height);
         }
 
         /**
-         * 将布局快照中的坐标同步到当前界面字段，供渲染、滚动与测试复用。
-         *
-         * @param layout 当前窗口下的任务分配弹窗布局
+         * 閻忓繐妫楃粩椋庝沪閳ь剝绠涢銈呭季濞戞搩鍘惧▓鎴﹀锤閹邦厾鍨奸柛姘湰椤掔偤宕氶弶璺ㄧЪ闁告挸绉堕弲顐︽閵忕姷鎽熸繛鍫㈩暜缁辨繃绗熷☉娆掝洬闁哄本鎸堕埀顑跨劍缁挳宕濋妸銈囩憿婵炴潙顑堥惁顖涘緞瀹ュ洦鏆忛柕?         *
+         * @param layout 鐟滅増鎸告晶鐘电玻濡も偓瑜版稒绋夌€ｎ剚鐣卞ù鐘侯嚙婵喖宕氶崱娑樺赋鐎殿喖婀遍悰銉ф暜閸愩劎婀?
          */
         private void applyDialogLayout(MemberSelectionDialogLayout layout) {
             if (layout == null) {
@@ -3885,45 +3837,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 返回当前任务分配弹窗的滚动偏移，供同包测试代码校验滚动边界。
-         *
-         * @return 当前滚动偏移
+         * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喖宕氶崱娑樺赋鐎殿喖婀遍悰銉╂儍閸曨剛娉婇柛鏂诲妼娴滃摜绮旀导娆戠濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担鍦ⅰ濡ょ姴鏈划鎾礉閵娿劎鐝堕柣锝呰閳?         *
+         * @return 鐟滅増鎸告晶鐘差煥濮橆剙袟闁稿绻掍簺
          */
         private int getScrollOffsetForTest() {
             return scrollOffset;
         }
 
         /**
-         * 返回当前任务分配弹窗的可见行数，供同包测试代码计算最大滚动范围。
-         *
-         * @return 当前可见行数
+         * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喖宕氶崱娑樺赋鐎殿喖婀遍悰銉╂儍閸曨偄璁查悷娆庢祰椤㈡垿寮敮顔剧濞撴碍绋戦幃鎾诲礌閸涱喚銈撮悹鍥ㄦ磻閸烆剟鎯嶆担绛嬪悁缂佺姵顨嗗〒鑸靛緞瑜庣划鎾礉閵娿劌鐦遍柛銉︾暘閳?         *
+         * @return 鐟滅増鎸告晶鐘诲矗椤栨繍娼岄悶娑樻湰閺?
          */
         private int getVisibleRowsForTest() {
             return visibleRows;
         }
 
         /**
-         * 返回当前任务分配弹窗列表区域中心点 X 坐标，供同包测试代码驱动滚轮事件。
-         *
-         * @return 列表区域中心点 X 坐标
+         * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喖宕氶崱娑樺赋鐎殿喖婀遍悰銉╁礆濡ゅ嫨鈧啴宕犻崫鍕幍濞戞搩鍘肩缓楣冩倷?X 闁秆勫姈閻栵綁鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粍銇欓崡鐐残楁繝濠冧亢閻ゅ棙绂嶇€ｂ晜顐介柕?         *
+         * @return 闁告帗顨夐妴鍐礌閸濆嫮鍘靛☉鎿冨幖缁洪箖鎮?X 闁秆勫姈閻?
          */
         private double getListCenterXForTest() {
             return dialogLayout == null ? listX + (listWidth / 2.0D) : dialogLayout.getListCenterX();
         }
 
         /**
-         * 返回当前任务分配弹窗列表区域中心点 Y 坐标，供同包测试代码驱动滚轮事件。
-         *
-         * @return 列表区域中心点 Y 坐标
+         * 閺夆晜鏌ㄥú鏍亹閹惧啿顤呭ù鐘侯嚙婵喖宕氶崱娑樺赋鐎殿喖婀遍悰銉╁礆濡ゅ嫨鈧啴宕犻崫鍕幍濞戞搩鍘肩缓楣冩倷?Y 闁秆勫姈閻栵綁鏁嶇仦鑲╄繑闁告艾鑻€垫ê霉鐎ｎ厾妲稿ù鐙呯悼閻栨粍銇欓崡鐐残楁繝濠冧亢閻ゅ棙绂嶇€ｂ晜顐介柕?         *
+         * @return 闁告帗顨夐妴鍐礌閸濆嫮鍘靛☉鎿冨幖缁洪箖鎮?Y 闁秆勫姈閻?
          */
         private double getListCenterYForTest() {
             return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
         }
 
         /**
-         * 构建当前团队项目可供指派的成员列表，包含 owner 且去重，并按约定顺序稳定输出。
-         *
-         * @return 可指派成员候选列表
+         * 闁哄瀚紓鎾广亹閹惧啿顤呴柛銉ｅ灲濡诧附銇勯崷顓熺獥闁告瑯鍨欢鐢稿箰閸ャ劍鐑﹂柣銊ュ閸ㄦ岸宕ㄥΟ鍝勭仚閻炴侗鐓夌槐婵嬪礌閸涱厽鍎?owner 濞戞挻鏌ㄩ獮鎾绘煂瀹ュ繒绀夋鐐跺煐鐎垫粎鐥敃鈧悾鐐亜閸濆嫮纰嶇紒瀣暱閻ｇ偓娼忛幘鍐叉瘔闁?         *
+         * @return 闁告瑯鍨辩€垫艾煤閻愵剙鐏囬柛娑櫭埀顒佺懇閳ь剙顦崹顏嗘偘?
          */
         private List<AssignableMember> collectAssignableMembers() {
             List<AssignableMember> members = new ArrayList<>();
@@ -3950,10 +3897,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 返回指定行当前对应的成员候选项。
+         * 閺夆晜鏌ㄥú鏍箰閸パ呮毎閻炴稑鑻紞瀣礈瀹ュ拋鍤犻幖瀛樻⒒濞堟垿骞嬮幇顒佸枀闁稿﹥鐟╅埀顒€顦甸妴宥夊Υ?
          *
-         * @param rowIndex 行索引
-         * @return 当前行成员；若越界则返回 null
+         * @param rowIndex 閻炴稑鐬奸崒銊ヮ嚕?
+         * @return 鐟滅増鎸告晶鐘垫偘鐏炴儳鐏囬柛娑欙公缁遍亶鎳熼妷銊ㄩ柣锝呰嫰閸垱娼婚弬鎸庣 null
          */
         private AssignableMember getMemberForRow(int rowIndex) {
             if (filteredMembers == null || filteredMembers.isEmpty()) {
@@ -3967,7 +3914,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 按搜索关键字过滤可指派成员列表。
+         * 闁圭顦伴幃宕囨閵忕姴褰犻梺娆惧枛閻⊙勬交閸ャ劍濮㈤柛娆樺灡鐎垫艾煤閻愵剙鐏囬柛娑櫭崹顏嗘偘閵婏絺鍋?
          */
         private void updateFilteredPlayers() {
             if (allMembers == null || filteredMembers == null) {
@@ -3993,7 +3940,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 根据当前滚动位置刷新成员按钮文案与可见性。
+         * 闁哄秷顫夊畵浣姐亹閹惧啿顤呮繝濠冭壘婵晜鎷呭鍥╂瀭闁告帡鏀遍弻濠囧箣閹邦剚鍠呴柟绋款樀閹告娊寮崶顭戞敵濞戞挸楠歌ぐ鑼喆娴ｅ厜鍋撹閳?
          */
         private void updatePlayerButtons() {
             if (playerButtons == null) {
@@ -4016,9 +3963,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 将任务分配弹窗的滚动偏移限制在候选成员列表的有效范围内。
-         *
-         * @return 修正后的滚动偏移
+         * 閻忓繐妫旈幑銏ゅ礉閳ュ啿鐎婚梺鏉跨Т閼村﹦绮ｅΔ鍐╃暠婵犲﹥鑹炬慨鈺呭磻韫囨泤鈺呮⒔閹邦剙鐓戦柛锔哄妼閳ь剚鐟╅埀顒€顦伴崹姘跺川濡搫鐏欓悶娑栧妿濞堟垿寮垫径瀣珡闁肩厧鍟ú鍧楀礃閸涱偀鍋?         *
+         * @return 濞ｅ浂鍠楅婊堝触鎼达絾鐣辨繝濠冭壘婵晠宕戣箛鏇?
          */
         private int clampMemberScrollOffset() {
             int totalItems = filteredMembers == null ? 0 : filteredMembers.size();
@@ -4026,20 +3972,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         /**
-         * 返回任务分配弹窗候选成员列表允许的最大滚动偏移。
-         *
-         * @return 最大滚动偏移
-         */
+         * 閺夆晜鏌ㄥú鏍ㄧ鐠囨彃顫ら柛鎺戞閸樸倕顕ｉ崷顓犲炊闁稿﹥鐟╅埀顒€顦伴崹姘跺川濡搫鐏欓悶娑栧妼閸樻垹鎷嬮崫銉︾暠闁哄牃鍋撳鍫嗗嫮娉婇柛鏂诲妼娴滃摜绮斿Ч鍥ｅ亾?         *
+         * @return 闁哄牃鍋撳鍫嗗嫮娉婇柛鏂诲妼娴滃摜绮?         */
         private int getMaxMemberScrollOffset() {
             int totalItems = filteredMembers == null ? 0 : filteredMembers.size();
             return MemberSelectionDialogLayout.getMaxScrollOffset(totalItems, visibleRows);
         }
 
         /**
-         * 将目标任务指派给选中的团队成员，并回到父界面。
+         * 閻忓繐妫涘ú浼村冀閸ワ附宕查柛鏂哄墲鐎垫艾煤閸撗呰埗闂侇偄顦懙鎴︽儍閸曨偅绀嬮梻鍐枑閸ㄦ岸宕ㄥ鍫㈢妤犵偠娉涘ú鏍礆閹殿喖鐓戦柣锝呯焸濞间即濡?
          *
-         * @param uuid 目标成员 UUID
-         * @param name 目标成员显示名称
+         * @param uuid 闁烩晩鍠楅悥锝夊箣閹邦剚鍠?UUID
+         * @param name 闁烩晩鍠楅悥锝夊箣閹邦剚鍠呴柡鍕⒔閵囨岸宕ュ鍥?
          */
         private void applyAssignTo(String uuid, String name) {
             targetTask.setAssigneeUuid(uuid);
