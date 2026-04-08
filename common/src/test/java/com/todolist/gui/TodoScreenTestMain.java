@@ -46,9 +46,14 @@ public final class TodoScreenTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldInitializeWithDefaultPersonalProject", TodoScreenTestMain::shouldInitializeWithDefaultPersonalProject);
-        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowOnlyMyViewInPersonalSpace", TodoScreenTestMain::shouldShowOnlyMyViewInPersonalSpace);
-        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUnassignedAllAndMineViewsInTeamSpace", TodoScreenTestMain::shouldShowUnassignedAllAndMineViewsInTeamSpace);
-        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleCompletedSectionWithoutChangingCurrentView", TodoScreenTestMain::shouldToggleCompletedSectionWithoutChangingCurrentView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowOnlyMyViewInPersonalSpaceUtf8", TodoScreenTestMain::shouldShowOnlyMyViewInPersonalSpaceUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUnassignedAllAndMineViewsInTeamSpaceUtf8", TodoScreenTestMain::shouldShowUnassignedAllAndMineViewsInTeamSpaceUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowAllProjectTasksInTeamAllViewUtf8", TodoScreenTestMain::shouldShowAllProjectTasksInTeamAllViewUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowMemberAddTaskInTeamAllViewWhenProjectSettingEnabledUtf8", TodoScreenTestMain::shouldAllowMemberAddTaskInTeamAllViewWhenProjectSettingEnabledUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleActiveSectionWithoutChangingCurrentViewUtf8", TodoScreenTestMain::shouldToggleActiveSectionWithoutChangingCurrentViewUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleCompletedSectionWithoutChangingCurrentViewUtf8", TodoScreenTestMain::shouldToggleCompletedSectionWithoutChangingCurrentViewUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepBottomActionButtonsCenteredAboveQuickAddUtf8", TodoScreenTestMain::shouldKeepBottomActionButtonsCenteredAboveQuickAddUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldBlurDetailInputsWhenClickingOutsideFieldsUtf8", TodoScreenTestMain::shouldBlurDetailInputsWhenClickingOutsideFieldsUtf8);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineThreeColumnLayoutOnLargeScreen", TodoScreenTestMain::shouldUseInlineThreeColumnLayoutOnLargeScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineDetailPanelOnMediumScreen", TodoScreenTestMain::shouldUseInlineDetailPanelOnMediumScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
@@ -83,7 +88,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 验证界面初始化后会默认落在个人项目，并同步当前激活项目。
+     * 验证界面初始化后会默认选中个人项目并同步激活项目状态。
      */
     private static void shouldInitializeWithDefaultPersonalProject() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -101,7 +106,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 验证个人空间只暴露“我的”视图，并保持当前视图为“我的”。
+     * 验证个人空间只显示“我的”任务视图。
      */
     private static void shouldShowOnlyMyViewInPersonalSpace() {
         GuiTestSupport.resetState();
@@ -118,7 +123,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 验证团队空间会暴露“待分配 / 全部 / 我的”三个视图，并默认落在“待分配”。
+     * 验证团队空间会显示待分配、全部和我的三个任务视图。
      */
     private static void shouldShowUnassignedAllAndMineViewsInTeamSpace() {
         GuiTestSupport.resetState();
@@ -137,7 +142,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 验证折叠已完成分组不会改变当前空间视图。
+     * 验证切换已完成分组时不会影响当前空间和任务视图。
      */
     private static void shouldToggleCompletedSectionWithoutChangingCurrentView() {
         GuiTestSupport.resetState();
@@ -167,7 +172,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 验证大窗口下主界面保持左栏、中栏、右侧详情三栏常驻布局。
+     * 验证大窗口下主界面会采用三栏常驻布局。
      */
     private static void shouldUseInlineThreeColumnLayoutOnLargeScreen() {
         GuiTestSupport.resetState();
@@ -196,8 +201,8 @@ public final class TodoScreenTestMain {
         int[] sidebarBounds = screen.getProjectSidebarBoundsForTest();
         int[] contentBounds = screen.getContentAreaBoundsForTest();
         int[] detailBounds = screen.getDetailPanelBoundsForTest();
-        GuiTestSupport.assertTrue(sidebarBounds[0] + sidebarBounds[2] <= contentBounds[0], "大窗口下左栏应位于主内容区左侧");
-        GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] <= detailBounds[0], "大窗口下详情区应位于主内容区右侧");
+        GuiTestSupport.assertTrue(sidebarBounds[0] + sidebarBounds[2] <= contentBounds[0], "项目侧栏应位于主内容区左侧");
+        GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] <= detailBounds[0], "详情区应位于主内容区右侧");
     }
 
     /**
@@ -351,7 +356,7 @@ public final class TodoScreenTestMain {
     }
 
     /**
-     * 校验团队空间详情抽屉会显示纵向排列的团队操作按钮。
+     * 校验团队空间详情抽屉会在标题框下方显示横向排列的团队操作按钮。
      */
     private static void shouldShowVerticalTeamActionButtonsInTeamDetailDrawer() {
         GuiTestSupport.resetState();
@@ -374,14 +379,19 @@ public final class TodoScreenTestMain {
         int[] claimBounds = screen.getClaimButtonBoundsForTest();
         int[] abandonBounds = screen.getAbandonButtonBoundsForTest();
         int[] assignBounds = screen.getAssignOthersButtonBoundsForTest();
-        GuiTestSupport.assertEquals(claimBounds[0], abandonBounds[0], "团队按钮应保持同一列左对齐");
-        GuiTestSupport.assertEquals(abandonBounds[0], assignBounds[0], "团队按钮应保持同一列左对齐");
-        GuiTestSupport.assertTrue(claimBounds[1] + claimBounds[3] <= abandonBounds[1], "放弃按钮应位于领取按钮下方");
-        GuiTestSupport.assertTrue(abandonBounds[1] + abandonBounds[3] <= assignBounds[1], "指派按钮应位于放弃按钮下方");
+        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
+        GuiTestSupport.assertTrue(claimBounds[1] >= titleBounds[1] + titleBounds[3], "团队按钮应位于标题框下方");
+        GuiTestSupport.assertEquals(claimBounds[1], abandonBounds[1], "团队按钮应保持同一行纵向对齐");
+        GuiTestSupport.assertEquals(abandonBounds[1], assignBounds[1], "团队按钮应保持同一行纵向对齐");
+        GuiTestSupport.assertTrue(claimBounds[0] + claimBounds[2] <= abandonBounds[0], "放弃按钮应位于领取按钮右侧");
+        GuiTestSupport.assertTrue(abandonBounds[0] + abandonBounds[2] <= assignBounds[0], "指派按钮应位于放弃按钮右侧");
+        GuiTestSupport.assertEquals("领取", screen.getClaimButtonTextForTest(), "领取按钮应使用简短文案");
+        GuiTestSupport.assertEquals("放弃", screen.getAbandonButtonTextForTest(), "放弃按钮应使用简短文案");
+        GuiTestSupport.assertEquals("指派", screen.getAssignOthersButtonTextForTest(), "指派按钮应使用简短文案");
     }
 
     /**
-     * 校验详情抽屉的关闭按钮会独占顶部一行。
+     * 校验详情抽屉的关闭按钮会缩小并内嵌在标题行右侧。
      */
     private static void shouldLayoutDetailDrawerCloseRowSeparately() {
         GuiTestSupport.resetState();
@@ -401,7 +411,10 @@ public final class TodoScreenTestMain {
         int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
         assertRectInsideScreen(closeBounds, 480, 300, "详情抽屉关闭按钮应位于屏幕内");
         assertRectInsideScreen(titleBounds, 480, 300, "详情抽屉标题输入框应位于屏幕内");
-        GuiTestSupport.assertTrue(closeBounds[1] + closeBounds[3] <= titleBounds[1], "关闭按钮应独占顶部一行并位于标题输入框上方");
+        GuiTestSupport.assertTrue(closeBounds[0] >= titleBounds[0] + titleBounds[2], "关闭按钮应位于标题框右侧");
+        GuiTestSupport.assertTrue(closeBounds[1] >= titleBounds[1], "关闭按钮应内嵌在标题行高度范围内");
+        GuiTestSupport.assertTrue(closeBounds[1] + closeBounds[3] <= titleBounds[1] + titleBounds[3], "关闭按钮底边不应超出标题行");
+        GuiTestSupport.assertEquals("×", screen.getDetailCloseButtonTextForTest(), "关闭按钮应使用乘号样式");
     }
 
     /**
@@ -1297,6 +1310,236 @@ public final class TodoScreenTestMain {
      * @param task 原始任务
      * @return 复制后的任务
      */
+    /**
+     * 验证个人空间只显示“我的”视图，并保持当前视图为“我的”。
+     */
+    private static void shouldShowOnlyMyViewInPersonalSpaceUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
+        GuiTestSupport.assertEquals(List.of("MY"), screen.getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
+        GuiTestSupport.assertEquals("MY", screen.getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
+    }
+
+    /**
+     * 验证团队空间会暴露“待分配 / 全部 / 我的”三个视图，并默认落在“待分配”。
+     */
+    private static void shouldShowUnassignedAllAndMineViewsInTeamSpaceUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-dev", "Dev Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+
+        GuiTestSupport.assertEquals("TEAM", screen.getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
+        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), screen.getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
+        GuiTestSupport.assertEquals("UNASSIGNED", screen.getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
+    }
+
+    /**
+     * 验证团队“全部”视图会展示当前项目下的全部任务。
+     */
+    private static void shouldShowAllProjectTasksInTeamAllViewUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-all-view", "Team All View");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Unassigned");
+        addTaskViaInput(screen, "Mine");
+        addTaskViaInput(screen, "Others");
+        List<Task> teamTasks = screen.getCurrentManagerTasksForTest();
+        Task unassigned = teamTasks.stream().filter(task -> "Unassigned".equals(task.getTitle())).findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到 Unassigned 任务"));
+        Task mine = teamTasks.stream().filter(task -> "Mine".equals(task.getTitle())).findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到 Mine 任务"));
+        Task others = teamTasks.stream().filter(task -> "Others".equals(task.getTitle())).findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到 Others 任务"));
+        mine.setAssigneeUuid(OWNER_ID.toString());
+        mine.setAssigneeName("owner");
+        others.setAssigneeUuid(ALICE_ID.toString());
+        others.setAssigneeName("alice");
+
+        screen.switchToTeamAllViewForTest();
+
+        List<String> titles = screen.getFilteredTasksForTest().stream().map(Task::getTitle).toList();
+        GuiTestSupport.assertEquals("ALL", screen.getCurrentTaskViewOptionNameForTest(), "切换后当前任务视图应为“全部”");
+        GuiTestSupport.assertTrue(titles.contains("Unassigned"), "团队全部视图应展示未分配任务");
+        GuiTestSupport.assertTrue(titles.contains("Mine"), "团队全部视图应展示分配给自己的任务");
+        GuiTestSupport.assertTrue(titles.contains("Others"), "团队全部视图应展示分配给其他成员的任务");
+    }
+
+    /**
+     * 验证团队成员在“全部”视图下会复用“待分配”视图的新增权限逻辑。
+     */
+    private static void shouldAllowMemberAddTaskInTeamAllViewWhenProjectSettingEnabledUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project memberProject = createExternalTeamProject("team-all-member-create", "Team All Member Create");
+        memberProject.addMember(OWNER_ID.toString(), Project.ProjectRole.MEMBER, "owner");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(memberProject);
+        screen.switchToTeamAllViewForTest();
+
+        addTaskViaInput(screen, "Blocked In Team All");
+        GuiTestSupport.assertEquals(0, screen.getCurrentManagerTasksForTest().size(), "未开启允许成员创建时，团队全部视图不应允许普通成员新增任务");
+        GuiTestSupport.assertEquals(1, screen.getNotificationCountForTest(), "被权限拦截时应显示提示");
+
+        memberProject.setAllowMemberCreate(true);
+        addTaskViaInput(screen, "Allowed In Team All");
+
+        GuiTestSupport.assertEquals(
+                List.of("Allowed In Team All"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "开启允许成员创建后，团队全部视图应允许普通成员新增任务"
+        );
+        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "新增团队任务后应标记存在未保存改动");
+    }
+
+    /**
+     * 验证折叠未完成分组不会改变当前空间与任务视图。
+     */
+    private static void shouldToggleActiveSectionWithoutChangingCurrentViewUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-active-toggle", "Team Active Toggle");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "A1");
+        addTaskViaInput(screen, "A2");
+        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
+        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
+        int[] taskListBounds = screen.getTaskListBoundsForTest();
+        int headerClickX = taskListBounds[0] + 10;
+        int activeHeaderClickY = screen.getTaskListWidgetForTest().getSectionHeaderCenterYForTest("active");
+
+        GuiTestSupport.assertTrue(screen.isActiveSectionExpandedForTest(), "默认情况下未完成分组应处于展开状态");
+
+        screen.mouseClicked(headerClickX, activeHeaderClickY, 0);
+
+        GuiTestSupport.assertFalse(screen.isActiveSectionExpandedForTest(), "切换后未完成分组应收起");
+        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换未完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换未完成分组不应改变当前任务视图");
+    }
+
+    /**
+     * 验证折叠已完成分组不会改变当前空间与任务视图。
+     */
+    private static void shouldToggleCompletedSectionWithoutChangingCurrentViewUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-completed-toggle", "Team Completed Toggle");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(teamProject);
+        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
+        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
+
+        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
+
+        screen.toggleCompletedSectionForTest();
+
+        GuiTestSupport.assertTrue(screen.isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
+        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
+
+        screen.toggleCompletedSectionForTest();
+
+        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
+        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
+    }
+
+    /**
+     * 验证保存和取消按钮位于底部独立一行，并在整个 GUI 底部水平居中。
+     */
+    private static void shouldKeepBottomActionButtonsCenteredAboveQuickAddUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 420, 250);
+
+        int[] saveBounds = screen.getSaveButtonBoundsForTest();
+        int[] cancelBounds = screen.getCancelButtonBoundsForTest();
+        int[] quickAddBounds = screen.getQuickAddFieldBoundsForTest();
+        int[] taskListBounds = screen.getTaskListBoundsForTest();
+        int actionsCenterX = (saveBounds[0] + cancelBounds[0] + cancelBounds[2]) / 2;
+        int screenCenterX = 420 / 2;
+        int buttonsBottom = Math.max(saveBounds[1] + saveBounds[3], cancelBounds[1] + cancelBounds[3]);
+
+        GuiTestSupport.assertTrue(taskListBounds[1] + taskListBounds[3] <= quickAddBounds[1], "任务列表应位于底部快速新增输入框上方");
+        GuiTestSupport.assertTrue(quickAddBounds[1] + quickAddBounds[3] <= saveBounds[1], "保存按钮应位于底部快速新增输入框下方");
+        GuiTestSupport.assertTrue(quickAddBounds[1] + quickAddBounds[3] <= cancelBounds[1], "取消按钮应位于底部快速新增输入框下方");
+        GuiTestSupport.assertTrue(Math.abs(actionsCenterX - screenCenterX) <= 2, "保存和取消按钮应在整个GUI底部保持水平居中");
+        GuiTestSupport.assertTrue(250 - buttonsBottom <= 12, "保存和取消按钮应贴近整个GUI底部");
+    }
+
+    /**
+     * 验证标题与描述输入框在点击详情区空白时会失焦，但不会清空当前选中任务。
+     */
+    private static void shouldBlurDetailInputsWhenClickingOutsideFieldsUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Focusable Task");
+        Task task = screen.getFilteredTasksForTest().get(0);
+        screen.selectTaskForTest(task);
+        screen.beginDetailTitleEditingForTest();
+
+        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
+        int[] descBounds = screen.getDescFieldBoundsForTest();
+        int blankX = detailBounds[0] + 10;
+        int blankY = Math.min(detailBounds[1] + detailBounds[3] - 10, titleBounds[1] + titleBounds[3] + 4);
+        if (blankY >= descBounds[1]) {
+            blankY = descBounds[1] - 4;
+        }
+
+        GuiTestSupport.assertTrue(screen.getTitleFieldForTest().isFocused(), "开始编辑后标题输入框应获取焦点");
+
+        screen.mouseClicked(blankX, blankY, 0);
+
+        GuiTestSupport.assertFalse(screen.getTitleFieldForTest().isFocused(), "点击标题框外后标题输入框应失焦");
+        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "点击详情区空白时不应清空当前选中任务");
+
+        screen.getDescFieldForTest().setFocused(true);
+        screen.mouseClicked(blankX, blankY, 0);
+
+        GuiTestSupport.assertFalse(screen.getDescFieldForTest().isFocused(), "点击描述框外后描述输入框应失焦");
+        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "描述框失焦时也不应清空当前选中任务");
+    }
+
     private static Task copyTask(Task task) {
         return task == null ? null : Task.fromNbt(task.toNbt());
     }
