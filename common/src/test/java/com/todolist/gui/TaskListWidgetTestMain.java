@@ -30,9 +30,12 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldBlockToggleWhenNonOpTeamAllViewEnabled", TaskListWidgetTestMain::shouldBlockToggleWhenNonOpTeamAllViewEnabled);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskByCoordinates", TaskListWidgetTestMain::shouldReturnTaskByCoordinates);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderPriorityColorBlockInsteadOfPriorityText", TaskListWidgetTestMain::shouldRenderPriorityColorBlockInsteadOfPriorityText);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldPlaceTagsBeforeTaskTitle", TaskListWidgetTestMain::shouldPlaceTagsBeforeTaskTitle);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded", TaskListWidgetTestMain::shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderSectionHeadersWithExpandMarkers", TaskListWidgetTestMain::shouldRenderSectionHeadersWithExpandMarkers);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepScrollOffsetInsideScrollableTaskArea", TaskListWidgetTestMain::shouldKeepScrollOffsetInsideScrollableTaskArea);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedRowsSeparatedFromActiveRows", TaskListWidgetTestMain::shouldKeepCompletedRowsSeparatedFromActiveRows);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldHideActiveTasksWhenSectionCollapsed", TaskListWidgetTestMain::shouldHideActiveTasksWhenSectionCollapsed);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldStartDraggingOnlyForActiveTasks", TaskListWidgetTestMain::shouldStartDraggingOnlyForActiveTasks);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldUpdateDropTargetWhileDragging", TaskListWidgetTestMain::shouldUpdateDropTargetWhileDragging);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlyCurrentVisibleActiveTasks", TaskListWidgetTestMain::shouldReorderOnlyCurrentVisibleActiveTasks);
@@ -87,7 +90,7 @@ public final class TaskListWidgetTestMain {
         AtomicReference<String> toggledId = new AtomicReference<>();
         widget.setOnTaskToggleCompletion(task -> toggledId.set(task.getId()));
 
-        boolean handled = widget.mouseClicked(13, 6, 0);
+        boolean handled = widget.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
 
         GuiTestSupport.assertTrue(handled, "点击复选框区域应被组件处理");
         GuiTestSupport.assertEquals(alpha.getId(), toggledId.get(), "点击复选框应触发完成状态切换回调");
@@ -106,7 +109,7 @@ public final class TaskListWidgetTestMain {
         AtomicReference<String> toggledId = new AtomicReference<>();
         widget.setOnTaskToggleCompletion(task -> toggledId.set(task.getId()));
 
-        widget.mouseClicked(13, 6, 0);
+        widget.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
 
         GuiTestSupport.assertNull(toggledId.get(), "非 OP 的 TEAM_ALL 视图不应允许点击复选框完成任务");
     }
@@ -143,6 +146,23 @@ public final class TaskListWidgetTestMain {
     /**
      * 校验已完成分组展开后，可以通过坐标准确识别标题行和任务行所属分段。
      */
+    /**
+     * 校验任务标签会以前置元信息的形式显示在标题之前。
+     */
+    private static void shouldPlaceTagsBeforeTaskTitle() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        Task alpha = createTask("task-alpha", "Alpha");
+        alpha.setTags(List.of("UI", "Bug"));
+        widget.setTasks(List.of(alpha));
+
+        GuiTestSupport.assertEquals("[UI] [Bug]", widget.getTaskLeadingMetaTextForTest(alpha.getId()), "任务标签应显示在任务标题之前");
+    }
+
+    /**
+     * 校验已完成分组展开后，可以通过坐标准确识别标题行和任务行所属分段。
+     */
     private static void shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
@@ -151,15 +171,18 @@ public final class TaskListWidgetTestMain {
         Task done = createTask("task-done", "Done");
         done.setCompleted(true);
         widget.setSections(List.of(
-                new TaskListWidget.SectionModel("active", "未完成", List.of(alpha), false, true),
-                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(alpha), true, true),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, true)
         ));
-        int rowHeight = widget.getTaskItemHeightForTest();
+        int activeHeaderY = widget.getSectionHeaderCenterYForTest("active");
+        int activeTaskY = widget.getTaskRowCenterYForTest(alpha.getId());
+        int completedHeaderY = widget.getSectionHeaderCenterYForTest("completed");
+        int completedTaskY = widget.getTaskRowCenterYForTest(done.getId());
 
-        TaskListWidget.TaskSectionHitResult activeHeader = widget.getSectionAt(20, rowHeight / 2.0);
-        TaskListWidget.TaskSectionHitResult activeTask = widget.getSectionAt(20, rowHeight + rowHeight / 2.0);
-        TaskListWidget.TaskSectionHitResult completedHeader = widget.getSectionAt(20, rowHeight * 2 + rowHeight / 2.0);
-        TaskListWidget.TaskSectionHitResult completedTask = widget.getSectionAt(20, rowHeight * 3 + rowHeight / 2.0);
+        TaskListWidget.TaskSectionHitResult activeHeader = widget.getSectionAt(20, activeHeaderY);
+        TaskListWidget.TaskSectionHitResult activeTask = widget.getSectionAt(20, activeTaskY);
+        TaskListWidget.TaskSectionHitResult completedHeader = widget.getSectionAt(20, completedHeaderY);
+        TaskListWidget.TaskSectionHitResult completedTask = widget.getSectionAt(20, completedTaskY);
 
         GuiTestSupport.assertEquals(TaskListWidget.RowType.SECTION_HEADER, activeHeader.getRowType(), "第一行应命中未完成分组标题");
         GuiTestSupport.assertEquals("active", activeHeader.getSectionId(), "第一行应属于未完成分组");
@@ -169,6 +192,28 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.assertEquals("completed", completedHeader.getSectionId(), "第三行应属于已完成分组");
         GuiTestSupport.assertEquals(TaskListWidget.RowType.TASK, completedTask.getRowType(), "第四行应命中已完成任务");
         GuiTestSupport.assertEquals(done.getId(), completedTask.getTask().getId(), "第四行应返回已完成任务");
+    }
+
+    /**
+     * 校验分组标题会统一带上展开/收起标记与数量文本。
+     */
+    private static void shouldRenderSectionHeadersWithExpandMarkers() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task alpha = createTask("task-alpha", "Alpha");
+        Task done = createTask("task-done", "Done");
+        done.setCompleted(true);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(alpha), true, true),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, false)
+        ));
+
+        GuiTestSupport.assertEquals(
+                List.of("HEADER:v 未完成（1）", "TASK:task-alpha", "HEADER:> 已完成（1）"),
+                widget.getRowDebugSnapshotForTest(),
+                "分组标题快照应包含展开/收起标记与数量文本"
+        );
     }
 
     /**
@@ -183,7 +228,7 @@ public final class TaskListWidgetTestMain {
             tasks.add(createTask("task-" + index, "Task " + index));
         }
         widget.setSections(List.of(
-                new TaskListWidget.SectionModel("active", "未完成", tasks, false, true)
+                new TaskListWidget.SectionModel("active", "未完成（8）", tasks, true, true)
         ));
 
         GuiTestSupport.assertTrue(widget.isTaskAreaScrollableForTest(), "任务超出可视范围时应进入可滚动状态");
@@ -207,14 +252,37 @@ public final class TaskListWidgetTestMain {
         Task done = createTask("task-done", "Done");
         done.setCompleted(true);
         widget.setSections(List.of(
-                new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, beta), false, true),
-                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+                new TaskListWidget.SectionModel("active", "未完成（2）", List.of(alpha, beta), true, true),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, true)
         ));
 
         GuiTestSupport.assertEquals(
-                List.of("HEADER:未完成", "TASK:task-alpha", "TASK:task-beta", "HEADER:已完成 1 项", "TASK:task-done"),
+                List.of("HEADER:v 未完成（2）", "TASK:task-alpha", "TASK:task-beta", "HEADER:v 已完成（1）", "TASK:task-done"),
                 widget.getRowDebugSnapshotForTest(),
                 "已完成分组应始终位于未完成分组之后，且不能与未完成任务混排"
+        );
+    }
+
+    /**
+     * 校验未完成分组收起后，不会继续渲染未完成任务行。
+     */
+    private static void shouldHideActiveTasksWhenSectionCollapsed() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task alpha = createTask("task-alpha", "Alpha");
+        Task beta = createTask("task-beta", "Beta");
+        Task done = createTask("task-done", "Done");
+        done.setCompleted(true);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（2）", List.of(alpha, beta), true, false),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, true)
+        ));
+
+        GuiTestSupport.assertEquals(
+                List.of("HEADER:> 未完成（2）", "HEADER:v 已完成（1）", "TASK:task-done"),
+                widget.getRowDebugSnapshotForTest(),
+                "未完成分组收起后不应继续渲染未完成任务"
         );
     }
 
@@ -236,8 +304,8 @@ public final class TaskListWidgetTestMain {
         Task done = createTask("task-done", "Done");
         done.setCompleted(true);
         widget.setSections(List.of(
-                new TaskListWidget.SectionModel("active", "未完成", List.of(active), false, true),
-                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(active), true, true),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, true)
         ));
         widget.setOnTaskReorder(tasks -> {
         });
@@ -265,7 +333,7 @@ public final class TaskListWidgetTestMain {
         Task alpha = createTask("task-alpha", "Alpha");
         Task beta = createTask("task-beta", "Beta");
         Task gamma = createTask("task-gamma", "Gamma");
-        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, beta, gamma), false, true)));
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成（3）", List.of(alpha, beta, gamma), true, true)));
         widget.setOnTaskReorder(tasks -> {
         });
 
@@ -290,7 +358,7 @@ public final class TaskListWidgetTestMain {
         Task alpha = createTask("task-alpha", "Alpha");
         Task gamma = createTask("task-gamma", "Gamma");
         AtomicReference<List<String>> reorderedIds = new AtomicReference<>(List.of());
-        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, gamma), false, true)));
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成（2）", List.of(alpha, gamma), true, true)));
         widget.setOnTaskReorder(tasks -> reorderedIds.set(tasks.stream().map(Task::getId).toList()));
 
         int interactX = widget.getInteractXForTest();
@@ -316,8 +384,8 @@ public final class TaskListWidgetTestMain {
         Task done = createTask("task-done", "Done");
         done.setCompleted(true);
         widget.setSections(List.of(
-                new TaskListWidget.SectionModel("active", "未完成", List.of(alpha, beta), false, true),
-                new TaskListWidget.SectionModel("completed", "已完成 1 项", List.of(done), true, true)
+                new TaskListWidget.SectionModel("active", "未完成（2）", List.of(alpha, beta), true, true),
+                new TaskListWidget.SectionModel("completed", "已完成（1）", List.of(done), true, true)
         ));
         widget.setOnTaskReorder(tasks -> {
         });
@@ -331,7 +399,7 @@ public final class TaskListWidgetTestMain {
         widget.mouseReleased(interactX, targetY, 0);
 
         GuiTestSupport.assertEquals(
-                List.of("HEADER:未完成", "TASK:task-beta", "TASK:task-alpha", "HEADER:已完成 1 项", "TASK:task-done"),
+                List.of("HEADER:v 未完成（2）", "TASK:task-beta", "TASK:task-alpha", "HEADER:v 已完成（1）", "TASK:task-done"),
                 widget.getRowDebugSnapshotForTest(),
                 "重排未完成分组后应保持已完成分组原样不变"
         );
@@ -348,7 +416,7 @@ public final class TaskListWidgetTestMain {
         for (int index = 0; index < 8; index++) {
             tasks.add(createTask("task-" + index, "Task " + index));
         }
-        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成", tasks, false, true)));
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成（8）", tasks, true, true)));
         widget.setOnTaskReorder(reordered -> {
         });
 

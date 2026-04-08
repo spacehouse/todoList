@@ -6,7 +6,9 @@ import com.todolist.project.ProjectNameFormatter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ComponentPath;
@@ -20,6 +22,13 @@ import net.minecraft.client.gui.navigation.FocusNavigationEvent;
  * 项目侧边栏列表组件：展示项目并处理选择/滚动等交互。
  */
 public class ProjectListWidget implements Renderable, GuiEventListener, NarratableEntry {
+    private static final int ITEM_HORIZONTAL_INSET = 3;
+    private static final int ITEM_VERTICAL_GAP = 3;
+    private static final int ITEM_COLOR_BAR_WIDTH = 2;
+    private static final int ITEM_TEXT_LEFT_GAP = 4;
+    private static final int ITEM_COUNT_MAX_WIDTH = 16;
+    private static final int ITEM_STAR_WIDTH = 8;
+
     private final Minecraft client;
     private final int x;
     private final int y;
@@ -29,6 +38,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
 
     private List<Project> projects = new ArrayList<>();
     private List<Project> sourceProjects = new ArrayList<>();
+    private Map<String, Integer> projectTaskCounts = new HashMap<>();
     private Project selectedProject;
     private Consumer<Project> onProjectSelected;
     
@@ -66,6 +76,24 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         this.onProjectSelected = callback;
     }
 
+    /**
+     * 设置侧栏项目对应的任务数量，用于在项目名称右侧显示数量提示。
+     *
+     * @param taskCounts 项目 ID 到任务数的映射
+     */
+    public void setProjectTaskCounts(Map<String, Integer> taskCounts) {
+        if (taskCounts == null || taskCounts.isEmpty()) {
+            this.projectTaskCounts = new HashMap<>();
+            return;
+        }
+        this.projectTaskCounts = new HashMap<>(taskCounts);
+    }
+
+    /**
+     * 设置当前选中的项目，并在选中项失效时回退到默认项目。
+     *
+     * @param project 当前选中的项目
+     */
     public void setSelectedProject(Project project) {
         this.selectedProject = project;
         ensureSelectionFallback();
@@ -163,61 +191,64 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         ModConfig config = ModConfig.getInstance();
         Font textRenderer = client.font;
 
-        // Background
-        context.fill(x, y, x + width, y + height, 0xFF101010); // Darker background for sidebar
+        context.fill(x, y, x + width, y + height, 0xFF0D1115);
+        context.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF111820);
         context.renderOutline(x, y, width, height, config.getBorderColor());
 
-        // Header "PROJECTS"
-        // context.drawText(textRenderer, "Projects", x + 5, y - 12, 0xFFFFFFFF, false);
-
         int visibleItems = height / itemHeight;
-        
         for (int i = 0; i < visibleItems; i++) {
             int index = i + scrollOffset;
-            if (index >= projects.size()) break;
+            if (index >= projects.size()) {
+                break;
+            }
 
             Project project = projects.get(index);
             int itemY = y + i * itemHeight;
-
             boolean isSelected = selectedProject != null
                     && selectedProject.getId() != null
                     && selectedProject.getId().equals(project.getId());
             boolean isHovered = mouseX >= x && mouseX < x + width && mouseY >= itemY && mouseY < itemY + itemHeight;
 
-            // Background
+            int rowTop = itemY + ITEM_VERTICAL_GAP;
+            int rowBottom = itemY + itemHeight - ITEM_VERTICAL_GAP;
+            int rowLeft = x + ITEM_HORIZONTAL_INSET;
+            int rowRight = x + width - ITEM_HORIZONTAL_INSET;
             if (isSelected) {
-                context.fill(x + 1, itemY, x + width - 1, itemY + itemHeight, 0xFF303030);
+                context.fill(rowLeft, rowTop, rowRight, rowBottom, 0xFF283648);
             } else if (isHovered) {
-                context.fill(x + 1, itemY, x + width - 1, itemY + itemHeight, 0xFF202020);
+                context.fill(rowLeft, rowTop, rowRight, rowBottom, 0xFF1A2530);
             }
 
-            // Color indicator
-            int color = project.getColor() | 0xFF000000;
-            context.fill(x + 4, itemY + 4, x + 8, itemY + 16, color);
+            int nameLeadInset = 2;
+            if (isSelected || isHovered) {
+                int color = project.getColor() | 0xFF000000;
+                context.fill(rowLeft + 1, rowTop + 3, rowLeft + 1 + ITEM_COLOR_BAR_WIDTH, rowBottom - 3, color);
+                nameLeadInset = 1 + ITEM_COLOR_BAR_WIDTH + ITEM_TEXT_LEFT_GAP;
+            }
 
             boolean starred = config.isHudProjectStarred(project.getId());
-            int starX = x + width - 12;
+            int starX = rowRight - ITEM_STAR_WIDTH - 1;
             int starColor = starred ? 0xFFFFD700 : 0xFF666666;
             context.drawString(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
 
-            // Name
             String name = ProjectNameFormatter.toDisplayText(project).getString();
-            int nameColor = isSelected ? 0xFFFFFFFF : 0xFFAAAAAA;
-            
-            // Truncate name if too long
-            int nameWidth = Math.max(16, width - 28);
+            String taskCountText = getProjectTaskCountText(project);
+            int nameColor = isSelected ? 0xFFFFFFFF : 0xFFD6E0EC;
+            int countColor = isSelected ? 0xFFAEC3DD : 0xFF8FA0B5;
+            int countWidth = Math.min(ITEM_COUNT_MAX_WIDTH, textRenderer.width(taskCountText));
+            int countX = starX - countWidth - 3;
+            int nameX = rowLeft + nameLeadInset;
+            int nameWidth = Math.max(16, countX - 4 - nameX);
             String displayName = textRenderer.plainSubstrByWidth(name, nameWidth);
-            context.drawString(textRenderer, displayName, x + 12, itemY + (itemHeight - 8) / 2, nameColor, false);
-            
-            // Scope indicator (Icon or text?)
-            // For now just name
+            context.drawString(textRenderer, displayName, nameX, itemY + (itemHeight - 8) / 2, nameColor, false);
+            context.drawString(textRenderer, taskCountText, countX, itemY + (itemHeight - 8) / 2, countColor, false);
         }
-        
-        // Scrollbar indicator if needed (simplified)
+
         if (projects.size() > visibleItems) {
             int barHeight = (int)((float)visibleItems / projects.size() * height);
             int barY = y + (int)((float)scrollOffset / projects.size() * height);
-            context.fill(x + width - 2, barY, x + width, barY + barHeight, 0xFF808080);
+            context.fill(x + width - 3, y + 2, x + width - 1, y + height - 2, 0xFF1C2731);
+            context.fill(x + width - 3, barY, x + width - 1, barY + barHeight, 0xFF6E8093);
         }
     }
 
@@ -283,7 +314,24 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     @Override
     public void updateNarration(net.minecraft.client.gui.narration.NarrationElementOutput builder) {
     }
-    
+
+    /**
+     * 返回项目在侧栏中的任务数文本，并对极端值做收敛显示。
+     *
+     * @param project 目标项目
+     * @return 任务数文本
+     */
+    private String getProjectTaskCountText(Project project) {
+        if (project == null || project.getId() == null || project.getId().isEmpty()) {
+            return "0";
+        }
+        int count = Math.max(0, projectTaskCounts.getOrDefault(project.getId(), 0));
+        if (count > 99) {
+            return "99+";
+        }
+        return Integer.toString(count);
+    }
+
     @Nullable
     @Override
     public ComponentPath nextFocusPath(FocusNavigationEvent navigation) {

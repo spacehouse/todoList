@@ -14,6 +14,22 @@ import net.minecraft.network.chat.Component;
  * 任务列表组件：渲染任务条目、处理选中/悬停，并支持滚动与完成状态切换。
  */
 public class TaskListWidget implements Renderable {
+    private static final int MIN_TASK_ITEM_HEIGHT = 28;
+    private static final int SECTION_HEADER_ROW_HEIGHT = 16;
+    private static final int SECTION_HEADER_LEFT_PADDING = 12;
+    private static final int TASK_ROW_LEFT_PADDING = 2;
+    private static final int TASK_ROW_HORIZONTAL_PADDING = 12;
+    private static final int TASK_ROW_VERTICAL_PADDING = 5;
+    private static final int TASK_PRIORITY_BAR_WIDTH = 4;
+    private static final int TASK_CHECKBOX_SIZE = 12;
+    private static final int TASK_CONTENT_GAP = 6;
+    private static final int TASK_META_GAP = 6;
+    private static final int TASK_TITLE_MIN_WIDTH = 40;
+    private static final int TASK_LEADING_META_MAX_WIDTH = 96;
+    private static final int TASK_TRAILING_META_MIN_WIDTH = 48;
+    private static final int TASK_TRAILING_META_MAX_WIDTH = 96;
+    private static final int TASK_META_TEXT_COLOR = 0xFF55FFFF;
+
     /**
      * 任务列表中的行类型，用于区分分组标题与任务行。
      */
@@ -163,6 +179,8 @@ public class TaskListWidget implements Renderable {
         private final RowType rowType;
         private final String sectionId;
         private final String sectionTitle;
+        private final boolean sectionExpandable;
+        private final boolean sectionExpanded;
         private final Task task;
 
         /**
@@ -173,10 +191,13 @@ public class TaskListWidget implements Renderable {
          * @param sectionTitle 分段标题
          * @param task 当前行任务
          */
-        private DisplayRow(RowType rowType, String sectionId, String sectionTitle, Task task) {
+        private DisplayRow(RowType rowType, String sectionId, String sectionTitle,
+                           boolean sectionExpandable, boolean sectionExpanded, Task task) {
             this.rowType = rowType;
             this.sectionId = sectionId;
             this.sectionTitle = sectionTitle;
+            this.sectionExpandable = sectionExpandable;
+            this.sectionExpanded = sectionExpanded;
             this.task = task;
         }
     }
@@ -190,6 +211,7 @@ public class TaskListWidget implements Renderable {
     private List<Task> tasks = new ArrayList<>();
     private List<SectionModel> sections = new ArrayList<>();
     private List<DisplayRow> displayRows = new ArrayList<>();
+    private List<Integer> rowHeights = new ArrayList<>();
     private final ScrollBar scrollBar;
     private int hoveredTaskIndex = -1;
     private int selectedTaskIndex = -1;
@@ -216,7 +238,7 @@ public class TaskListWidget implements Renderable {
         this.y = y;
         this.width = width;
         this.height = height;
-        this.taskItemHeight = ModConfig.getInstance().getTaskItemHeight();
+        this.taskItemHeight = Math.max(MIN_TASK_ITEM_HEIGHT, ModConfig.getInstance().getTaskItemHeight());
         // 创建独立的滚动条组件（宽度 10px）
         int barWidth = 10;
         int barX = x + width - barWidth - 1;
@@ -264,9 +286,22 @@ public class TaskListWidget implements Renderable {
     }
 
     private void updateMaxScroll() {
-        int visibleCount = Math.max(1, height / Math.max(1, taskItemHeight));
-        int maxScroll = Math.max(0, displayRows.size() - visibleCount);
-        scrollBar.setMaxValue(maxScroll);
+        if (displayRows.isEmpty()) {
+            scrollBar.setMaxValue(0);
+            return;
+        }
+        int accumulatedHeight = 0;
+        int maxScroll = 0;
+        for (int index = displayRows.size() - 1; index >= 0; index--) {
+            int rowHeight = getRowHeight(index);
+            if (accumulatedHeight + rowHeight > height) {
+                maxScroll = Math.min(displayRows.size() - 1, index + 1);
+                break;
+            }
+            accumulatedHeight += rowHeight;
+            maxScroll = index;
+        }
+        scrollBar.setMaxValue(Math.max(0, maxScroll));
     }
 
     /**
@@ -306,11 +341,13 @@ public class TaskListWidget implements Renderable {
         context.fill(x, y, x + width, y + height, config.getBackgroundColor());
         context.renderOutline(x, y, width, height, config.getBorderColor());
 
-        // 绘制任务
+        // 将任务内容限制在列表矩形内部，避免末行覆盖到底部输入区域。
+        context.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
         renderTasks(context, mouseX, mouseY);
+        context.disableScissor();
 
         // 绘制滚动条（如果需要）
-        int totalContentHeight = displayRows.size() * taskItemHeight;
+        int totalContentHeight = getTotalContentHeight();
         if (totalContentHeight > height) {
             // 使用 ScrollBarRenderer 接口适配 DrawContext
             scrollBar.render(mouseX, mouseY, totalContentHeight, new ScrollBar.ScrollBarRenderer() {
@@ -326,21 +363,18 @@ public class TaskListWidget implements Renderable {
         Font textRenderer = client.font;
         ModConfig config = ModConfig.getInstance();
         int scrollOffset = scrollBar.getValue();
-        int visibleCount = Math.max(1, height / Math.max(1, taskItemHeight));
-        int visibleTasks = Math.min(displayRows.size() - scrollOffset, visibleCount);
+        int rowY = y;
 
-        for (int i = 0; i < visibleTasks; i++) {
-            int rowIndex = i + scrollOffset;
-            if (rowIndex >= displayRows.size()) break;
-
+        for (int rowIndex = scrollOffset; rowIndex < displayRows.size() && rowY < y + height; rowIndex++) {
             DisplayRow row = displayRows.get(rowIndex);
-            int rowY = y + i * taskItemHeight;
+            int rowHeight = getRowHeight(rowIndex);
 
             if (row.rowType == RowType.SECTION_HEADER) {
-                renderSectionHeader(context, textRenderer, row, rowIndex, rowY, mouseX, mouseY);
+                renderSectionHeader(context, textRenderer, row, rowIndex, rowY, rowHeight, mouseX, mouseY);
             } else if (row.task != null) {
-                renderTaskRow(context, textRenderer, config, row.task, rowIndex, rowY, mouseX, mouseY);
+                renderTaskRow(context, textRenderer, config, row.task, rowIndex, rowY, rowHeight, mouseX, mouseY);
             }
+            rowY += rowHeight;
         }
 
         renderDragIndicator(context);
@@ -350,34 +384,55 @@ public class TaskListWidget implements Renderable {
      * 渲染分组标题行。
      */
     private void renderSectionHeader(net.minecraft.client.gui.GuiGraphics context, Font textRenderer, DisplayRow row,
-                                     int rowIndex, int rowY, int mouseX, int mouseY) {
+                                     int rowIndex, int rowY, int rowHeight, int mouseX, int mouseY) {
         int bgColor = rowIndex == selectedTaskIndex ? 0xFF252525 : 0xFF161616;
-        if (mouseX >= x && mouseX < x + width && mouseY >= rowY && mouseY < rowY + taskItemHeight) {
+        if (mouseX >= x && mouseX < x + width && mouseY >= rowY && mouseY < rowY + rowHeight) {
             bgColor = 0xFF202020;
         }
-        context.fill(x + 1, rowY, x + width - 1, rowY + taskItemHeight - 1, bgColor);
-        context.drawString(textRenderer, Component.nullToEmpty(row.sectionTitle),
-                x + 8, rowY + (taskItemHeight - textRenderer.lineHeight) / 2,
+        context.fill(x + 1, rowY, x + width - 1, rowY + rowHeight, bgColor);
+        context.drawString(textRenderer, Component.nullToEmpty(buildSectionHeaderText(row)),
+                x + SECTION_HEADER_LEFT_PADDING, rowY + (rowHeight - textRenderer.lineHeight) / 2,
                 0xFFAAAAAA, false);
+    }
+
+    /**
+     * 构建分组标题的展示文本，统一包含展开/收起标记。
+     *
+     * @param row 分组标题行
+     * @return 用于渲染和测试断言的标题文本
+     */
+    private String buildSectionHeaderText(DisplayRow row) {
+        if (row == null) {
+            return "";
+        }
+        if (!row.sectionExpandable) {
+            return row.sectionTitle == null ? "" : row.sectionTitle;
+        }
+        String prefix = row.sectionExpanded ? "v " : "> ";
+        return prefix + (row.sectionTitle == null ? "" : row.sectionTitle);
     }
 
     /**
      * 渲染任务行。
      */
     private void renderTaskRow(net.minecraft.client.gui.GuiGraphics context, Font textRenderer, ModConfig config,
-                               Task task, int rowIndex, int taskY, int mouseX, int mouseY) {
-        int bgColor = getTaskBackgroundColor(rowIndex, taskY, mouseX, mouseY);
+                               Task task, int rowIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
+        int bgColor = getTaskBackgroundColor(rowIndex, taskY, rowHeight, mouseX, mouseY);
         int priorityColor = task.getPriority().getColor();
         int textColor = task.isCompleted() ? 0xFF888888 : 0xFFFFFFFF;
+        int textBaselineY = taskY + (rowHeight - textRenderer.lineHeight) / 2;
+        int rowTopInset = taskY + TASK_ROW_VERTICAL_PADDING;
+        int rowBottomInset = taskY + rowHeight - TASK_ROW_VERTICAL_PADDING;
 
-        context.fill(x + 1, taskY, x + width - 1, taskY + taskItemHeight - 1, bgColor);
+        context.fill(x + 1, taskY, x + width - 1, taskY + rowHeight - 1, bgColor);
 
-        context.fill(x + 2, taskY + 2, x + 6, taskY + taskItemHeight - 3, priorityColor);
+        int priorityLeft = x + TASK_ROW_LEFT_PADDING;
+        context.fill(priorityLeft, rowTopInset, priorityLeft + TASK_PRIORITY_BAR_WIDTH, rowBottomInset, priorityColor);
 
-        int checkboxX = x + 12;
-        int checkboxY = taskY + (taskItemHeight - 12) / 2;
-        context.fill(checkboxX, checkboxY, checkboxX + 12, checkboxY + 12, 0xFF000000);
-        context.renderOutline(checkboxX, checkboxY, 12, 12, 0xFFFFFFFF);
+        int checkboxX = priorityLeft + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP;
+        int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
+        context.fill(checkboxX, checkboxY, checkboxX + TASK_CHECKBOX_SIZE, checkboxY + TASK_CHECKBOX_SIZE, 0xFF000000);
+        context.renderOutline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
 
         if (task.isCompleted()) {
             context.fill(checkboxX + 3, checkboxY + 5, checkboxX + 5, checkboxY + 7, 0xFF00FF00);
@@ -388,70 +443,43 @@ public class TaskListWidget implements Renderable {
         if (title == null) {
             title = "";
         }
-        int titleX = x + 30;
-        int reservedForTags = 100;
-        int rightLimit = scrollBar.getBarX() - 2;
-        int maxTitleWidth = Math.max(16, rightLimit - reservedForTags - titleX);
+        int textLeft = checkboxX + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP;
+        int rightLimit = scrollBar.getBarX() - TASK_ROW_HORIZONTAL_PADDING;
+        String trailingMeta = buildTaskTrailingMetaText(task);
+        int trailingMetaWidth = trailingMeta.isEmpty()
+                ? 0
+                : clampInt(textRenderer.width(trailingMeta), TASK_TRAILING_META_MIN_WIDTH, TASK_TRAILING_META_MAX_WIDTH);
+        int contentRight = trailingMetaWidth > 0 ? rightLimit - trailingMetaWidth - TASK_META_GAP : rightLimit;
+
+        String leadingMeta = buildTaskLeadingMetaText(task);
+        int availableContentWidth = Math.max(TASK_TITLE_MIN_WIDTH, contentRight - textLeft);
+        int leadingMetaWidth = 0;
+        String truncatedLeadingMeta = "";
+        if (!leadingMeta.isEmpty()) {
+            int preferredLeadingWidth = Math.min(TASK_LEADING_META_MAX_WIDTH, Math.max(48, availableContentWidth / 3));
+            int safeLeadingWidth = Math.max(0, availableContentWidth - TASK_TITLE_MIN_WIDTH - TASK_META_GAP);
+            int maxLeadingWidth = Math.min(preferredLeadingWidth, safeLeadingWidth);
+            if (maxLeadingWidth > 0) {
+                truncatedLeadingMeta = trimWithEllipsis(textRenderer, leadingMeta, maxLeadingWidth);
+                leadingMetaWidth = textRenderer.width(truncatedLeadingMeta);
+                context.drawString(textRenderer, Component.nullToEmpty(truncatedLeadingMeta), textLeft, textBaselineY, TASK_META_TEXT_COLOR, false);
+            }
+        }
+
+        int titleX = textLeft + (leadingMetaWidth > 0 ? leadingMetaWidth + TASK_META_GAP : 0);
+        int maxTitleWidth = Math.max(TASK_TITLE_MIN_WIDTH, contentRight - titleX);
         String truncatedTitle = trimWithEllipsis(textRenderer, title, maxTitleWidth);
-        context.drawString(textRenderer, Component.nullToEmpty(truncatedTitle),
-                titleX, taskY + (taskItemHeight - textRenderer.lineHeight) / 2,
-                textColor, false);
+        context.drawString(textRenderer, Component.nullToEmpty(truncatedTitle), titleX, textBaselineY, textColor, false);
 
-        if (width > 150) {
-            int rightForTags = scrollBar.getBarX() - 2;
-            int tagAreaWidth = 90;
-            int tagX = rightForTags - tagAreaWidth;
-            List<String> tags = new ArrayList<>();
-            for (String tag : task.getTags()) {
-                if (tag == null) continue;
-                String t = tag.trim();
-                if (!t.isEmpty()) {
-                    tags.add(t);
-                }
-            }
-            String assigneeName = null;
-            String assigneeUuid = task.getAssigneeUuid();
-            if (assigneeUuid != null && !assigneeUuid.isEmpty()) {
-                if (client != null && client.getConnection() != null) {
-                    java.util.Collection<net.minecraft.client.multiplayer.PlayerInfo> entries = client.getConnection().getOnlinePlayers();
-                    for (net.minecraft.client.multiplayer.PlayerInfo entry : entries) {
-                        if (assigneeUuid.equals(entry.getProfile().getId().toString())) {
-                            String name = entry.getProfile().getName();
-                            if (name != null && !name.isEmpty()) {
-                                assigneeName = name;
-                                task.setAssigneeName(name);
-                            }
-                            break;
-                        }
-                    }
-                }
-                if ((assigneeName == null || assigneeName.isEmpty()) && task.getAssigneeName() != null) {
-                    assigneeName = task.getAssigneeName();
-                }
-            }
-            StringBuilder sb = new StringBuilder();
-            if (assigneeName != null && !assigneeName.isEmpty()) {
-                sb.append("[").append(assigneeName).append("]");
-            }
-            for (String tag : tags) {
-                if (sb.length() > 0) {
-                    sb.append(" ");
-                }
-                sb.append("[").append(tag).append("]");
-            }
-
-            String display = sb.toString();
-            if (!display.isEmpty()) {
-                int maxTagWidth = rightForTags - tagX;
-                String truncatedTag = trimWithEllipsis(textRenderer, display, maxTagWidth);
-                context.drawString(textRenderer, Component.nullToEmpty(truncatedTag),
-                        tagX, taskY + (taskItemHeight - textRenderer.lineHeight) / 2,
-                        0xFF55FFFF, false);
-            }
+        if (!trailingMeta.isEmpty()) {
+            int trailingTextWidth = Math.min(trailingMetaWidth, Math.max(0, rightLimit - titleX));
+            String truncatedTrailingMeta = trimWithEllipsis(textRenderer, trailingMeta, trailingTextWidth);
+            int trailingX = rightLimit - textRenderer.width(truncatedTrailingMeta);
+            context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingX, textBaselineY, TASK_META_TEXT_COLOR, false);
         }
     }
 
-    private int getTaskBackgroundColor(int taskIndex, int taskY, int mouseX, int mouseY) {
+    private int getTaskBackgroundColor(int taskIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
         ModConfig config = ModConfig.getInstance();
 
         if (teamAllViewForNonOp && client != null && client.player != null &&
@@ -480,11 +508,75 @@ public class TaskListWidget implements Renderable {
         }
 
         if (mouseX >= x && mouseX < x + width &&
-            mouseY >= taskY && mouseY < taskY + taskItemHeight) {
+            mouseY >= taskY && mouseY < taskY + rowHeight) {
             hoveredTaskIndex = taskIndex;
             return config.getHoveredBackgroundColor();
         }
         return 0xFF1A1A1A;
+    }
+
+    /**
+     * 构建任务标题前方显示的标签文本。
+     *
+     * @param task 目标任务
+     * @return 标签文本；无标签时返回空字符串
+     */
+    private String buildTaskLeadingMetaText(Task task) {
+        if (task == null || task.getTags().isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (String tag : task.getTags()) {
+            if (tag == null || tag.isBlank()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append('[').append(tag.trim()).append(']');
+        }
+        return builder.toString();
+    }
+
+    /**
+     * 构建任务标题右侧显示的负责人文本。
+     *
+     * @param task 目标任务
+     * @return 负责人文本；无人负责时返回空字符串
+     */
+    private String buildTaskTrailingMetaText(Task task) {
+        String assigneeName = resolveAssigneeName(task);
+        return assigneeName.isEmpty() ? "" : "@" + assigneeName;
+    }
+
+    /**
+     * 解析任务当前应展示的负责人名称。
+     *
+     * @param task 目标任务
+     * @return 可展示的负责人名称；不存在时返回空字符串
+     */
+    private String resolveAssigneeName(Task task) {
+        if (task == null) {
+            return "";
+        }
+        String assigneeName = task.getAssigneeName();
+        if (assigneeName != null && !assigneeName.isBlank()) {
+            return assigneeName.trim();
+        }
+        String assigneeUuid = task.getAssigneeUuid();
+        return assigneeUuid == null ? "" : assigneeUuid.trim();
+    }
+
+    /**
+     * 将整数值限制在指定范围内。
+     *
+     * @param value 原始值
+     * @param min 最小值
+     * @param max 最大值
+     * @return 限制后的结果
+     */
+    private int clampInt(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     /**
@@ -504,9 +596,9 @@ public class TaskListWidget implements Renderable {
         int lineY;
         if (clampedIndex >= rowIndexes.size()) {
             int lastRowIndex = rowIndexes.get(rowIndexes.size() - 1);
-            lineY = y + (lastRowIndex - scrollBar.getValue() + 1) * taskItemHeight;
+            lineY = getRowTopForVisibleIndex(lastRowIndex) + getRowHeight(lastRowIndex);
         } else {
-            lineY = y + (rowIndexes.get(clampedIndex) - scrollBar.getValue()) * taskItemHeight;
+            lineY = getRowTopForVisibleIndex(rowIndexes.get(clampedIndex));
         }
         if (lineY < y || lineY > y + height) {
             return;
@@ -530,20 +622,20 @@ public class TaskListWidget implements Renderable {
             }
 
             // 检查是否点击在复选框上
-            int scrollOffset = scrollBar.getValue();
-            int index = (int) ((mouseY - y) / taskItemHeight) + scrollOffset;
+            int index = findVisibleRowIndexAt(mouseY);
             if (index >= 0 && index < displayRows.size()) {
                 DisplayRow row = displayRows.get(index);
                 if (row.rowType != RowType.TASK || row.task == null) {
                     return false;
                 }
-                int taskY = y + (index - scrollOffset) * taskItemHeight;
-                int checkboxX = x + 12;
-                int checkboxY = taskY + (taskItemHeight - 12) / 2;
+                int taskY = getRowTopForVisibleIndex(index);
+                int rowHeight = getRowHeight(index);
+                int checkboxX = x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP;
+                int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
 
                 // 检查点击是否在复选框范围内 (12x12)
-                if (mouseX >= checkboxX && mouseX < checkboxX + 12 &&
-                    mouseY >= checkboxY && mouseY < checkboxY + 12) {
+                if (mouseX >= checkboxX && mouseX < checkboxX + TASK_CHECKBOX_SIZE &&
+                    mouseY >= checkboxY && mouseY < checkboxY + TASK_CHECKBOX_SIZE) {
                     Task clickedTask = row.task;
                     if (!clickedTask.isCompleted()) {
                         if (onTaskToggleCompletion != null && !teamAllViewForNonOp) {
@@ -625,8 +717,7 @@ public class TaskListWidget implements Renderable {
         if (x >= this.x && x < this.x + width &&
             y >= this.y && y < this.y + height) {
 
-            int scrollOffset = scrollBar.getValue();
-            int index = (y - this.y) / taskItemHeight + scrollOffset;
+            int index = findVisibleRowIndexAt(y);
             if (index >= 0 && index < displayRows.size()) {
                 DisplayRow row = displayRows.get(index);
                 if (row.rowType == RowType.TASK) {
@@ -648,7 +739,7 @@ public class TaskListWidget implements Renderable {
         if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) {
             return null;
         }
-        int rowIndex = (int) ((mouseY - y) / taskItemHeight) + scrollBar.getValue();
+        int rowIndex = findVisibleRowIndexAt(mouseY);
         if (rowIndex < 0 || rowIndex >= displayRows.size()) {
             return null;
         }
@@ -784,7 +875,7 @@ public class TaskListWidget implements Renderable {
         }
         for (int index = 0; index < rowIndexes.size(); index++) {
             int rowIndex = rowIndexes.get(index);
-            double rowMiddleY = y + (rowIndex - scrollBar.getValue()) * taskItemHeight + taskItemHeight / 2.0D;
+            double rowMiddleY = getRowTopForVisibleIndex(rowIndex) + getRowHeight(rowIndex) / 2.0D;
             if (mouseY < rowMiddleY) {
                 return index;
             }
@@ -995,7 +1086,7 @@ public class TaskListWidget implements Renderable {
         List<String> snapshot = new ArrayList<>();
         for (DisplayRow row : displayRows) {
             if (row.rowType == RowType.SECTION_HEADER) {
-                snapshot.add("HEADER:" + row.sectionTitle);
+                snapshot.add("HEADER:" + buildSectionHeaderText(row));
             } else if (row.task != null) {
                 snapshot.add("TASK:" + row.task.getId());
             }
@@ -1019,6 +1110,19 @@ public class TaskListWidget implements Renderable {
      */
     int getTaskItemHeightForTest() {
         return taskItemHeight;
+    }
+
+    int getSectionHeaderHeightForTest() {
+        return Math.min(taskItemHeight, SECTION_HEADER_ROW_HEIGHT);
+    }
+
+    /**
+     * 返回任务列表控件的边界，供界面测试校验布局。
+     *
+     * @return 任务列表控件边界数组
+     */
+    int[] getBoundsForTest() {
+        return new int[] {x, y, width, height};
     }
 
     /**
@@ -1049,12 +1153,13 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
-     * 返回任务列表内部可用于交互的横坐标，供测试稳定构造点击和拖拽输入。
+     * 返回任务内容区域内的测试用横坐标。
      *
      * @return 任务内容区域内的测试用横坐标
      */
     int getInteractXForTest() {
-        return x + 30;
+        return x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP
+                + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP + 4;
     }
 
     /**
@@ -1070,11 +1175,83 @@ public class TaskListWidget implements Renderable {
         for (int index = 0; index < displayRows.size(); index++) {
             DisplayRow row = displayRows.get(index);
             if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
-                int visibleRowIndex = index - scrollBar.getValue();
-                return y + visibleRowIndex * taskItemHeight + taskItemHeight / 2;
+                return getRowTopForVisibleIndex(index) + getRowHeight(index) / 2;
             }
         }
         return -1;
+    }
+
+    int getSectionHeaderCenterYForTest(String sectionId) {
+        if (sectionId == null || displayRows == null) {
+            return -1;
+        }
+        for (int index = 0; index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType == RowType.SECTION_HEADER && sectionId.equals(row.sectionId)) {
+                return getRowTopForVisibleIndex(index) + getRowHeight(index) / 2;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 返回指定任务当前用于前置展示的标签文本，供测试断言任务项布局语义。
+     *
+     * @param taskId 任务 ID
+     * @return 前置标签文本；任务不存在时返回空字符串
+     */
+    /**
+     * 返回任务复选框中心点的横坐标，供测试稳定命中完成态切换区域。
+     *
+     * @return 复选框中心点横坐标
+     */
+    int getCheckboxCenterXForTest() {
+        return x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP + TASK_CHECKBOX_SIZE / 2;
+    }
+
+    /**
+     * 返回首行任务复选框的中心纵坐标，供测试稳定命中复选框点击区域。
+     *
+     * @return 复选框中心点纵坐标
+     */
+    int getCheckboxCenterYForTest() {
+        for (int index = scrollBar.getValue(); index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType == RowType.TASK) {
+                int rowTop = getRowTopForVisibleIndex(index);
+                return rowTop + (getRowHeight(index) - TASK_CHECKBOX_SIZE) / 2 + TASK_CHECKBOX_SIZE / 2;
+            }
+        }
+        return y + (taskItemHeight - TASK_CHECKBOX_SIZE) / 2 + TASK_CHECKBOX_SIZE / 2;
+    }
+
+    /**
+     * 返回指定任务当前用于前置展示的标签文本，供测试断言任务项布局语义。
+     *
+     * @param taskId 任务 ID
+     * @return 前置标签文本；任务不存在时返回空字符串
+     */
+    String getTaskLeadingMetaTextForTest(String taskId) {
+        Task task = findTaskById(taskId);
+        return buildTaskLeadingMetaText(task);
+    }
+
+    /**
+     * 根据任务 ID 查找当前列表中的任务对象。
+     *
+     * @param taskId 任务 ID
+     * @return 匹配的任务对象；不存在时返回 null
+     */
+    private Task findTaskById(String taskId) {
+        if (taskId == null || displayRows == null) {
+            return null;
+        }
+        for (DisplayRow row : displayRows) {
+            if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
+                return row.task;
+            }
+        }
+        return null;
     }
 
     /**
@@ -1082,6 +1259,67 @@ public class TaskListWidget implements Renderable {
      *
      * @param offset 目标滚动偏移
      */
+    private int getRowHeight(DisplayRow row) {
+        if (row == null) {
+            return taskItemHeight;
+        }
+        return row.rowType == RowType.SECTION_HEADER
+                ? Math.min(taskItemHeight, SECTION_HEADER_ROW_HEIGHT)
+                : taskItemHeight;
+    }
+
+    private int getRowHeight(int rowIndex) {
+        if (rowIndex < 0 || rowIndex >= displayRows.size()) {
+            return taskItemHeight;
+        }
+        return rowHeights.get(rowIndex);
+    }
+
+    private int getTotalContentHeight() {
+        int totalHeight = 0;
+        for (int rowHeight : rowHeights) {
+            totalHeight += rowHeight;
+        }
+        return totalHeight;
+    }
+
+    private int findVisibleRowIndexAt(double mouseY) {
+        if (mouseY < y || mouseY >= y + height) {
+            return -1;
+        }
+        int currentY = y;
+        for (int rowIndex = scrollBar.getValue(); rowIndex < displayRows.size() && currentY < y + height; rowIndex++) {
+            int rowHeight = getRowHeight(rowIndex);
+            if (mouseY >= currentY && mouseY < currentY + rowHeight) {
+                return rowIndex;
+            }
+            currentY += rowHeight;
+        }
+        return -1;
+    }
+
+    private int getRowTopForVisibleIndex(int rowIndex) {
+        int currentY = y;
+        for (int index = scrollBar.getValue(); index < rowIndex && index < displayRows.size(); index++) {
+            currentY += getRowHeight(index);
+        }
+        return currentY;
+    }
+
+    private int getVisibleBottomIndex(int startIndex) {
+        int currentY = y;
+        int bottomIndex = Math.max(0, Math.min(startIndex, displayRows.size() - 1));
+        for (int index = startIndex; index < displayRows.size() && currentY < y + height; index++) {
+            int rowHeight = getRowHeight(index);
+            if (currentY + rowHeight > y + height) {
+                break;
+            }
+            bottomIndex = index;
+            currentY += rowHeight;
+        }
+        return bottomIndex;
+    }
+
     void setScrollOffsetForTest(int offset) {
         scrollBar.setValue(offset);
     }
@@ -1135,15 +1373,14 @@ public class TaskListWidget implements Renderable {
         if (index < 0 || displayRows == null || displayRows.isEmpty()) {
             return;
         }
-        int visibleCount = Math.max(1, height / taskItemHeight);
         int currentTop = scrollBar.getValue();
-        int currentBottom = currentTop + visibleCount - 1;
+        int currentBottom = getVisibleBottomIndex(currentTop);
         if (index < currentTop) {
             scrollBar.setValue(index);
             return;
         }
         if (index > currentBottom) {
-            scrollBar.setValue(index - visibleCount + 1);
+            scrollBar.setValue(index);
         }
     }
 
@@ -1189,6 +1426,7 @@ public class TaskListWidget implements Renderable {
         List<DisplayRow> rows = new ArrayList<>();
         if (sections == null || sections.isEmpty()) {
             this.displayRows = rows;
+            this.rowHeights = new ArrayList<>();
             return;
         }
         for (SectionModel section : sections) {
@@ -1197,16 +1435,31 @@ public class TaskListWidget implements Renderable {
             }
             boolean showHeader = !section.title.isEmpty() || section.expandable;
             if (showHeader) {
-                rows.add(new DisplayRow(RowType.SECTION_HEADER, section.id, section.title, null));
+                rows.add(new DisplayRow(RowType.SECTION_HEADER,
+                        section.id,
+                        section.title,
+                        section.expandable,
+                        section.expanded,
+                        null));
             }
             if (!section.expandable || section.expanded) {
                 for (Task task : section.tasks) {
                     if (task != null) {
-                        rows.add(new DisplayRow(RowType.TASK, section.id, section.title, task));
+                        rows.add(new DisplayRow(RowType.TASK,
+                                section.id,
+                                section.title,
+                                section.expandable,
+                                section.expanded,
+                                task));
                     }
                 }
             }
         }
         this.displayRows = rows;
+        List<Integer> heights = new ArrayList<>(rows.size());
+        for (DisplayRow row : rows) {
+            heights.add(getRowHeight(row));
+        }
+        this.rowHeights = heights;
     }
 }

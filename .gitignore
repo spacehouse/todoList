@@ -68,3 +68,5 @@ local.properties
 */logs/*
 */log/*
 *.log
+
+docs/*
