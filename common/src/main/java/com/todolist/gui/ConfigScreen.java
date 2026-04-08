@@ -2,8 +2,6 @@ package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
-import com.todolist.client.ClientPlatformAdapter;
-import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
@@ -16,9 +14,14 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 配置界面，回退为改造前的旧版 HUD 配置表单与整屏预览布局。
+ * 配置界面，提供经典 HUD 配置表单和固定高度的 HUD 预览区域。
  */
 public class ConfigScreen extends Screen {
+
+    /**
+     * 配置界面中 HUD 预览框使用的固定高度，避免真实 HUD 内容过多时撑大拖拽区域。
+     */
+    private static final int FIXED_PREVIEW_HUD_HEIGHT = 60;
 
     private final Screen parent;
 
@@ -207,7 +210,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 初始化旧版配置表单与预览区域。
+     * 初始化经典配置表单和 HUD 预览区域。
      */
     @Override
     protected void init() {
@@ -282,7 +285,7 @@ public class ConfigScreen extends Screen {
 
         previewUseCustom = config.isHudUseCustomPosition();
         previewHudWidth = Math.max(1, config.getHudWidth());
-        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        previewHudHeight = Math.max(1, resolvePreviewHudHeight());
         syncPreviewPositionFromConfig(config);
 
         int buttonY = y + row * rowHeight + 30;
@@ -297,7 +300,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 渲染旧版表单与 HUD 预览。
+     * 渲染经典配置表单和 HUD 预览区域。
      *
      * @param context 绘制上下文
      * @param mouseX 鼠标 X 坐标
@@ -325,7 +328,7 @@ public class ConfigScreen extends Screen {
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textHeight);
 
         previewHudWidth = Math.max(1, parseIntSafe(hudWidthField.getValue(), ModConfig.getInstance().getHudWidth()));
-        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        previewHudHeight = Math.max(1, resolvePreviewHudHeight());
         if (previewUseCustom) {
             applyPreviewAnchorsToAbsolutePosition();
         } else {
@@ -351,12 +354,12 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 处理 HUD 预览块点击，进入拖拽模式。
+     * 处理 HUD 预览框点击事件，命中后进入拖拽模式。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param button 鼠标按键
-     * @return 若命中预览块则返回 true
+     * @return 命中预览框时返回 true
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -379,12 +382,12 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 结束预览拖拽状态。
+     * 结束 HUD 预览框的拖拽状态。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param button 鼠标按键
-     * @return 若本次释放结束了拖拽则返回 true
+     * @return 本次释放结束了拖拽时返回 true
      */
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
@@ -396,14 +399,14 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 拖拽 HUD 预览块，并同步新的预览锚点。
+     * 拖拽 HUD 预览框，并同步新的预览锚点。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      * @param button 鼠标按键
      * @param deltaX 鼠标 X 偏移
      * @param deltaY 鼠标 Y 偏移
-     * @return 若处理了拖拽则返回 true
+     * @return 处理了拖拽时返回 true
      */
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
@@ -419,7 +422,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 保存当前旧版配置表单并返回父界面。
+     * 保存当前配置表单内容，并返回父界面。
      */
     private void applyAndReturn() {
         ModConfig config = ModConfig.getInstance();
@@ -432,7 +435,7 @@ public class ConfigScreen extends Screen {
         config.setHudProjectSource(hudProjectSourceValue);
 
         previewHudWidth = Math.max(1, config.getHudWidth());
-        previewHudHeight = Math.max(1, resolveActualHudHeight());
+        previewHudHeight = Math.max(1, resolvePreviewHudHeight());
         if (previewUseCustom) {
             config.updateHudCustomPosition(previewHudX, previewHudY, this.width, this.height, previewHudWidth, previewHudHeight);
         } else {
@@ -443,7 +446,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 按当前配置刷新预览绝对坐标。
+     * 按当前配置刷新预览框的绝对坐标。
      *
      * @param config 当前模组配置
      */
@@ -483,16 +486,12 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 解析当前实际 HUD 高度，用于更准确地保存预览位置。
+     * 返回配置界面中固定使用的 HUD 预览高度，避免任务过多时拖拽框被撑大。
      *
-     * @return 当前 HUD 高度
+     * @return 固定预览高度
      */
-    private int resolveActualHudHeight() {
-        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
-        if (renderer != null) {
-            return Math.max(1, renderer.getCurrentPanelHeight());
-        }
-        return Math.max(1, previewHudHeight == 0 ? 40 : previewHudHeight);
+    private int resolvePreviewHudHeight() {
+        return FIXED_PREVIEW_HUD_HEIGHT;
     }
 
     /**
@@ -515,7 +514,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 将比例值裁剪到 0 到 1。
+     * 将比例值裁剪到 0 到 1 的范围内。
      *
      * @param ratio 原始比例
      * @return 裁剪后的比例
@@ -531,7 +530,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 根据当前绝对坐标刷新预览锚点和边距。
+     * 根据当前绝对坐标刷新预览框的锚点和边距。
      */
     private void updatePreviewAnchorsFromAbsolutePosition() {
         previewHudX = clampPreviewCoordinate(previewHudX, this.width, previewHudWidth);
@@ -559,7 +558,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 根据当前锚点和边距恢复预览绝对坐标。
+     * 根据当前锚点和边距恢复预览框的绝对坐标。
      */
     private void applyPreviewAnchorsToAbsolutePosition() {
         int resolvedX = previewHorizontalAnchor == ModConfig.HudHorizontalAnchor.LEFT
@@ -588,7 +587,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 刷新“空列表时仍显示”按钮文案。
+     * 刷新“无任务时仍显示 HUD”按钮文案。
      */
     private void updateHudShowWhenEmptyButtonLabel() {
         if (hudShowWhenEmptyButton == null) {
@@ -653,10 +652,10 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 解析 HUD 项目来源索引。
+     * 解析 HUD 项目来源的索引。
      *
      * @param source 当前来源值
-     * @return 对应索引
+     * @return 对应的索引
      */
     private int resolveHudProjectSourceIndex(String source) {
         for (int index = 0; index < HudProjectSourceOptions.VALUES.length; index++) {
@@ -720,7 +719,7 @@ public class ConfigScreen extends Screen {
     }
 
     /**
-     * 将整型值裁剪到指定范围。
+     * 将整型值裁剪到指定范围内。
      *
      * @param value 原始值
      * @param min 最小值
@@ -766,14 +765,14 @@ public class ConfigScreen extends Screen {
         private static final String[] VALUES = new String[] {"CURRENT", "STARRED", "ALL"};
 
         /**
-         * 私有构造方法，避免工具类实例化。
+         * 私有构造方法，避免工具类被实例化。
          */
         private HudProjectSourceOptions() {
         }
     }
 
     /**
-     * 整型滑块控件，用于待办数和已办数设置。
+     * 整型滑块控件，用于待办数量和已办数量设置。
      */
     private static class IntSliderWidget extends AbstractSliderButton {
         private final int min;
@@ -831,7 +830,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 当前滑块不需要额外提交逻辑。
+         * 当前滑块不需要额外的提交逻辑。
          */
         @Override
         protected void applyValue() {
@@ -904,7 +903,7 @@ public class ConfigScreen extends Screen {
         }
 
         /**
-         * 当前滑块不需要额外提交逻辑。
+         * 当前滑块不需要额外的提交逻辑。
          */
         @Override
         protected void applyValue() {

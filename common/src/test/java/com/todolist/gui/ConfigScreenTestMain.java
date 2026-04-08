@@ -1,10 +1,18 @@
 package com.todolist.gui;
 
+import com.todolist.TodoListCommon;
+import com.todolist.client.ClientPlatformAdapter;
+import com.todolist.client.ClientTaskStorageHelper;
+import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.FakeMinecraftClient;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.gui.testsupport.RecordingClientOps;
+import com.todolist.task.Task;
 import net.minecraft.client.gui.screens.Screen;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 配置界面离线自测入口，覆盖旧版配置页的表单、保存和预览拖拽流程。
@@ -30,6 +38,7 @@ public final class ConfigScreenTestMain {
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistHudSourceAndVisibilityTogether", ConfigScreenTestMain::shouldPersistHudSourceAndVisibilityTogether);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistSafeValuesOnSave", ConfigScreenTestMain::shouldPersistSafeValuesOnSave);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldEnableCustomPreviewAfterDragAndSave", ConfigScreenTestMain::shouldEnableCustomPreviewAfterDragAndSave);
+        GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldKeepFixedPreviewHeightWhenActualHudIsTall", ConfigScreenTestMain::shouldKeepFixedPreviewHeightWhenActualHudIsTall);
     }
 
     /**
@@ -179,5 +188,35 @@ public final class ConfigScreenTestMain {
         GuiTestSupport.assertTrue(ModConfig.getInstance().isHudUseCustomPosition(), "保存后应写回自定义 HUD 定位开关");
         GuiTestSupport.assertTrue(ModConfig.getInstance().getHudCustomX() != originalX || ModConfig.getInstance().getHudCustomY() != originalY,
                 "保存后应写回新的 HUD 坐标");
+    }
+
+    /**
+     * 验证即使实际 HUD 面板高度较大，配置页预览框仍保持固定高度，便于拖拽定位。
+     */
+    private static void shouldKeepFixedPreviewHeightWhenActualHudIsTall() {
+        GuiTestSupport.resetState();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudTodoLimit(10);
+        config.setHudDoneLimit(7);
+        config.setHudMaxHeight(400);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        List<Task> tasks = new ArrayList<>();
+        for (int index = 0; index < 18; index++) {
+            tasks.add(new Task("Tall Preview " + index, ""));
+        }
+        try {
+            ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), minecraft, tasks);
+        } catch (Exception exception) {
+            throw new AssertionError("写入个人任务测试数据失败", exception);
+        }
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        ClientPlatformAdapter.setHudRendererSupplier(() -> renderer);
+
+        Screen parent = ScreenDriver.createParentScreen("parent");
+        ConfigScreen screen = new ConfigScreen(parent);
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertEquals(60, screen.getPreviewHudHeightForTest(), "配置页预览框高度应保持固定值，不跟随实际 HUD 高度变化");
     }
 }
