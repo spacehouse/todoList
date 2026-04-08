@@ -5,10 +5,10 @@ import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,11 +24,6 @@ import net.minecraft.network.chat.Component;
  */
 public class TodoHudRenderer {
     private static final long HUD_MODEL_REFRESH_INTERVAL_MS = 250L;
-    private static final Comparator<Task> HUD_TASK_COMPARATOR = (a, b) -> {
-        int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
-        if (priority != 0) return priority;
-        return Long.compare(a.getCreatedAt(), b.getCreatedAt());
-    };
 
     /**
      * HUD 视图模式，和配置项中的字符串一一对应。
@@ -70,10 +65,13 @@ public class TodoHudRenderer {
     private static final int HUD_PRIORITY_BLOCK_GAP = 4;
     
     // 缓存视图标签
-    private static final Component LABEL_TEAM_UNASSIGNED = Component.translatable("hud.todolist.view_label.team_unassigned");
-    private static final Component LABEL_TEAM_ALL = Component.translatable("hud.todolist.view_label.team_all");
-    private static final Component LABEL_TEAM_ASSIGNED = Component.translatable("hud.todolist.view_label.team_assigned");
-    private static final Component LABEL_PERSONAL = Component.translatable("hud.todolist.view_label.personal");
+    private static final Component LABEL_SPACE_PERSONAL = Component.translatable("hud.todolist.space_label.personal");
+    private static final Component LABEL_SPACE_TEAM = Component.translatable("hud.todolist.space_label.team");
+    private static final Component LABEL_TEAM_VIEW_UNASSIGNED = Component.translatable("hud.todolist.team_view_label.unassigned");
+    private static final Component LABEL_TEAM_VIEW_ALL = Component.translatable("hud.todolist.team_view_label.all");
+    private static final Component LABEL_TEAM_VIEW_ASSIGNED = Component.translatable("hud.todolist.team_view_label.assigned");
+    private static final Component LABEL_PROJECT_SOURCE_STARRED = Component.translatable("gui.todolist.hud.project_source.starred");
+    private static final Component LABEL_PROJECT_SOURCE_ALL = Component.translatable("gui.todolist.hud.project_source.all");
 
     /**
      * HUD 行视觉元数据：统一描述优先级色块、前置标签和标题位置。
@@ -201,7 +199,7 @@ public class TodoHudRenderer {
         int x = placement.getX();
         int y = placement.getY();
 
-        renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, renderPlan, config, getViewLabel(viewMode));
+        renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, renderPlan, config, viewMode);
     }
 
     private void refreshHudModelIfNeeded(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
@@ -236,9 +234,6 @@ public class TodoHudRenderer {
                 pending.add(task);
             }
         }
-        pending.sort(HUD_TASK_COMPARATOR);
-        done.sort(HUD_TASK_COMPARATOR);
-
         cachedPendingTasks = pending;
         cachedDoneTasks = done;
         rebuildRowRenderCache(pending, done, hudWidth);
@@ -325,7 +320,7 @@ public class TodoHudRenderer {
             boolean assigned = assignee != null && !assignee.isEmpty();
             if (viewMode == HudViewMode.TEAM_UNASSIGNED && !assigned) {
                 result.add(task);
-            } else if (viewMode == HudViewMode.TEAM_ALL && assigned) {
+            } else if (viewMode == HudViewMode.TEAM_ALL) {
                 result.add(task);
             } else if (viewMode == HudViewMode.TEAM_ASSIGNED && assigned && myUuid != null && myUuid.equals(assignee)) {
                 result.add(task);
@@ -430,12 +425,67 @@ public class TodoHudRenderer {
      * @param viewMode HUD 视图模式
      * @return HUD 标题视图标签
      */
-    private Component getViewLabel(HudViewMode viewMode) {
+    private Component buildHeaderTitle(HudViewMode viewMode) {
+        Project.Scope scope = getScopeByView(viewMode);
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        List<Project> scopedProjects = manager.getProjectsByScope(scope);
+        String projectName = buildHeaderProjectSourceText(scope, manager, scopedProjects, ModConfig.getInstance().getHudProjectSource());
+
+        StringBuilder builder = new StringBuilder(getSpaceLabel(scope).getString());
+        if (!projectName.isEmpty()) {
+            builder.append('-').append(projectName);
+        }
+
+        Component teamViewLabel = getTeamViewLabel(viewMode);
+        if (teamViewLabel != null) {
+            builder.append('-').append(teamViewLabel.getString());
+        }
+        return Component.literal(builder.toString());
+    }
+
+    /**
+     * 根据 HUD 项目来源构建标题中的项目段文本。
+     *
+     * @param scope 当前项目范围
+     * @param manager 项目管理器
+     * @param scopedProjects 当前范围下的项目列表
+     * @param sourceMode HUD 项目来源配置
+     * @return 标题中的项目段文本
+     */
+    private String buildHeaderProjectSourceText(Project.Scope scope, ProjectManager manager, List<Project> scopedProjects, String sourceMode) {
+        if ("STARRED".equalsIgnoreCase(sourceMode)) {
+            return LABEL_PROJECT_SOURCE_STARRED.getString();
+        }
+        if ("ALL".equalsIgnoreCase(sourceMode)) {
+            return LABEL_PROJECT_SOURCE_ALL.getString();
+        }
+
+        Project activeProject = resolveScopedActiveProject(manager, scope, scopedProjects);
+        return ProjectNameFormatter.toDisplayText(activeProject).getString().trim();
+    }
+
+    /**
+     * 根据项目范围返回 HUD 标题中的空间标签。
+     *
+     * @param scope 当前项目范围
+     * @return HUD 空间标签
+     */
+    private Component getSpaceLabel(Project.Scope scope) {
+        return scope == Project.Scope.TEAM ? LABEL_SPACE_TEAM : LABEL_SPACE_PERSONAL;
+    }
+
+    /**
+     * 根据团队 HUD 视图返回对应的子视图标签。
+     *
+     * @param viewMode HUD 视图模式
+     * @return 团队子视图标签；个人视图时返回 {@code null}
+     */
+    private Component getTeamViewLabel(HudViewMode viewMode) {
         return switch (viewMode) {
-            case TEAM_UNASSIGNED -> LABEL_TEAM_UNASSIGNED;
-            case TEAM_ALL -> LABEL_TEAM_ALL;
-            case TEAM_ASSIGNED -> LABEL_TEAM_ASSIGNED;
-            case PERSONAL -> LABEL_PERSONAL;
+            case TEAM_UNASSIGNED -> LABEL_TEAM_VIEW_UNASSIGNED;
+            case TEAM_ALL -> LABEL_TEAM_VIEW_ALL;
+            case TEAM_ASSIGNED -> LABEL_TEAM_VIEW_ASSIGNED;
+            case PERSONAL -> null;
         };
     }
 
@@ -453,10 +503,10 @@ public class TodoHudRenderer {
      * @param viewLabel 当前视图标签
      */
     private void renderTaskList(GuiGraphics context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done,
-            HudRenderPlan renderPlan, ModConfig config, Component viewLabel) {
+            HudRenderPlan renderPlan, ModConfig config, HudViewMode viewMode) {
         int currentY = y;
         float opacity = (float) config.getHudOpacity();
-        int panelColor = applyOpacityToColor(0xFF232323, opacity);
+        int panelColor = applyBackgroundOpacity(0xFF232323, opacity);
         int rowHeight = 12;
         int headerHeight = 14;
 
@@ -464,38 +514,38 @@ public class TodoHudRenderer {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-        Component title = Component.translatable("hud.todolist.header", viewLabel);
+        Component title = buildHeaderTitle(viewMode);
 
         context.fill(x, y, x + width, y + panelHeight, panelColor);
         int headerTextY = y + (headerHeight - client.font.lineHeight) / 2;
-        context.drawString(client.font, title, x + 4, headerTextY, applyOpacityToColor(0xFFE0B240, opacity));
+        context.drawString(client.font, title, x + 4, headerTextY, toOpaqueColor(0xFFE0B240));
         currentY += headerHeight;
 
         if (!expanded) {
             Component summary = buildCollapsedSummaryText(pending, done);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, summary, x + 4, summaryY, applyOpacityToColor(0xDDDDDD, opacity));
+            context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xDDDDDD));
             return;
         }
 
         for (int i = 0; i < renderPlan.shownPending; i++) {
-            drawTaskRow(context, x, currentY, width, rowHeight, opacity, pending.get(i));
+            drawTaskRow(context, x, currentY, width, rowHeight, pending.get(i));
             currentY += rowHeight;
         }
 
         if (renderPlan.showDoneSection) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
+            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xAAAAAA));
             currentY += rowHeight;
             for (int i = 0; i < renderPlan.shownDone; i++) {
-                drawTaskRow(context, x, currentY, width, rowHeight, opacity, done.get(i));
+                drawTaskRow(context, x, currentY, width, rowHeight, done.get(i));
                 currentY += rowHeight;
             }
         }
 
         if (renderPlan.showMore) {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, buildHiddenCountText(renderPlan.hiddenCount), x + 4, moreY, applyOpacityToColor(0xAAAAAA, opacity));
+            context.drawString(client.font, buildHiddenCountText(renderPlan.hiddenCount), x + 4, moreY, toOpaqueColor(0xAAAAAA));
         }
     }
 
@@ -507,7 +557,7 @@ public class TodoHudRenderer {
      * @param opacity HUD 透明度（用于同步文本与背景的显示效果）
      * @param task 待绘制任务
      */
-    private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, float opacity, Task task) {
+    private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, Task task) {
         RowRenderCache rowCache = rowRenderCacheByTaskId.get(task.getId());
         if (!isRowRenderCacheValid(rowCache, task, width)) {
             rowCache = buildRowRenderCache(task, width);
@@ -518,16 +568,13 @@ public class TodoHudRenderer {
         int titleTextY = y + (rowHeight - client.font.lineHeight) / 2;
         int labelLineHeight = Math.max(1, Math.round(client.font.lineHeight * HUD_LABEL_SCALE));
         int labelTextY = y + (rowHeight - labelLineHeight) / 2;
-        int textColor = applyOpacityToColor(0xFFFFFF, opacity);
-        int labelColor = applyOpacityToColor(0x55FFFF, opacity);
+        int textColor = toOpaqueColor(0xFFFFFF);
+        int labelColor = toOpaqueColor(0x55FFFF);
 
         HudRowVisual rowVisual = rowCache.rowVisual;
         context.fill(rowLeft, y + 2, rowLeft + HUD_PRIORITY_BLOCK_WIDTH, y + rowHeight - 2,
-                applyOpacityToColor(rowVisual.priorityBlockColor, opacity));
+                toOpaqueColor(rowVisual.priorityBlockColor));
 
-        if (rowVisual.assigneeText != null && !rowVisual.assigneeText.isEmpty()) {
-            drawScaledString(context, rowVisual.assigneeText, rowLeft + rowVisual.assigneeOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
-        }
         if (rowVisual.tagText != null && !rowVisual.tagText.isEmpty()) {
             drawScaledString(context, rowVisual.tagText, rowLeft + rowVisual.tagOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
         }
@@ -583,15 +630,9 @@ public class TodoHudRenderer {
         int currentOffset = HUD_PRIORITY_BLOCK_WIDTH + HUD_PRIORITY_BLOCK_GAP;
         int maxLabelWidth = Math.max(18, rowWidth / 3);
 
-        String assigneeToken = buildHudLabelToken(resolveAssigneeLabel(task), maxLabelWidth);
         String tagToken = buildHudLabelToken(resolveFirstTaskTag(task), maxLabelWidth);
 
         int assigneeOffset = 0;
-        if (!assigneeToken.isEmpty()) {
-            assigneeOffset = currentOffset;
-            currentOffset += measureScaledTextWidth(assigneeToken, HUD_LABEL_SCALE);
-        }
-
         int tagOffset = 0;
         if (!tagToken.isEmpty()) {
             tagOffset = currentOffset;
@@ -608,7 +649,7 @@ public class TodoHudRenderer {
                 : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
 
         return new HudRowVisual(resolvePriorityBlockColor(task.getPriority()), "",
-                assigneeToken.isEmpty() ? null : assigneeToken,
+                null,
                 tagToken.isEmpty() ? null : tagToken,
                 assigneeOffset, tagOffset, titleOffset, titleText);
     }
@@ -626,7 +667,6 @@ public class TodoHudRenderer {
                 + valueOrEmpty(task.getTitle()) + '|'
                 + task.getPriority().name() + '|'
                 + task.isCompleted() + '|'
-                + resolveAssigneeLabel(task) + '|'
                 + resolveFirstTaskTag(task) + '|'
                 + hudWidth + '|'
                 + guiScale;
@@ -797,6 +837,27 @@ public class TodoHudRenderer {
     }
 
     /**
+     * 仅对 HUD 背景类颜色应用透明度，不影响文字和前景元素。
+     *
+     * @param color 原始颜色
+     * @param opacity 透明度倍率
+     * @return 应用透明度后的背景颜色
+     */
+    private static int applyBackgroundOpacity(int color, float opacity) {
+        return applyOpacityToColor(color, opacity);
+    }
+
+    /**
+     * 将文字和前景元素颜色统一提升为不透明 ARGB，避免被 HUD 透明度联动影响。
+     *
+     * @param color 原始 RGB 或 ARGB 颜色
+     * @return alpha 固定为 255 的前景颜色
+     */
+    private static int toOpaqueColor(int color) {
+        return 0xFF000000 | (color & 0x00FFFFFF);
+    }
+
+    /**
      * 解析 HUD 使用的指派人标签。
      *
      * @param task 当前任务
@@ -893,6 +954,15 @@ public class TodoHudRenderer {
     }
 
     /**
+     * 返回当前 HUD 顶部标题文本，供离线测试断言标题结构。
+     *
+     * @return 当前 HUD 顶部标题
+     */
+    String getHeaderTitleForTest() {
+        return buildHeaderTitle(resolveViewMode(ModConfig.getInstance())).getString();
+    }
+
+    /**
      * 返回当前缓存中的未完成任务快照，供离线测试断言筛选结果。
      *
      * @return 当前缓存的未完成任务列表
@@ -947,6 +1017,28 @@ public class TodoHudRenderer {
      * @param taskId 任务 ID
      * @return 标题起始偏移
      */
+    /**
+     * 返回指定任务行中的责任人标签文本，供离线测试断言 HUD 已隐藏责任人标签。
+     *
+     * @param taskId 任务 ID
+     * @return 责任人标签文本
+     */
+    String getAssigneeTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.assigneeText == null ? "" : cache.rowVisual.assigneeText;
+    }
+
+    /**
+     * 返回指定任务行中的任务标签文本，供离线测试确认标签仍然显示。
+     *
+     * @param taskId 任务 ID
+     * @return 任务标签文本
+     */
+    String getTagTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.tagText == null ? "" : cache.rowVisual.tagText;
+    }
+
     int getRowTitleOffsetForTest(String taskId) {
         RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
         return cache == null ? 0 : cache.rowVisual.titleOffset;
@@ -980,6 +1072,34 @@ public class TodoHudRenderer {
     int getHiddenCountForTest() {
         HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
         return renderPlan.hiddenCount;
+    }
+
+    /**
+     * 返回给定透明度下的 HUD 背景颜色，供测试断言透明度只作用于背景。
+     *
+     * @param opacity HUD 透明度
+     * @return HUD 背景颜色
+     */
+    int getPanelBackgroundColorForTest(float opacity) {
+        return applyBackgroundOpacity(0xFF232323, opacity);
+    }
+
+    /**
+     * 返回 HUD 标题文字颜色，供测试断言标题文字不受透明度影响。
+     *
+     * @return HUD 标题文字颜色
+     */
+    int getHeaderTextColorForTest() {
+        return toOpaqueColor(0xFFE0B240);
+    }
+
+    /**
+     * 返回 HUD 任务文字颜色，供测试断言任务文字不受透明度影响。
+     *
+     * @return HUD 任务文字颜色
+     */
+    int getTaskTextColorForTest() {
+        return toOpaqueColor(0xFFFFFF);
     }
 
     /**

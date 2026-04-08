@@ -5,13 +5,15 @@ import com.todolist.gui.testsupport.FakeMinecraftClient;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.gui.testsupport.RecordingClientOps;
 import com.todolist.project.Project;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.network.chat.Component;
 
 /**
- * TodoHudRenderer 离线自测入口：覆盖 HUD 视图回退、任务筛选、视觉元数据与高度语义。
+ * TodoHudRenderer 离线自测入口，覆盖 HUD 视图过滤、顺序同步、透明度与标题展示等关键回归场景。
  */
 public final class TodoHudRendererTestMain {
     private static final UUID OWNER_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
@@ -33,6 +35,12 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterUnassignedTasksInTeamUnassignedView", TodoHudRendererTestMain::shouldFilterUnassignedTasksInTeamUnassignedView);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterAssignedTasksFromCurrentTeamProject", TodoHudRendererTestMain::shouldFilterAssignedTasksFromCurrentTeamProject);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterStarredProjectsInTeamAllView", TodoHudRendererTestMain::shouldFilterStarredProjectsInTeamAllView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldKeepTaskManagerOrderInTeamAllView", TodoHudRendererTestMain::shouldKeepTaskManagerOrderInTeamAllView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldKeepHudTextOpaqueWhenOpacityChanges", TodoHudRendererTestMain::shouldKeepHudTextOpaqueWhenOpacityChanges);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldBuildHeaderWithSpaceProjectAndView", TodoHudRendererTestMain::shouldBuildHeaderWithSpaceProjectAndView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldBuildHeaderWithStarredProjectSource", TodoHudRendererTestMain::shouldBuildHeaderWithStarredProjectSource);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldBuildHeaderWithAllProjectSource", TodoHudRendererTestMain::shouldBuildHeaderWithAllProjectSource);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldHideAssigneeLabelInHudRows", TodoHudRendererTestMain::shouldHideAssigneeLabelInHudRows);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRenderPriorityAsColorBlockMetadata", TodoHudRendererTestMain::shouldRenderPriorityAsColorBlockMetadata);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRespectTodoAndDoneLimitsSeparately", TodoHudRendererTestMain::shouldRespectTodoAndDoneLimitsSeparately);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowHiddenCountSummaryWhenCollapsedOrTruncated", TodoHudRendererTestMain::shouldShowHiddenCountSummaryWhenCollapsedOrTruncated);
@@ -107,7 +115,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 验证 TEAM_ALL + STARRED 组合只保留加星团队项目中的已分派任务。
+     * 验证 TEAM_ALL + STARRED 组合会保留加星团队项目中的全部任务。
      */
     private static void shouldFilterStarredProjectsInTeamAllView() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -127,9 +135,146 @@ public final class TodoHudRendererTestMain {
         TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
         renderer.refreshHudModelForTest();
 
-        GuiTestSupport.assertEquals(List.of("Starred Assigned"), taskTitles(renderer.getCachedPendingTasksForTest()), "STARRED 来源应只保留加星项目中的已分派未完成任务");
-        GuiTestSupport.assertEquals(List.of("Starred Done"), taskTitles(renderer.getCachedDoneTasksForTest()), "STARRED 来源应只保留加星项目中的已分派已完成任务");
-        GuiTestSupport.assertEquals(2, renderer.getRowRenderCacheSizeForTest(), "加星项目筛选后应只保留命中的两条缓存");
+        GuiTestSupport.assertEquals(List.of("Starred Assigned", "Starred Unassigned"), taskTitles(renderer.getCachedPendingTasksForTest()), "STARRED 来源应保留加星项目中的全部未完成任务");
+        GuiTestSupport.assertEquals(List.of("Starred Done"), taskTitles(renderer.getCachedDoneTasksForTest()), "STARRED 来源应保留加星项目中的已完成任务");
+        GuiTestSupport.assertEquals(3, renderer.getRowRenderCacheSizeForTest(), "加星项目筛选后应缓存全部命中的任务");
+    }
+
+    /**
+     * 验证 TEAM_ALL 视图中的 HUD 顺序会跟随任务管理器顺序，不再额外按优先级重排。
+     */
+    private static void shouldKeepTaskManagerOrderInTeamAllView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-order", "HUD Order");
+        ops.getTeamTaskManager().addTask(createTeamTask("Low First", project.getId(), null, null, Task.Priority.LOW, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("High Second", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done First", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true));
+        ops.getTeamTaskManager().addTask(createTeamTask("Done Second", project.getId(), OTHER_ID.toString(), "other", Task.Priority.HIGH, true));
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(List.of("Low First", "High Second"), taskTitles(renderer.getCachedPendingTasksForTest()), "TEAM_ALL 视图中的未完成任务顺序应与任务管理器一致");
+        GuiTestSupport.assertEquals(List.of("Done First", "Done Second"), taskTitles(renderer.getCachedDoneTasksForTest()), "TEAM_ALL 视图中的已完成任务顺序应与任务管理器一致");
+    }
+
+    /**
+     * 验证 HUD 透明度变化时，只影响背景，不影响标题和任务文字。
+     */
+    private static void shouldKeepHudTextOpaqueWhenOpacityChanges() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+
+        int backgroundColor = renderer.getPanelBackgroundColorForTest(0.25F);
+        int headerTextColor = renderer.getHeaderTextColorForTest();
+        int taskTextColor = renderer.getTaskTextColorForTest();
+
+        GuiTestSupport.assertTrue(((backgroundColor >>> 24) & 0xFF) < 255, "HUD 背景透明度降低后 alpha 应跟随下降");
+        GuiTestSupport.assertEquals(255, (headerTextColor >>> 24) & 0xFF, "HUD 标题文字不应受透明度影响");
+        GuiTestSupport.assertEquals(255, (taskTextColor >>> 24) & 0xFF, "HUD 任务文字不应受透明度影响");
+    }
+
+    /**
+     * 验证 HUD 顶部标题会按“空间-项目名-团队子视图”格式组装。
+     */
+    private static void shouldBuildHeaderWithSpaceProjectAndView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("CURRENT");
+
+        Project project = createTeamProject("hud-header", "HUD Header");
+        ops.setActiveProjectId(project.getId());
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        String expected = Component.translatable("hud.todolist.space_label.team").getString()
+                + "-"
+                + ProjectNameFormatter.toDisplayText(project).getString()
+                + "-"
+                + Component.translatable("hud.todolist.team_view_label.all").getString();
+        GuiTestSupport.assertEquals(expected, renderer.getHeaderTitleForTest(), "HUD 顶部标题应展示空间、项目名和当前团队子视图");
+    }
+
+    /**
+     * 验证 HUD 任务行会暴露色块优先级元数据，而不是依赖优先级文本图标。
+     */
+    /**
+     * 验证 STARRED 来源会在 HUD 标题中显示“星标项目”，而不是某一个活动项目名。
+     */
+    private static void shouldBuildHeaderWithStarredProjectSource() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("STARRED");
+
+        Project project = createTeamProject("hud-starred-header", "HUD Starred Header");
+        ops.setActiveProjectId(project.getId());
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        String expected = Component.translatable("hud.todolist.space_label.team").getString()
+                + "-"
+                + Component.translatable("gui.todolist.hud.project_source.starred").getString()
+                + "-"
+                + Component.translatable("hud.todolist.team_view_label.all").getString();
+        GuiTestSupport.assertEquals(expected, renderer.getHeaderTitleForTest(), "STARRED 来源下，HUD 标题应显示星标项目来源标签");
+    }
+
+    /**
+     * 验证 ALL 来源会在 HUD 标题中显示“全部项目”。
+     */
+    private static void shouldBuildHeaderWithAllProjectSource() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-all-header", "HUD All Header");
+        ops.setActiveProjectId(project.getId());
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        String expected = Component.translatable("hud.todolist.space_label.team").getString()
+                + "-"
+                + Component.translatable("gui.todolist.hud.project_source.all").getString()
+                + "-"
+                + Component.translatable("hud.todolist.team_view_label.all").getString();
+        GuiTestSupport.assertEquals(expected, renderer.getHeaderTitleForTest(), "ALL 来源下，HUD 标题应显示全部项目来源标签");
+    }
+
+    /**
+     * 验证 HUD 任务行不再显示责任人标签，只保留标签与标题。
+     */
+    private static void shouldHideAssigneeLabelInHudRows() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ASSIGNED");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-hide-assignee", "HUD Hide Assignee");
+        Task task = createTeamTask("Assigned Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        task.addTag("Alpha");
+        ops.getTeamTaskManager().addTask(task);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals("", renderer.getAssigneeTextForTest(task.getId()), "HUD 任务行不应再显示责任人标签");
+        GuiTestSupport.assertTrue(renderer.getTagTextForTest(task.getId()).contains("Alpha"), "HUD 任务行仍应保留任务标签");
     }
 
     /**
@@ -247,7 +392,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 验证强制刷新会立即清空当前缓存任务与任务行渲染缓存。
+     * 验证强制刷新会立刻清空当前缓存任务与任务行渲染缓存。
      */
     private static void shouldClearCachesWhenForceRefreshing() {
         RecordingClientOps ops = GuiTestSupport.resetState();
