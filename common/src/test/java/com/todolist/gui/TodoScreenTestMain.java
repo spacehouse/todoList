@@ -59,6 +59,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen", TodoScreenTestMain::shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
@@ -79,7 +80,12 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMarkUnsavedAfterManualReorder", TodoScreenTestMain::shouldMarkUnsavedAfterManualReorder);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskListScrollOffsetWhenSelectingTask", TodoScreenTestMain::shouldKeepTaskListScrollOffsetWhenSelectingTask);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMovePromotedTaskAheadOfLowerPriorities", TodoScreenTestMain::shouldMovePromotedTaskAheadOfLowerPriorities);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMoveDemotedTaskBehindHigherPriorities", TodoScreenTestMain::shouldMoveDemotedTaskBehindHigherPriorities);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange", TodoScreenTestMain::shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTasksBySearchAndStatus", TodoScreenTestMain::shouldFilterTasksBySearchAndStatus);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowUncompleteCompletedTaskInPersonalView", TodoScreenTestMain::shouldAllowUncompleteCompletedTaskInPersonalView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksAndClearUnsavedState", TodoScreenTestMain::shouldSavePersonalTasksAndClearUnsavedState);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld", TodoScreenTestMain::shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow", TodoScreenTestMain::shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow);
@@ -332,8 +338,8 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "删除前紧凑窗口详情覆盖层应已显示");
 
-        screen.openTaskContextMenuForTest(task);
-        screen.clickContextMenuItemForTest(3);
+        Screen confirmScreen = openDeleteTaskConfirmScreen(minecraft, screen, task);
+        clickDialogButton(confirmScreen, 0);
 
         GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "删除选中任务后详情覆盖层应自动收起");
         GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "删除选中任务后不应残留选中项");
@@ -345,6 +351,29 @@ public final class TodoScreenTestMain {
     /**
      * 校验个人空间详情抽屉会隐藏团队操作按钮。
      */
+    /**
+     * 验证删除确认弹窗点击取消后不会误删任务，并会返回待办主界面。
+     */
+    private static void shouldKeepTaskWhenCancelingDeleteConfirmation() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Delete Confirm Cancel Task");
+        Task task = requireTaskByTitle(screen, "Delete Confirm Cancel Task");
+        screen.selectTaskForTest(task);
+
+        Screen confirmScreen = openDeleteTaskConfirmScreen(minecraft, screen, task);
+        clickDialogButton(confirmScreen, 1);
+
+        GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "取消删除后应返回待办主界面");
+        GuiTestSupport.assertEquals(1, screen.getCurrentManagerTasksForTest().size(), "取消删除后任务不应被移除");
+        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "取消删除后原任务仍应保持选中");
+    }
+
     private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -848,6 +877,145 @@ public final class TodoScreenTestMain {
         );
     }
 
+    /**
+     * 验证点击任务选中详情时，不会把任务列表滚动位置重置到顶部或底部。
+     */
+    private static void shouldKeepTaskListScrollOffsetWhenSelectingTask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        for (int index = 0; index < 8; index++) {
+            addTaskViaInput(screen, "Scroll Task " + index);
+        }
+
+        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        Task targetTask = requireTaskByTitle(screen, "Scroll Task 7");
+        widget.ensureVisible(targetTask);
+        int previousOffset = widget.getScrollOffsetForTest();
+        GuiTestSupport.assertTrue(previousOffset > 0, "测试前应先滚动到非顶部位置");
+        int clickX = widget.getInteractXForTest();
+        int clickY = widget.getTaskRowCenterYForTest(targetTask.getId());
+
+        screen.mouseClicked(clickX, clickY, 0);
+        screen.mouseReleased(clickX, clickY, 0);
+
+        GuiTestSupport.assertEquals(previousOffset, screen.getTaskListWidgetForTest().getScrollOffsetForTest(), "点击任务后应保持原有滚动偏移");
+        GuiTestSupport.assertEquals(targetTask.getId(), screen.getSelectedTaskForTest().getId(), "点击任务后仍应正确选中目标任务");
+    }
+
+    /**
+     * 验证把任务提升为高优先级后，会自动归位到更靠前的优先级分组。
+     */
+    private static void shouldMovePromotedTaskAheadOfLowerPriorities() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Medium First");
+        addTaskViaInput(screen, "High Middle");
+        addTaskViaInput(screen, "Low Last");
+
+        Task mediumTask = requireTaskByTitle(screen, "Medium First");
+        Task highTask = requireTaskByTitle(screen, "High Middle");
+        Task lowTask = requireTaskByTitle(screen, "Low Last");
+        mediumTask.setPriority(Task.Priority.MEDIUM);
+        highTask.setPriority(Task.Priority.HIGH);
+        lowTask.setPriority(Task.Priority.LOW);
+        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+
+        screen.selectTaskForTest(lowTask);
+        screen.openTaskContextMenuForTest(lowTask);
+        screen.clickContextMenuItemForTest(0);
+
+        GuiTestSupport.assertEquals(
+                List.of("High Middle", "Low Last", "Medium First"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "提升为高优先级后应移动到更靠前的优先级分组"
+        );
+    }
+
+    /**
+     * 验证把任务降为低优先级后，会自动归位到更靠后的优先级分组。
+     */
+    private static void shouldMoveDemotedTaskBehindHigherPriorities() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "High First");
+        addTaskViaInput(screen, "Medium Middle");
+        addTaskViaInput(screen, "Low Last");
+
+        Task highTask = requireTaskByTitle(screen, "High First");
+        Task mediumTask = requireTaskByTitle(screen, "Medium Middle");
+        Task lowTask = requireTaskByTitle(screen, "Low Last");
+        highTask.setPriority(Task.Priority.HIGH);
+        mediumTask.setPriority(Task.Priority.MEDIUM);
+        lowTask.setPriority(Task.Priority.LOW);
+        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+
+        screen.selectTaskForTest(highTask);
+        screen.openTaskContextMenuForTest(highTask);
+        screen.clickContextMenuItemForTest(2);
+
+        GuiTestSupport.assertEquals(
+                List.of("Medium Middle", "Low Last", "High First"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "降低为低优先级后应移动到更靠后的优先级分组"
+        );
+    }
+
+    /**
+     * 验证优先级归位时会保留同优先级任务之间的手动拖拽顺序。
+     */
+    private static void shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "High Alpha");
+        addTaskViaInput(screen, "High Beta");
+        addTaskViaInput(screen, "Gamma");
+
+        Task highAlpha = requireTaskByTitle(screen, "High Alpha");
+        Task highBeta = requireTaskByTitle(screen, "High Beta");
+        Task gamma = requireTaskByTitle(screen, "Gamma");
+        highAlpha.setPriority(Task.Priority.HIGH);
+        highBeta.setPriority(Task.Priority.HIGH);
+        gamma.setPriority(Task.Priority.MEDIUM);
+        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+
+        dragTaskBefore(screen, highBeta, highAlpha);
+        GuiTestSupport.assertEquals(
+                List.of("High Beta", "High Alpha", "Gamma"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "手动拖拽后同优先级任务顺序应先被任务管理器记录"
+        );
+
+        screen.selectTaskForTest(gamma);
+        screen.openTaskContextMenuForTest(gamma);
+        screen.clickContextMenuItemForTest(0);
+
+        GuiTestSupport.assertEquals(
+                List.of("High Beta", "High Alpha", "Gamma"),
+                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "优先级归位后应保留原有高优先级任务之间的手动拖拽顺序"
+        );
+    }
+
     private static void shouldFilterTasksBySearchAndStatus() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -893,6 +1061,29 @@ public final class TodoScreenTestMain {
     /**
      * 验证保存个人任务后，会发送整表替换、清除未保存状态并返回父界面。
      */
+    /**
+     * 楠岃瘉涓汉瑙嗗浘涓嬪凡瀹屾垚浠诲姟鐐瑰嚮澶嶉€夋鍚庡彲浠ユ仮澶嶄负鏈畬鎴愩€?
+     */
+    private static void shouldAllowUncompleteCompletedTaskInPersonalView() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Completed Personal Task");
+        Task task = screen.getCurrentManagerTasksForTest().get(0);
+        task.setCompleted(true);
+        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+        screen.toggleCompletedSectionForTest();
+
+        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        GuiTestSupport.assertFalse(screen.getCurrentManagerTasksForTest().get(0).isCompleted(), "个人视图下点击已完成任务的复选框后应恢复为未完成");
+    }
+
     private static void shouldSavePersonalTasksAndClearUnsavedState() {
         RecordingClientOps ops = GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -1257,6 +1448,70 @@ public final class TodoScreenTestMain {
         int x = bounds[0] + Math.max(1, bounds[2] / 2);
         int y = bounds[1] + Math.max(1, bounds[3] / 2);
         screen.mouseClicked(x, y, 0);
+    }
+
+    /**
+     * 按标题查找当前界面中的任务，找不到时直接抛出断言。
+     *
+     * @param screen 目标界面
+     * @param title 任务标题
+     * @return 匹配到的任务
+     */
+    private static Task requireTaskByTitle(TodoScreen screen, String title) {
+        return screen.getCurrentManagerTasksForTest().stream()
+                .filter(task -> title.equals(task.getTitle()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("应能找到任务: " + title));
+    }
+
+    /**
+     * 将源任务拖拽到目标任务之前，用于校验任务列表的手动排序逻辑。
+     *
+     * @param screen 目标界面
+     * @param sourceTask 需要移动的任务
+     * @param targetTask 目标位置前方的任务
+     */
+    private static void dragTaskBefore(TodoScreen screen, Task sourceTask, Task targetTask) {
+        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        widget.ensureVisible(sourceTask);
+        widget.ensureVisible(targetTask);
+        int interactX = widget.getInteractXForTest();
+        int startY = widget.getTaskRowCenterYForTest(sourceTask.getId());
+        int targetY = widget.getTaskRowCenterYForTest(targetTask.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        screen.mouseClicked(interactX, startY, 0);
+        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        screen.mouseReleased(interactX, targetY, 0);
+    }
+
+    /**
+     * 通过右键菜单打开任务删除确认弹窗，并完成该弹窗的初始化。
+     *
+     * @param minecraft 测试客户端
+     * @param screen 待办主界面
+     * @param task 待删除任务
+     * @return 已初始化的删除确认弹窗
+     */
+    private static Screen openDeleteTaskConfirmScreen(FakeMinecraftClient minecraft, TodoScreen screen, Task task) {
+        screen.openTaskContextMenuForTest(task);
+        screen.clickContextMenuItemForTest(3);
+        Screen confirmScreen = minecraft.getLastScreen();
+        GuiTestSupport.assertNotNull(confirmScreen, "点击删除后应弹出确认窗口");
+        GuiTestSupport.assertTrue(confirmScreen instanceof ConfirmActionScreen, "点击删除后应打开任务删除确认弹窗");
+        ScreenDriver.init(minecraft, confirmScreen);
+        return confirmScreen;
+    }
+
+    /**
+     * 点击确认类弹窗中的指定按钮，便于复用确认与取消流程测试。
+     *
+     * @param screen 弹窗界面
+     * @param buttonIndex 按钮索引
+     */
+    private static void clickDialogButton(Screen screen, int buttonIndex) {
+        List<Button> buttons = ScreenDriver.getButtons(screen);
+        GuiTestSupport.assertTrue(buttonIndex >= 0 && buttonIndex < buttons.size(), "弹窗按钮索引应在可用范围内");
+        ScreenDriver.click(buttons.get(buttonIndex));
     }
 
     private static void assertRectInsideScreen(int[] bounds, int screenWidth, int screenHeight, String message) {

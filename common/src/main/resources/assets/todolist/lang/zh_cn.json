@@ -30,6 +30,8 @@
   "gui.todolist.label.search": "搜索:",
   "gui.todolist.save": "保存",
   "gui.todolist.cancel": "取消",
+  "gui.todolist.task.delete_confirm.title": "删除任务",
+  "gui.todolist.task.delete_confirm.message": "确定要删除任务“%s”吗？该操作无法撤销。",
   "gui.todolist.filter.priority_high": "高",
   "gui.todolist.filter.priority_medium": "中",
   "gui.todolist.filter.priority_low": "低",

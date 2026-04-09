@@ -31,6 +31,8 @@
   "gui.todolist.label.priority": "Priority: ",
   "gui.todolist.save": "Save",
   "gui.todolist.cancel": "Cancel",
+  "gui.todolist.task.delete_confirm.title": "Delete Task",
+  "gui.todolist.task.delete_confirm.message": "Delete task \"%s\"? This action cannot be undone.",
   "gui.todolist.filter.priority_high": "High",
   "gui.todolist.filter.priority_medium": "Medium",
   "gui.todolist.filter.priority_low": "Low",

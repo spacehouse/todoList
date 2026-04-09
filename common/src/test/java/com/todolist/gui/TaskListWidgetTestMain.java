@@ -27,6 +27,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepSelectionAfterResettingTasks", TaskListWidgetTestMain::shouldKeepSelectionAfterResettingTasks);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldScrollSelectedTaskIntoView", TaskListWidgetTestMain::shouldScrollSelectedTaskIntoView);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldToggleCompletionWhenClickingCheckbox", TaskListWidgetTestMain::shouldToggleCompletionWhenClickingCheckbox);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldToggleCompletedTaskWhenClickingCheckbox", TaskListWidgetTestMain::shouldToggleCompletedTaskWhenClickingCheckbox);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldBlockToggleWhenNonOpTeamAllViewEnabled", TaskListWidgetTestMain::shouldBlockToggleWhenNonOpTeamAllViewEnabled);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskByCoordinates", TaskListWidgetTestMain::shouldReturnTaskByCoordinates);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderPriorityColorBlockInsteadOfPriorityText", TaskListWidgetTestMain::shouldRenderPriorityColorBlockInsteadOfPriorityText);
@@ -99,6 +100,25 @@ public final class TaskListWidgetTestMain {
     /**
      * 校验非 OP 在 TEAM_ALL 视图下点击复选框不会触发完成切换。
      */
+    /**
+     * 鏍￠獙鐐瑰嚮宸插畬鎴愪换鍔＄殑澶嶉€夋鍚庝篃浼氳Е鍙戠姸鎬佸垏鎹㈠洖璋冦€?
+     */
+    private static void shouldToggleCompletedTaskWhenClickingCheckbox() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        Task done = createTask("task-done", "Done");
+        done.setCompleted(true);
+        widget.setTasks(List.of(done));
+        AtomicReference<String> toggledId = new AtomicReference<>();
+        widget.setOnTaskToggleCompletion(task -> toggledId.set(task.getId()));
+
+        boolean handled = widget.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        GuiTestSupport.assertTrue(handled, "点击已完成任务的复选框区域应被组件处理");
+        GuiTestSupport.assertEquals(done.getId(), toggledId.get(), "已完成任务点击复选框后也应触发切换回调");
+    }
+
     private static void shouldBlockToggleWhenNonOpTeamAllViewEnabled() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();

@@ -313,6 +313,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private String preferredTeamProjectId;
     private boolean teamProjectsEnabled = true;
     private int savedProjectListScrollOffset;
+    private int savedTaskListScrollOffset;
     private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_GAP = 2;
     private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING = 4;
     private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_ROW_HEIGHT = 16;
@@ -1583,6 +1584,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         baseFilteredTasks = new ArrayList<>();
         filteredTasks = new ArrayList<>();
+        if (taskListWidget != null) {
+            savedTaskListScrollOffset = taskListWidget.getScrollOffset();
+        }
         this.clearWidgets();
 
         ModConfig config = ModConfig.getInstance();
@@ -1763,9 +1767,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             taskListWidget.setSelectedTask(selectedTask);
         }
         taskListWidget.setOnTaskToggleCompletion(task -> {
-            if (task.isCompleted()) {
-                return;
-            }
             boolean wasCompleted = task.isCompleted();
             toggleTaskCompletion(task);
             if (!wasCompleted && task.isCompleted()) {
@@ -1890,6 +1891,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         });
 
         filterTasks(currentFilter);
+        if (taskListWidget != null) {
+            taskListWidget.setScrollOffset(savedTaskListScrollOffset);
+        }
         syncDetailWidgetsFromState();
         this.setFocused(quickAddField);
         updateButtonStates();
@@ -3463,7 +3467,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             closeTaskContextMenu();
             return;
         }
+        Task.Priority previousPriority = task.getPriority();
+        if (previousPriority == priority) {
+            closeTaskContextMenu();
+            return;
+        }
         task.setPriority(priority);
+        reorderCurrentViewActiveTasksAfterPriorityChange(task);
         setSelectedPriority(priority);
         markUnsaved();
         refreshTaskList();
@@ -3474,18 +3484,56 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         closeTaskContextMenu();
     }
 
+    /**
+     * 处理任务右键菜单中的删除操作入口，先弹出二次确认，再在确认后真正执行删除。
+     *
+     * @param task 目标任务
+     */
     private void deleteTaskFromContextMenu(Task task) {
         if (task == null || !canDeleteTask(task)) {
             closeTaskContextMenu();
             return;
         }
-        taskManager.deleteTask(task.getId());
-        if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(task.getId())) {
+        closeTaskContextMenu();
+        openDeleteTaskConfirmScreen(task);
+    }
+
+    /**
+     * 打开任务删除确认弹窗，避免误删任务。
+     *
+     * @param task 待删除任务
+     */
+    private void openDeleteTaskConfirmScreen(Task task) {
+        if (task == null || task.getId() == null || minecraft == null) {
+            return;
+        }
+        String taskId = task.getId();
+        String taskTitle = task.getTitle() == null ? "" : task.getTitle();
+        Component message = Component.translatable("gui.todolist.task.delete_confirm.message", taskTitle);
+        minecraft.setScreen(new ConfirmActionScreen(
+                this,
+                Component.translatable("gui.todolist.task.delete_confirm.title"),
+                message,
+                Component.translatable("gui.todolist.delete"),
+                () -> confirmDeleteTask(taskId)
+        ));
+    }
+
+    /**
+     * 在用户确认后真正删除任务，并同步刷新选中态与列表显示。
+     *
+     * @param taskId 待删除任务 ID
+     */
+    private void confirmDeleteTask(String taskId) {
+        if (taskManager == null || taskId == null || taskId.isBlank()) {
+            return;
+        }
+        taskManager.deleteTask(taskId);
+        if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskId)) {
             clearSelectedTask();
         }
         markUnsaved();
         refreshTaskList();
-        closeTaskContextMenu();
     }
 
     private void renderTaskContextMenu(GuiGraphics context, int mouseX, int mouseY) {
@@ -3617,6 +3665,98 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         markUnsaved();
         refreshTaskList();
+    }
+
+    /**
+     * 在当前视图内按优先级重新归位未完成任务，同时保留同优先级内部的拖拽顺序。
+     *
+     * @param updatedTask 刚刚修改优先级的任务
+     */
+    private void reorderCurrentViewActiveTasksAfterPriorityChange(Task updatedTask) {
+        if (updatedTask == null || updatedTask.getId() == null || taskManager == null) {
+            return;
+        }
+        List<Task> scopedActiveTasks = getCurrentViewActiveTasksForOrdering();
+        if (scopedActiveTasks.size() < 2) {
+            return;
+        }
+        List<Task> highTasks = new ArrayList<>();
+        List<Task> mediumTasks = new ArrayList<>();
+        List<Task> lowTasks = new ArrayList<>();
+        boolean taskIncluded = false;
+
+        for (Task task : scopedActiveTasks) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            if (updatedTask.getId().equals(task.getId())) {
+                taskIncluded = true;
+                continue;
+            }
+            appendTaskToPriorityBucket(task, highTasks, mediumTasks, lowTasks);
+        }
+        if (!taskIncluded) {
+            return;
+        }
+        appendTaskToPriorityBucket(updatedTask, highTasks, mediumTasks, lowTasks);
+
+        List<String> orderedTaskIds = new ArrayList<>(highTasks.size() + mediumTasks.size() + lowTasks.size());
+        appendTaskIds(highTasks, orderedTaskIds);
+        appendTaskIds(mediumTasks, orderedTaskIds);
+        appendTaskIds(lowTasks, orderedTaskIds);
+        taskManager.reorderTasks(orderedTaskIds);
+    }
+
+    /**
+     * 返回当前视图内参与排序的未完成任务，并保持任务管理器中的稳定顺序。
+     *
+     * @return 当前视图范围内的未完成任务
+     */
+    private List<Task> getCurrentViewActiveTasksForOrdering() {
+        if (taskManager == null) {
+            return List.of();
+        }
+        return applyAssignedFilterIfNeeded(taskManager.getIncompleteTasks());
+    }
+
+    /**
+     * 将任务追加到对应优先级的分组列表中。
+     *
+     * @param task 目标任务
+     * @param highTasks 高优先级任务分组
+     * @param mediumTasks 中优先级任务分组
+     * @param lowTasks 低优先级任务分组
+     */
+    private void appendTaskToPriorityBucket(Task task, List<Task> highTasks, List<Task> mediumTasks, List<Task> lowTasks) {
+        if (task == null) {
+            return;
+        }
+        if (task.getPriority() == Task.Priority.HIGH) {
+            highTasks.add(task);
+            return;
+        }
+        if (task.getPriority() == Task.Priority.LOW) {
+            lowTasks.add(task);
+            return;
+        }
+        mediumTasks.add(task);
+    }
+
+    /**
+     * 按当前顺序将任务 ID 写入目标列表，供任务管理器执行稳定重排。
+     *
+     * @param tasks 源任务列表
+     * @param targetIds 目标 ID 列表
+     */
+    private void appendTaskIds(List<Task> tasks, List<String> targetIds) {
+        if (tasks == null || targetIds == null) {
+            return;
+        }
+        for (Task task : tasks) {
+            if (task != null && task.getId() != null) {
+                targetIds.add(task.getId());
+            }
+        }
     }
 
     /**

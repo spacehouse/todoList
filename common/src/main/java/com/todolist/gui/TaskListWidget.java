@@ -637,10 +637,8 @@ public class TaskListWidget implements Renderable {
                 if (mouseX >= checkboxX && mouseX < checkboxX + TASK_CHECKBOX_SIZE &&
                     mouseY >= checkboxY && mouseY < checkboxY + TASK_CHECKBOX_SIZE) {
                     Task clickedTask = row.task;
-                    if (!clickedTask.isCompleted()) {
-                        if (onTaskToggleCompletion != null && !teamAllViewForNonOp) {
-                            onTaskToggleCompletion.accept(clickedTask);
-                        }
+                    if (onTaskToggleCompletion != null && !teamAllViewForNonOp) {
+                        onTaskToggleCompletion.accept(clickedTask);
                     }
                     return true;
                 }
@@ -757,7 +755,7 @@ public class TaskListWidget implements Renderable {
      * @return 当前滚动偏移量
      */
     int getScrollOffsetForTest() {
-        return scrollBar.getValue();
+        return getScrollOffset();
     }
 
     /**
@@ -1321,7 +1319,7 @@ public class TaskListWidget implements Renderable {
     }
 
     void setScrollOffsetForTest(int offset) {
-        scrollBar.setValue(offset);
+        setScrollOffset(offset);
     }
 
     public int getHeight() {
@@ -1369,6 +1367,24 @@ public class TaskListWidget implements Renderable {
         }
     }
 
+    /**
+     * 返回当前滚动偏移量，供界面在重建前后保持任务列表可视区域。
+     *
+     * @return 当前滚动偏移量
+     */
+    int getScrollOffset() {
+        return scrollBar.getValue();
+    }
+
+    /**
+     * 设置当前滚动偏移量，并自动裁剪到合法范围内。
+     *
+     * @param offset 目标滚动偏移量
+     */
+    void setScrollOffset(int offset) {
+        scrollBar.setValue(offset);
+    }
+
     private void ensureVisibleIndex(int index) {
         if (index < 0 || displayRows == null || displayRows.isEmpty()) {
             return;
@@ -1412,11 +1428,7 @@ public class TaskListWidget implements Renderable {
         rebuildDisplayRowsFromSections();
         updateMaxScroll();
         syncSelectionIndex();
-        if (selectedTaskIndex >= 0) {
-            ensureVisibleIndex(selectedTaskIndex);
-        } else {
-            this.scrollBar.setValue(previousScroll);
-        }
+        setScrollOffset(previousScroll);
     }
 
     /**
