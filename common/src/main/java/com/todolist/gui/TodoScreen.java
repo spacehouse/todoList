@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -65,6 +66,58 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         MY,
         UNASSIGNED,
         ALL
+    }
+
+    /**
+     * 表示团队项目搜索前缀对应的角色筛选模式。
+     */
+    private enum ProjectSearchRoleFilter {
+        NONE,
+        CREATED_BY_ME,
+        MANAGED_BY_ME,
+        JOINED_BY_ME
+    }
+
+    /**
+     * 表示解析后的项目搜索查询结果。
+     */
+    private static final class ProjectSearchQuery {
+        private final ProjectSearchRoleFilter roleFilter;
+        private final String nameQuery;
+
+        /**
+         * 创建解析后的项目搜索查询对象。
+         *
+         * @param roleFilter 项目角色筛选模式
+         * @param nameQuery 去掉前缀后的名称关键字
+         */
+        private ProjectSearchQuery(ProjectSearchRoleFilter roleFilter, String nameQuery) {
+            this.roleFilter = roleFilter == null ? ProjectSearchRoleFilter.NONE : roleFilter;
+            this.nameQuery = nameQuery == null ? "" : nameQuery;
+        }
+    }
+
+    /**
+     * 表示项目搜索前缀下拉面板中的一个候选项。
+     */
+    private static final class ProjectSearchPrefixOption {
+        private final String prefix;
+        private final String descKey;
+        private final String fallbackZh;
+        private final String fallbackEn;
+
+        /**
+         * 创建一个项目搜索前缀候选项。
+         *
+         * @param prefix 搜索前缀
+         * @param descKey 描述文本翻译键
+         */
+        private ProjectSearchPrefixOption(String prefix, String descKey, String fallbackZh, String fallbackEn) {
+            this.prefix = prefix;
+            this.descKey = descKey;
+            this.fallbackZh = fallbackZh == null ? "" : fallbackZh;
+            this.fallbackEn = fallbackEn == null ? "" : fallbackEn;
+        }
     }
 
     /**
@@ -244,6 +297,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     // 项目搜索与展开控制
     private EditBox projectSearchField;
+    private boolean projectSearchPrefixDropdownOpen;
     private Button addProjectBtn;
     private Button personalSpaceButton;
     private Button teamSpaceButton;
@@ -259,6 +313,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private String preferredTeamProjectId;
     private boolean teamProjectsEnabled = true;
     private int savedProjectListScrollOffset;
+    private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_GAP = 2;
+    private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING = 4;
+    private static final int PROJECT_SEARCH_PREFIX_DROPDOWN_ROW_HEIGHT = 16;
+    private static final List<ProjectSearchPrefixOption> PROJECT_SEARCH_PREFIX_OPTIONS = List.of(
+            new ProjectSearchPrefixOption("@me", "gui.todolist.project.search.prefix.me.desc", "我创建的项目", "Projects I created"),
+            new ProjectSearchPrefixOption("@ma", "gui.todolist.project.search.prefix.ma.desc", "我管理的项目", "Projects I manage"),
+            new ProjectSearchPrefixOption("@in", "gui.todolist.project.search.prefix.in.desc", "我加入的项目", "Projects I joined")
+    );
     
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
     
@@ -671,6 +733,54 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     EditBox getProjectSearchFieldForTest() {
         return projectSearchField;
+    }
+
+    /**
+     * 返回当前项目搜索前缀下拉面板是否可见，供界面测试断言。
+     *
+     * @return 下拉面板可见时返回 {@code true}
+     */
+    boolean isProjectSearchPrefixDropdownVisibleForTest() {
+        return shouldShowProjectSearchPrefixDropdown();
+    }
+
+    /**
+     * 返回项目搜索前缀候选项文本快照，供界面测试断言。
+     *
+     * @return 当前候选项文本列表
+     */
+    List<String> getProjectSearchPrefixSuggestionTextsForTest() {
+        List<String> texts = new ArrayList<>();
+        for (ProjectSearchPrefixOption option : PROJECT_SEARCH_PREFIX_OPTIONS) {
+            texts.add(buildProjectSearchPrefixOptionText(option));
+        }
+        return List.copyOf(texts);
+    }
+
+    /**
+     * 返回指定项目搜索前缀候选项的点击区域边界，供界面测试定位。
+     *
+     * @param index 候选项索引
+     * @return 候选项边界数组
+     */
+    int[] getProjectSearchPrefixSuggestionBoundsForTest(int index) {
+        return getProjectSearchPrefixOptionBounds(index);
+    }
+
+    /**
+     * 返回当前侧栏中可见项目名称快照，供界面测试断言筛选结果。
+     *
+     * @return 当前可见项目名称列表
+     */
+    List<String> getVisibleProjectNamesForTest() {
+        if (projectListWidget == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (Project project : projectListWidget.getProjectsForTest()) {
+            names.add(ProjectNameFormatter.toDisplayText(project).getString());
+        }
+        return List.copyOf(names);
     }
 
     /**
@@ -2068,6 +2178,56 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             sidebarToggleButton.visible = layoutMetrics.sidebarOverlay;
             sidebarToggleButton.active = layoutMetrics.sidebarOverlay;
         }
+        syncProjectSearchPrefixDropdownState();
+    }
+
+    /**
+     * 根据当前空间、侧栏状态和焦点状态同步项目搜索前缀下拉面板显隐。
+     */
+    private void syncProjectSearchPrefixDropdownState() {
+        if (!canUseProjectSearchPrefixDropdown()
+                || projectSearchField == null
+                || !projectSearchField.visible
+                || !projectSearchField.isFocused()) {
+            closeProjectSearchPrefixDropdown();
+        }
+    }
+
+    /**
+     * 判断当前是否允许显示团队项目搜索前缀下拉面板。
+     *
+     * @return 允许显示时返回 {@code true}
+     */
+    private boolean canUseProjectSearchPrefixDropdown() {
+        return currentSpaceMode == SpaceMode.TEAM && isSidebarPanelVisible();
+    }
+
+    /**
+     * 判断项目搜索前缀下拉面板当前是否应显示。
+     *
+     * @return 应显示时返回 {@code true}
+     */
+    private boolean shouldShowProjectSearchPrefixDropdown() {
+        return projectSearchPrefixDropdownOpen
+                && canUseProjectSearchPrefixDropdown()
+                && projectSearchField != null
+                && projectSearchField.visible;
+    }
+
+    /**
+     * 打开项目搜索前缀下拉面板。
+     */
+    private void openProjectSearchPrefixDropdown() {
+        if (canUseProjectSearchPrefixDropdown()) {
+            projectSearchPrefixDropdownOpen = true;
+        }
+    }
+
+    /**
+     * 关闭项目搜索前缀下拉面板。
+     */
+    private void closeProjectSearchPrefixDropdown() {
+        projectSearchPrefixDropdownOpen = false;
     }
 
     /**
@@ -2146,8 +2306,106 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             context.drawString(this.font, Component.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
         }
         */
+        renderProjectSearchPrefixDropdown(context, mouseX, mouseY);
         renderTaskContextMenu(context, mouseX, mouseY);
         renderNotifications(context);
+    }
+
+    /**
+     * 绘制团队项目搜索前缀下拉面板，帮助玩家发现可用前缀。
+     *
+     * @param context 当前绘制上下文
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     */
+    private void renderProjectSearchPrefixDropdown(GuiGraphics context, int mouseX, int mouseY) {
+        if (!shouldShowProjectSearchPrefixDropdown()) {
+            return;
+        }
+        int[] bounds = getProjectSearchPrefixDropdownBounds();
+        if (bounds[2] <= 0 || bounds[3] <= 0) {
+            return;
+        }
+        context.fill(bounds[0], bounds[1], bounds[0] + bounds[2], bounds[1] + bounds[3], 0xEE0F141B);
+        context.renderOutline(bounds[0], bounds[1], bounds[2], bounds[3], 0xFF506070);
+
+        for (int i = 0; i < PROJECT_SEARCH_PREFIX_OPTIONS.size(); i++) {
+            int[] itemBounds = getProjectSearchPrefixOptionBounds(i);
+            boolean hovered = mouseX >= itemBounds[0] && mouseX < itemBounds[0] + itemBounds[2]
+                    && mouseY >= itemBounds[1] && mouseY < itemBounds[1] + itemBounds[3];
+            if (hovered) {
+                context.fill(itemBounds[0], itemBounds[1], itemBounds[0] + itemBounds[2], itemBounds[1] + itemBounds[3], 0xFF223040);
+            }
+            int textY = itemBounds[1] + Math.max(0, (itemBounds[3] - this.font.lineHeight) / 2);
+            ProjectSearchPrefixOption option = PROJECT_SEARCH_PREFIX_OPTIONS.get(i);
+            context.drawString(this.font, option.prefix, itemBounds[0] + 4, textY, 0xFFE0B240, false);
+            context.drawString(this.font, getProjectSearchPrefixOptionDescription(option), itemBounds[0] + 34, textY, 0xFFD8E2EC, false);
+        }
+    }
+
+    /**
+     * 返回项目搜索前缀下拉面板的整体边界。
+     *
+     * @return 下拉面板边界数组
+     */
+    private int[] getProjectSearchPrefixDropdownBounds() {
+        if (projectSearchField == null) {
+            return new int[] {0, 0, 0, 0};
+        }
+        int x = projectSearchField.getX();
+        int y = projectSearchField.getY() + projectSearchField.getHeight() + PROJECT_SEARCH_PREFIX_DROPDOWN_GAP;
+        int width = projectSearchField.getWidth();
+        int height = PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING * 2
+                + PROJECT_SEARCH_PREFIX_OPTIONS.size() * PROJECT_SEARCH_PREFIX_DROPDOWN_ROW_HEIGHT;
+        return new int[] {x, y, width, height};
+    }
+
+    /**
+     * 返回指定前缀候选项的边界。
+     *
+     * @param index 候选项索引
+     * @return 候选项边界数组
+     */
+    private int[] getProjectSearchPrefixOptionBounds(int index) {
+        int[] bounds = getProjectSearchPrefixDropdownBounds();
+        if (index < 0 || index >= PROJECT_SEARCH_PREFIX_OPTIONS.size()) {
+            return new int[] {0, 0, 0, 0};
+        }
+        int x = bounds[0] + PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING;
+        int y = bounds[1] + PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING + index * PROJECT_SEARCH_PREFIX_DROPDOWN_ROW_HEIGHT;
+        int width = Math.max(0, bounds[2] - PROJECT_SEARCH_PREFIX_DROPDOWN_PADDING * 2);
+        int height = PROJECT_SEARCH_PREFIX_DROPDOWN_ROW_HEIGHT;
+        return new int[] {x, y, width, height};
+    }
+
+    /**
+     * 构建项目搜索前缀候选项展示文本，供测试断言。
+     *
+     * @param option 当前前缀候选项
+     * @return 展示文本
+     */
+    private String buildProjectSearchPrefixOptionText(ProjectSearchPrefixOption option) {
+        if (option == null) {
+            return "";
+        }
+        return option.prefix + "  " + getProjectSearchPrefixOptionDescription(option);
+    }
+
+    /**
+     * 返回项目搜索前缀候选项的展示说明，优先使用翻译文本，缺失时回退到内置文案。
+     *
+     * @param option 当前前缀候选项
+     * @return 候选项说明文本
+     */
+    private String getProjectSearchPrefixOptionDescription(ProjectSearchPrefixOption option) {
+        if (option == null) {
+            return "";
+        }
+        String translated = Component.translatable(option.descKey).getString();
+        if (translated != null && !translated.isBlank() && !option.descKey.equals(translated)) {
+            return translated;
+        }
+        return option.fallbackZh.isEmpty() ? option.fallbackEn : option.fallbackZh;
     }
 
     /**
@@ -2470,6 +2728,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (projectSearchField != null) {
             projectSearchField.setFocused(false);
         }
+        closeProjectSearchPrefixDropdown();
         if (quickAddField != null) {
             quickAddField.setFocused(false);
         }
@@ -2511,6 +2770,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             sidebarOverlayVisible = false;
             layoutMetrics = buildMainLayoutMetrics(ModConfig.getInstance());
             applyResponsiveWidgetVisibility();
+        }
+        if (button == 0 && handleProjectSearchPrefixDropdownClick(mouseX, mouseY)) {
+            return true;
+        }
+        if ((button == 0 || button == 1) && shouldShowProjectSearchPrefixDropdown()
+                && !isProjectSearchFieldHit(mouseX, mouseY)
+                && !isInsideProjectSearchPrefixDropdown(mouseX, mouseY)) {
+            closeProjectSearchPrefixDropdown();
+        }
+        if (button == 0 && canUseProjectSearchPrefixDropdown() && isProjectSearchFieldHit(mouseX, mouseY)) {
+            openProjectSearchPrefixDropdown();
         }
         if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
             pendingClickSelectionTask = null;
@@ -2601,6 +2871,139 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
         return handled || cleared;
+    }
+
+    /**
+     * 处理项目搜索前缀下拉面板的点击事件。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @return 命中候选项时返回 {@code true}
+     */
+    private boolean handleProjectSearchPrefixDropdownClick(double mouseX, double mouseY) {
+        if (!shouldShowProjectSearchPrefixDropdown()) {
+            return false;
+        }
+        int index = getProjectSearchPrefixOptionIndexAt(mouseX, mouseY);
+        if (index < 0 || index >= PROJECT_SEARCH_PREFIX_OPTIONS.size()) {
+            return false;
+        }
+        applyProjectSearchPrefix(PROJECT_SEARCH_PREFIX_OPTIONS.get(index).prefix);
+        if (projectSearchField != null) {
+            projectSearchField.setFocused(true);
+            this.setFocused(projectSearchField);
+        }
+        return true;
+    }
+
+    /**
+     * 判断鼠标是否命中项目搜索输入框。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @return 命中搜索框时返回 {@code true}
+     */
+    private boolean isProjectSearchFieldHit(double mouseX, double mouseY) {
+        return projectSearchField != null
+                && projectSearchField.visible
+                && projectSearchField.isMouseOver(mouseX, mouseY);
+    }
+
+    /**
+     * 判断坐标是否位于项目搜索前缀下拉面板内。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @return 命中下拉面板时返回 {@code true}
+     */
+    private boolean isInsideProjectSearchPrefixDropdown(double mouseX, double mouseY) {
+        if (!shouldShowProjectSearchPrefixDropdown()) {
+            return false;
+        }
+        int[] bounds = getProjectSearchPrefixDropdownBounds();
+        return mouseX >= bounds[0] && mouseX < bounds[0] + bounds[2]
+                && mouseY >= bounds[1] && mouseY < bounds[1] + bounds[3];
+    }
+
+    /**
+     * 返回指定坐标命中的项目搜索前缀候选项索引。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @return 候选项索引；未命中时返回 -1
+     */
+    private int getProjectSearchPrefixOptionIndexAt(double mouseX, double mouseY) {
+        for (int i = 0; i < PROJECT_SEARCH_PREFIX_OPTIONS.size(); i++) {
+            int[] bounds = getProjectSearchPrefixOptionBounds(i);
+            if (mouseX >= bounds[0] && mouseX < bounds[0] + bounds[2]
+                    && mouseY >= bounds[1] && mouseY < bounds[1] + bounds[3]) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 将指定项目搜索前缀写入搜索框，并尽量保留现有名称关键字。
+     *
+     * @param prefix 目标搜索前缀
+     */
+    private void applyProjectSearchPrefix(String prefix) {
+        if (projectSearchField == null || prefix == null || prefix.isEmpty()) {
+            return;
+        }
+        String current = projectSearchField.getValue();
+        String suffix = extractProjectSearchQuerySuffix(current);
+        String nextValue = suffix.isEmpty() ? prefix + " " : prefix + " " + suffix;
+        projectSearchField.setValue(nextValue);
+        projectSearchQuery = nextValue;
+        updateProjectList();
+        closeProjectSearchPrefixDropdown();
+    }
+
+    /**
+     * 提取项目搜索输入中去掉已识别前缀后的剩余关键字。
+     *
+     * @param current 当前搜索文本
+     * @return 去掉前缀后的关键字
+     */
+    private String extractProjectSearchQuerySuffix(String current) {
+        String normalized = current == null ? "" : current.trim();
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        ProjectSearchRoleFilter roleFilter = parseProjectSearchRoleFilter(lower);
+        if (roleFilter != ProjectSearchRoleFilter.NONE) {
+            String prefix = getProjectSearchRolePrefix(roleFilter);
+            return normalized.substring(prefix.length()).trim();
+        }
+        if (!normalized.startsWith("@")) {
+            return normalized;
+        }
+        int separatorIndex = findFirstWhitespaceIndex(normalized);
+        if (separatorIndex < 0) {
+            return "";
+        }
+        return normalized.substring(separatorIndex).trim();
+    }
+
+    /**
+     * 返回字符串中第一个空白字符的位置，未找到时返回 -1。
+     *
+     * @param text 待检查的文本
+     * @return 第一个空白字符的位置
+     */
+    private int findFirstWhitespaceIndex(String text) {
+        if (text == null || text.isEmpty()) {
+            return -1;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override
@@ -3454,22 +3857,134 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         List<Project> filtered = new ArrayList<>();
-        String query = projectSearchQuery == null ? "" : projectSearchQuery.toLowerCase().trim();
+        String rawQuery = projectSearchQuery == null ? "" : projectSearchQuery.trim();
+        ProjectSearchQuery parsedQuery = parseProjectSearchQuery(projectSearchQuery);
+        String playerUuid = getCurrentPlayerUuid();
         for (Project project : all) {
             if (project == null || project.getScope() != projectScopeFilter) {
                 continue;
             }
-            String searchableName = ProjectNameFormatter.toDisplayText(project).getString().toLowerCase();
-            if (!query.isEmpty() && !searchableName.contains(query)) {
+            if (projectScopeFilter == Project.Scope.TEAM
+                    && parsedQuery.roleFilter != ProjectSearchRoleFilter.NONE
+                    && !matchesTeamProjectSearchRoleFilter(project, parsedQuery.roleFilter, playerUuid)) {
+                continue;
+            }
+            String searchableName = ProjectNameFormatter.toDisplayText(project).getString().toLowerCase(Locale.ROOT);
+            if (!parsedQuery.nameQuery.isEmpty() && !searchableName.contains(parsedQuery.nameQuery)) {
                 continue;
             }
             filtered.add(project);
         }
 
-        if (defaultProject != null && !containsProject(filtered, defaultProject.getId())) {
+        if (defaultProject != null && rawQuery.isEmpty() && !containsProject(filtered, defaultProject.getId())) {
             filtered.add(0, defaultProject);
         }
         return filtered;
+    }
+
+    /**
+     * 解析项目搜索输入中的角色前缀与名称关键字。
+     *
+     * @param rawQuery 原始搜索文本
+     * @return 解析后的项目搜索查询
+     */
+    private ProjectSearchQuery parseProjectSearchQuery(String rawQuery) {
+        String normalized = rawQuery == null ? "" : rawQuery.trim();
+        if (normalized.isEmpty()) {
+            return new ProjectSearchQuery(ProjectSearchRoleFilter.NONE, "");
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        ProjectSearchRoleFilter roleFilter = parseProjectSearchRoleFilter(lower);
+        if (roleFilter == ProjectSearchRoleFilter.NONE) {
+            return new ProjectSearchQuery(ProjectSearchRoleFilter.NONE, lower);
+        }
+        String prefix = getProjectSearchRolePrefix(roleFilter);
+        String suffix = normalized.substring(prefix.length()).trim().toLowerCase(Locale.ROOT);
+        return new ProjectSearchQuery(roleFilter, suffix);
+    }
+
+    /**
+     * 解析开头的项目搜索前缀对应的筛选模式。
+     *
+     * @param lowerQuery 小写后的搜索文本
+     * @return 对应的角色筛选模式
+     */
+    private ProjectSearchRoleFilter parseProjectSearchRoleFilter(String lowerQuery) {
+        if (matchesProjectSearchPrefix(lowerQuery, "@me")) {
+            return ProjectSearchRoleFilter.CREATED_BY_ME;
+        }
+        if (matchesProjectSearchPrefix(lowerQuery, "@ma")) {
+            return ProjectSearchRoleFilter.MANAGED_BY_ME;
+        }
+        if (matchesProjectSearchPrefix(lowerQuery, "@in")) {
+            return ProjectSearchRoleFilter.JOINED_BY_ME;
+        }
+        return ProjectSearchRoleFilter.NONE;
+    }
+
+    /**
+     * 判断搜索文本是否以指定前缀开头，且后续为空或为空白分隔。
+     *
+     * @param query 当前搜索文本
+     * @param prefix 待匹配前缀
+     * @return 命中前缀时返回 {@code true}
+     */
+    private boolean matchesProjectSearchPrefix(String query, String prefix) {
+        if (query == null || prefix == null || !query.startsWith(prefix)) {
+            return false;
+        }
+        return query.length() == prefix.length() || Character.isWhitespace(query.charAt(prefix.length()));
+    }
+
+    /**
+     * 返回指定角色筛选模式对应的项目搜索前缀。
+     *
+     * @param roleFilter 角色筛选模式
+     * @return 对应的搜索前缀
+     */
+    private String getProjectSearchRolePrefix(ProjectSearchRoleFilter roleFilter) {
+        return switch (roleFilter) {
+            case CREATED_BY_ME -> "@me";
+            case MANAGED_BY_ME -> "@ma";
+            case JOINED_BY_ME -> "@in";
+            case NONE -> "";
+        };
+    }
+
+    /**
+     * 判断团队项目是否符合当前前缀角色筛选条件。
+     *
+     * @param project 当前项目
+     * @param roleFilter 当前角色筛选模式
+     * @param playerUuid 当前玩家 UUID
+     * @return 命中筛选条件时返回 {@code true}
+     */
+    private boolean matchesTeamProjectSearchRoleFilter(Project project, ProjectSearchRoleFilter roleFilter, String playerUuid) {
+        if (project == null || playerUuid == null || playerUuid.isEmpty()) {
+            return roleFilter == ProjectSearchRoleFilter.NONE;
+        }
+        if (roleFilter == ProjectSearchRoleFilter.CREATED_BY_ME) {
+            return playerUuid.equals(project.getOwnerUuid());
+        }
+        Project.ProjectRole memberRole = project.getMemberRole(playerUuid);
+        if (roleFilter == ProjectSearchRoleFilter.MANAGED_BY_ME) {
+            return playerUuid.equals(project.getOwnerUuid())
+                    || memberRole == Project.ProjectRole.PROJECT_MANAGER
+                    || memberRole == Project.ProjectRole.LEAD;
+        }
+        if (roleFilter == ProjectSearchRoleFilter.JOINED_BY_ME) {
+            return memberRole != null;
+        }
+        return true;
+    }
+
+    /**
+     * 返回当前玩家 UUID，供团队项目搜索前缀筛选使用。
+     *
+     * @return 当前玩家 UUID；不存在时返回空字符串
+     */
+    private String getCurrentPlayerUuid() {
+        return this.minecraft == null || this.minecraft.player == null ? "" : this.minecraft.player.getUUID().toString();
     }
 
     /**
@@ -4361,6 +4876,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.selectedTask = null;
         this.detailOverlayVisible = false;
         this.sidebarOverlayVisible = false;
+        closeProjectSearchPrefixDropdown();
         this.currentProject = project;
         rememberSelectedProject(project);
 

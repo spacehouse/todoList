@@ -65,6 +65,14 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEnterDetailTitleEditModeAfterClickingTitle", TodoScreenTestMain::shouldEnterDetailTitleEditModeAfterClickingTitle);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCloseOverlayDetailDrawerFromCloseButton", TodoScreenTestMain::shouldCloseOverlayDetailDrawerFromCloseButton);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepProjectActionButtonsPinnedAtSidebarBottom", TodoScreenTestMain::shouldKeepProjectActionButtonsPinnedAtSidebarBottom);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowProjectSearchPrefixDropdownInTeamSpace", TodoScreenTestMain::shouldShowProjectSearchPrefixDropdownInTeamSpace);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldApplyProjectSearchPrefixSuggestionAndPreserveNameQuery", TodoScreenTestMain::shouldApplyProjectSearchPrefixSuggestionAndPreserveNameQuery);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldReplaceUnknownProjectSearchPrefixWhenApplyingSuggestion", TodoScreenTestMain::shouldReplaceUnknownProjectSearchPrefixWhenApplyingSuggestion);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTeamProjectsByCreatedPrefix", TodoScreenTestMain::shouldFilterTeamProjectsByCreatedPrefix);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTeamProjectsByManagedPrefixAndName", TodoScreenTestMain::shouldFilterTeamProjectsByManagedPrefixAndName);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTeamProjectsByJoinedPrefix", TodoScreenTestMain::shouldFilterTeamProjectsByJoinedPrefix);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldTreatUnknownProjectSearchPrefixAsPlainNameQuery", TodoScreenTestMain::shouldTreatUnknownProjectSearchPrefixAsPlainNameQuery);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideProjectSearchPrefixDropdownOutsideTeamSpace", TodoScreenTestMain::shouldHideProjectSearchPrefixDropdownOutsideTeamSpace);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowApplyJoinButtonForNonMemberTeamProject", TodoScreenTestMain::shouldShowApplyJoinButtonForNonMemberTeamProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseViewLabelForReadOnlyTeamProjectMember", TodoScreenTestMain::shouldUseViewLabelForReadOnlyTeamProjectMember);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
@@ -503,6 +511,190 @@ public final class TodoScreenTestMain {
     /**
      * 校验非成员查看团队项目时会显示“申请加入”，并隐藏删除按钮。
      */
+    /**
+     * 验证团队空间聚焦项目搜索框后会显示前缀下拉提示。
+     */
+    private static void shouldShowProjectSearchPrefixDropdownInTeamSpace() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        focusProjectSearchField(screen);
+
+        GuiTestSupport.assertTrue(screen.isProjectSearchPrefixDropdownVisibleForTest(), "团队空间聚焦项目搜索框后应显示前缀下拉提示");
+        GuiTestSupport.assertEquals(List.of("@me  我创建的项目", "@ma  我管理的项目", "@in  我加入的项目"),
+                screen.getProjectSearchPrefixSuggestionTextsForTest(),
+                "项目搜索前缀下拉应展示三条固定候选项");
+    }
+
+    /**
+     * 验证点击项目搜索前缀候选项后会写入前缀并保留已有名称关键字。
+     */
+    private static void shouldApplyProjectSearchPrefixSuggestionAndPreserveNameQuery() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "核心");
+        focusProjectSearchField(screen);
+
+        clickProjectSearchPrefixSuggestion(screen, 1);
+
+        GuiTestSupport.assertEquals("@ma 核心", screen.getProjectSearchFieldForTest().getValue(), "点击 @ma 候选项后应保留已有名称关键字");
+        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "点击前缀候选项后下拉应自动关闭");
+    }
+
+    /**
+     * 验证已有未知前缀时点击候选项会替换前缀，并保留原有名称关键字。
+     */
+    private static void shouldReplaceUnknownProjectSearchPrefixWhenApplyingSuggestion() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@mx 核心");
+        focusProjectSearchField(screen);
+
+        clickProjectSearchPrefixSuggestion(screen, 1);
+
+        GuiTestSupport.assertEquals("@ma 核心", screen.getProjectSearchFieldForTest().getValue(), "未知前缀被建议项替换后应仅保留名称关键字");
+        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "替换未知前缀后下拉应自动关闭");
+    }
+
+    /**
+     * 验证 @me 只会筛出我创建的团队项目。
+     */
+    private static void shouldFilterTeamProjectsByCreatedPrefix() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        Project createdProject = createTeamProject("team-owned-search", "Owned Search Team");
+        createExternalTeamProject("team-external-search", "External Search Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@me");
+
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
+                "@me 应包含我创建的默认团队项目");
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(createdProject).getString()),
+                "@me 应包含我创建的普通团队项目");
+        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains("External Search Team"),
+                "@me 不应包含他人创建的团队项目");
+    }
+
+    /**
+     * 验证 @ma 支持按管理身份和项目名关键字组合筛选。
+     */
+    private static void shouldFilterTeamProjectsByManagedPrefixAndName() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        createTeamProject("team-managed-owned", "核心 自建");
+        Project leadProject = createExternalTeamProject("team-managed-lead", "核心 管理");
+        leadProject.addMember(OWNER_ID.toString(), Project.ProjectRole.LEAD, "owner");
+        Project memberProject = createExternalTeamProject("team-managed-member", "核心 参与");
+        memberProject.addMember(OWNER_ID.toString(), Project.ProjectRole.MEMBER, "owner");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@ma 核心");
+
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains("核心 自建"), "@ma 核心 应包含我创建且命中关键字的项目");
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains("核心 管理"), "@ma 核心 应包含我以组长身份管理的项目");
+        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
+                "@ma 核心 不应包含仅以普通成员加入的项目");
+    }
+
+    /**
+     * 验证 @in 会筛出我已加入的全部团队项目。
+     */
+    private static void shouldFilterTeamProjectsByJoinedPrefix() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        Project memberProject = createExternalTeamProject("team-joined-member", "Joined Member Team");
+        memberProject.addMember(OWNER_ID.toString(), Project.ProjectRole.MEMBER, "owner");
+        Project leadProject = createExternalTeamProject("team-joined-lead", "Joined Lead Team");
+        leadProject.addMember(OWNER_ID.toString(), Project.ProjectRole.LEAD, "owner");
+        createExternalTeamProject("team-joined-outsider", "Joined Outsider Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@in");
+
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
+                "@in 应包含我已加入的默认团队项目");
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
+                "@in 应包含我以普通成员加入的项目");
+        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(leadProject).getString()),
+                "@in 应包含我以组长身份加入的项目");
+        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains("Joined Outsider Team"),
+                "@in 不应包含我未加入的项目");
+    }
+
+    /**
+     * 验证未知前缀会退化为普通项目名搜索，不触发角色筛选语义。
+     */
+    private static void shouldTreatUnknownProjectSearchPrefixAsPlainNameQuery() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        Project namedProject = createExternalTeamProject("team-unknown-prefix", "@mx 特殊项目");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@mx 特殊");
+
+        GuiTestSupport.assertEquals(List.of(ProjectNameFormatter.toDisplayText(namedProject).getString()),
+                screen.getVisibleProjectNamesForTest(),
+                "未知前缀应退化为普通名称搜索");
+    }
+
+    /**
+     * 验证个人空间不会显示团队项目搜索前缀下拉，且点击外部后会关闭下拉。
+     */
+    private static void shouldHideProjectSearchPrefixDropdownOutsideTeamSpace() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project personalProject = createDefaultPersonalProject();
+        Project defaultTeamProject = createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        screen.switchProjectForTest(defaultTeamProject);
+        focusProjectSearchField(screen);
+        GuiTestSupport.assertTrue(screen.isProjectSearchPrefixDropdownVisibleForTest(), "团队空间下拉应先显示");
+
+        int[] contentBounds = screen.getContentAreaBoundsForTest();
+        screen.mouseClicked(contentBounds[0] + 8, contentBounds[1] + 8, 0);
+        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "点击搜索框外部后应关闭前缀下拉");
+
+        screen.switchProjectForTest(personalProject);
+        focusProjectSearchField(screen);
+        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "个人空间不应显示团队项目搜索前缀下拉");
+    }
+
     private static void shouldShowApplyJoinButtonForNonMemberTeamProject() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
@@ -1043,6 +1235,30 @@ public final class TodoScreenTestMain {
      * @param screenHeight 屏幕高度
      * @param message 断言失败提示
      */
+    /**
+     * 聚焦项目搜索输入框，触发前缀下拉提示显示。
+     *
+     * @param screen 目标界面
+     */
+    private static void focusProjectSearchField(TodoScreen screen) {
+        int x = screen.getProjectSearchFieldForTest().getX() + 4;
+        int y = screen.getProjectSearchFieldForTest().getY() + Math.max(1, screen.getProjectSearchFieldForTest().getHeight() / 2);
+        screen.mouseClicked(x, y, 0);
+    }
+
+    /**
+     * 点击指定的项目搜索前缀候选项。
+     *
+     * @param screen 目标界面
+     * @param index 候选项索引
+     */
+    private static void clickProjectSearchPrefixSuggestion(TodoScreen screen, int index) {
+        int[] bounds = screen.getProjectSearchPrefixSuggestionBoundsForTest(index);
+        int x = bounds[0] + Math.max(1, bounds[2] / 2);
+        int y = bounds[1] + Math.max(1, bounds[3] / 2);
+        screen.mouseClicked(x, y, 0);
+    }
+
     private static void assertRectInsideScreen(int[] bounds, int screenWidth, int screenHeight, String message) {
         GuiTestSupport.assertTrue(bounds != null && bounds.length == 4, message + "（边界数据无效）");
         GuiTestSupport.assertTrue(bounds[0] >= 0, message + "（x 不应小于 0）");
