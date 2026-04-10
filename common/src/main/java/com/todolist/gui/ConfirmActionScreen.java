@@ -6,7 +6,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 通用确认操作弹窗：展示标题、说明文案与确认/取消按钮，用于承载危险操作的二次确认。
+ * 通用确认操作弹窗。
+ * 用于展示标题、说明文案以及确认和取消按钮，承载高风险操作的二次确认。
  */
 public class ConfirmActionScreen extends Screen {
     private final Screen parent;
@@ -20,7 +21,7 @@ public class ConfirmActionScreen extends Screen {
      * @param parent 父界面
      * @param title 弹窗标题
      * @param message 弹窗说明文案
-     * @param confirmButtonText 确认按钮文案
+     * @param confirmButtonText 确认按钮文本
      * @param onConfirm 确认后的回调
      */
     public ConfirmActionScreen(Screen parent,
@@ -36,7 +37,7 @@ public class ConfirmActionScreen extends Screen {
     }
 
     /**
-     * 初始化确认弹窗内的按钮布局。
+     * 初始化确认弹窗中的按钮布局。
      */
     @Override
     protected void init() {
@@ -67,7 +68,7 @@ public class ConfirmActionScreen extends Screen {
     }
 
     /**
-     * 渲染确认弹窗的背景、标题与说明文字。
+     * 渲染确认弹窗的背景、标题和说明文案。
      *
      * @param context 绘制上下文
      * @param mouseX 鼠标 X 坐标

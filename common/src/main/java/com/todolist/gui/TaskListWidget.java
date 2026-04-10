@@ -1328,16 +1328,12 @@ public class TaskListWidget implements Renderable {
 
     public void setSelectedTask(Task task) {
         if (task == null) {
-            clearSelection();
+            selectedTaskIndex = -1;
+            selectedTaskId = null;
             return;
         }
         selectedTaskId = task.getId();
         syncSelectionIndex();
-    }
-
-    public void clearSelection() {
-        selectedTaskIndex = -1;
-        selectedTaskId = null;
     }
 
     private void syncSelectionIndex() {

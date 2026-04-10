@@ -14,7 +14,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 持久化项目相关的玩家运行期状态，例如当前选中项目、HUD 星标项目和 HUD 可见性。
+ * 玩家项目状态存储组件。
+ * 负责持久化玩家当前选中项目、HUD 星标项目以及 HUD 可见性等运行期状态。
  */
 public class ProjectPlayerStateStorage {
     private static final int NBT_COMPOUND_TYPE = 10;
@@ -26,7 +27,7 @@ public class ProjectPlayerStateStorage {
     private static final String PROJECT_ID_KEY = "projectId";
 
     /**
-     * 创建玩家项目状态存储，并确保目录存在。
+     * 创建玩家项目状态存储组件，并确保状态目录存在。
      */
     public ProjectPlayerStateStorage() {
         ensureDirectoryExists();
@@ -42,7 +43,7 @@ public class ProjectPlayerStateStorage {
     }
 
     /**
-     * 确保玩家项目状态目录已创建。
+     * 确保玩家项目状态目录已经创建。
      */
     private void ensureDirectoryExists() {
         try {
@@ -70,7 +71,7 @@ public class ProjectPlayerStateStorage {
      * 判断指定玩家的项目状态文件是否已经存在。
      *
      * @param playerUuid 玩家 UUID
-     * @return 已存在时返回 true
+     * @return 状态文件存在时返回 true
      */
     public boolean hasPlayerState(UUID playerUuid) {
         if (playerUuid == null) {
@@ -84,7 +85,7 @@ public class ProjectPlayerStateStorage {
      *
      * @param playerUuid 玩家 UUID
      * @param state 待保存的项目状态
-     * @throws IOException 写盘失败时抛出异常
+     * @throws IOException 当写盘失败时抛出
      */
     public void savePlayerState(UUID playerUuid, ProjectPlayerState state) throws IOException {
         ensureDirectoryExists();
@@ -114,7 +115,7 @@ public class ProjectPlayerStateStorage {
      *
      * @param playerUuid 玩家 UUID
      * @return 读取到的项目状态；文件不存在时返回空状态
-     * @throws IOException 读盘失败时抛出异常
+     * @throws IOException 当读盘失败时抛出
      */
     public ProjectPlayerState loadPlayerState(UUID playerUuid) throws IOException {
         Path playerStateFile = getPlayerStateFilePath(playerUuid);
@@ -161,7 +162,8 @@ public class ProjectPlayerStateStorage {
     }
 
     /**
-     * 封装玩家项目状态的简单值对象。
+     * 玩家项目状态值对象。
+     * 用于封装当前选中项目、HUD 星标项目列表和 HUD 可见性。
      */
     public static final class ProjectPlayerState {
         private final String activeProjectId;

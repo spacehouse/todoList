@@ -5,6 +5,7 @@ import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,20 +13,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 项目数据持久化：负责从磁盘加载/保存个人与团队项目列表。
+ * 项目存储组件。
+ * 负责读取和保存个人项目、团队项目的数据文件。
  */
 public class ProjectStorage {
     private static final String PERSONAL_PROJECTS_FILE = "projects.dat";
     private static final String TEAM_PROJECTS_FILE = "team_projects.dat";
 
+    /**
+     * 创建项目存储组件，并预热项目目录。
+     */
     public ProjectStorage() {
         ensureDirectoryExists();
     }
 
+    /**
+     * 返回项目数据目录。
+     *
+     * @return 项目数据目录
+     */
     private Path getProjectsDirectory() {
         return DataPathProvider.getProjectsDir();
     }
 
+    /**
+     * 确保项目数据目录存在。
+     */
     private void ensureDirectoryExists() {
         try {
             Path projectsDir = getProjectsDirectory();
@@ -38,12 +51,14 @@ public class ProjectStorage {
     }
 
     /**
-     * 加载个人项目列表。
+     * 读取个人项目列表。
+     *
+     * @return 个人项目列表
+     * @throws IOException 当读取文件失败时抛出
      */
     public List<Project> loadProjects() throws IOException {
         ensureDirectoryExists();
-        Path projectsDir = getProjectsDirectory();
-        Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
+        Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         if (!Files.exists(file)) {
             return new ArrayList<>();
         }
@@ -51,12 +66,14 @@ public class ProjectStorage {
     }
 
     /**
-     * 加载团队项目列表。
+     * 读取团队项目列表。
+     *
+     * @return 团队项目列表
+     * @throws IOException 当读取文件失败时抛出
      */
     public List<Project> loadTeamProjects() throws IOException {
         ensureDirectoryExists();
-        Path projectsDir = getProjectsDirectory();
-        Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
+        Path file = getProjectsDirectory().resolve(TEAM_PROJECTS_FILE);
         if (!Files.exists(file)) {
             return new ArrayList<>();
         }
@@ -65,34 +82,47 @@ public class ProjectStorage {
 
     /**
      * 保存个人项目列表。
+     *
+     * @param projects 待保存的个人项目列表
+     * @throws IOException 当写入文件失败时抛出
      */
     public void saveProjects(List<Project> projects) throws IOException {
         ensureDirectoryExists();
-        Path projectsDir = getProjectsDirectory();
-        Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
+        Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
 
     /**
      * 保存团队项目列表。
+     *
+     * @param projects 待保存的团队项目列表
+     * @throws IOException 当写入文件失败时抛出
      */
     public void saveTeamProjects(List<Project> projects) throws IOException {
         ensureDirectoryExists();
-        Path projectsDir = getProjectsDirectory();
-        Path file = projectsDir.resolve(TEAM_PROJECTS_FILE);
+        Path file = getProjectsDirectory().resolve(TEAM_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
     }
 
     /**
      * 判断个人项目数据文件是否存在。
+     * 当前用于初始化阶段区分首次创建与已有存档恢复。
+     *
+     * @return 若个人项目文件存在则返回 true
      */
     public boolean hasPersonalProjectsFile() {
         ensureDirectoryExists();
-        Path projectsDir = getProjectsDirectory();
-        Path file = projectsDir.resolve(PERSONAL_PROJECTS_FILE);
+        Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         return Files.exists(file);
     }
 
+    /**
+     * 从指定文件读取项目列表，并在必要时回写规范化后的数据。
+     *
+     * @param file 项目数据文件
+     * @return 读取到的项目列表
+     * @throws IOException 当读取文件失败时抛出
+     */
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
         CompoundTag root = NbtIo.read(file.toFile());
@@ -130,6 +160,13 @@ public class ProjectStorage {
         return projects;
     }
 
+    /**
+     * 将项目列表写入指定文件。
+     *
+     * @param projects 待写入的项目列表
+     * @param file 目标文件
+     * @throws IOException 当写入文件失败时抛出
+     */
     private void saveProjectsToFile(List<Project> projects, Path file) throws IOException {
         CompoundTag root = new CompoundTag();
         ListTag list = new ListTag();

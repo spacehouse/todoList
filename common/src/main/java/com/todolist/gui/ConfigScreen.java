@@ -152,18 +152,12 @@ public class ConfigScreen extends Screen {
      *
      * @return 预览矩形 X 坐标
      */
-    int getPreviewRectXForTest() {
-        return previewRectX;
-    }
 
     /**
      * 返回预览命中矩形 Y 坐标。
      *
      * @return 预览矩形 Y 坐标
      */
-    int getPreviewRectYForTest() {
-        return previewRectY;
-    }
 
     /**
      * 返回预览 HUD 宽度。

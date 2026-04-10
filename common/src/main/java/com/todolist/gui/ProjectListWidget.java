@@ -19,7 +19,7 @@ import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 
 /**
- * 项目侧边栏列表组件：展示项目并处理选择/滚动等交互。
+ * 项目侧栏列表组件，负责展示项目、处理选择、星标切换与滚动交互。
  */
 public class ProjectListWidget implements Renderable, GuiEventListener, NarratableEntry {
     private static final int ITEM_HORIZONTAL_INSET = 3;
@@ -41,8 +41,6 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     private Map<String, Integer> projectTaskCounts = new HashMap<>();
     private Project selectedProject;
     private Consumer<Project> onProjectSelected;
-    
-    // Simple scrolling
     private int scrollOffset = 0;
 
     /**
@@ -57,7 +55,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目数据源并重建可见列表（含星标排序与筛选逻辑）。
+     * 设置项目数据源，并重建当前可见的项目列表。
      */
     public void setProjects(List<Project> projects) {
         if (projects == null) {
@@ -70,14 +68,14 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目选择回调。
+     * 设置项目点击后的选择回调。
      */
     public void setOnProjectSelected(Consumer<Project> callback) {
         this.onProjectSelected = callback;
     }
 
     /**
-     * 设置侧栏项目对应的任务数量，用于在项目名称右侧显示数量提示。
+     * 设置项目对应的任务数量，用于在侧栏右侧显示计数。
      *
      * @param taskCounts 项目 ID 到任务数的映射
      */
@@ -90,7 +88,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置当前选中的项目，并在选中项失效时回退到默认项目。
+     * 设置当前选中的项目，并在选中项失效时自动回退。
      *
      * @param project 当前选中的项目
      */
@@ -107,7 +105,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目列表滚动偏移量，并自动裁剪到当前可见范围内。
+     * 设置项目列表的滚动偏移量，并裁剪到合法范围。
      *
      * @param scrollOffset 目标滚动偏移量
      */
@@ -116,12 +114,15 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         clampScrollOffset();
     }
 
+    /**
+     * 返回当前选中的项目。
+     */
     public Project getSelectedProject() {
         return selectedProject;
     }
 
     /**
-     * 返回当前用于渲染的项目列表快照，供同包测试代码断言排序与筛选结果。
+     * 返回当前可见项目列表快照，供同包测试校验排序结果。
      *
      * @return 当前可见项目列表快照
      */
@@ -130,20 +131,25 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 返回项目列表的布局边界，供同包测试验证侧栏滚动区尺寸。
+     * 返回组件边界，供同包测试验证侧栏布局。
      *
-     * @return 依次包含 x、y、width、height 的边界数组
+     * @return 依次包含 x、y、width、height 的数组
      */
     int[] getBoundsForTest() {
         return new int[] {x, y, width, height};
     }
 
+    /**
+     * 按星标状态重建项目列表顺序。
+     */
     private void rebuildProjects() {
         ModConfig config = ModConfig.getInstance();
         List<Project> starred = new ArrayList<>();
         List<Project> unstarred = new ArrayList<>();
         for (Project p : sourceProjects) {
-            if (p == null) continue;
+            if (p == null) {
+                continue;
+            }
             if (config.isHudProjectStarred(p.getId())) {
                 starred.add(p);
             } else {
@@ -157,6 +163,9 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         clampScrollOffset();
     }
 
+    /**
+     * 确保当前选中项仍然有效，否则回退到默认项目或首项。
+     */
     private void ensureSelectionFallback() {
         if (projects == null || projects.isEmpty()) {
             selectedProject = null;
@@ -170,7 +179,9 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
             }
         }
         for (Project p : projects) {
-            if (p == null) continue;
+            if (p == null) {
+                continue;
+            }
             if (p.isDefaultPersonalProject() || p.isDefaultTeamProject()) {
                 selectedProject = p;
                 return;
@@ -179,13 +190,23 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         selectedProject = projects.get(0);
     }
 
+    /**
+     * 将滚动偏移量限制在当前列表可滚动范围内。
+     */
     private void clampScrollOffset() {
         int visibleItems = Math.max(1, height / itemHeight);
         int maxScroll = Math.max(0, projects.size() - visibleItems);
-        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
-        if (scrollOffset < 0) scrollOffset = 0;
+        if (scrollOffset > maxScroll) {
+            scrollOffset = maxScroll;
+        }
+        if (scrollOffset < 0) {
+            scrollOffset = 0;
+        }
     }
 
+    /**
+     * 渲染项目侧栏的背景、项目行、星标与滚动条。
+     */
     @Override
     public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
@@ -245,17 +266,20 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         }
 
         if (projects.size() > visibleItems) {
-            int barHeight = (int)((float)visibleItems / projects.size() * height);
-            int barY = y + (int)((float)scrollOffset / projects.size() * height);
+            int barHeight = (int) ((float) visibleItems / projects.size() * height);
+            int barY = y + (int) ((float) scrollOffset / projects.size() * height);
             context.fill(x + width - 3, y + 2, x + width - 1, y + height - 2, 0xFF1C2731);
             context.fill(x + width - 3, barY, x + width - 1, barY + barHeight, 0xFF6E8093);
         }
     }
 
+    /**
+     * 处理项目项点击与星标切换点击。
+     */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
-            int index = (int)((mouseY - y) / itemHeight) + scrollOffset;
+            int index = (int) ((mouseY - y) / itemHeight) + scrollOffset;
             if (index >= 0 && index < projects.size()) {
                 Project clicked = projects.get(index);
                 int mx = (int) mouseX;
@@ -271,55 +295,69 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
                 if (onProjectSelected != null) {
                     onProjectSelected.accept(clicked);
                 }
-                // play click sound
                 return true;
             }
         }
         return false;
     }
 
+    /**
+     * 处理项目列表区域内的滚轮滚动。
+     */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-         if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
-             if (amount == 0) {
-                 return false;
-             }
-             int visibleItems = Math.max(1, height / itemHeight);
-             int maxScroll = Math.max(0, projects.size() - visibleItems);
-             int before = scrollOffset;
-             if (amount > 0) {
-                 scrollOffset = Math.max(0, scrollOffset - 1);
-             } else {
-                 scrollOffset = Math.min(maxScroll, scrollOffset + 1);
-             }
-             return scrollOffset != before;
-         }
-         return false;
+        if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
+            if (amount == 0) {
+                return false;
+            }
+            int visibleItems = Math.max(1, height / itemHeight);
+            int maxScroll = Math.max(0, projects.size() - visibleItems);
+            int before = scrollOffset;
+            if (amount > 0) {
+                scrollOffset = Math.max(0, scrollOffset - 1);
+            } else {
+                scrollOffset = Math.min(maxScroll, scrollOffset + 1);
+            }
+            return scrollOffset != before;
+        }
+        return false;
     }
 
+    /**
+     * 接收焦点变化通知；当前组件不维护独立焦点状态。
+     */
     @Override
     public void setFocused(boolean focused) {
     }
 
+    /**
+     * 返回当前组件是否持有焦点；当前始终不参与焦点管理。
+     */
     @Override
     public boolean isFocused() {
         return false;
     }
 
+    /**
+     * 返回旁白优先级；当前组件不提供旁白内容。
+     */
     @Override
     public NarrationPriority narrationPriority() {
         return NarrationPriority.NONE;
     }
 
+    /**
+     * 更新旁白内容；当前组件不输出旁白文本。
+     */
     @Override
     public void updateNarration(net.minecraft.client.gui.narration.NarrationElementOutput builder) {
     }
 
     /**
-     * 返回项目在侧栏中的任务数文本，并对极端值做收敛显示。
+     * 返回项目在侧栏中的任务数量文本，并对极端值做收敛显示。
      *
      * @param project 目标项目
-     * @return 任务数文本
+     * @return 任务数量文本
      */
     private String getProjectTaskCountText(Project project) {
         if (project == null || project.getId() == null || project.getId().isEmpty()) {
@@ -332,11 +370,12 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         return Integer.toString(count);
     }
 
+    /**
+     * 返回下一个可聚焦路径；当前组件不支持键盘焦点导航。
+     */
     @Nullable
     @Override
     public ComponentPath nextFocusPath(FocusNavigationEvent navigation) {
         return null;
     }
 }
-
-
