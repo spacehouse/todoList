@@ -70,3 +70,10 @@ local.properties
 *.log
 
 docs/*
+
+*.bak.*
+
+# Local workspace files
+.editorconfig
+AGENTS.md
+gradle-out.txt
