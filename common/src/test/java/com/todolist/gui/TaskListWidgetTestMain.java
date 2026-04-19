@@ -98,10 +98,7 @@ public final class TaskListWidgetTestMain {
     }
 
     /**
-     * 校验非 OP 在 TEAM_ALL 视图下点击复选框不会触发完成切换。
-     */
-    /**
-     * 鏍￠獙鐐瑰嚮宸插畬鎴愪换鍔＄殑澶嶉€夋鍚庝篃浼氳Е鍙戠姸鎬佸垏鎹㈠洖璋冦€?
+     * 校验点击已完成任务的复选框后也会触发完成切换回调。
      */
     private static void shouldToggleCompletedTaskWhenClickingCheckbox() {
         GuiTestSupport.resetState();
@@ -119,6 +116,9 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.assertEquals(done.getId(), toggledId.get(), "已完成任务点击复选框后也应触发切换回调");
     }
 
+    /**
+     * 校验非 OP 在 TEAM_ALL 视图下点击复选框不会触发完成切换。
+     */
     private static void shouldBlockToggleWhenNonOpTeamAllViewEnabled() {
         GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
@@ -163,9 +163,6 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.assertTrue(widget.hasPriorityColorBlockForTaskForTest(alpha.getId()), "任务行应保留优先级色块表达");
     }
 
-    /**
-     * 校验已完成分组展开后，可以通过坐标准确识别标题行和任务行所属分段。
-     */
     /**
      * 校验任务标签会以前置元信息的形式显示在标题之前。
      */
@@ -306,13 +303,6 @@ public final class TaskListWidgetTestMain {
         );
     }
 
-    /**
-     * 创建测试任务对象，减少重复样板代码。
-     *
-     * @param id 任务 ID
-     * @param title 任务标题
-     * @return 测试任务对象
-     */
     /**
      * 校验仅未完成任务允许进入拖拽态，已完成任务不能作为拖拽起点。
      */

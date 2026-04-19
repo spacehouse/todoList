@@ -40,6 +40,17 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 为 TodoScreen 创建测试访问器。
+     *
+     * @param screen 目标界面
+     * @return 测试访问器
+     */
+    private static TodoScreenTestAccess access(TodoScreen screen) {
+        return TodoScreenTestAccess.of(screen);
+    }
+
+
+    /**
      * 串行执行 TodoScreen 的所有 GUI 回归测试。
      *
      * @param args 命令行参数，当前未使用
@@ -86,6 +97,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange", TodoScreenTestMain::shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTasksBySearchAndStatus", TodoScreenTestMain::shouldFilterTasksBySearchAndStatus);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowUncompleteCompletedTaskInPersonalView", TodoScreenTestMain::shouldAllowUncompleteCompletedTaskInPersonalView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUncompletedTaskInActiveSectionImmediately", TodoScreenTestMain::shouldShowUncompletedTaskInActiveSectionImmediately);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowEnterAddWhileTaskSelected", TodoScreenTestMain::shouldAllowEnterAddWhileTaskSelected);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksAndClearUnsavedState", TodoScreenTestMain::shouldSavePersonalTasksAndClearUnsavedState);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld", TodoScreenTestMain::shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow", TodoScreenTestMain::shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow);
@@ -113,8 +126,8 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
 
-        GuiTestSupport.assertEquals(personalProject.getId(), screen.getCurrentProjectForTest().getId(), "初始化后应选中默认个人项目");
-        GuiTestSupport.assertEquals("PERSONAL", screen.getViewModeNameForTest(), "默认项目初始化后应保持个人视图");
+        GuiTestSupport.assertEquals(personalProject.getId(), access(screen).getCurrentProjectForTest().getId(), "初始化后应选中默认个人项目");
+        GuiTestSupport.assertEquals("PERSONAL", access(screen).getViewModeNameForTest(), "默认项目初始化后应保持个人视图");
         GuiTestSupport.assertEquals(personalProject.getId(), ops.getActiveProjectId(), "初始化后应记录当前激活项目");
         GuiTestSupport.assertEquals(personalProject.getId(), ops.getActiveProjectSyncCalls().get(0), "初始化后应向桥接层同步当前激活项目");
     }
@@ -131,9 +144,9 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
 
-        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
-        GuiTestSupport.assertEquals(List.of("MY"), screen.getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
-        GuiTestSupport.assertEquals("MY", screen.getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
+        GuiTestSupport.assertEquals("PERSONAL", access(screen).getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
+        GuiTestSupport.assertEquals(List.of("MY"), access(screen).getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
+        GuiTestSupport.assertEquals("MY", access(screen).getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
     }
 
     /**
@@ -148,11 +161,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
 
-        GuiTestSupport.assertEquals("TEAM", screen.getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
-        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), screen.getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
-        GuiTestSupport.assertEquals("UNASSIGNED", screen.getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
+        GuiTestSupport.assertEquals("TEAM", access(screen).getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
+        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), access(screen).getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
+        GuiTestSupport.assertEquals("UNASSIGNED", access(screen).getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
     }
 
     /**
@@ -167,22 +180,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
-        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
-        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
+        access(screen).switchProjectForTest(teamProject);
+        String originalSpaceMode = access(screen).getCurrentSpaceModeNameForTest();
+        String originalTaskView = access(screen).getCurrentTaskViewOptionNameForTest();
 
-        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
+        GuiTestSupport.assertFalse(access(screen).isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
 
-        screen.toggleCompletedSectionForTest();
+        access(screen).toggleCompletedSectionForTest();
 
-        GuiTestSupport.assertTrue(screen.isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
-        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
-        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
+        GuiTestSupport.assertTrue(access(screen).isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
+        GuiTestSupport.assertEquals(originalSpaceMode, access(screen).getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, access(screen).getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
 
-        screen.toggleCompletedSectionForTest();
+        access(screen).toggleCompletedSectionForTest();
 
-        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
-        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
+        GuiTestSupport.assertFalse(access(screen).isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
+        GuiTestSupport.assertEquals(originalTaskView, access(screen).getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
     }
 
     /**
@@ -197,24 +210,24 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 480, 300);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Large Layout Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertEquals("LARGE", screen.getResponsiveTierNameForTest(), "大窗口应命中 LARGE 档位");
-        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "大窗口下项目侧栏不应进入覆盖模式");
-        GuiTestSupport.assertFalse(screen.isDetailPanelOverlayForTest(), "大窗口下详情区不应进入覆盖模式");
-        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "大窗口下项目侧栏应保持可见");
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "大窗口下详情区应保持可见");
+        GuiTestSupport.assertEquals("LARGE", access(screen).getResponsiveTierNameForTest(), "大窗口应命中 LARGE 档位");
+        GuiTestSupport.assertFalse(access(screen).isProjectSidebarOverlayForTest(), "大窗口下项目侧栏不应进入覆盖模式");
+        GuiTestSupport.assertFalse(access(screen).isDetailPanelOverlayForTest(), "大窗口下详情区不应进入覆盖模式");
+        GuiTestSupport.assertTrue(access(screen).isProjectSidebarVisibleForTest(), "大窗口下项目侧栏应保持可见");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "大窗口下详情区应保持可见");
 
-        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 480, 300, "大窗口下项目侧栏边界应位于屏幕内");
-        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 480, 300, "大窗口下主内容区边界应位于屏幕内");
-        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 480, 300, "大窗口下详情区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getProjectSidebarBoundsForTest(), 480, 300, "大窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getContentAreaBoundsForTest(), 480, 300, "大窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getDetailPanelBoundsForTest(), 480, 300, "大窗口下详情区边界应位于屏幕内");
 
-        int[] sidebarBounds = screen.getProjectSidebarBoundsForTest();
-        int[] contentBounds = screen.getContentAreaBoundsForTest();
-        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        int[] sidebarBounds = access(screen).getProjectSidebarBoundsForTest();
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
         GuiTestSupport.assertTrue(sidebarBounds[0] + sidebarBounds[2] <= contentBounds[0], "项目侧栏应位于主内容区左侧");
         GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] <= detailBounds[0], "详情区应位于主内容区右侧");
     }
@@ -231,19 +244,19 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 420, 250);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Medium Layout Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertEquals("MEDIUM", screen.getResponsiveTierNameForTest(), "中等窗口应命中 MEDIUM 档位");
-        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "中等窗口下项目侧栏不应进入覆盖模式");
-        GuiTestSupport.assertFalse(screen.isDetailPanelOverlayForTest(), "中等窗口下详情区仍应常驻");
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "中等窗口下选中任务后详情区应保持可见");
+        GuiTestSupport.assertEquals("MEDIUM", access(screen).getResponsiveTierNameForTest(), "中等窗口应命中 MEDIUM 档位");
+        GuiTestSupport.assertFalse(access(screen).isProjectSidebarOverlayForTest(), "中等窗口下项目侧栏不应进入覆盖模式");
+        GuiTestSupport.assertFalse(access(screen).isDetailPanelOverlayForTest(), "中等窗口下详情区仍应常驻");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "中等窗口下选中任务后详情区应保持可见");
 
-        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 420, 250, "中等窗口下项目侧栏边界应位于屏幕内");
-        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 420, 250, "中等窗口下主内容区边界应位于屏幕内");
-        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 420, 250, "中等窗口下详情区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getProjectSidebarBoundsForTest(), 420, 250, "中等窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getContentAreaBoundsForTest(), 420, 250, "中等窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getDetailPanelBoundsForTest(), 420, 250, "中等窗口下详情区边界应位于屏幕内");
     }
 
     /**
@@ -258,23 +271,23 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 360, 220);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Compact Layout Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertEquals("COMPACT", screen.getResponsiveTierNameForTest(), "紧凑窗口应命中 COMPACT 档位");
-        GuiTestSupport.assertFalse(screen.isProjectSidebarOverlayForTest(), "紧凑窗口下项目侧栏仍应常驻");
-        GuiTestSupport.assertTrue(screen.isDetailPanelOverlayForTest(), "紧凑窗口下详情区应进入覆盖模式");
-        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "紧凑窗口下项目侧栏应保持可见");
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "选中任务后详情覆盖层应显示");
+        GuiTestSupport.assertEquals("COMPACT", access(screen).getResponsiveTierNameForTest(), "紧凑窗口应命中 COMPACT 档位");
+        GuiTestSupport.assertFalse(access(screen).isProjectSidebarOverlayForTest(), "紧凑窗口下项目侧栏仍应常驻");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelOverlayForTest(), "紧凑窗口下详情区应进入覆盖模式");
+        GuiTestSupport.assertTrue(access(screen).isProjectSidebarVisibleForTest(), "紧凑窗口下项目侧栏应保持可见");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "选中任务后详情覆盖层应显示");
 
-        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 360, 220, "紧凑窗口下项目侧栏边界应位于屏幕内");
-        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 360, 220, "紧凑窗口下主内容区边界应位于屏幕内");
-        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 360, 220, "紧凑窗口下详情区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getProjectSidebarBoundsForTest(), 360, 220, "紧凑窗口下项目侧栏边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getContentAreaBoundsForTest(), 360, 220, "紧凑窗口下主内容区边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getDetailPanelBoundsForTest(), 360, 220, "紧凑窗口下详情区边界应位于屏幕内");
 
-        int[] contentBounds = screen.getContentAreaBoundsForTest();
-        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
         GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] > detailBounds[0], "覆盖式详情区应与主内容区发生水平覆盖，而不是继续压缩主内容区");
     }
 
@@ -290,31 +303,31 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 300, 190);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Minimal Layout Task");
 
-        GuiTestSupport.assertEquals("MINIMAL", screen.getResponsiveTierNameForTest(), "极小窗口应命中 MINIMAL 档位");
-        GuiTestSupport.assertTrue(screen.isProjectSidebarOverlayForTest(), "极小窗口下项目侧栏应进入覆盖模式");
-        GuiTestSupport.assertTrue(screen.isDetailPanelOverlayForTest(), "极小窗口下详情区应进入覆盖模式");
-        GuiTestSupport.assertFalse(screen.isProjectSidebarVisibleForTest(), "极小窗口初始化时项目侧栏覆盖层应默认收起");
-        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "未选中任务时极小窗口详情覆盖层应默认收起");
-        GuiTestSupport.assertTrue(screen.isSidebarToggleButtonVisibleForTest(), "极小窗口下应提供项目侧栏切换按钮");
+        GuiTestSupport.assertEquals("MINIMAL", access(screen).getResponsiveTierNameForTest(), "极小窗口应命中 MINIMAL 档位");
+        GuiTestSupport.assertTrue(access(screen).isProjectSidebarOverlayForTest(), "极小窗口下项目侧栏应进入覆盖模式");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelOverlayForTest(), "极小窗口下详情区应进入覆盖模式");
+        GuiTestSupport.assertFalse(access(screen).isProjectSidebarVisibleForTest(), "极小窗口初始化时项目侧栏覆盖层应默认收起");
+        GuiTestSupport.assertFalse(access(screen).isDetailPanelVisibleForTest(), "未选中任务时极小窗口详情覆盖层应默认收起");
+        GuiTestSupport.assertTrue(access(screen).isSidebarToggleButtonVisibleForTest(), "极小窗口下应提供项目侧栏切换按钮");
 
-        screen.toggleSidebarOverlayForTest();
+        access(screen).toggleSidebarOverlayForTest();
 
-        GuiTestSupport.assertTrue(screen.isProjectSidebarVisibleForTest(), "点击切换后极小窗口项目侧栏覆盖层应显示");
-        assertRectInsideScreen(screen.getProjectSidebarBoundsForTest(), 300, 190, "极小窗口下项目侧栏覆盖层边界应位于屏幕内");
-        assertRectInsideScreen(screen.getContentAreaBoundsForTest(), 300, 190, "极小窗口下主内容区边界应位于屏幕内");
+        GuiTestSupport.assertTrue(access(screen).isProjectSidebarVisibleForTest(), "点击切换后极小窗口项目侧栏覆盖层应显示");
+        assertRectInsideScreen(access(screen).getProjectSidebarBoundsForTest(), 300, 190, "极小窗口下项目侧栏覆盖层边界应位于屏幕内");
+        assertRectInsideScreen(access(screen).getContentAreaBoundsForTest(), 300, 190, "极小窗口下主内容区边界应位于屏幕内");
 
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "极小窗口选中任务后详情覆盖层应显示");
-        assertRectInsideScreen(screen.getDetailPanelBoundsForTest(), 300, 190, "极小窗口下详情覆盖层边界应位于屏幕内");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "极小窗口选中任务后详情覆盖层应显示");
+        assertRectInsideScreen(access(screen).getDetailPanelBoundsForTest(), 300, 190, "极小窗口下详情覆盖层边界应位于屏幕内");
 
-        int[] contentBounds = screen.getContentAreaBoundsForTest();
-        int[] sidebarBounds = screen.getProjectSidebarBoundsForTest();
-        int[] detailBounds = screen.getDetailPanelBoundsForTest();
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
+        int[] sidebarBounds = access(screen).getProjectSidebarBoundsForTest();
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
         GuiTestSupport.assertTrue(contentBounds[0] < sidebarBounds[0] + sidebarBounds[2], "极小窗口下项目侧栏应覆盖到主内容区之上");
         GuiTestSupport.assertTrue(contentBounds[0] + contentBounds[2] > detailBounds[0], "极小窗口下详情区应覆盖到主内容区之上");
     }
@@ -331,18 +344,18 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 360, 220);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Compact Delete Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "删除前紧凑窗口详情覆盖层应已显示");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "删除前紧凑窗口详情覆盖层应已显示");
 
         Screen confirmScreen = openDeleteTaskConfirmScreen(minecraft, screen, task);
         clickDialogButton(confirmScreen, 0);
 
-        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "删除选中任务后详情覆盖层应自动收起");
-        GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "删除选中任务后不应残留选中项");
+        GuiTestSupport.assertFalse(access(screen).isDetailPanelVisibleForTest(), "删除选中任务后详情覆盖层应自动收起");
+        GuiTestSupport.assertNull(access(screen).getSelectedTaskForTest(), "删除选中任务后不应残留选中项");
     }
 
     /**
@@ -364,14 +377,14 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Delete Confirm Cancel Task");
         Task task = requireTaskByTitle(screen, "Delete Confirm Cancel Task");
-        screen.selectTaskForTest(task);
+        access(screen).selectTaskForTest(task);
 
         Screen confirmScreen = openDeleteTaskConfirmScreen(minecraft, screen, task);
         clickDialogButton(confirmScreen, 1);
 
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "取消删除后应返回待办主界面");
-        GuiTestSupport.assertEquals(1, screen.getCurrentManagerTasksForTest().size(), "取消删除后任务不应被移除");
-        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "取消删除后原任务仍应保持选中");
+        GuiTestSupport.assertEquals(1, access(screen).getCurrentManagerTasksForTest().size(), "取消删除后任务不应被移除");
+        GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "取消删除后原任务仍应保持选中");
     }
 
     private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
@@ -383,13 +396,13 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Personal Detail Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "个人项目下应保持个人空间语义");
-        GuiTestSupport.assertFalse(screen.isClaimButtonVisibleForTest(), "个人空间详情抽屉不应显示领取按钮");
-        GuiTestSupport.assertFalse(screen.isAbandonButtonVisibleForTest(), "个人空间详情抽屉不应显示放弃按钮");
-        GuiTestSupport.assertFalse(screen.isAssignOthersButtonVisibleForTest(), "个人空间详情抽屉不应显示指派他人按钮");
+        GuiTestSupport.assertEquals("PERSONAL", access(screen).getCurrentSpaceModeNameForTest(), "个人项目下应保持个人空间语义");
+        GuiTestSupport.assertFalse(access(screen).isClaimButtonVisibleForTest(), "个人空间详情抽屉不应显示领取按钮");
+        GuiTestSupport.assertFalse(access(screen).isAbandonButtonVisibleForTest(), "个人空间详情抽屉不应显示放弃按钮");
+        GuiTestSupport.assertFalse(access(screen).isAssignOthersButtonVisibleForTest(), "个人空间详情抽屉不应显示指派他人按钮");
     }
 
     /**
@@ -404,27 +417,27 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 480, 300);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Team Detail Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertTrue(screen.isClaimButtonVisibleForTest(), "团队空间详情抽屉应显示领取按钮");
-        GuiTestSupport.assertTrue(screen.isAbandonButtonVisibleForTest(), "团队空间详情抽屉应显示放弃按钮");
-        GuiTestSupport.assertTrue(screen.isAssignOthersButtonVisibleForTest(), "团队空间详情抽屉应显示指派他人按钮");
+        GuiTestSupport.assertTrue(access(screen).isClaimButtonVisibleForTest(), "团队空间详情抽屉应显示领取按钮");
+        GuiTestSupport.assertTrue(access(screen).isAbandonButtonVisibleForTest(), "团队空间详情抽屉应显示放弃按钮");
+        GuiTestSupport.assertTrue(access(screen).isAssignOthersButtonVisibleForTest(), "团队空间详情抽屉应显示指派他人按钮");
 
-        int[] claimBounds = screen.getClaimButtonBoundsForTest();
-        int[] abandonBounds = screen.getAbandonButtonBoundsForTest();
-        int[] assignBounds = screen.getAssignOthersButtonBoundsForTest();
-        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
+        int[] claimBounds = access(screen).getClaimButtonBoundsForTest();
+        int[] abandonBounds = access(screen).getAbandonButtonBoundsForTest();
+        int[] assignBounds = access(screen).getAssignOthersButtonBoundsForTest();
+        int[] titleBounds = access(screen).getDetailTitleFieldBoundsForTest();
         GuiTestSupport.assertTrue(claimBounds[1] >= titleBounds[1] + titleBounds[3], "团队按钮应位于标题框下方");
         GuiTestSupport.assertEquals(claimBounds[1], abandonBounds[1], "团队按钮应保持同一行纵向对齐");
         GuiTestSupport.assertEquals(abandonBounds[1], assignBounds[1], "团队按钮应保持同一行纵向对齐");
         GuiTestSupport.assertTrue(claimBounds[0] + claimBounds[2] <= abandonBounds[0], "放弃按钮应位于领取按钮右侧");
         GuiTestSupport.assertTrue(abandonBounds[0] + abandonBounds[2] <= assignBounds[0], "指派按钮应位于放弃按钮右侧");
-        GuiTestSupport.assertEquals("领取", screen.getClaimButtonTextForTest(), "领取按钮应使用简短文案");
-        GuiTestSupport.assertEquals("放弃", screen.getAbandonButtonTextForTest(), "放弃按钮应使用简短文案");
-        GuiTestSupport.assertEquals("指派", screen.getAssignOthersButtonTextForTest(), "指派按钮应使用简短文案");
+        GuiTestSupport.assertEquals("领取", access(screen).getClaimButtonTextForTest(), "领取按钮应使用简短文案");
+        GuiTestSupport.assertEquals("放弃", access(screen).getAbandonButtonTextForTest(), "放弃按钮应使用简短文案");
+        GuiTestSupport.assertEquals("指派", access(screen).getAssignOthersButtonTextForTest(), "指派按钮应使用简短文案");
     }
 
     /**
@@ -439,19 +452,19 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 480, 300);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Detail Layout Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        int[] closeBounds = screen.getDetailCloseButtonBoundsForTest();
-        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
+        int[] closeBounds = access(screen).getDetailCloseButtonBoundsForTest();
+        int[] titleBounds = access(screen).getDetailTitleFieldBoundsForTest();
         assertRectInsideScreen(closeBounds, 480, 300, "详情抽屉关闭按钮应位于屏幕内");
         assertRectInsideScreen(titleBounds, 480, 300, "详情抽屉标题输入框应位于屏幕内");
         GuiTestSupport.assertTrue(closeBounds[0] >= titleBounds[0] + titleBounds[2], "关闭按钮应位于标题框右侧");
         GuiTestSupport.assertTrue(closeBounds[1] >= titleBounds[1], "关闭按钮应内嵌在标题行高度范围内");
         GuiTestSupport.assertTrue(closeBounds[1] + closeBounds[3] <= titleBounds[1] + titleBounds[3], "关闭按钮底边不应超出标题行");
-        GuiTestSupport.assertEquals("×", screen.getDetailCloseButtonTextForTest(), "关闭按钮应使用乘号样式");
+        GuiTestSupport.assertEquals("×", access(screen).getDetailCloseButtonTextForTest(), "关闭按钮应使用乘号样式");
     }
 
     /**
@@ -466,15 +479,15 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Editable Detail Title");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertFalse(screen.isDetailTitleEditableForTest(), "详情标题默认应处于只读态");
+        GuiTestSupport.assertFalse(access(screen).isDetailTitleEditableForTest(), "详情标题默认应处于只读态");
 
-        screen.beginDetailTitleEditingForTest();
+        access(screen).beginDetailTitleEditingForTest();
 
-        GuiTestSupport.assertTrue(screen.isDetailTitleEditableForTest(), "点击标题后应进入可编辑状态");
-        ScreenDriver.setText(screen.getTitleFieldForTest(), "Editable Detail Title Updated");
+        GuiTestSupport.assertTrue(access(screen).isDetailTitleEditableForTest(), "点击标题后应进入可编辑状态");
+        ScreenDriver.setText(access(screen).getTitleFieldForTest(), "Editable Detail Title Updated");
         GuiTestSupport.assertEquals("Editable Detail Title Updated", task.getTitle(), "编辑详情标题后应同步更新选中任务");
     }
 
@@ -490,17 +503,17 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         GuiTestSupport.initScreen(minecraft, screen, 360, 220);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Overlay Close Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
 
-        GuiTestSupport.assertTrue(screen.isDetailPanelVisibleForTest(), "关闭前紧凑窗口详情抽屉应已显示");
+        GuiTestSupport.assertTrue(access(screen).isDetailPanelVisibleForTest(), "关闭前紧凑窗口详情抽屉应已显示");
 
-        screen.clickDetailCloseButtonForTest();
+        access(screen).clickDetailCloseButtonForTest();
 
-        GuiTestSupport.assertFalse(screen.isDetailPanelVisibleForTest(), "点击关闭按钮后覆盖式详情抽屉应收起");
-        GuiTestSupport.assertNull(screen.getSelectedTaskForTest(), "点击关闭按钮后不应保留选中任务");
+        GuiTestSupport.assertFalse(access(screen).isDetailPanelVisibleForTest(), "点击关闭按钮后覆盖式详情抽屉应收起");
+        GuiTestSupport.assertNull(access(screen).getSelectedTaskForTest(), "点击关闭按钮后不应保留选中任务");
     }
 
     /**
@@ -518,17 +531,17 @@ public final class TodoScreenTestMain {
         createPersonalProject("personal-beta", "Beta");
         createPersonalProject("personal-gamma", "Gamma");
 
-        int[] listBoundsBefore = screen.getProjectListBoundsForTest();
-        int[] addBoundsBefore = screen.getAddProjectButtonBoundsForTest();
-        int[] editBoundsBefore = screen.getEditProjectButtonBoundsForTest();
-        int[] deleteBoundsBefore = screen.getDeleteProjectButtonBoundsForTest();
+        int[] listBoundsBefore = access(screen).getProjectListBoundsForTest();
+        int[] addBoundsBefore = access(screen).getAddProjectButtonBoundsForTest();
+        int[] editBoundsBefore = access(screen).getEditProjectButtonBoundsForTest();
+        int[] deleteBoundsBefore = access(screen).getDeleteProjectButtonBoundsForTest();
 
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "zz-not-found");
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "zz-not-found");
 
-        int[] listBoundsAfter = screen.getProjectListBoundsForTest();
-        int[] addBoundsAfter = screen.getAddProjectButtonBoundsForTest();
-        int[] editBoundsAfter = screen.getEditProjectButtonBoundsForTest();
-        int[] deleteBoundsAfter = screen.getDeleteProjectButtonBoundsForTest();
+        int[] listBoundsAfter = access(screen).getProjectListBoundsForTest();
+        int[] addBoundsAfter = access(screen).getAddProjectButtonBoundsForTest();
+        int[] editBoundsAfter = access(screen).getEditProjectButtonBoundsForTest();
+        int[] deleteBoundsAfter = access(screen).getDeleteProjectButtonBoundsForTest();
 
         GuiTestSupport.assertEquals(addBoundsBefore[1], addBoundsAfter[1], "项目搜索后新增按钮应保持固定在侧栏底部");
         GuiTestSupport.assertEquals(editBoundsBefore[1], editBoundsAfter[1], "项目搜索后编辑按钮应保持固定在侧栏底部");
@@ -551,12 +564,12 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
+        access(screen).switchProjectForTest(defaultTeamProject);
         focusProjectSearchField(screen);
 
-        GuiTestSupport.assertTrue(screen.isProjectSearchPrefixDropdownVisibleForTest(), "团队空间聚焦项目搜索框后应显示前缀下拉提示");
+        GuiTestSupport.assertTrue(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "团队空间聚焦项目搜索框后应显示前缀下拉提示");
         GuiTestSupport.assertEquals(List.of("@me  我创建的项目", "@ma  我管理的项目", "@in  我加入的项目"),
-                screen.getProjectSearchPrefixSuggestionTextsForTest(),
+                access(screen).getProjectSearchPrefixSuggestionTextsForTest(),
                 "项目搜索前缀下拉应展示三条固定候选项");
     }
 
@@ -571,14 +584,14 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "核心");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "核心");
         focusProjectSearchField(screen);
 
         clickProjectSearchPrefixSuggestion(screen, 1);
 
-        GuiTestSupport.assertEquals("@ma 核心", screen.getProjectSearchFieldForTest().getValue(), "点击 @ma 候选项后应保留已有名称关键字");
-        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "点击前缀候选项后下拉应自动关闭");
+        GuiTestSupport.assertEquals("@ma 核心", access(screen).getProjectSearchFieldForTest().getValue(), "点击 @ma 候选项后应保留已有名称关键字");
+        GuiTestSupport.assertFalse(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "点击前缀候选项后下拉应自动关闭");
     }
 
     /**
@@ -592,14 +605,14 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@mx 核心");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "@mx 核心");
         focusProjectSearchField(screen);
 
         clickProjectSearchPrefixSuggestion(screen, 1);
 
-        GuiTestSupport.assertEquals("@ma 核心", screen.getProjectSearchFieldForTest().getValue(), "未知前缀被建议项替换后应仅保留名称关键字");
-        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "替换未知前缀后下拉应自动关闭");
+        GuiTestSupport.assertEquals("@ma 核心", access(screen).getProjectSearchFieldForTest().getValue(), "未知前缀被建议项替换后应仅保留名称关键字");
+        GuiTestSupport.assertFalse(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "替换未知前缀后下拉应自动关闭");
     }
 
     /**
@@ -615,14 +628,14 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@me");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "@me");
 
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
                 "@me 应包含我创建的默认团队项目");
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(createdProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(createdProject).getString()),
                 "@me 应包含我创建的普通团队项目");
-        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains("External Search Team"),
+        GuiTestSupport.assertFalse(access(screen).getVisibleProjectNamesForTest().contains("External Search Team"),
                 "@me 不应包含他人创建的团队项目");
     }
 
@@ -642,12 +655,12 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@ma 核心");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "@ma 核心");
 
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains("核心 自建"), "@ma 核心 应包含我创建且命中关键字的项目");
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains("核心 管理"), "@ma 核心 应包含我以组长身份管理的项目");
-        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains("核心 自建"), "@ma 核心 应包含我创建且命中关键字的项目");
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains("核心 管理"), "@ma 核心 应包含我以组长身份管理的项目");
+        GuiTestSupport.assertFalse(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
                 "@ma 核心 不应包含仅以普通成员加入的项目");
     }
 
@@ -667,16 +680,16 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@in");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "@in");
 
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(defaultTeamProject).getString()),
                 "@in 应包含我已加入的默认团队项目");
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(memberProject).getString()),
                 "@in 应包含我以普通成员加入的项目");
-        GuiTestSupport.assertTrue(screen.getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(leadProject).getString()),
+        GuiTestSupport.assertTrue(access(screen).getVisibleProjectNamesForTest().contains(ProjectNameFormatter.toDisplayText(leadProject).getString()),
                 "@in 应包含我以组长身份加入的项目");
-        GuiTestSupport.assertFalse(screen.getVisibleProjectNamesForTest().contains("Joined Outsider Team"),
+        GuiTestSupport.assertFalse(access(screen).getVisibleProjectNamesForTest().contains("Joined Outsider Team"),
                 "@in 不应包含我未加入的项目");
     }
 
@@ -692,11 +705,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
-        ScreenDriver.setText(screen.getProjectSearchFieldForTest(), "@mx 特殊");
+        access(screen).switchProjectForTest(defaultTeamProject);
+        ScreenDriver.setText(access(screen).getProjectSearchFieldForTest(), "@mx 特殊");
 
         GuiTestSupport.assertEquals(List.of(ProjectNameFormatter.toDisplayText(namedProject).getString()),
-                screen.getVisibleProjectNamesForTest(),
+                access(screen).getVisibleProjectNamesForTest(),
                 "未知前缀应退化为普通名称搜索");
     }
 
@@ -711,17 +724,17 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(defaultTeamProject);
+        access(screen).switchProjectForTest(defaultTeamProject);
         focusProjectSearchField(screen);
-        GuiTestSupport.assertTrue(screen.isProjectSearchPrefixDropdownVisibleForTest(), "团队空间下拉应先显示");
+        GuiTestSupport.assertTrue(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "团队空间下拉应先显示");
 
-        int[] contentBounds = screen.getContentAreaBoundsForTest();
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
         screen.mouseClicked(contentBounds[0] + 8, contentBounds[1] + 8, 0);
-        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "点击搜索框外部后应关闭前缀下拉");
+        GuiTestSupport.assertFalse(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "点击搜索框外部后应关闭前缀下拉");
 
-        screen.switchProjectForTest(personalProject);
+        access(screen).switchProjectForTest(personalProject);
         focusProjectSearchField(screen);
-        GuiTestSupport.assertFalse(screen.isProjectSearchPrefixDropdownVisibleForTest(), "个人空间不应显示团队项目搜索前缀下拉");
+        GuiTestSupport.assertFalse(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "个人空间不应显示团队项目搜索前缀下拉");
     }
 
     private static void shouldShowApplyJoinButtonForNonMemberTeamProject() {
@@ -733,10 +746,10 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(outsiderProject);
+        access(screen).switchProjectForTest(outsiderProject);
 
-        GuiTestSupport.assertTrue(screen.isApplyJoinProjectButtonVisibleForTest(), "非成员团队项目应显示申请加入按钮");
-        GuiTestSupport.assertFalse(screen.isDeleteProjectButtonVisibleForTest(), "非成员团队项目不应显示删除按钮");
+        GuiTestSupport.assertTrue(access(screen).isApplyJoinProjectButtonVisibleForTest(), "非成员团队项目应显示申请加入按钮");
+        GuiTestSupport.assertFalse(access(screen).isDeleteProjectButtonVisibleForTest(), "非成员团队项目不应显示删除按钮");
     }
 
     /**
@@ -752,11 +765,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(memberProject);
+        access(screen).switchProjectForTest(memberProject);
 
-        GuiTestSupport.assertEquals("gui.todolist.project.view", screen.getEditProjectButtonTextForTest(), "普通成员进入团队项目时编辑按钮应降级为查看语义");
-        GuiTestSupport.assertFalse(screen.isApplyJoinProjectButtonVisibleForTest(), "已加入团队项目后不应继续显示申请加入按钮");
-        GuiTestSupport.assertTrue(screen.isDeleteProjectButtonVisibleForTest(), "已加入团队项目后应恢复删除按钮区域");
+        GuiTestSupport.assertEquals("gui.todolist.project.view", access(screen).getEditProjectButtonTextForTest(), "普通成员进入团队项目时编辑按钮应降级为查看语义");
+        GuiTestSupport.assertFalse(access(screen).isApplyJoinProjectButtonVisibleForTest(), "已加入团队项目后不应继续显示申请加入按钮");
+        GuiTestSupport.assertTrue(access(screen).isDeleteProjectButtonVisibleForTest(), "已加入团队项目后应恢复删除按钮区域");
     }
 
     private static void shouldSwitchProjectToTeamScopeAndSyncActiveProject() {
@@ -768,10 +781,10 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
 
-        GuiTestSupport.assertEquals(teamProject.getId(), screen.getCurrentProjectForTest().getId(), "切换后应选中团队项目");
-        GuiTestSupport.assertEquals("TEAM_UNASSIGNED", screen.getViewModeNameForTest(), "切换到团队项目后应进入团队未分配视图");
+        GuiTestSupport.assertEquals(teamProject.getId(), access(screen).getCurrentProjectForTest().getId(), "切换后应选中团队项目");
+        GuiTestSupport.assertEquals("TEAM_UNASSIGNED", access(screen).getViewModeNameForTest(), "切换到团队项目后应进入团队未分配视图");
         GuiTestSupport.assertEquals(teamProject.getId(), ops.getActiveProjectId(), "切换后应更新激活项目");
         GuiTestSupport.assertEquals(teamProject.getId(), ops.getActiveProjectSyncCalls().get(ops.getActiveProjectSyncCalls().size() - 1), "切换后应同步新的激活项目");
     }
@@ -788,23 +801,23 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
 
         Project updatedTeamProject = createTeamProject("team-dev", "Dev Team Updated");
         TodoListCommon.getProjectManager().updateProject(updatedTeamProject);
-        GuiTestSupport.assertEquals(updatedTeamProject, screen.getCurrentProjectForTest(), "收到 UPDATED 事件后应替换为最新项目对象");
+        GuiTestSupport.assertEquals(updatedTeamProject, access(screen).getCurrentProjectForTest(), "收到 UPDATED 事件后应替换为最新项目对象");
 
         TodoListCommon.getProjectManager().deleteProject(updatedTeamProject.getId());
-        GuiTestSupport.assertEquals(defaultTeamProject.getId(), screen.getCurrentProjectForTest().getId(), "删除当前团队项目后应回退到默认团队项目");
+        GuiTestSupport.assertEquals(defaultTeamProject.getId(), access(screen).getCurrentProjectForTest().getId(), "删除当前团队项目后应回退到默认团队项目");
 
         TodoListCommon.getProjectManager().clearAll();
-        GuiTestSupport.assertNull(screen.getCurrentProjectForTest(), "收到 CLEARED 事件后应清空当前项目");
-        GuiTestSupport.assertEquals("PERSONAL", screen.getViewModeNameForTest(), "项目清空后应回退到个人视图");
+        GuiTestSupport.assertNull(access(screen).getCurrentProjectForTest(), "收到 CLEARED 事件后应清空当前项目");
+        GuiTestSupport.assertEquals("PERSONAL", access(screen).getViewModeNameForTest(), "项目清空后应回退到个人视图");
         GuiTestSupport.assertNull(ops.getActiveProjectId(), "项目清空后桥接层中的激活项目也应为空");
 
         Project personalProject = createDefaultPersonalProject();
         TodoListCommon.getProjectManager().addProject(personalProject);
-        GuiTestSupport.assertEquals(personalProject.getId(), screen.getCurrentProjectForTest().getId(), "重新添加默认个人项目后应自动恢复选中");
+        GuiTestSupport.assertEquals(personalProject.getId(), access(screen).getCurrentProjectForTest().getId(), "重新添加默认个人项目后应自动恢复选中");
     }
 
     /**
@@ -819,15 +832,15 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Alpha");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        screen.selectTaskForTest(task);
-        ScreenDriver.setText(screen.getTitleFieldForTest(), "Alpha Updated");
-        ScreenDriver.setText(screen.getTagFieldForTest(), "red,urgent");
+        access(screen).selectTaskForTest(task);
+        ScreenDriver.setText(access(screen).getTitleFieldForTest(), "Alpha Updated");
+        ScreenDriver.setText(access(screen).getTagFieldForTest(), "red,urgent");
 
         GuiTestSupport.assertEquals("Alpha Updated", task.getTitle(), "编辑任务标题后应更新当前任务");
         GuiTestSupport.assertEquals(2, task.getTags().size(), "编辑标签后应拆分为两个标签");
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "编辑任务后应标记存在未保存改动");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "编辑任务后应标记存在未保存改动");
         GuiTestSupport.assertTrue(TodoScreen.hasPersonalUnsavedChanges(), "编辑个人任务后应同步个人未保存标记");
     }
 
@@ -848,15 +861,15 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Alpha");
         addTaskViaInput(screen, "Beta");
         addTaskViaInput(screen, "Gamma");
-        screen.saveTasksForTest();
-        GuiTestSupport.assertFalse(screen.hasUnsavedChangesForTest(), "保存后应先清除未保存状态");
+        access(screen).saveTasksForTest();
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "保存后应先清除未保存状态");
 
-        TaskListWidget widget = screen.getTaskListWidgetForTest();
-        Task gamma = screen.getFilteredTasksForTest().stream()
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        Task gamma = access(screen).getFilteredTasksForTest().stream()
                 .filter(task -> "Gamma".equals(task.getTitle()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到 Gamma 任务"));
-        Task alpha = screen.getFilteredTasksForTest().stream()
+        Task alpha = access(screen).getFilteredTasksForTest().stream()
                 .filter(task -> "Alpha".equals(task.getTitle()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到 Alpha 任务"));
@@ -869,10 +882,10 @@ public final class TodoScreenTestMain {
         screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
         screen.mouseReleased(interactX, targetY, 0);
 
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "手动拖拽排序后应重新标记为未保存");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "手动拖拽排序后应重新标记为未保存");
         GuiTestSupport.assertEquals(
                 List.of("Gamma", "Alpha", "Beta"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "手动拖拽排序后当前任务管理器应保留新的任务顺序"
         );
     }
@@ -892,7 +905,7 @@ public final class TodoScreenTestMain {
             addTaskViaInput(screen, "Scroll Task " + index);
         }
 
-        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         Task targetTask = requireTaskByTitle(screen, "Scroll Task 7");
         widget.ensureVisible(targetTask);
         int previousOffset = widget.getScrollOffsetForTest();
@@ -903,8 +916,8 @@ public final class TodoScreenTestMain {
         screen.mouseClicked(clickX, clickY, 0);
         screen.mouseReleased(clickX, clickY, 0);
 
-        GuiTestSupport.assertEquals(previousOffset, screen.getTaskListWidgetForTest().getScrollOffsetForTest(), "点击任务后应保持原有滚动偏移");
-        GuiTestSupport.assertEquals(targetTask.getId(), screen.getSelectedTaskForTest().getId(), "点击任务后仍应正确选中目标任务");
+        GuiTestSupport.assertEquals(previousOffset, access(screen).getTaskListWidgetForTest().getScrollOffsetForTest(), "点击任务后应保持原有滚动偏移");
+        GuiTestSupport.assertEquals(targetTask.getId(), access(screen).getSelectedTaskForTest().getId(), "点击任务后仍应正确选中目标任务");
     }
 
     /**
@@ -928,15 +941,15 @@ public final class TodoScreenTestMain {
         mediumTask.setPriority(Task.Priority.MEDIUM);
         highTask.setPriority(Task.Priority.HIGH);
         lowTask.setPriority(Task.Priority.LOW);
-        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
-        screen.selectTaskForTest(lowTask);
-        screen.openTaskContextMenuForTest(lowTask);
-        screen.clickContextMenuItemForTest(0);
+        access(screen).selectTaskForTest(lowTask);
+        access(screen).openTaskContextMenuForTest(lowTask);
+        access(screen).clickContextMenuItemForTest(0);
 
         GuiTestSupport.assertEquals(
                 List.of("High Middle", "Low Last", "Medium First"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "提升为高优先级后应移动到更靠前的优先级分组"
         );
     }
@@ -962,15 +975,15 @@ public final class TodoScreenTestMain {
         highTask.setPriority(Task.Priority.HIGH);
         mediumTask.setPriority(Task.Priority.MEDIUM);
         lowTask.setPriority(Task.Priority.LOW);
-        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
-        screen.selectTaskForTest(highTask);
-        screen.openTaskContextMenuForTest(highTask);
-        screen.clickContextMenuItemForTest(2);
+        access(screen).selectTaskForTest(highTask);
+        access(screen).openTaskContextMenuForTest(highTask);
+        access(screen).clickContextMenuItemForTest(2);
 
         GuiTestSupport.assertEquals(
                 List.of("Medium Middle", "Low Last", "High First"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "降低为低优先级后应移动到更靠后的优先级分组"
         );
     }
@@ -996,22 +1009,22 @@ public final class TodoScreenTestMain {
         highAlpha.setPriority(Task.Priority.HIGH);
         highBeta.setPriority(Task.Priority.HIGH);
         gamma.setPriority(Task.Priority.MEDIUM);
-        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
         dragTaskBefore(screen, highBeta, highAlpha);
         GuiTestSupport.assertEquals(
                 List.of("High Beta", "High Alpha", "Gamma"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "手动拖拽后同优先级任务顺序应先被任务管理器记录"
         );
 
-        screen.selectTaskForTest(gamma);
-        screen.openTaskContextMenuForTest(gamma);
-        screen.clickContextMenuItemForTest(0);
+        access(screen).selectTaskForTest(gamma);
+        access(screen).openTaskContextMenuForTest(gamma);
+        access(screen).clickContextMenuItemForTest(0);
 
         GuiTestSupport.assertEquals(
                 List.of("High Beta", "High Alpha", "Gamma"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "优先级归位后应保留原有高优先级任务之间的手动拖拽顺序"
         );
     }
@@ -1027,42 +1040,39 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Alpha");
         addTaskViaInput(screen, "Beta");
 
-        ScreenDriver.setText(screen.getSearchFieldForTest(), "be");
-        GuiTestSupport.assertEquals(1, screen.getFilteredTasksForTest().size(), "搜索后应只保留匹配关键字的任务");
-        GuiTestSupport.assertEquals("Beta", screen.getFilteredTasksForTest().get(0).getTitle(), "搜索后应返回匹配标题的任务");
+        ScreenDriver.setText(access(screen).getSearchFieldForTest(), "be");
+        GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "搜索后应只保留匹配关键字的任务");
+        GuiTestSupport.assertEquals("Beta", access(screen).getFilteredTasksForTest().get(0).getTitle(), "搜索后应返回匹配标题的任务");
 
-        ScreenDriver.setText(screen.getSearchFieldForTest(), "");
-        Task alpha = screen.getFilteredTasksForTest().stream()
+        ScreenDriver.setText(access(screen).getSearchFieldForTest(), "");
+        Task alpha = access(screen).getFilteredTasksForTest().stream()
                 .filter(task -> "Alpha".equals(task.getTitle()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到 Alpha 任务"));
         alpha.setCompleted(true);
 
-        screen.switchProjectForTest(screen.getCurrentProjectForTest());
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
-        GuiTestSupport.assertTrue(screen.getFilterStatusButtonForTest() == null, "待办界面不应再显示状态筛选按钮");
-        GuiTestSupport.assertEquals("active", screen.getCurrentFilterForTest(), "当前筛选状态应固定为未完成列表");
-        GuiTestSupport.assertEquals(1, screen.getFilteredTasksForTest().size(), "未完成列表中只应保留未完成任务");
-        GuiTestSupport.assertEquals("Beta", screen.getFilteredTasksForTest().get(0).getTitle(), "未完成列表中应只显示 Beta");
+        GuiTestSupport.assertTrue(access(screen).getFilterStatusButtonForTest() == null, "待办界面不应再显示状态筛选按钮");
+        GuiTestSupport.assertEquals("active", access(screen).getCurrentFilterForTest(), "当前筛选状态应固定为未完成列表");
+        GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "未完成列表中只应保留未完成任务");
+        GuiTestSupport.assertEquals("Beta", access(screen).getFilteredTasksForTest().get(0).getTitle(), "未完成列表中应只显示 Beta");
 
-        List<String> collapsedRows = screen.getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        List<String> collapsedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
         GuiTestSupport.assertEquals(3, collapsedRows.size(), "默认收起时应包含两个分组标题和一条未完成任务");
         GuiTestSupport.assertTrue(collapsedRows.get(0).startsWith("HEADER:"), "第一行应为未完成分组标题");
-        GuiTestSupport.assertEquals("TASK:" + screen.getFilteredTasksForTest().get(0).getId(), collapsedRows.get(1), "收起时应仅显示 Beta 任务");
+        GuiTestSupport.assertEquals("TASK:" + access(screen).getFilteredTasksForTest().get(0).getId(), collapsedRows.get(1), "收起时应仅显示 Beta 任务");
         GuiTestSupport.assertTrue(collapsedRows.get(2).startsWith("HEADER:"), "最后一行应为已完成分组标题");
 
-        screen.toggleCompletedSectionForTest();
+        access(screen).toggleCompletedSectionForTest();
 
-        List<String> expandedRows = screen.getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        List<String> expandedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
         GuiTestSupport.assertEquals(4, expandedRows.size(), "展开已完成分组后应额外显示已完成任务");
         GuiTestSupport.assertEquals("TASK:" + alpha.getId(), expandedRows.get(3), "展开已完成分组后应显示 Alpha 任务");
     }
 
     /**
-     * 验证保存个人任务后，会发送整表替换、清除未保存状态并返回父界面。
-     */
-    /**
-     * 楠岃瘉涓汉瑙嗗浘涓嬪凡瀹屾垚浠诲姟鐐瑰嚮澶嶉€夋鍚庡彲浠ユ仮澶嶄负鏈畬鎴愩€?
+     * 验证个人视图下点击已完成任务的复选框后可以恢复为未完成。
      */
     private static void shouldAllowUncompleteCompletedTaskInPersonalView() {
         GuiTestSupport.resetState();
@@ -1073,15 +1083,64 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Completed Personal Task");
-        Task task = screen.getCurrentManagerTasksForTest().get(0);
+        Task task = access(screen).getCurrentManagerTasksForTest().get(0);
         task.setCompleted(true);
-        screen.switchProjectForTest(screen.getCurrentProjectForTest());
-        screen.toggleCompletedSectionForTest();
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        access(screen).toggleCompletedSectionForTest();
 
-        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
 
-        GuiTestSupport.assertFalse(screen.getCurrentManagerTasksForTest().get(0).isCompleted(), "个人视图下点击已完成任务的复选框后应恢复为未完成");
+        GuiTestSupport.assertFalse(access(screen).getCurrentManagerTasksForTest().get(0).isCompleted(), "个人视图下点击已完成任务的复选框后应恢复为未完成");
+    }
+
+    /**
+     * 验证已完成任务取消勾选后，会立即回到未完成分组而不必先保存。
+     */
+    private static void shouldShowUncompletedTaskInActiveSectionImmediately() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Completed Personal Task");
+        Task task = access(screen).getCurrentManagerTasksForTest().get(0);
+        task.setCompleted(true);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        access(screen).toggleCompletedSectionForTest();
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        List<String> rows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "取消已完成后应立即重新进入未完成任务列表");
+        GuiTestSupport.assertEquals("TASK:" + task.getId(), rows.get(1), "取消已完成后任务应立即显示在未完成分组中");
+        GuiTestSupport.assertEquals(3, rows.size(), "取消已完成后已完成分组应只保留标题行");
+    }
+
+    /**
+     * 验证存在选中任务时，只要快速新增输入框聚焦，回车仍可新增任务。
+     */
+    private static void shouldAllowEnterAddWhileTaskSelected() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Alpha");
+        Task task = access(screen).getCurrentManagerTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+
+        ScreenDriver.setText(access(screen).getQuickAddFieldForTest(), "Beta");
+        addTaskViaEnter(screen);
+
+        List<Task> tasks = access(screen).getCurrentManagerTasksForTest();
+        GuiTestSupport.assertEquals(2, tasks.size(), "选中任务时在快速新增框按回车仍应新增任务");
+        GuiTestSupport.assertEquals("Beta", tasks.get(1).getTitle(), "新增任务标题应来自快速新增输入框");
     }
 
     private static void shouldSavePersonalTasksAndClearUnsavedState() {
@@ -1093,10 +1152,10 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Alpha");
-        screen.saveTasksForTest();
+        access(screen).saveTasksForTest();
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "保存个人任务后应向桥接层发送整表替换");
-        GuiTestSupport.assertFalse(screen.hasUnsavedChangesForTest(), "保存后应清除未保存状态");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "保存后应清除未保存状态");
         GuiTestSupport.assertEquals(1, minecraft.getTestPlayerMessages().size(), "保存成功后应给玩家发送一条提示消息");
         GuiTestSupport.assertNotNull(minecraft.getLastScreen(), "保存后应返回父界面");
     }
@@ -1113,11 +1172,11 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Alpha");
-        GuiTestSupport.assertEquals(1, screen.getCurrentManagerTasksForTest().size(), "关闭前当前任务管理器中应存在未保存任务");
+        GuiTestSupport.assertEquals(1, access(screen).getCurrentManagerTasksForTest().size(), "关闭前当前任务管理器中应存在未保存任务");
 
         screen.onClose();
 
-        GuiTestSupport.assertEquals(0, screen.getCurrentManagerTasksForTest().size(), "关闭后未保存的个人任务应被丢弃");
+        GuiTestSupport.assertEquals(0, access(screen).getCurrentManagerTasksForTest().size(), "关闭后未保存的个人任务应被丢弃");
         GuiTestSupport.assertEquals(0, ops.getRequestTeamSyncCallCount(), "关闭个人任务界面时不应请求团队同步");
         GuiTestSupport.assertFalse(TodoScreen.hasPersonalUnsavedChanges(), "关闭后应清除个人未保存标记");
     }
@@ -1134,13 +1193,13 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Team Task");
 
         screen.onClose();
 
         GuiTestSupport.assertEquals(1, ops.getRequestTeamSyncCallCount(), "关闭未保存的团队视图时应请求团队同步");
-        GuiTestSupport.assertFalse(screen.hasUnsavedChangesForTest(), "关闭后应清除团队视图的未保存状态");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "关闭后应清除团队视图的未保存状态");
     }
 
     /**
@@ -1154,12 +1213,12 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(null);
-        ScreenDriver.setText(screen.getTitleFieldForTest(), "Orphan Task");
+        access(screen).switchProjectForTest(null);
+        ScreenDriver.setText(access(screen).getTitleFieldForTest(), "Orphan Task");
         addTaskViaEnter(screen);
 
-        GuiTestSupport.assertEquals(1, screen.getNotificationCountForTest(), "未选择项目时新增任务应显示提示");
-        GuiTestSupport.assertEquals(0, screen.getCurrentManagerTasksForTest().size(), "未选择项目时不应真正新增任务");
+        GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "未选择项目时新增任务应显示提示");
+        GuiTestSupport.assertEquals(0, access(screen).getCurrentManagerTasksForTest().size(), "未选择项目时不应真正新增任务");
     }
 
     /**
@@ -1174,19 +1233,19 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Alpha");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        screen.selectTaskForTest(task);
-        screen.openTaskContextMenuForTest(task);
-        GuiTestSupport.assertTrue(screen.hasContextMenuForTest(), "打开上下文菜单后应处于菜单打开状态");
-        GuiTestSupport.assertEquals(4, screen.getContextMenuItemTextsForTest().size(), "上下文菜单应包含四个操作项");
+        access(screen).selectTaskForTest(task);
+        access(screen).openTaskContextMenuForTest(task);
+        GuiTestSupport.assertTrue(access(screen).hasContextMenuForTest(), "打开上下文菜单后应处于菜单打开状态");
+        GuiTestSupport.assertEquals(4, access(screen).getContextMenuItemTextsForTest().size(), "上下文菜单应包含四个操作项");
 
-        screen.clickContextMenuItemForTest(0);
+        access(screen).clickContextMenuItemForTest(0);
 
         GuiTestSupport.assertEquals(Task.Priority.HIGH, task.getPriority(), "通过上下文菜单修改后任务优先级应更新");
         GuiTestSupport.assertEquals(1, ops.getUpdateTaskCalls().size(), "通过上下文菜单修改优先级后应发送更新请求");
-        GuiTestSupport.assertFalse(screen.hasContextMenuForTest(), "执行上下文菜单操作后应关闭菜单");
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "通过上下文菜单修改任务后应标记未保存状态");
+        GuiTestSupport.assertFalse(access(screen).hasContextMenuForTest(), "执行上下文菜单操作后应关闭菜单");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "通过上下文菜单修改任务后应标记未保存状态");
     }
 
     /**
@@ -1208,22 +1267,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Team Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        Screen assignScreen = access(screen).createAssignPlayerScreenForTest(task);
         ScreenDriver.init(minecraft, assignScreen);
-        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "指派列表应只展示团队项目成员且 owner 只出现一次");
-        screen.setAssignPlayerSearchForTest(assignScreen, "bo");
-        GuiTestSupport.assertEquals(List.of("bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "搜索分配玩家时应只保留匹配结果");
+        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "指派列表应只展示团队项目成员且 owner 只出现一次");
+        access(screen).setAssignPlayerSearchForTest(assignScreen, "bo");
+        GuiTestSupport.assertEquals(List.of("bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "搜索分配玩家时应只保留匹配结果");
 
-        screen.clickAssignPlayerRowForTest(assignScreen, 0);
+        access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
 
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "点击玩家后应把任务分配给对应成员");
         GuiTestSupport.assertEquals("20000000-0000-0000-0000-000000000003", task.getAssigneeUuid(), "分配后应写入对应玩家 UUID");
-        GuiTestSupport.assertEquals(1, screen.getNotificationCountForTest(), "分配任务后应显示成功提示");
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "分配任务后应标记未保存状态");
+        GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "分配任务后应显示成功提示");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "分配任务后应标记未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "完成分配后应返回主界面");
     }
 
@@ -1245,22 +1304,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Offline Assign Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        Screen assignScreen = access(screen).createAssignPlayerScreenForTest(task);
         ScreenDriver.init(minecraft, assignScreen);
 
-        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "离线项目成员也应出现在指派列表中，在线非成员不应出现");
-        screen.setAssignPlayerSearchForTest(assignScreen, "bo");
-        GuiTestSupport.assertEquals(List.of("bob"), screen.getAssignablePlayerNamesForTest(assignScreen), "搜索离线项目成员时也应命中缓存名称");
+        GuiTestSupport.assertEquals(List.of("owner", "alice", "bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "离线项目成员也应出现在指派列表中，在线非成员不应出现");
+        access(screen).setAssignPlayerSearchForTest(assignScreen, "bo");
+        GuiTestSupport.assertEquals(List.of("bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "搜索离线项目成员时也应命中缓存名称");
 
-        screen.clickAssignPlayerRowForTest(assignScreen, 0);
+        access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
 
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "离线成员被选中后应写入缓存名称");
         GuiTestSupport.assertEquals(BOB_ID.toString(), task.getAssigneeUuid(), "离线成员被选中后应写入对应 UUID");
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "指派离线成员后仍应标记未保存");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "指派离线成员后仍应标记未保存");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "指派离线成员后应返回主界面");
     }
 
@@ -1285,21 +1344,21 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Assign Overflow Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        Screen assignScreen = access(screen).createAssignPlayerScreenForTest(task);
         ScreenDriver.init(minecraft, assignScreen);
 
-        int candidateCount = screen.getAssignablePlayerNamesForTest(assignScreen).size();
-        int visibleRows = screen.getAssignPlayerVisibleRowsForTest(assignScreen);
+        int candidateCount = access(screen).getAssignablePlayerNamesForTest(assignScreen).size();
+        int visibleRows = access(screen).getAssignPlayerVisibleRowsForTest(assignScreen);
         GuiTestSupport.assertTrue(candidateCount > visibleRows, "候选成员超出可见行数时才能验证滚动列表");
 
-        screen.scrollAssignPlayerListForTest(assignScreen, candidateCount + 2);
+        access(screen).scrollAssignPlayerListForTest(assignScreen, candidateCount + 2);
 
         int expectedMaxOffset = candidateCount - visibleRows;
-        GuiTestSupport.assertEquals(expectedMaxOffset, screen.getAssignPlayerScrollOffsetForTest(assignScreen), "指派列表滚动时应停在最后一屏，不应越过可见范围");
+        GuiTestSupport.assertEquals(expectedMaxOffset, access(screen).getAssignPlayerScrollOffsetForTest(assignScreen), "指派列表滚动时应停在最后一屏，不应越过可见范围");
     }
 
     /**
@@ -1318,11 +1377,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Small Screen Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
+        Task task = access(screen).getFilteredTasksForTest().get(0);
 
-        Screen assignScreen = screen.createAssignPlayerScreenForTest(task);
+        Screen assignScreen = access(screen).createAssignPlayerScreenForTest(task);
         GuiTestSupport.initScreen(minecraft, assignScreen, 320, 170);
 
         List<Button> buttons = ScreenDriver.getButtons(assignScreen);
@@ -1404,7 +1463,7 @@ public final class TodoScreenTestMain {
      * @param title 任务标题
      */
     private static void addTaskViaInput(TodoScreen screen, String title) {
-        ScreenDriver.setText(screen.getQuickAddFieldForTest(), title);
+        ScreenDriver.setText(access(screen).getQuickAddFieldForTest(), title);
         addTaskViaEnter(screen);
     }
 
@@ -1414,7 +1473,7 @@ public final class TodoScreenTestMain {
      * @param screen 待操作界面
      */
     private static void addTaskViaEnter(TodoScreen screen) {
-        screen.getQuickAddFieldForTest().setFocused(true);
+        access(screen).getQuickAddFieldForTest().setFocused(true);
         ScreenDriver.pressEnter(screen);
     }
 
@@ -1432,8 +1491,8 @@ public final class TodoScreenTestMain {
      * @param screen 目标界面
      */
     private static void focusProjectSearchField(TodoScreen screen) {
-        int x = screen.getProjectSearchFieldForTest().getX() + 4;
-        int y = screen.getProjectSearchFieldForTest().getY() + Math.max(1, screen.getProjectSearchFieldForTest().getHeight() / 2);
+        int x = access(screen).getProjectSearchFieldForTest().getX() + 4;
+        int y = access(screen).getProjectSearchFieldForTest().getY() + Math.max(1, access(screen).getProjectSearchFieldForTest().getHeight() / 2);
         screen.mouseClicked(x, y, 0);
     }
 
@@ -1444,7 +1503,7 @@ public final class TodoScreenTestMain {
      * @param index 候选项索引
      */
     private static void clickProjectSearchPrefixSuggestion(TodoScreen screen, int index) {
-        int[] bounds = screen.getProjectSearchPrefixSuggestionBoundsForTest(index);
+        int[] bounds = access(screen).getProjectSearchPrefixSuggestionBoundsForTest(index);
         int x = bounds[0] + Math.max(1, bounds[2] / 2);
         int y = bounds[1] + Math.max(1, bounds[3] / 2);
         screen.mouseClicked(x, y, 0);
@@ -1458,7 +1517,7 @@ public final class TodoScreenTestMain {
      * @return 匹配到的任务
      */
     private static Task requireTaskByTitle(TodoScreen screen, String title) {
-        return screen.getCurrentManagerTasksForTest().stream()
+        return access(screen).getCurrentManagerTasksForTest().stream()
                 .filter(task -> title.equals(task.getTitle()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到任务: " + title));
@@ -1472,7 +1531,7 @@ public final class TodoScreenTestMain {
      * @param targetTask 目标位置前方的任务
      */
     private static void dragTaskBefore(TodoScreen screen, Task sourceTask, Task targetTask) {
-        TaskListWidget widget = screen.getTaskListWidgetForTest();
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         widget.ensureVisible(sourceTask);
         widget.ensureVisible(targetTask);
         int interactX = widget.getInteractXForTest();
@@ -1493,8 +1552,8 @@ public final class TodoScreenTestMain {
      * @return 已初始化的删除确认弹窗
      */
     private static Screen openDeleteTaskConfirmScreen(FakeMinecraftClient minecraft, TodoScreen screen, Task task) {
-        screen.openTaskContextMenuForTest(task);
-        screen.clickContextMenuItemForTest(3);
+        access(screen).openTaskContextMenuForTest(task);
+        access(screen).clickContextMenuItemForTest(3);
         Screen confirmScreen = minecraft.getLastScreen();
         GuiTestSupport.assertNotNull(confirmScreen, "点击删除后应弹出确认窗口");
         GuiTestSupport.assertTrue(confirmScreen instanceof ConfirmActionScreen, "点击删除后应打开任务删除确认弹窗");
@@ -1551,7 +1610,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld() {
         GuiTestSupport.resetState();
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
 
         FakeMinecraftClient publishedMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         publishedMinecraft.setLocalServer(true);
@@ -1562,13 +1621,13 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(publishedMinecraft, publishedScreen);
         addTaskViaInput(publishedScreen, "Published Personal Task");
-        publishedScreen.saveTasksForTest();
+        access(publishedScreen).saveTasksForTest();
 
         GuiTestSupport.assertEquals(List.of("Published Personal Task"),
                 TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
                 "LAN 主机保存个人任务后应同步写入本地文件");
 
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
         FakeMinecraftClient singleplayerMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         singleplayerMinecraft.setLocalServer(true);
         TodoScreen singleplayerScreen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
@@ -1576,7 +1635,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(singleplayerMinecraft, singleplayerScreen);
 
         GuiTestSupport.assertEquals(List.of("Published Personal Task"),
-                singleplayerScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(singleplayerScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重新进入单人世界后应仍能看到之前保存的个人任务");
     }
 
@@ -1586,7 +1645,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow() {
         GuiTestSupport.resetState();
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
 
         FakeMinecraftClient lanHostMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         lanHostMinecraft.setLocalServer(true);
@@ -1597,9 +1656,9 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(lanHostMinecraft, lanHostScreen);
         addTaskViaInput(lanHostScreen, "LAN Host Journey Task");
-        GuiTestSupport.assertTrue(lanHostScreen.hasUnsavedChangesForTest(), "发布局域网后新增个人任务应先标记为未保存");
+        GuiTestSupport.assertTrue(access(lanHostScreen).hasUnsavedChangesForTest(), "发布局域网后新增个人任务应先标记为未保存");
 
-        lanHostScreen.saveTasksForTest();
+        access(lanHostScreen).saveTasksForTest();
 
         GuiTestSupport.assertNotNull(lanHostMinecraft.getLastScreen(), "保存个人任务后应关闭当前界面并返回父界面");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
@@ -1609,7 +1668,7 @@ public final class TodoScreenTestMain {
                 loadPlayerTaskTitles(OWNER_ID),
                 "LAN 主机保存个人任务后也应写入主机玩家文件");
 
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
         FakeMinecraftClient singleplayerMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         singleplayerMinecraft.setLocalServer(true);
         singleplayerMinecraft.setIntegratedServer(createUnpublishedIntegratedServer());
@@ -1618,7 +1677,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(singleplayerMinecraft, singleplayerScreen);
 
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
-                singleplayerScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(singleplayerScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "退出局域网主机后重新进入单人世界仍应看到刚才保存的个人任务");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
                 TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
@@ -1630,7 +1689,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldSavePersonalAndTeamTasksWhenSavingFromTeamViewOnRemoteServer() {
         RecordingClientOps ops = GuiTestSupport.resetState();
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
 
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         Project personalProject = createDefaultPersonalProject();
@@ -1640,10 +1699,10 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Remote Personal Task");
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Remote Team Task");
 
-        screen.saveTasksForTest();
+        access(screen).saveTasksForTest();
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "从团队视图保存时也应提交个人任务整表");
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "从团队视图保存时应提交团队任务整表");
@@ -1657,13 +1716,13 @@ public final class TodoScreenTestMain {
 
         TodoScreen reopenScreen = new TodoScreen(ScreenDriver.createParentScreen("remote"));
         ScreenDriver.init(minecraft, reopenScreen);
-        GuiTestSupport.assertEquals(personalProject.getId(), reopenScreen.getCurrentProjectForTest().getId(), "重新打开 GUI 后应仍能回到个人项目");
+        GuiTestSupport.assertEquals(personalProject.getId(), access(reopenScreen).getCurrentProjectForTest().getId(), "重新打开 GUI 后应仍能回到个人项目");
         GuiTestSupport.assertEquals(List.of("Remote Personal Task"),
-                reopenScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(reopenScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重新打开 GUI 后应能看到保存过的个人任务");
-        reopenScreen.switchProjectForTest(teamProject);
+        access(reopenScreen).switchProjectForTest(teamProject);
         GuiTestSupport.assertEquals(List.of("Remote Team Task"),
-                reopenScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(reopenScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重新打开 GUI 后应能看到保存过的团队任务");
     }
 
@@ -1672,7 +1731,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldKeepPersonalAndTeamTasksAfterRemoteReconnectWhenSavingFromPersonalView() {
         RecordingClientOps ops = GuiTestSupport.resetState();
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
 
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         Project personalProject = createDefaultPersonalProject();
@@ -1681,12 +1740,12 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("remote"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Remote Team Persisted Task");
-        screen.switchProjectForTest(personalProject);
+        access(screen).switchProjectForTest(personalProject);
         addTaskViaInput(screen, "Remote Personal Persisted Task");
 
-        screen.saveTasksForTest();
+        access(screen).saveTasksForTest();
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "从个人视图保存时应提交个人任务整表");
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "从个人视图保存时也应提交团队任务整表");
@@ -1694,29 +1753,29 @@ public final class TodoScreenTestMain {
         TodoScreen sameSessionScreen = new TodoScreen(ScreenDriver.createParentScreen("remote"));
         ScreenDriver.init(minecraft, sameSessionScreen);
         GuiTestSupport.assertEquals(List.of("Remote Personal Persisted Task"),
-                sameSessionScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(sameSessionScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "同一联机会话内重新打开 GUI 时应能看到保存过的个人任务");
-        sameSessionScreen.switchProjectForTest(teamProject);
+        access(sameSessionScreen).switchProjectForTest(teamProject);
         GuiTestSupport.assertEquals(List.of("Remote Team Persisted Task"),
-                sameSessionScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(sameSessionScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "同一联机会话内重新打开 GUI 时应能看到保存过的团队任务");
 
         RecordingClientOps reconnectOps = new RecordingClientOps();
         restoreTasksToManager(reconnectOps.getTeamTaskManager(), ops.getReplaceTeamTaskCalls().get(0));
         ClientBridge.setOps(reconnectOps);
-        TodoScreen.resetGuiStateForTest();
+        TodoScreenTestAccess.resetGuiStateForTest();
 
         FakeMinecraftClient reconnectMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         TodoScreen reconnectScreen = new TodoScreen(ScreenDriver.createParentScreen("remote"));
         ScreenDriver.init(reconnectMinecraft, reconnectScreen);
 
-        GuiTestSupport.assertEquals(personalProject.getId(), reconnectScreen.getCurrentProjectForTest().getId(), "重连后默认应仍能进入个人项目");
+        GuiTestSupport.assertEquals(personalProject.getId(), access(reconnectScreen).getCurrentProjectForTest().getId(), "重连后默认应仍能进入个人项目");
         GuiTestSupport.assertEquals(List.of("Remote Personal Persisted Task"),
-                reconnectScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(reconnectScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重连后应能从个人任务存储恢复个人任务");
-        reconnectScreen.switchProjectForTest(teamProject);
+        access(reconnectScreen).switchProjectForTest(teamProject);
         GuiTestSupport.assertEquals(List.of("Remote Team Persisted Task"),
-                reconnectScreen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(reconnectScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重连后应能从服务端同步结果恢复团队任务");
     }
 
@@ -1793,9 +1852,9 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
 
-        GuiTestSupport.assertEquals("PERSONAL", screen.getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
-        GuiTestSupport.assertEquals(List.of("MY"), screen.getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
-        GuiTestSupport.assertEquals("MY", screen.getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
+        GuiTestSupport.assertEquals("PERSONAL", access(screen).getCurrentSpaceModeNameForTest(), "默认个人项目下应解析为个人空间");
+        GuiTestSupport.assertEquals(List.of("MY"), access(screen).getVisibleTaskViewOptionNamesForTest(), "个人空间应只显示“我的”视图");
+        GuiTestSupport.assertEquals("MY", access(screen).getCurrentTaskViewOptionNameForTest(), "个人空间当前视图应为“我的”");
     }
 
     /**
@@ -1810,11 +1869,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
 
-        GuiTestSupport.assertEquals("TEAM", screen.getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
-        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), screen.getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
-        GuiTestSupport.assertEquals("UNASSIGNED", screen.getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
+        GuiTestSupport.assertEquals("TEAM", access(screen).getCurrentSpaceModeNameForTest(), "切换团队项目后应解析为团队空间");
+        GuiTestSupport.assertEquals(List.of("UNASSIGNED", "ALL", "MY"), access(screen).getVisibleTaskViewOptionNamesForTest(), "团队空间应显示三个团队视图");
+        GuiTestSupport.assertEquals("UNASSIGNED", access(screen).getCurrentTaskViewOptionNameForTest(), "团队空间默认视图应为“待分配”");
     }
 
     /**
@@ -1829,11 +1888,11 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "Unassigned");
         addTaskViaInput(screen, "Mine");
         addTaskViaInput(screen, "Others");
-        List<Task> teamTasks = screen.getCurrentManagerTasksForTest();
+        List<Task> teamTasks = access(screen).getCurrentManagerTasksForTest();
         Task unassigned = teamTasks.stream().filter(task -> "Unassigned".equals(task.getTitle())).findFirst()
                 .orElseThrow(() -> new AssertionError("应能找到 Unassigned 任务"));
         Task mine = teamTasks.stream().filter(task -> "Mine".equals(task.getTitle())).findFirst()
@@ -1845,10 +1904,10 @@ public final class TodoScreenTestMain {
         others.setAssigneeUuid(ALICE_ID.toString());
         others.setAssigneeName("alice");
 
-        screen.switchToTeamAllViewForTest();
+        access(screen).switchToTeamAllViewForTest();
 
-        List<String> titles = screen.getFilteredTasksForTest().stream().map(Task::getTitle).toList();
-        GuiTestSupport.assertEquals("ALL", screen.getCurrentTaskViewOptionNameForTest(), "切换后当前任务视图应为“全部”");
+        List<String> titles = access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList();
+        GuiTestSupport.assertEquals("ALL", access(screen).getCurrentTaskViewOptionNameForTest(), "切换后当前任务视图应为“全部”");
         GuiTestSupport.assertTrue(titles.contains("Unassigned"), "团队全部视图应展示未分配任务");
         GuiTestSupport.assertTrue(titles.contains("Mine"), "团队全部视图应展示分配给自己的任务");
         GuiTestSupport.assertTrue(titles.contains("Others"), "团队全部视图应展示分配给其他成员的任务");
@@ -1867,22 +1926,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(memberProject);
-        screen.switchToTeamAllViewForTest();
+        access(screen).switchProjectForTest(memberProject);
+        access(screen).switchToTeamAllViewForTest();
 
         addTaskViaInput(screen, "Blocked In Team All");
-        GuiTestSupport.assertEquals(0, screen.getCurrentManagerTasksForTest().size(), "未开启允许成员创建时，团队全部视图不应允许普通成员新增任务");
-        GuiTestSupport.assertEquals(1, screen.getNotificationCountForTest(), "被权限拦截时应显示提示");
+        GuiTestSupport.assertEquals(0, access(screen).getCurrentManagerTasksForTest().size(), "未开启允许成员创建时，团队全部视图不应允许普通成员新增任务");
+        GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "被权限拦截时应显示提示");
 
         memberProject.setAllowMemberCreate(true);
         addTaskViaInput(screen, "Allowed In Team All");
 
         GuiTestSupport.assertEquals(
                 List.of("Allowed In Team All"),
-                screen.getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "开启允许成员创建后，团队全部视图应允许普通成员新增任务"
         );
-        GuiTestSupport.assertTrue(screen.hasUnsavedChangesForTest(), "新增团队任务后应标记存在未保存改动");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "新增团队任务后应标记存在未保存改动");
     }
 
     /**
@@ -1897,22 +1956,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
+        access(screen).switchProjectForTest(teamProject);
         addTaskViaInput(screen, "A1");
         addTaskViaInput(screen, "A2");
-        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
-        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
-        int[] taskListBounds = screen.getTaskListBoundsForTest();
+        String originalSpaceMode = access(screen).getCurrentSpaceModeNameForTest();
+        String originalTaskView = access(screen).getCurrentTaskViewOptionNameForTest();
+        int[] taskListBounds = access(screen).getTaskListBoundsForTest();
         int headerClickX = taskListBounds[0] + 10;
-        int activeHeaderClickY = screen.getTaskListWidgetForTest().getSectionHeaderCenterYForTest("active");
+        int activeHeaderClickY = access(screen).getTaskListWidgetForTest().getSectionHeaderCenterYForTest("active");
 
-        GuiTestSupport.assertTrue(screen.isActiveSectionExpandedForTest(), "默认情况下未完成分组应处于展开状态");
+        GuiTestSupport.assertTrue(access(screen).isActiveSectionExpandedForTest(), "默认情况下未完成分组应处于展开状态");
 
         screen.mouseClicked(headerClickX, activeHeaderClickY, 0);
 
-        GuiTestSupport.assertFalse(screen.isActiveSectionExpandedForTest(), "切换后未完成分组应收起");
-        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换未完成分组不应改变当前空间");
-        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换未完成分组不应改变当前任务视图");
+        GuiTestSupport.assertFalse(access(screen).isActiveSectionExpandedForTest(), "切换后未完成分组应收起");
+        GuiTestSupport.assertEquals(originalSpaceMode, access(screen).getCurrentSpaceModeNameForTest(), "切换未完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, access(screen).getCurrentTaskViewOptionNameForTest(), "切换未完成分组不应改变当前任务视图");
     }
 
     /**
@@ -1927,22 +1986,22 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        screen.switchProjectForTest(teamProject);
-        String originalSpaceMode = screen.getCurrentSpaceModeNameForTest();
-        String originalTaskView = screen.getCurrentTaskViewOptionNameForTest();
+        access(screen).switchProjectForTest(teamProject);
+        String originalSpaceMode = access(screen).getCurrentSpaceModeNameForTest();
+        String originalTaskView = access(screen).getCurrentTaskViewOptionNameForTest();
 
-        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
+        GuiTestSupport.assertFalse(access(screen).isCompletedSectionExpandedForTest(), "默认情况下已完成分组应处于收起状态");
 
-        screen.toggleCompletedSectionForTest();
+        access(screen).toggleCompletedSectionForTest();
 
-        GuiTestSupport.assertTrue(screen.isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
-        GuiTestSupport.assertEquals(originalSpaceMode, screen.getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
-        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
+        GuiTestSupport.assertTrue(access(screen).isCompletedSectionExpandedForTest(), "切换后已完成分组应展开");
+        GuiTestSupport.assertEquals(originalSpaceMode, access(screen).getCurrentSpaceModeNameForTest(), "切换已完成分组不应改变当前空间");
+        GuiTestSupport.assertEquals(originalTaskView, access(screen).getCurrentTaskViewOptionNameForTest(), "切换已完成分组不应改变当前任务视图");
 
-        screen.toggleCompletedSectionForTest();
+        access(screen).toggleCompletedSectionForTest();
 
-        GuiTestSupport.assertFalse(screen.isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
-        GuiTestSupport.assertEquals(originalTaskView, screen.getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
+        GuiTestSupport.assertFalse(access(screen).isCompletedSectionExpandedForTest(), "再次切换后已完成分组应恢复收起");
+        GuiTestSupport.assertEquals(originalTaskView, access(screen).getCurrentTaskViewOptionNameForTest(), "反复切换已完成分组也不应改变当前任务视图");
     }
 
     /**
@@ -1957,10 +2016,10 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.initScreen(minecraft, screen, 420, 250);
 
-        int[] saveBounds = screen.getSaveButtonBoundsForTest();
-        int[] cancelBounds = screen.getCancelButtonBoundsForTest();
-        int[] quickAddBounds = screen.getQuickAddFieldBoundsForTest();
-        int[] taskListBounds = screen.getTaskListBoundsForTest();
+        int[] saveBounds = access(screen).getSaveButtonBoundsForTest();
+        int[] cancelBounds = access(screen).getCancelButtonBoundsForTest();
+        int[] quickAddBounds = access(screen).getQuickAddFieldBoundsForTest();
+        int[] taskListBounds = access(screen).getTaskListBoundsForTest();
         int actionsCenterX = (saveBounds[0] + cancelBounds[0] + cancelBounds[2]) / 2;
         int screenCenterX = 420 / 2;
         int buttonsBottom = Math.max(saveBounds[1] + saveBounds[3], cancelBounds[1] + cancelBounds[3]);
@@ -1984,31 +2043,31 @@ public final class TodoScreenTestMain {
 
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Focusable Task");
-        Task task = screen.getFilteredTasksForTest().get(0);
-        screen.selectTaskForTest(task);
-        screen.beginDetailTitleEditingForTest();
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+        access(screen).beginDetailTitleEditingForTest();
 
-        int[] detailBounds = screen.getDetailPanelBoundsForTest();
-        int[] titleBounds = screen.getDetailTitleFieldBoundsForTest();
-        int[] descBounds = screen.getDescFieldBoundsForTest();
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
+        int[] titleBounds = access(screen).getDetailTitleFieldBoundsForTest();
+        int[] descBounds = access(screen).getDescFieldBoundsForTest();
         int blankX = detailBounds[0] + 10;
         int blankY = Math.min(detailBounds[1] + detailBounds[3] - 10, titleBounds[1] + titleBounds[3] + 4);
         if (blankY >= descBounds[1]) {
             blankY = descBounds[1] - 4;
         }
 
-        GuiTestSupport.assertTrue(screen.getTitleFieldForTest().isFocused(), "开始编辑后标题输入框应获取焦点");
+        GuiTestSupport.assertTrue(access(screen).getTitleFieldForTest().isFocused(), "开始编辑后标题输入框应获取焦点");
 
         screen.mouseClicked(blankX, blankY, 0);
 
-        GuiTestSupport.assertFalse(screen.getTitleFieldForTest().isFocused(), "点击标题框外后标题输入框应失焦");
-        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "点击详情区空白时不应清空当前选中任务");
+        GuiTestSupport.assertFalse(access(screen).getTitleFieldForTest().isFocused(), "点击标题框外后标题输入框应失焦");
+        GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "点击详情区空白时不应清空当前选中任务");
 
-        screen.getDescFieldForTest().setFocused(true);
+        access(screen).getDescFieldForTest().setFocused(true);
         screen.mouseClicked(blankX, blankY, 0);
 
-        GuiTestSupport.assertFalse(screen.getDescFieldForTest().isFocused(), "点击描述框外后描述输入框应失焦");
-        GuiTestSupport.assertEquals(task.getId(), screen.getSelectedTaskForTest().getId(), "描述框失焦时也不应清空当前选中任务");
+        GuiTestSupport.assertFalse(access(screen).getDescFieldForTest().isFocused(), "点击描述框外后描述输入框应失焦");
+        GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "描述框失焦时也不应清空当前选中任务");
     }
 
     private static Task copyTask(Task task) {

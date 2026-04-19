@@ -73,29 +73,29 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 璁剧疆娴嬭瘯鐢ㄧ獥鍙ｅ疄渚嬶紝渚?HUD 绛夐€昏緫璇诲彇灞忓箷灏哄涓庣缉鏀惧€笺€?
+     * 设置测试窗口实例，供 HUD 等逻辑读取屏幕尺寸与缩放值。
      *
-     * @param window 娴嬭瘯绐楀彛瀹炰緥
+     * @param window 测试窗口实例
      */
     public void setTestWindow(Window window) {
         this.testWindow = window;
     }
 
     /**
-     * 璁剧疆娴嬭瘯鐢ㄩ€夐」瀹炰緥锛屼緵鐩存帴璇诲彇 `options.hideGui` 鐨勯€昏緫浣跨敤銆?
+     * 设置测试选项实例，供直接读取 `options.hideGui` 的逻辑使用。
      *
-     * @param options 娴嬭瘯閫夐」瀹炰緥
+     * @param options 测试选项实例
      */
     public void setTestOptions(Options options) {
         this.testOptions = options;
     }
 
     /**
-     * 璁剧疆娴嬭瘯绐楀彛鐨?GUI 灏哄涓庣缉鏀撅紝渚夸簬 HUD 绂荤嚎鑷祴鎺у埗甯冨眬鏉′欢銆?
+     * 设置测试窗口的 GUI 尺寸与缩放，便于 HUD 离线自测控制布局条件。
      *
-     * @param guiScaledWidth GUI 缂╂斁鍚庡搴?
-     * @param guiScaledHeight GUI 缂╂斁鍚庨珮搴?
-     * @param guiScale GUI 缂╂斁鍊?
+     * @param guiScaledWidth GUI 缩放后宽度
+     * @param guiScaledHeight GUI 缩放后高度
+     * @param guiScale GUI 缩放值
      */
     public void setWindowMetrics(int guiScaledWidth, int guiScaledHeight, double guiScale) {
         if (testWindow == null) {
@@ -109,9 +109,9 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 璁剧疆 `options.hideGui` 娴嬭瘯鐘舵€侊紝渚涢獙璇?HUD 鏄剧ず寮€鍏虫柟鍚戠殑閫昏緫浣跨敤銆?
+     * 设置 `options.hideGui` 测试状态，供验证 HUD 显示开关方向的逻辑使用。
      *
-     * @param hideGui true 琛ㄧず闅愯棌 HUD
+     * @param hideGui true 表示隐藏 HUD
      */
     public void setHideGui(boolean hideGui) {
         if (testOptions != null) {
@@ -180,9 +180,9 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 杩斿洖娴嬭瘯绐楀彛瀹炰緥锛岄伩鍏嶈繘鍏ョ湡瀹?Minecraft 窗口渚濊禆銆?
+     * 返回测试窗口实例，避免进入真实 Minecraft 窗口依赖。
      *
-     * @return 娴嬭瘯绐楀彛瀹炰緥
+     * @return 测试窗口实例
      */
     @Override
     public Window getWindow() {

@@ -638,7 +638,7 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
-     * 妯℃嫙鈥滈噸杩涗笘鐣屸€濆悗鐨勫叕鍏卞眰閲嶈浇锛岄噸鏂板垵濮嬪寲瀛樺偍骞朵粠纾佺洏鎭㈠椤圭洰鏁版嵁銆?
+     * 模拟“重进世界”后的公共层重载，重新初始化存储并从磁盘恢复项目数据。
      */
     static void reloadPersistentState() {
         TodoListCommon.init();
@@ -646,7 +646,7 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
-     * 鑾峰彇褰撳墠娴嬭瘯鍛藉悕绌洪棿涓嬬殑涓汉椤圭洰鎸佷箙鍖栨枃浠惰矾寰勩€?
+     * 获取当前测试命名空间下的个人项目持久化文件路径。
      */
     static Path getPersonalProjectsFilePath() {
         return DataPathProvider.getProjectsDir().resolve("projects.dat");
@@ -663,27 +663,30 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
-     * 鑾峰彇褰撳墠娴嬭瘯鍛藉悕绌洪棿涓嬬殑鍥㈤槦椤圭洰鎸佷箙鍖栨枃浠惰矾寰勩€?
+     * 获取当前测试命名空间下的团队项目持久化文件路径。
      */
     static Path getTeamProjectsFilePath() {
         return DataPathProvider.getProjectsDir().resolve("team_projects.dat");
     }
 
     /**
-     * 鑾峰彇鎸囧畾鐜╁鐨勪釜浜轰换鍔℃寔涔呭寲鏂囦欢璺緞銆?
+     * 获取指定玩家的个人任务持久化文件路径。
+     *
+     * @param player 测试玩家
+     * @return 玩家个人任务文件路径
      */
     static Path getPersonalTaskFilePath(TestServerPlayer player) {
         return DataPathProvider.getTaskPlayersDir().resolve(player.getUUID().toString() + ".dat");
     }
 
     /**
-     * 鑾峰彇褰撳墠娴嬭瘯鍛藉悕绌洪棿涓嬬殑鍥㈤槦浠诲姟鎸佷箙鍖栨枃浠惰矾寰勩€?
+     * 获取当前测试命名空间下的团队任务持久化文件路径。
      */
     static Path getTeamTaskFilePath() {
         return TodoListCommon.getTaskStorage().getDataDirectoryPath().resolve("team_tasks.dat");
     }
 
-        /**
+    /**
      * 校验启动后手动修改 commandAccessMode 配置，不会被其他配置保存写回默认值。
      */
     private static void shouldPreserveCommandAccessModeAfterExternalConfigEdit() throws Exception {
