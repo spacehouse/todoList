@@ -78,6 +78,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistClaimAndAbandonImmediatelyInTeamView", TodoScreenTestMain::shouldPersistClaimAndAbandonImmediatelyInTeamView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
@@ -586,6 +587,47 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(notificationCountBeforeOther + 1, access(screen).getNotificationCountForTest(), "他人已领取时应新增一条提示");
         GuiTestSupport.assertEquals(Component.translatable("message.todolist.already_assigned").getString(), access(screen).getLastNotificationTextForTest(), "他人已领取提示文案应匹配");
         GuiTestSupport.assertEquals(syncCallsBeforeOther, ops.getReplaceTeamTaskCalls().size(), "他人已领取提示不应触发同步");
+    }
+
+    /**
+     * 验证“领取 -> 指派 -> 服务端回推 -> 放弃”链路中，后续操作仍会作用于任务管理器最新对象。
+     */
+    private static void shouldKeepTaskMutationsEffectiveAfterAssignFlowResync() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-assign-followup", "Assign Followup Team");
+        teamProject.addMember(ALICE_ID.toString(), Project.ProjectRole.MEMBER, "alice");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Assign Followup Task");
+        Task staleTaskRef = requireTaskByTitle(screen, "Assign Followup Task");
+        access(screen).selectTaskForTest(staleTaskRef);
+        access(screen).triggerClaimTaskForTest();
+        Task claimedTask = requireTaskByTitle(screen, "Assign Followup Task");
+        GuiTestSupport.assertEquals(OWNER_ID.toString(), claimedTask.getAssigneeUuid(), "领取后任务应先归当前玩家");
+
+        restoreTasksToManager(ops.getTeamTaskManager(), ops.getTeamTaskManager().getAllTasks());
+        Screen assignScreen = access(screen).createAssignPlayerScreenForTest(staleTaskRef);
+        ScreenDriver.init(minecraft, assignScreen);
+        access(screen).setAssignPlayerSearchForTest(assignScreen, "ali");
+        int syncCallsBeforeAssign = ops.getReplaceTeamTaskCalls().size();
+        access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
+        Task assignedTask = requireTaskByTitle(screen, "Assign Followup Task");
+        GuiTestSupport.assertEquals(ALICE_ID.toString(), assignedTask.getAssigneeUuid(), "指派后任务应归属被指派成员");
+        GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "指派后应触发一次团队整表同步");
+
+        restoreTasksToManager(ops.getTeamTaskManager(), ops.getTeamTaskManager().getAllTasks());
+        access(screen).selectTaskForTest(staleTaskRef);
+        int syncCallsBeforeAbandon = ops.getReplaceTeamTaskCalls().size();
+        access(screen).triggerAbandonTaskForTest();
+        Task abandonedTask = requireTaskByTitle(screen, "Assign Followup Task");
+        GuiTestSupport.assertNull(abandonedTask.getAssigneeUuid(), "服务端回推后再次放弃应真正清空任务归属");
+        GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应继续触发团队整表同步");
     }
 
     private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
@@ -1453,7 +1495,7 @@ public final class TodoScreenTestMain {
      * 验证在分配玩家弹窗中搜索并选择成员后，会更新任务分配并返回主界面。
      */
     private static void shouldSearchAndAssignPlayerFromAssignScreen() {
-        GuiTestSupport.resetState();
+        RecordingClientOps ops = GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
         createDefaultTeamProject();
@@ -1478,12 +1520,14 @@ public final class TodoScreenTestMain {
         access(screen).setAssignPlayerSearchForTest(assignScreen, "bo");
         GuiTestSupport.assertEquals(List.of("bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "搜索分配玩家时应只保留匹配结果");
 
+        int syncCallsBeforeAssign = ops.getReplaceTeamTaskCalls().size();
         access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
 
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "点击玩家后应把任务分配给对应成员");
         GuiTestSupport.assertEquals("20000000-0000-0000-0000-000000000003", task.getAssigneeUuid(), "分配后应写入对应玩家 UUID");
         GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "分配任务后应显示成功提示");
-        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "分配任务后应标记未保存状态");
+        GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "分配任务后应立即同步团队任务整表");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "分配任务后不应残留未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "完成分配后应返回主界面");
     }
 
@@ -1491,7 +1535,7 @@ public final class TodoScreenTestMain {
      * 校验“指派他人”弹窗会保留离线项目成员，并允许直接将任务指派给该离线成员。
      */
     private static void shouldListOfflineProjectMembersInAssignScreen() {
-        GuiTestSupport.resetState();
+        RecordingClientOps ops = GuiTestSupport.resetState();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
         createDefaultTeamProject();
@@ -1516,11 +1560,13 @@ public final class TodoScreenTestMain {
         access(screen).setAssignPlayerSearchForTest(assignScreen, "bo");
         GuiTestSupport.assertEquals(List.of("bob"), access(screen).getAssignablePlayerNamesForTest(assignScreen), "搜索离线项目成员时也应命中缓存名称");
 
+        int syncCallsBeforeAssign = ops.getReplaceTeamTaskCalls().size();
         access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
 
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "离线成员被选中后应写入缓存名称");
         GuiTestSupport.assertEquals(BOB_ID.toString(), task.getAssigneeUuid(), "离线成员被选中后应写入对应 UUID");
-        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "指派离线成员后仍应标记未保存");
+        GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "指派离线成员后应立即同步团队任务整表");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "指派离线成员后不应残留未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "指派离线成员后应返回主界面");
     }
 
