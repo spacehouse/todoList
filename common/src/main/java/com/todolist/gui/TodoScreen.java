@@ -1931,12 +1931,57 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return personalHasUnsavedChanges;
     }
 
+    /**
+     * 基于当前选中任务 ID 回查任务管理器中的最新对象，避免网络同步后引用过期。
+     *
+     * @return 可用于后续修改的最新选中任务；不存在时返回 {@code null}
+     */
+    private Task resolveCurrentSelectedTaskForMutation() {
+        if (selectedTask == null) {
+            return null;
+        }
+        Task latest = resolveTaskForMutation(selectedTask);
+        if (latest == null) {
+            clearSelectedTask();
+            return null;
+        }
+        selectedTask = latest;
+        return latest;
+    }
+
+    /**
+     * 基于任务 ID 回查任务管理器中的最新任务对象。
+     *
+     * @param task 候选任务对象
+     * @return 最新任务对象；无法回查时返回 {@code null}
+     */
+    private Task resolveTaskForMutation(Task task) {
+        if (task == null) {
+            return null;
+        }
+        return resolveTaskByIdForMutation(task.getId());
+    }
+
+    /**
+     * 基于任务 ID 回查任务管理器中的最新任务对象。
+     *
+     * @param taskId 任务 ID
+     * @return 最新任务对象；无法回查时返回 {@code null}
+     */
+    private Task resolveTaskByIdForMutation(String taskId) {
+        if (taskId == null || taskId.isBlank() || taskManager == null) {
+            return null;
+        }
+        return taskManager.getTask(taskId);
+    }
+
     private void onClaimTask() {
-        if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
+        Task taskToClaim = resolveCurrentSelectedTaskForMutation();
+        if (taskToClaim == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
         String validationKey = TodoScreenPermissionSupport.validateClaimTask(
-                selectedTask,
+                taskToClaim,
                 this.minecraft,
                 viewMode.name()
         );
@@ -1945,12 +1990,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         String uuid = this.minecraft.player.getUUID().toString();
-        selectedTask.setAssigneeUuid(uuid);
-        selectedTask.setAssigneeName(this.minecraft.player.getName().getString());
+        taskToClaim.setAssigneeUuid(uuid);
+        taskToClaim.setAssigneeName(this.minecraft.player.getName().getString());
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
         persistCurrentViewTasksImmediately("claim");
-        applySearchFilter();
+        filterTasks();
     }
 
     /**
@@ -2017,11 +2062,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     
     private void onAbandonTask() {
-        if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
+        Task taskToAbandon = resolveCurrentSelectedTaskForMutation();
+        if (taskToAbandon == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
         String validationKey = TodoScreenPermissionSupport.validateAbandonTask(
-                selectedTask,
+                taskToAbandon,
                 this.minecraft,
                 currentProject,
                 viewMode.name()
@@ -2030,16 +2076,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable(validationKey).getString());
             return;
         }
-        selectedTask.setAssigneeUuid(null);
-        selectedTask.setAssigneeName(null);
+        taskToAbandon.setAssigneeUuid(null);
+        taskToAbandon.setAssigneeName(null);
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
         persistCurrentViewTasksImmediately("abandon");
-        applySearchFilter();
+        filterTasks();
     }
 
     private void onAssignOthers() {
-        if (selectedTask == null || this.minecraft == null) {
+        Task taskToAssign = resolveCurrentSelectedTaskForMutation();
+        if (taskToAssign == null || this.minecraft == null) {
             return;
         }
         if (viewMode == ViewMode.PERSONAL) {
@@ -2048,7 +2095,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (!TodoScreenPermissionSupport.canTaskOperationInView(
                 Operation.EDIT_TASK,
-                selectedTask,
+                taskToAssign,
                 this.minecraft,
                 currentProject,
                 viewMode.name()
@@ -2056,7 +2103,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        this.minecraft.setScreen(createAssignPlayerScreen(selectedTask));
+        this.minecraft.setScreen(createAssignPlayerScreen(taskToAssign));
     }
 
     /**
@@ -2066,31 +2113,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @return assignment dialog screen
      */
     private Screen createAssignPlayerScreen(Task task) {
+        String taskId = task == null ? null : task.getId();
         return new AssignPlayerScreen(
                 this,
                 task,
                 () -> currentProject,
                 (project, memberUuid) -> TodoScreenMemberSupport.resolveProjectMemberDisplayName(this.minecraft, project, memberUuid),
-                (memberUuid, memberName) -> applyAssignResult(task, memberUuid, memberName)
+                (memberUuid, memberName) -> applyAssignResult(taskId, memberUuid, memberName)
         );
     }
 
     /**
      * Apply the selected member assignment to the task.
      *
-     * @param task target task
+     * @param taskId target task id
      * @param memberUuid selected member UUID
      * @param memberName selected member display name
      */
-    private void applyAssignResult(Task task, String memberUuid, String memberName) {
-        if (task == null) {
+    private void applyAssignResult(String taskId, String memberUuid, String memberName) {
+        Task taskToAssign = resolveTaskByIdForMutation(taskId);
+        if (taskToAssign == null) {
+            TodoConstants.LOGGER.warn("Skip assign operation because task {} is missing in current manager snapshot", taskId);
+            addNotification(Component.translatable("message.todolist.save_failed").getString());
+            filterTasks();
             return;
         }
-        task.setAssigneeUuid(memberUuid);
-        task.setAssigneeName(memberName);
+        taskToAssign.setAssigneeUuid(memberUuid);
+        taskToAssign.setAssigneeName(memberName);
+        if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskToAssign.getId())) {
+            selectedTask = taskToAssign;
+        }
         addNotification(Component.translatable("message.todolist.assigned_to_player", memberName).getString());
         markUnsaved();
-        applySearchFilter();
+        persistCurrentViewTasksImmediately("assign_others");
+        filterTasks();
     }
 
     private void filterTasks() {
