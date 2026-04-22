@@ -308,6 +308,36 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 返回最近一条通知文本。
+     *
+     * @return 最新通知文本，不存在时返回空字符串
+     */
+    String getLastNotificationTextForTest() {
+        List<TodoScreenNotificationSupport.NotificationEntry> entries = readScreenListField("notifications");
+        if (entries.isEmpty()) {
+            return "";
+        }
+        TodoScreenNotificationSupport.NotificationEntry entry = entries.get(entries.size() - 1);
+        return entry == null || entry.text == null ? "" : entry.text;
+    }
+
+    /**
+     * 返回当前内容区顶部面包屑摘要文本。
+     *
+     * @return 面包屑摘要文本
+     */
+    String getContentHeaderSummaryTextForTest() {
+        SpaceMode currentSpaceMode = readScreenField("currentSpaceMode", SpaceMode.class);
+        TaskViewOption taskViewOption = readScreenField("currentTaskViewOption", TaskViewOption.class);
+        Project currentProject = getCurrentProjectForTest();
+        return TodoScreenTextSupport.buildContentHeaderSummaryText(
+                currentSpaceMode == SpaceMode.TEAM,
+                currentProject,
+                taskViewOption
+        );
+    }
+
+    /**
      * 返回标题输入框。
      *
      * @return 标题输入框
@@ -541,6 +571,20 @@ final class TodoScreenTestAccess {
      */
     void selectTaskForTest(Task task) {
         invokeScreenVoid("selectTask", new Class<?>[] {Task.class}, task);
+    }
+
+    /**
+     * 触发领取任务动作。
+     */
+    void triggerClaimTaskForTest() {
+        invokeScreenVoid("onClaimTask");
+    }
+
+    /**
+     * 触发放弃任务动作。
+     */
+    void triggerAbandonTaskForTest() {
+        invokeScreenVoid("onAbandonTask");
     }
 
     /**

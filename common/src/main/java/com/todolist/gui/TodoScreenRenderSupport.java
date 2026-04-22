@@ -92,6 +92,7 @@ final class TodoScreenRenderSupport {
                                            MainLayoutMetrics layoutMetrics,
                                            ResponsiveTier responsiveTier,
                                            SpaceMode currentSpaceMode,
+                                           TaskViewOption currentTaskViewOption,
                                            Project currentProject,
                                            Button configButton,
                                            Button sidebarToggleButton) {
@@ -100,7 +101,8 @@ final class TodoScreenRenderSupport {
         }
         String summaryText = TodoScreenTextSupport.buildContentHeaderSummaryText(
                 currentSpaceMode == SpaceMode.TEAM,
-                currentProject
+                currentProject,
+                currentTaskViewOption
         );
         if (summaryText.isEmpty()) {
             return;
@@ -165,7 +167,7 @@ final class TodoScreenRenderSupport {
     static void renderNotifications(GuiGraphics context,
                                     Font font,
                                     int screenWidth,
-                                    EditBox searchField,
+                                    MainLayoutMetrics layoutMetrics,
                                     List<TodoScreenNotificationSupport.NotificationEntry> notifications) {
         if (font == null || notifications == null || notifications.isEmpty()) {
             return;
@@ -173,8 +175,9 @@ final class TodoScreenRenderSupport {
         long now = System.currentTimeMillis();
         int boxWidth = TodoScreenNotificationSupport.BOX_WIDTH;
         int boxHeight = TodoScreenNotificationSupport.BOX_HEIGHT;
-        int startX = TodoScreenNotificationSupport.resolveStartX(screenWidth);
-        int startY = TodoScreenNotificationSupport.resolveStartY(searchField == null ? null : searchField.getY());
+        LayoutRect contentBounds = layoutMetrics == null ? null : layoutMetrics.contentBounds;
+        int startX = TodoScreenNotificationSupport.resolveStartX(screenWidth, contentBounds);
+        int startY = TodoScreenNotificationSupport.resolveStartY(contentBounds);
 
         List<TodoScreenNotificationSupport.NotificationEntry> active =
                 TodoScreenNotificationSupport.retainActive(notifications, now);

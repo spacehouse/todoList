@@ -885,6 +885,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 layoutMetrics,
                 responsiveTier,
                 currentSpaceMode,
+                currentTaskViewOption,
                 currentProject,
                 configButton,
                 sidebarToggleButton
@@ -929,7 +930,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 context,
                 this.font,
                 this.width,
-                searchField,
+                layoutMetrics,
                 notifications
         );
     }
@@ -1709,18 +1710,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskId)) {
             clearSelectedTask();
         }
-        if (!persistCurrentViewTasksImmediatelyAfterDelete()) {
+        if (!persistCurrentViewTasksImmediately("deletion")) {
             markUnsaved();
         }
         applySearchFilter();
     }
 
     /**
-     * 删除任务后立即持久化当前视图任务，避免删除操作还需要额外点击保存。
+     * 在关键任务操作后立即持久化当前视图任务，避免额外点击保存按钮。
      *
+     * @param operationName 操作名称，用于日志定位
      * @return 持久化成功返回 {@code true}，失败返回 {@code false}
      */
-    private boolean persistCurrentViewTasksImmediatelyAfterDelete() {
+    private boolean persistCurrentViewTasksImmediately(String operationName) {
         try {
             if (viewMode == ViewMode.PERSONAL) {
                 TodoScreenPersistenceSupport.savePersonalTasks(personalTaskManager, this.minecraft);
@@ -1732,7 +1734,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
             return true;
         } catch (Exception exception) {
-            TodoConstants.LOGGER.error("Failed to persist task deletion immediately", exception);
+            TodoConstants.LOGGER.error("Failed to persist task {} immediately", operationName, exception);
             if (this.minecraft != null && this.minecraft.player != null) {
                 this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
             } else {
@@ -1947,6 +1949,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         selectedTask.setAssigneeName(this.minecraft.player.getName().getString());
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
+        persistCurrentViewTasksImmediately("claim");
         applySearchFilter();
     }
 
@@ -2031,6 +2034,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         selectedTask.setAssigneeName(null);
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
+        persistCurrentViewTasksImmediately("abandon");
         applySearchFilter();
     }
 

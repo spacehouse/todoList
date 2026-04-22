@@ -59,10 +59,34 @@ final class TodoScreenNotificationSupport {
         return Math.max(BOX_MARGIN, screenWidth - BOX_WIDTH - BOX_MARGIN);
     }
 
-    static int resolveStartY(Integer searchFieldY) {
-        if (searchFieldY == null) {
+    /**
+     * 解析通知堆栈的起始 X 坐标，优先锚定在内容区右上角，避免与详情抽屉操作按钮重叠。
+     *
+     * @param screenWidth 当前屏幕宽度
+     * @param contentBounds 内容区边界
+     * @return 通知起始 X 坐标
+     */
+    static int resolveStartX(int screenWidth, TodoScreenLayoutSupport.LayoutRect contentBounds) {
+        int fallbackX = resolveStartX(screenWidth);
+        if (contentBounds == null || contentBounds.width <= 0) {
+            return fallbackX;
+        }
+        int contentAnchorX = contentBounds.x + contentBounds.width - BOX_WIDTH - BOX_MARGIN;
+        int minContentX = contentBounds.x + BOX_MARGIN;
+        int anchoredX = Math.max(minContentX, contentAnchorX);
+        return Math.min(fallbackX, Math.max(BOX_MARGIN, anchoredX));
+    }
+
+    /**
+     * 解析通知堆栈的起始 Y 坐标，优先锚定在内容区顶部。
+     *
+     * @param contentBounds 内容区边界
+     * @return 通知起始 Y 坐标
+     */
+    static int resolveStartY(TodoScreenLayoutSupport.LayoutRect contentBounds) {
+        if (contentBounds == null || contentBounds.height <= 0) {
             return DEFAULT_START_Y;
         }
-        return Math.max(0, searchFieldY);
+        return Math.max(0, contentBounds.y + BOX_MARGIN);
     }
 }

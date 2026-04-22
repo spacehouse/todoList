@@ -164,7 +164,10 @@ final class TodoScreenPermissionSupport {
         }
         String uuid = minecraft.player.getUUID().toString();
         String assignee = task.getAssigneeUuid();
-        if (assignee != null && !assignee.isEmpty() && !assignee.equals(uuid)) {
+        if (assignee != null && !assignee.isEmpty()) {
+            if (assignee.equals(uuid)) {
+                return "message.todolist.already_assigned_to_me";
+            }
             return "message.todolist.already_assigned";
         }
         return null;
