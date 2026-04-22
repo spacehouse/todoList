@@ -17,24 +17,43 @@ final class TodoScreenTextSupport {
     }
 
     /**
-     * 生成任务列表顶部摘要文本，内容为当前空间与项目名称。
+     * 生成任务列表顶部摘要文本，内容为当前空间、项目名称与视图维度。
      *
      * @param teamSpace 当前是否为团队空间
      * @param currentProject 当前项目
+     * @param taskViewOption 当前任务视图维度
      * @return 顶部摘要文本
      */
-    static String buildContentHeaderSummaryText(boolean teamSpace, Project currentProject) {
+    static String buildContentHeaderSummaryText(boolean teamSpace, Project currentProject, TaskViewOption taskViewOption) {
         String scopeText = Component.translatable(teamSpace
                 ? "gui.todolist.scope.team"
                 : "gui.todolist.scope.personal").getString();
+        String viewText = buildContentHeaderViewText(teamSpace, taskViewOption);
         if (currentProject == null) {
-            return scopeText;
+            return scopeText + " / " + viewText;
         }
         String projectName = ProjectNameFormatter.toDisplayText(currentProject).getString().trim();
         if (projectName.isEmpty()) {
-            return scopeText;
+            return scopeText + " / " + viewText;
         }
-        return scopeText + " / " + projectName;
+        return scopeText + " / " + projectName + " / " + viewText;
+    }
+
+    /**
+     * 根据空间与任务视图选项生成面包屑中的视图短标签。
+     *
+     * @param teamSpace 当前是否为团队空间
+     * @param taskViewOption 当前任务视图维度
+     * @return 视图标签文本
+     */
+    private static String buildContentHeaderViewText(boolean teamSpace, TaskViewOption taskViewOption) {
+        if (!teamSpace || taskViewOption == null || taskViewOption == TaskViewOption.MY) {
+            return Component.translatable("gui.todolist.header.view.mine").getString();
+        }
+        if (taskViewOption == TaskViewOption.UNASSIGNED) {
+            return Component.translatable("gui.todolist.header.view.unassigned").getString();
+        }
+        return Component.translatable("gui.todolist.header.view.all").getString();
     }
 
     /**

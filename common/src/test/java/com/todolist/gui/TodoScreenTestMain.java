@@ -13,6 +13,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.UUID;
@@ -69,9 +70,14 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineDetailPanelOnMediumScreen", TodoScreenTestMain::shouldUseInlineDetailPanelOnMediumScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen", TodoScreenTestMain::shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowSpaceProjectAndViewInContentHeaderBreadcrumb", TodoScreenTestMain::shouldShowSpaceProjectAndViewInContentHeaderBreadcrumb);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseWiderSidebarAndReducedGapInInlineLayout", TodoScreenTestMain::shouldUseWiderSidebarAndReducedGapInInlineLayout);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAnchorNotificationsToContentAreaWhenDetailDrawerVisible", TodoScreenTestMain::shouldAnchorNotificationsToContentAreaWhenDetailDrawerVisible);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistClaimAndAbandonImmediatelyInTeamView", TodoScreenTestMain::shouldPersistClaimAndAbandonImmediatelyInTeamView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
@@ -334,6 +340,103 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 验证内容区顶部面包屑会显示“空间/项目/视图”，并在无项目时降级为“空间/视图”。
+     */
+    private static void shouldShowSpaceProjectAndViewInContentHeaderBreadcrumb() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-breadcrumb", "面包屑项目");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+
+        String expectedTeamSummary = Component.translatable("gui.todolist.scope.team").getString()
+                + " / 面包屑项目 / "
+                + Component.translatable("gui.todolist.header.view.all").getString();
+        GuiTestSupport.assertEquals(expectedTeamSummary, access(screen).getContentHeaderSummaryTextForTest(), "团队项目应显示空间/项目/视图三段面包屑");
+
+        access(screen).switchProjectForTest(null);
+        String expectedPersonalSummary = Component.translatable("gui.todolist.scope.personal").getString()
+                + " / "
+                + Component.translatable("gui.todolist.header.view.mine").getString();
+        GuiTestSupport.assertEquals(expectedPersonalSummary, access(screen).getContentHeaderSummaryTextForTest(), "无项目时面包屑应降级为空间/视图");
+    }
+
+    /**
+     * 验证三栏常驻布局下项目栏宽度整体上调，并将栏间距减半。
+     */
+    private static void shouldUseWiderSidebarAndReducedGapInInlineLayout() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-layout-sidebar-gap", "Layout Sidebar Gap Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 480, 300);
+        access(screen).switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Sidebar Gap Task");
+        Task task = requireTaskByTitle(screen, "Sidebar Gap Task");
+        access(screen).switchToTeamAllViewForTest();
+        access(screen).selectTaskForTest(task);
+
+        int[] sidebarBounds = access(screen).getProjectSidebarBoundsForTest();
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
+        int availableWidth = 480 - sidebarBounds[0] * 2;
+        int legacyUpperBound = Math.min(156, Math.max(112, availableWidth / 3));
+        int legacySidebarWidth = clampIntForTest(
+                com.todolist.config.ModConfig.getInstance().getProjectSidebarWidth(),
+                112,
+                legacyUpperBound
+        );
+
+        int leftGap = contentBounds[0] - (sidebarBounds[0] + sidebarBounds[2]);
+        int rightGap = detailBounds[0] - (contentBounds[0] + contentBounds[2]);
+        GuiTestSupport.assertEquals(legacySidebarWidth + 12, sidebarBounds[2], "项目栏宽度应在旧规则基础上上调 12px");
+        GuiTestSupport.assertEquals(5, leftGap, "大屏三栏左侧间距应减半至 5px");
+        GuiTestSupport.assertEquals(5, rightGap, "大屏三栏右侧间距应减半至 5px");
+    }
+
+    /**
+     * 验证详情抽屉显示时，通知锚点会固定在内容区右上角，避免与详情按钮重叠。
+     */
+    private static void shouldAnchorNotificationsToContentAreaWhenDetailDrawerVisible() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-notification-anchor", "Notification Anchor Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 480, 300);
+        access(screen).switchProjectForTest(teamProject);
+        addTaskViaInput(screen, "Anchor Task");
+        Task task = requireTaskByTitle(screen, "Anchor Task");
+        access(screen).switchToTeamAllViewForTest();
+        access(screen).selectTaskForTest(task);
+
+        int[] contentBounds = access(screen).getContentAreaBoundsForTest();
+        int[] claimBounds = access(screen).getClaimButtonBoundsForTest();
+        TodoScreenLayoutSupport.LayoutRect contentRect = new TodoScreenLayoutSupport.LayoutRect(
+                contentBounds[0],
+                contentBounds[1],
+                contentBounds[2],
+                contentBounds[3]
+        );
+        int startX = TodoScreenNotificationSupport.resolveStartX(480, contentRect);
+        int startY = TodoScreenNotificationSupport.resolveStartY(contentRect);
+
+        GuiTestSupport.assertTrue(startX >= contentBounds[0] + TodoScreenNotificationSupport.BOX_MARGIN, "通知应锚定在内容区内部");
+        GuiTestSupport.assertTrue(startY + TodoScreenNotificationSupport.BOX_HEIGHT <= claimBounds[1], "通知应位于详情按钮行上方，避免遮挡领取/放弃/指派操作");
+        GuiTestSupport.assertEquals(contentBounds[1] + TodoScreenNotificationSupport.BOX_MARGIN, startY, "通知应从内容区顶部留白后开始绘制");
+    }
+
+    /**
      * 验证紧凑窗口下删除当前选中任务后，覆盖式详情区会一起收起，避免留下空抽屉。
      */
     private static void shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen() {
@@ -411,6 +514,78 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "确认删除后应立即同步个人任务整表");
         GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().get(0).size(), "删除后同步的个人任务列表应为空");
         GuiTestSupport.assertEquals(0, ops.getReplaceTeamTaskCalls().size(), "个人视图删除不应触发团队任务同步");
+    }
+
+    /**
+     * 验证团队视图下领取/放弃任务后会立即持久化并清理未保存标记。
+     */
+    private static void shouldPersistClaimAndAbandonImmediatelyInTeamView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-claim-abandon-persist", "Claim Abandon Persist Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Claim Persist Team Task");
+        Task task = requireTaskByTitle(screen, "Claim Persist Team Task");
+        access(screen).selectTaskForTest(task);
+
+        int syncCallsBeforeClaim = ops.getReplaceTeamTaskCalls().size();
+        access(screen).triggerClaimTaskForTest();
+        Task claimedTask = requireTaskByTitle(screen, "Claim Persist Team Task");
+        GuiTestSupport.assertEquals(syncCallsBeforeClaim + 1, ops.getReplaceTeamTaskCalls().size(), "领取后应立即同步团队任务整表");
+        GuiTestSupport.assertEquals(OWNER_ID.toString(), claimedTask.getAssigneeUuid(), "领取后 assigneeUuid 应立即写入当前玩家");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "领取成功后不应残留未保存标记");
+
+        int syncCallsBeforeAbandon = ops.getReplaceTeamTaskCalls().size();
+        access(screen).selectTaskForTest(claimedTask);
+        access(screen).triggerAbandonTaskForTest();
+        Task abandonedTask = requireTaskByTitle(screen, "Claim Persist Team Task");
+        GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应立即同步团队任务整表");
+        GuiTestSupport.assertNull(abandonedTask.getAssigneeUuid(), "放弃后 assigneeUuid 应立即清空");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "放弃成功后不应残留未保存标记");
+    }
+
+    /**
+     * 验证重复领取提示会区分“自己已领取”和“他人已领取”。
+     */
+    private static void shouldDifferentiateClaimValidationMessageForSelfAndOthers() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-claim-validation", "Claim Validation Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Claim Validation Task");
+        Task task = requireTaskByTitle(screen, "Claim Validation Task");
+
+        task.setAssigneeUuid(OWNER_ID.toString());
+        task.setAssigneeName("owner");
+        access(screen).selectTaskForTest(task);
+        int notificationCountBeforeSelf = access(screen).getNotificationCountForTest();
+        int syncCallsBeforeSelf = ops.getReplaceTeamTaskCalls().size();
+        access(screen).triggerClaimTaskForTest();
+        GuiTestSupport.assertEquals(notificationCountBeforeSelf + 1, access(screen).getNotificationCountForTest(), "自己重复领取时应新增一条提示");
+        GuiTestSupport.assertEquals(Component.translatable("message.todolist.already_assigned_to_me").getString(), access(screen).getLastNotificationTextForTest(), "自己重复领取提示文案应匹配");
+        GuiTestSupport.assertEquals(syncCallsBeforeSelf, ops.getReplaceTeamTaskCalls().size(), "自己重复领取提示不应触发同步");
+
+        task.setAssigneeUuid(ALICE_ID.toString());
+        task.setAssigneeName("alice");
+        access(screen).selectTaskForTest(task);
+        int notificationCountBeforeOther = access(screen).getNotificationCountForTest();
+        int syncCallsBeforeOther = ops.getReplaceTeamTaskCalls().size();
+        access(screen).triggerClaimTaskForTest();
+        GuiTestSupport.assertEquals(notificationCountBeforeOther + 1, access(screen).getNotificationCountForTest(), "他人已领取时应新增一条提示");
+        GuiTestSupport.assertEquals(Component.translatable("message.todolist.already_assigned").getString(), access(screen).getLastNotificationTextForTest(), "他人已领取提示文案应匹配");
+        GuiTestSupport.assertEquals(syncCallsBeforeOther, ops.getReplaceTeamTaskCalls().size(), "他人已领取提示不应触发同步");
     }
 
     private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
@@ -1595,6 +1770,27 @@ public final class TodoScreenTestMain {
         List<Button> buttons = ScreenDriver.getButtons(screen);
         GuiTestSupport.assertTrue(buttonIndex >= 0 && buttonIndex < buttons.size(), "弹窗按钮索引应在可用范围内");
         ScreenDriver.click(buttons.get(buttonIndex));
+    }
+
+    /**
+     * 将整型值约束在指定范围内，便于测试中复用布局基线计算。
+     *
+     * @param value 原始值
+     * @param min 最小值
+     * @param max 最大值
+     * @return 约束后的值
+     */
+    private static int clampIntForTest(int value, int min, int max) {
+        if (max < min) {
+            return min;
+        }
+        if (value < min) {
+            return min;
+        }
+        if (value > max) {
+            return max;
+        }
+        return value;
     }
 
     private static void assertRectInsideScreen(int[] bounds, int screenWidth, int screenHeight, String message) {
