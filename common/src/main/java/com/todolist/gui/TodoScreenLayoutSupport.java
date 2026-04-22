@@ -6,6 +6,8 @@ import com.todolist.config.ModConfig;
  * TodoScreen 布局支持类，负责统一管理响应式档位与主布局参数计算。
  */
 final class TodoScreenLayoutSupport {
+    private static final int SIDEBAR_WIDTH_BUMP = 12;
+
     /**
      * 表示界面在不同屏幕尺寸下使用的响应式档位。
      */
@@ -190,7 +192,7 @@ final class TodoScreenLayoutSupport {
                                                     boolean detailOverlayVisible,
                                                     boolean hasSelectedTask) {
         int padding = resolveLayoutPadding(config, responsiveTier);
-        int gap = responsiveTier == ResponsiveTier.LARGE ? 10 : 8;
+        int gap = responsiveTier == ResponsiveTier.LARGE ? 5 : 4;
         int panelTop = Math.max(24, padding + 16);
         int bottomBarHeight = 20;
         int inputRowHeight = 20;
@@ -294,11 +296,12 @@ final class TodoScreenLayoutSupport {
      * @return 侧栏宽度
      */
     static int resolveSidebarWidth(ModConfig config, ResponsiveTier responsiveTier, int availableWidth) {
+        int bumpedSidebarWidth = config.getProjectSidebarWidth() + SIDEBAR_WIDTH_BUMP;
         return switch (responsiveTier) {
-            case LARGE -> clampInt(config.getProjectSidebarWidth(), 112, Math.min(156, Math.max(112, availableWidth / 3)));
-            case MEDIUM -> clampInt(config.getProjectSidebarWidth(), 104, Math.min(136, Math.max(104, availableWidth / 3)));
-            case COMPACT -> clampInt(config.getProjectSidebarWidth(), 96, Math.min(124, Math.max(96, availableWidth / 3)));
-            case MINIMAL -> clampInt(Math.max(132, availableWidth - 84), 132, Math.max(132, Math.min(200, availableWidth - 8)));
+            case LARGE -> clampInt(bumpedSidebarWidth, 124, Math.min(168, Math.max(124, availableWidth / 3 + SIDEBAR_WIDTH_BUMP)));
+            case MEDIUM -> clampInt(bumpedSidebarWidth, 116, Math.min(148, Math.max(116, availableWidth / 3 + SIDEBAR_WIDTH_BUMP)));
+            case COMPACT -> clampInt(bumpedSidebarWidth, 108, Math.min(136, Math.max(108, availableWidth / 3 + SIDEBAR_WIDTH_BUMP)));
+            case MINIMAL -> clampInt(Math.max(144, availableWidth - 72), 144, Math.max(144, Math.min(212, availableWidth - 8)));
         };
     }
 
