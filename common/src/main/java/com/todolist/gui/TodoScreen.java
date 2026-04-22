@@ -1889,6 +1889,30 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
+    /**
+     * 渲染任务右键上下文菜单，并根据鼠标位置高亮当前悬停项。
+     *
+     * @param context 当前绘制上下文
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     */
+    private void renderTaskContextMenu(GuiGraphics context, int mouseX, int mouseY) {
+        if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
+            return;
+        }
+        TodoScreenContextMenuSupport.renderMenu(
+                context,
+                this.font,
+                contextMenuItems,
+                contextMenuX,
+                contextMenuY,
+                contextMenuWidth,
+                contextMenuItemHeight,
+                mouseX,
+                mouseY
+        );
+    }
+
     private boolean handleContextMenuClick(double mouseX, double mouseY, int button) {
         if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             return false;
