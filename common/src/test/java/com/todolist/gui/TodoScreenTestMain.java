@@ -71,6 +71,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen", TodoScreenTestMain::shouldUseOverlaySidebarAndDetailPanelOnMinimalScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldLayoutDetailDrawerCloseRowSeparately", TodoScreenTestMain::shouldLayoutDetailDrawerCloseRowSeparately);
@@ -385,6 +386,31 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "取消删除后应返回待办主界面");
         GuiTestSupport.assertEquals(1, access(screen).getCurrentManagerTasksForTest().size(), "取消删除后任务不应被移除");
         GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "取消删除后原任务仍应保持选中");
+    }
+
+    /**
+     * 验证删除确认后会立即持久化，不再要求额外点击保存按钮。
+     */
+    private static void shouldPersistTaskDeletionImmediatelyAfterConfirmation() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Delete Persist Task");
+        Task task = requireTaskByTitle(screen, "Delete Persist Task");
+
+        Screen confirmScreen = openDeleteTaskConfirmScreen(minecraft, screen, task);
+        clickDialogButton(confirmScreen, 0);
+
+        GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "确认删除后应返回待办主界面");
+        GuiTestSupport.assertEquals(0, access(screen).getCurrentManagerTasksForTest().size(), "确认删除后任务应立即从当前列表移除");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "确认删除后不应再残留未保存标记");
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "确认删除后应立即同步个人任务整表");
+        GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().get(0).size(), "删除后同步的个人任务列表应为空");
+        GuiTestSupport.assertEquals(0, ops.getReplaceTeamTaskCalls().size(), "个人视图删除不应触发团队任务同步");
     }
 
     private static void shouldHideTeamActionButtonsInPersonalDetailDrawer() {
