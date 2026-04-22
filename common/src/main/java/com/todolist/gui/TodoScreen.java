@@ -1697,6 +1697,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     /**
      * 在用户确认后真正删除任务，并同步刷新选中状态与列表显示。
+     * 删除成功后会立即尝试持久化当前视图任务，避免再额外点击保存按钮。
      *
      * @param taskId 待删除任务 ID
      */
@@ -1708,8 +1709,37 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskId)) {
             clearSelectedTask();
         }
-        markUnsaved();
+        if (!persistCurrentViewTasksImmediatelyAfterDelete()) {
+            markUnsaved();
+        }
         applySearchFilter();
+    }
+
+    /**
+     * 删除任务后立即持久化当前视图任务，避免删除操作还需要额外点击保存。
+     *
+     * @return 持久化成功返回 {@code true}，失败返回 {@code false}
+     */
+    private boolean persistCurrentViewTasksImmediatelyAfterDelete() {
+        try {
+            if (viewMode == ViewMode.PERSONAL) {
+                TodoScreenPersistenceSupport.savePersonalTasks(personalTaskManager, this.minecraft);
+                personalHasUnsavedChanges = false;
+            } else {
+                TodoScreenPersistenceSupport.saveTeamTasks(teamTaskManager, this.minecraft);
+                teamHasUnsavedChanges = false;
+            }
+            hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+            return true;
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.error("Failed to persist task deletion immediately", exception);
+            if (this.minecraft != null && this.minecraft.player != null) {
+                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
+            } else {
+                addNotification(Component.translatable("message.todolist.save_failed").getString());
+            }
+            return false;
+        }
     }
 
     private void renderTaskContextMenu(GuiGraphics context, int mouseX, int mouseY) {
