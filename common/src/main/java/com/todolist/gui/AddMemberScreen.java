@@ -17,7 +17,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 新增成员界面：从在线玩家列表中搜索并向服务端发送添加成员请求。
+ * 新增成员界面，负责从在线玩家列表中搜索候选成员并提交添加请求。
  */
 public class AddMemberScreen extends Screen {
     private final Screen parent;
@@ -26,6 +26,8 @@ public class AddMemberScreen extends Screen {
     private List<net.minecraft.client.multiplayer.PlayerInfo> allPlayers;
     private List<net.minecraft.client.multiplayer.PlayerInfo> filteredPlayers;
     private Button[] playerButtons;
+    private Button cancelButton;
+    private MemberSelectionDialogLayout dialogLayout;
     private int scrollOffset;
     private int visibleRows;
     private int listX;
@@ -44,7 +46,7 @@ public class AddMemberScreen extends Screen {
     }
 
     /**
-     * 返回当前过滤后的在线玩家列表快照，供同包测试代码断言过滤结果。
+     * 返回当前过滤后的在线玩家列表快照，供同包测试断言筛选结果。
      *
      * @return 过滤后的在线玩家列表快照
      */
@@ -53,7 +55,7 @@ public class AddMemberScreen extends Screen {
     }
 
     /**
-     * 返回当前滚动偏移量，供同包测试代码断言滚动行为。
+     * 返回当前滚动偏移量，供同包测试断言滚动行为。
      *
      * @return 当前滚动偏移量
      */
@@ -62,7 +64,7 @@ public class AddMemberScreen extends Screen {
     }
 
     /**
-     * 返回搜索输入框，供同包测试代码写入查询文本。
+     * 返回搜索输入框，供同包测试写入搜索内容。
      *
      * @return 搜索输入框
      */
@@ -71,50 +73,45 @@ public class AddMemberScreen extends Screen {
     }
 
     /**
-     * 返回当前成员列表按钮数组快照，供同包测试代码触发成员添加操作。
+     * 返回当前候选成员按钮数组快照，供同包测试触发点击。
      *
-     * @return 当前成员列表按钮数组快照
+     * @return 候选成员按钮数组快照
      */
     Button[] getPlayerButtonsForTest() {
         return playerButtons == null ? new Button[0] : playerButtons.clone();
     }
 
     /**
-     * 返回成员列表区域中心点 X 坐标，供同包测试代码驱动滚轮事件。
+     * 返回候选成员列表区域的中心 X 坐标，供同包测试驱动滚轮事件。
      *
-     * @return 成员列表区域中心点 X 坐标
+     * @return 列表区域中心 X 坐标
      */
     double getListCenterXForTest() {
-        return listX + (listWidth / 2.0D);
+        return dialogLayout == null ? listX + (listWidth / 2.0D) : dialogLayout.getListCenterX();
     }
 
     /**
-     * 返回成员列表区域中心点 Y 坐标，供同包测试代码驱动滚轮事件。
+     * 返回候选成员列表区域的中心 Y 坐标，供同包测试驱动滚轮事件。
      *
-     * @return 成员列表区域中心点 Y 坐标
+     * @return 列表区域中心 Y 坐标
      */
     double getListCenterYForTest() {
-        return listY + (listHeight / 2.0D);
+        return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
     }
 
+    /**
+     * 初始化搜索框、候选按钮和取消按钮。
+     */
     @Override
     protected void init() {
         if (minecraft == null || minecraft.getConnection() == null) {
             return;
         }
-        int guiWidth = Math.max(200, Math.min(320, this.width - 20));
-        int x = (this.width - guiWidth) / 2;
-        int topY = Math.max(20, this.height / 6);
-        int searchHeight = 20;
-        rowHeight = 22;
-        int maxRowsByHeight = Math.max(4, (this.height - topY - 70) / rowHeight);
-        visibleRows = Math.min(8, maxRowsByHeight);
-        listWidth = guiWidth;
-        listX = x;
-        listY = topY + searchHeight + 6;
-        listHeight = visibleRows * rowHeight;
+        dialogLayout = buildDialogLayout();
+        applyDialogLayout(dialogLayout);
 
-        searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
+        searchField = new EditBox(this.font, dialogLayout.dialogX(), dialogLayout.searchY(),
+                dialogLayout.dialogWidth(), dialogLayout.searchHeight(), Component.empty());
         searchField.setHint(Component.translatable("gui.todolist.member.name"));
         searchField.setValue("");
         this.addRenderableWidget(searchField);
@@ -133,26 +130,27 @@ public class AddMemberScreen extends Screen {
                 if (entry != null) {
                     addMember(entry);
                 }
-            }).bounds(x, btnY, guiWidth, 20).build();
+            }).bounds(dialogLayout.dialogX(), btnY, dialogLayout.dialogWidth(), 20).build();
             btn.active = false;
             btn.visible = false;
             this.addRenderableWidget(btn);
             playerButtons[i] = btn;
         }
 
-        int cancelY = listY + listHeight + 10;
-        Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
-            minecraft.setScreen(parent);
-        }).bounds(x, cancelY, guiWidth, 20).build();
-        this.addRenderableWidget(cancel);
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> minecraft.setScreen(parent))
+                .bounds(dialogLayout.cancelX(), dialogLayout.cancelY(),
+                        dialogLayout.cancelWidth(), dialogLayout.cancelHeight())
+                .build();
+        this.addRenderableWidget(cancelButton);
 
-        searchField.setResponder(text -> {
-            updateFilteredPlayers();
-        });
+        searchField.setResponder(text -> updateFilteredPlayers());
         updateFilteredPlayers();
         this.setFocused(searchField);
     }
 
+    /**
+     * 根据行号返回当前可见的候选玩家。
+     */
     private net.minecraft.client.multiplayer.PlayerInfo getPlayerForRow(int rowIndex) {
         if (filteredPlayers == null || filteredPlayers.isEmpty()) {
             return null;
@@ -164,6 +162,9 @@ public class AddMemberScreen extends Screen {
         return filteredPlayers.get(index);
     }
 
+    /**
+     * 根据搜索词和项目成员状态刷新候选成员列表。
+     */
     private void updateFilteredPlayers() {
         if (allPlayers == null) {
             return;
@@ -191,6 +192,35 @@ public class AddMemberScreen extends Screen {
         updatePlayerButtons();
     }
 
+    /**
+     * 构建当前窗口尺寸下的成员选择弹窗布局。
+     *
+     * @return 响应式布局快照
+     */
+    private MemberSelectionDialogLayout buildDialogLayout() {
+        return MemberSelectionDialogLayout.create(this.width, this.height);
+    }
+
+    /**
+     * 将布局快照同步到当前界面字段，供渲染和测试复用。
+     *
+     * @param layout 当前窗口下的成员选择弹窗布局
+     */
+    private void applyDialogLayout(MemberSelectionDialogLayout layout) {
+        if (layout == null) {
+            return;
+        }
+        rowHeight = layout.rowHeight();
+        visibleRows = layout.visibleRows();
+        listWidth = layout.listWidth();
+        listX = layout.listX();
+        listY = layout.listY();
+        listHeight = layout.listHeight();
+    }
+
+    /**
+     * 判断目标玩家是否已经是项目拥有者或现有成员。
+     */
     private boolean isAlreadyMember(Project project, UUID playerId) {
         if (project == null || playerId == null) {
             return false;
@@ -203,20 +233,14 @@ public class AddMemberScreen extends Screen {
         return project.getMembers().containsKey(uuid);
     }
 
+    /**
+     * 根据当前滚动偏移刷新候选成员按钮的显示内容。
+     */
     private void updatePlayerButtons() {
         if (playerButtons == null) {
             return;
         }
-        int maxOffset = 0;
-        if (filteredPlayers != null) {
-            maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
-        }
-        if (scrollOffset > maxOffset) {
-            scrollOffset = maxOffset;
-        }
-        if (scrollOffset < 0) {
-            scrollOffset = 0;
-        }
+        scrollOffset = clampPlayerScrollOffset();
         for (int i = 0; i < playerButtons.length; i++) {
             Button btn = playerButtons[i];
             net.minecraft.client.multiplayer.PlayerInfo entry = getPlayerForRow(i);
@@ -233,6 +257,19 @@ public class AddMemberScreen extends Screen {
         }
     }
 
+    /**
+     * 将新增成员弹窗的滚动偏移限制在候选列表的有效范围内。
+     *
+     * @return 修正后的滚动偏移
+     */
+    private int clampPlayerScrollOffset() {
+        int totalItems = filteredPlayers == null ? 0 : filteredPlayers.size();
+        return MemberSelectionDialogLayout.clampScrollOffset(scrollOffset, totalItems, visibleRows);
+    }
+
+    /**
+     * 发送新增成员请求，并在项目设置界面中做乐观更新。
+     */
     private void addMember(net.minecraft.client.multiplayer.PlayerInfo entry) {
         String name = entry.getProfile().getName();
         ClientBridge.ops().sendAddMember(projectId, entry.getProfile().getId().toString(), name);
@@ -242,16 +279,23 @@ public class AddMemberScreen extends Screen {
         onClose();
     }
 
+    /**
+     * 关闭界面并返回父界面。
+     */
     @Override
     public void onClose() {
         minecraft.setScreen(parent);
     }
-    
+
+    /**
+     * 处理候选成员列表区域内的滚轮滚动。
+     */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
+        if (dialogLayout != null && dialogLayout.isInsideList(mouseX, mouseY)) {
             if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
-                int maxOffset = Math.max(0, filteredPlayers.size() - visibleRows);
+                int totalItems = filteredPlayers.size();
+                int maxOffset = MemberSelectionDialogLayout.getMaxScrollOffset(totalItems, visibleRows);
                 if (verticalAmount < 0 && scrollOffset < maxOffset) {
                     scrollOffset++;
                     updatePlayerButtons();
@@ -269,15 +313,16 @@ public class AddMemberScreen extends Screen {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
+    /**
+     * 渲染新增成员弹窗标题和搜索标签。
+     */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
-        
         context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
-        context.drawString(font, Component.translatable("gui.todolist.label.member_name"), listX, searchField.getY() - 10, 0xFFAAAAAA, false);
-        
+        context.drawString(font, Component.translatable("gui.todolist.label.member_name"),
+                listX, searchField.getY() - 10, 0xFFAAAAAA, false);
+
         super.render(context, mouseX, mouseY, delta);
     }
 }
-
-

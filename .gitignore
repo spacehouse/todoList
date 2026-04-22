@@ -68,3 +68,10 @@ local.properties
 */logs/*
 */log/*
 *.log
+
+*.bak.*
+*.tmp.*
+AGENTS.md
+.editorconfig
+docs/ui-prototype-exports-v4/
+docs/gui-implementation-checklist.md

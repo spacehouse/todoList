@@ -6,6 +6,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,11 +17,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Handles task data persistence
- *
- * Storage structure:
- * - Single player: saves/worldname/todo/moddata.dat
- * - Multiplayer: world/todo/players/{uuid}.dat
+ * 任务存储组件。
+ * 负责统一处理单人、本地联机与团队任务的数据落盘、读取及元数据查询。
  */
 public class TaskStorage {
     private static final int NBT_COMPOUND_TYPE = 10;
@@ -32,19 +30,24 @@ public class TaskStorage {
     private final Map<Path, Long> lastLoggedLastSavedByFile = new HashMap<>();
     private final Map<Path, Integer> lastLoggedTaskCountByFile = new HashMap<>();
 
+    /**
+     * 创建任务存储组件，并预热所需的数据目录。
+     */
     public TaskStorage() {
         ensureDirectoryExists();
     }
 
     /**
-     * Get the data directory path
+     * 返回当前存储命名空间对应的数据目录。
+     *
+     * @return 当前任务数据目录
      */
     private Path getDataDirectory() {
         return DataPathProvider.getTodoDataDir();
     }
 
     /**
-     * Ensure data directory exists
+     * 确保存储目录及玩家子目录存在。
      */
     private void ensureDirectoryExists() {
         try {
@@ -54,7 +57,6 @@ public class TaskStorage {
                 TodoConstants.LOGGER.info("Created data directory: {}", dataDir);
             }
 
-            // Create players folder for multiplayer
             Path playersDir = DataPathProvider.getTaskPlayersDir();
             if (!Files.exists(playersDir)) {
                 Files.createDirectories(playersDir);
@@ -66,7 +68,10 @@ public class TaskStorage {
     }
 
     /**
-     * Save tasks to local storage (single player)
+     * 保存单人本地任务列表。
+     *
+     * @param tasks 待保存的任务列表
+     * @throws IOException 当写入文件失败时抛出
      */
     public void saveTasks(List<Task> tasks) throws IOException {
         ensureDirectoryExists();
@@ -76,7 +81,11 @@ public class TaskStorage {
     }
 
     /**
-     * Save tasks for a specific player (multiplayer)
+     * 保存指定玩家的个人任务列表。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param tasks 待保存的任务列表
+     * @throws IOException 当写入文件失败时抛出
      */
     public void savePlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
         ensureDirectoryExists();
@@ -87,7 +96,13 @@ public class TaskStorage {
     }
 
     /**
-     * 按当前服务端运行模式保存个人任务，单人本地模式写入单文件，其余模式写入玩家文件。
+     * 按当前服务端运行模式保存个人任务。
+     * 单人本地模式写入单文件，其余模式写入玩家文件。
+     *
+     * @param server 当前服务端
+     * @param playerUuid 玩家 UUID
+     * @param tasks 待保存的任务列表
+     * @throws IOException 当写入文件失败时抛出
      */
     public void savePersonalTasks(MinecraftServer server, UUID playerUuid, List<Task> tasks) throws IOException {
         if (shouldUseLocalPersonalStorage(server)) {
@@ -97,6 +112,12 @@ public class TaskStorage {
         savePlayerTasks(playerUuid, tasks);
     }
 
+    /**
+     * 保存团队任务列表。
+     *
+     * @param tasks 待保存的团队任务列表
+     * @throws IOException 当写入文件失败时抛出
+     */
     public void saveTeamTasks(List<Task> tasks) throws IOException {
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
@@ -105,7 +126,11 @@ public class TaskStorage {
     }
 
     /**
-     * Save tasks to a specific file
+     * 将任务列表写入指定文件。
+     *
+     * @param tasks 待保存的任务列表
+     * @param file 目标文件
+     * @throws IOException 当写入文件失败时抛出
      */
     private void saveTasksToFile(List<Task> tasks, Path file) throws IOException {
         CompoundTag root = new CompoundTag();
@@ -123,7 +148,10 @@ public class TaskStorage {
     }
 
     /**
-     * Load tasks from local storage (single player) - Safe version
+     * 安全读取单人本地任务列表。
+     * 当前保留给离线测试与调试场景使用，读取失败时返回空列表。
+     *
+     * @return 读取到的任务列表，失败时返回空列表
      */
     public List<Task> loadTasksSafe() {
         try {
@@ -135,7 +163,10 @@ public class TaskStorage {
     }
 
     /**
-     * Load tasks from local storage (single player)
+     * 读取单人本地任务列表。
+     *
+     * @return 读取到的任务列表
+     * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadTasks() throws IOException {
         ensureDirectoryExists();
@@ -151,7 +182,11 @@ public class TaskStorage {
     }
 
     /**
-     * Load tasks for a specific player (multiplayer)
+     * 读取指定玩家的个人任务列表。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 读取到的任务列表
+     * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadPlayerTasks(UUID playerUuid) throws IOException {
         ensureDirectoryExists();
@@ -165,7 +200,13 @@ public class TaskStorage {
     }
 
     /**
-     * 按当前服务端运行模式读取个人任务，单人本地模式优先使用单文件，其余模式读取玩家文件。
+     * 按当前服务端运行模式读取个人任务。
+     * 单人本地模式优先读取单文件，其余模式读取玩家文件。
+     *
+     * @param server 当前服务端
+     * @param playerUuid 玩家 UUID
+     * @return 读取到的任务列表
+     * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadPersonalTasks(MinecraftServer server, UUID playerUuid) throws IOException {
         if (shouldUseLocalPersonalStorage(server)) {
@@ -174,6 +215,12 @@ public class TaskStorage {
         return loadPlayerTasks(playerUuid);
     }
 
+    /**
+     * 读取团队任务列表。
+     *
+     * @return 读取到的团队任务列表
+     * @throws IOException 当读取文件失败时抛出
+     */
     public List<Task> loadTeamTasks() throws IOException {
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
@@ -188,7 +235,11 @@ public class TaskStorage {
     }
 
     /**
-     * Load tasks from a specific file
+     * 从指定文件读取任务列表。
+     *
+     * @param file 任务数据文件
+     * @return 解析后的任务列表
+     * @throws IOException 当读取文件失败时抛出
      */
     private List<Task> loadTasksFromFile(Path file) throws IOException {
         CompoundTag root = NbtIo.read(file);
@@ -217,11 +268,22 @@ public class TaskStorage {
         return tasks;
     }
 
+    /**
+     * 返回单人本地任务文件的最后保存时间戳。
+     *
+     * @return 最后保存时间戳，不存在时返回 0
+     */
     public long getLocalTasksLastSaved() {
         ensureDirectoryExists();
         return readLastSavedSafe(getDataDirectory().resolve(DATA_FILE));
     }
 
+    /**
+     * 返回指定玩家任务文件的最后保存时间戳。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 最后保存时间戳，不存在时返回 0
+     */
     public long getPlayerTasksLastSaved(UUID playerUuid) {
         if (playerUuid == null) {
             return 0L;
@@ -234,6 +296,10 @@ public class TaskStorage {
 
     /**
      * 按当前服务端运行模式读取个人任务文件的最后保存时间戳。
+     *
+     * @param server 当前服务端
+     * @param playerUuid 玩家 UUID
+     * @return 最后保存时间戳，不存在时返回 0
      */
     public long getPersonalTasksLastSaved(MinecraftServer server, UUID playerUuid) {
         if (shouldUseLocalPersonalStorage(server)) {
@@ -242,6 +308,12 @@ public class TaskStorage {
         return getPlayerTasksLastSaved(playerUuid);
     }
 
+    /**
+     * 安全读取指定文件中的最后保存时间戳。
+     *
+     * @param file 目标文件
+     * @return 最后保存时间戳，不存在或读取失败时返回 0
+     */
     private long readLastSavedSafe(Path file) {
         if (file == null || !Files.exists(file)) {
             return 0L;
@@ -257,11 +329,19 @@ public class TaskStorage {
         }
     }
 
+    /**
+     * 在文件内容发生变化时记录一次读取摘要，避免重复刷日志。
+     *
+     * @param file 数据文件
+     * @param version 数据版本
+     * @param lastSaved 最后保存时间戳
+     * @param taskCount 任务数量
+     */
     private void maybeLogLoadSummary(Path file, int version, long lastSaved, int taskCount) {
         Long lastLoggedLastSaved = lastLoggedLastSavedByFile.get(file);
         Integer lastLoggedCount = lastLoggedTaskCountByFile.get(file);
-        if (lastLoggedLastSaved != null && lastLoggedCount != null &&
-                lastLoggedLastSaved == lastSaved && lastLoggedCount == taskCount) {
+        if (lastLoggedLastSaved != null && lastLoggedCount != null
+                && lastLoggedLastSaved == lastSaved && lastLoggedCount == taskCount) {
             return;
         }
         lastLoggedLastSavedByFile.put(file, lastSaved);
@@ -270,41 +350,10 @@ public class TaskStorage {
     }
 
     /**
-     * Delete player data (for server admin or player leaving)
-     */
-    public void deletePlayerTasks(UUID playerUuid) throws IOException {
-        ensureDirectoryExists();
-        Path playersDir = DataPathProvider.getTaskPlayersDir();
-        Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
-        if (Files.exists(playerFile)) {
-            Files.delete(playerFile);
-            TodoConstants.LOGGER.info("Deleted task data for player {}", playerUuid);
-        }
-    }
-
-    /**
-     * Export tasks to a backup file
-     */
-    public void exportBackup(UUID playerUuid, Path backupPath) throws IOException {
-        List<Task> tasks = loadPlayerTasks(playerUuid);
-        saveTasksToFile(tasks, backupPath);
-        TodoConstants.LOGGER.info("Exported {} tasks to backup: {}", tasks.size(), backupPath);
-    }
-
-    /**
-     * Import tasks from a backup file
-     */
-    public List<Task> importBackup(Path backupPath) throws IOException {
-        if (!Files.exists(backupPath)) {
-            throw new IOException("Backup file not found: " + backupPath);
-        }
-        List<Task> tasks = loadTasksFromFile(backupPath);
-        TodoConstants.LOGGER.info("Imported {} tasks from backup", tasks.size());
-        return tasks;
-    }
-
-    /**
-     * Check if player data exists
+     * 判断指定玩家任务文件是否存在。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 若玩家任务文件存在则返回 true
      */
     public boolean hasPlayerTasks(UUID playerUuid) {
         ensureDirectoryExists();
@@ -314,18 +363,10 @@ public class TaskStorage {
     }
 
     /**
-     * 按当前服务端运行模式判断个人任务文件是否已存在。
-     */
-    public boolean hasPersonalTasks(MinecraftServer server, UUID playerUuid) {
-        if (shouldUseLocalPersonalStorage(server)) {
-            ensureDirectoryExists();
-            return Files.exists(getDataDirectory().resolve(DATA_FILE));
-        }
-        return hasPlayerTasks(playerUuid);
-    }
-
-    /**
-     * Get data directory path (for debugging)
+     * 返回当前任务数据目录。
+     * 当前保留给离线测试与调试入口使用。
+     *
+     * @return 当前任务数据目录
      */
     public Path getDataDirectoryPath() {
         return getDataDirectory();
@@ -333,6 +374,9 @@ public class TaskStorage {
 
     /**
      * 判断当前服务端是否应使用单人本地个人任务文件。
+     *
+     * @param server 当前服务端
+     * @return 单人未发布模式返回 true，否则返回 false
      */
     public boolean shouldUseLocalPersonalStorage(MinecraftServer server) {
         if (server == null) {
@@ -344,5 +388,3 @@ public class TaskStorage {
         return !server.isPublished();
     }
 }
-
-

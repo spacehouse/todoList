@@ -6,12 +6,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 命令输入归一化工具：集中处理命令参数的大小写、别名与非法值回退规则。
+ * 命令输入归一化工具。
+ * 集中处理命令参数的大小写、别名和非法值回退规则。
  */
 public final class CommandInputNormalizer {
 
     /**
-     * 创建命令输入归一化工具实例的私有构造器，阻止外部实例化。
+     * 禁止外部实例化工具类。
      */
     private CommandInputNormalizer() {
     }
@@ -20,7 +21,7 @@ public final class CommandInputNormalizer {
      * 归一化任务列表状态参数。
      *
      * @param status 原始状态参数
-     * @return all/incomplete/completed 之一；非法值返回空字符串
+     * @return all、incomplete 或 completed；非法值返回空字符串
      */
     public static String normalizeTaskListStatus(String status) {
         if (status == null) {
@@ -38,7 +39,7 @@ public final class CommandInputNormalizer {
      * 归一化任务列表优先级参数。
      *
      * @param priority 原始优先级参数
-     * @return all/low/medium/high 之一；非法值返回空字符串
+     * @return all、low、medium 或 high；非法值返回空字符串
      */
     public static String normalizeTaskListPriority(String priority) {
         if (priority == null) {
@@ -57,7 +58,7 @@ public final class CommandInputNormalizer {
      * 归一化任务清理范围参数。
      *
      * @param scope 原始范围参数
-     * @return personal/team 之一；非法值返回空字符串
+     * @return personal 或 team；非法值返回空字符串
      */
     public static String normalizeTaskCleanScope(String scope) {
         if (scope == null) {
@@ -74,7 +75,7 @@ public final class CommandInputNormalizer {
      * 归一化任务清理项目选择器参数。
      *
      * @param selector 原始选择器参数
-     * @return current/star/all 之一；非法值返回空字符串
+     * @return current、star 或 all；非法值返回空字符串
      */
     public static String normalizeTaskCleanProjectSelector(String selector) {
         if (selector == null) {
@@ -92,7 +93,7 @@ public final class CommandInputNormalizer {
      * 归一化任务清理状态参数。
      *
      * @param status 原始状态参数
-     * @return incomplete/completed 之一；非法值返回空字符串
+     * @return incomplete 或 completed；非法值返回空字符串
      */
     public static String normalizeTaskCleanStatus(String status) {
         if (status == null) {
@@ -109,7 +110,7 @@ public final class CommandInputNormalizer {
      * 归一化项目范围参数。
      *
      * @param scope 原始范围参数
-     * @return personal/team 之一；非法值返回空字符串
+     * @return personal 或 team；非法值返回空字符串
      */
     public static String normalizeProjectScope(String scope) {
         return normalizeTaskCleanScope(scope);
@@ -119,7 +120,7 @@ public final class CommandInputNormalizer {
      * 归一化项目列表模式参数。
      *
      * @param mode 原始模式参数
-     * @return all/current/star 之一；非法值返回空字符串
+     * @return all、current 或 star；非法值返回空字符串
      */
     public static String normalizeProjectListMode(String mode) {
         if (mode == null) {
@@ -134,10 +135,10 @@ public final class CommandInputNormalizer {
     }
 
     /**
-     * 归一化布尔型开关参数。
+     * 归一化布尔开关参数。
      *
      * @param rawValue 原始开关参数
-     * @return true/false；非法值返回 null
+     * @return true 或 false；非法值返回 null
      */
     public static Boolean normalizeToggleState(String rawValue) {
         if (rawValue == null) {
@@ -154,7 +155,7 @@ public final class CommandInputNormalizer {
      * 归一化项目成员角色参数。
      *
      * @param rawRole 原始角色参数
-     * @return lead/member 之一；非法值返回空字符串
+     * @return lead 或 member；非法值返回空字符串
      */
     public static String normalizeProjectMemberRole(String rawRole) {
         if (rawRole == null) {
@@ -171,7 +172,7 @@ public final class CommandInputNormalizer {
      * 归一化命令权限模式参数。
      *
      * @param rawMode 原始权限模式参数
-     * @return op_only/view_only/full 之一；非法值返回空字符串
+     * @return op_only、view_only 或 full；非法值返回空字符串
      */
     public static String normalizeCommandAccessMode(String rawMode) {
         if (rawMode == null) {
@@ -187,7 +188,8 @@ public final class CommandInputNormalizer {
     }
 
     /**
-     * 根据目标状态生成新的 HUD 星标项目列表，自动去重并过滤空值。
+     * 根据目标状态生成新的 HUD 星标项目列表。
+     * 会自动去重，并过滤空白项目 ID。
      *
      * @param currentProjectIds 当前星标项目 ID 列表
      * @param projectId 目标项目 ID
@@ -216,7 +218,8 @@ public final class CommandInputNormalizer {
     }
 
     /**
-     * 归一化项目 ID，去除首尾空白并将空输入折叠为空字符串。
+     * 归一化项目 ID。
+     * 会去除首尾空白，并将空输入折叠为空字符串。
      *
      * @param projectId 原始项目 ID
      * @return 归一化后的项目 ID；非法或空输入返回空字符串

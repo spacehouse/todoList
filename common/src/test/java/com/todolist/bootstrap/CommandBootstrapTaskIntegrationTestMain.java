@@ -1748,17 +1748,17 @@ public final class CommandBootstrapTaskIntegrationTestMain {
                 createPersonalTask("Second Open Task", false, Task.Priority.MEDIUM, null)
         );
 
-        assertEquals(1, dispatcher.execute("todo task clean personal all completed", createSource(0, firstPlayer, server)), "鐜╁ A 鍙戣捣 task clean 搴旇繑鍥炴垚鍔?");
-        assertEquals(1, dispatcher.execute("todo task clean personal all completed", createSource(0, secondPlayer, server)), "鐜╁ B 鍙戣捣 task clean 搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo task clean personal all completed", createSource(0, firstPlayer, server)), "玩家 A 发起 task clean 应返回成功");
+        assertEquals(1, dispatcher.execute("todo task clean personal all completed", createSource(0, secondPlayer, server)), "玩家 B 发起 task clean 应返回成功");
 
-        assertEquals(1, dispatcher.execute("todo task clean confirm", createSource(0, firstPlayer, server)), "鐜╁ A 纭娓呯悊搴旇繑鍥炴垚鍔?");
-        assertNull(findPersonalTaskByTitleOrNull(firstPlayer, "First Completed Task"), "鐜╁ A 纭鍚庡簲娓呯悊鑷繁鐨勫凡瀹屾垚浠诲姟");
-        assertNotNull(findPersonalTaskByTitleOrNull(firstPlayer, "First Open Task"), "鐜╁ A 纭鍚庝笉搴旀竻鐞嗚嚜宸辩殑鏈畬鎴愪换鍔?");
-        assertNotNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Completed Task"), "鐜╁ A 纭鍚庝笉搴旀竻鐞嗙帺瀹?B 鐨勫凡瀹屾垚浠诲姟");
+        assertEquals(1, dispatcher.execute("todo task clean confirm", createSource(0, firstPlayer, server)), "玩家 A 确认清理应返回成功");
+        assertNull(findPersonalTaskByTitleOrNull(firstPlayer, "First Completed Task"), "玩家 A 确认后应清理自己的已完成任务");
+        assertNotNull(findPersonalTaskByTitleOrNull(firstPlayer, "First Open Task"), "玩家 A 确认后不应清理自己的未完成任务");
+        assertNotNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Completed Task"), "玩家 A 确认后不应清理玩家 B 的已完成任务");
 
-        assertEquals(1, dispatcher.execute("todo task clean confirm", createSource(0, secondPlayer, server)), "鐜╁ B 纭娓呯悊搴旇繑鍥炴垚鍔?");
-        assertNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Completed Task"), "鐜╁ B 纭鍚庡簲娓呯悊鑷繁鐨勫凡瀹屾垚浠诲姟");
-        assertNotNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Open Task"), "鐜╁ B 纭鍚庝笉搴旀竻鐞嗚嚜宸辩殑鏈畬鎴愪换鍔?");
+        assertEquals(1, dispatcher.execute("todo task clean confirm", createSource(0, secondPlayer, server)), "玩家 B 确认清理应返回成功");
+        assertNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Completed Task"), "玩家 B 确认后应清理自己的已完成任务");
+        assertNotNull(findPersonalTaskByTitleOrNull(secondPlayer, "Second Open Task"), "玩家 B 确认后不应清理自己的未完成任务");
     }
 
     /**
@@ -1770,16 +1770,16 @@ public final class CommandBootstrapTaskIntegrationTestMain {
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
         int addResult = dispatcher.execute("todo task add \"Reload Personal Task\" \"Persist me\" persist", createSource(0, player));
-        assertEquals(1, addResult, "task add 鎼存棁绻戦崶鐐村灇閸?");
-        assertEquals(Boolean.TRUE, Files.exists(getPersonalTaskFilePath(player)), "task add 閸氬骸绨查崘娆忓弳娑擃亙姹夋禒璇插閺傚洣娆?");
+        assertEquals(1, addResult, "task add 应返回成功");
+        assertEquals(Boolean.TRUE, Files.exists(getPersonalTaskFilePath(player)), "task add 应写入个人任务文件");
 
         reloadPersistentState();
 
-        assertNotNull(findPersonalTaskByTitle(player, "Reload Personal Task"), "闁插秵鏌婇崚婵嗩潗閸栨牕鎮楁惔鏃囶嚉閼虫垝绮犻幐浣风畽閸栨牗鏋冩禒鏈佃厬鐠囪娲栨稉顏冩眽娴犺濮?");
+        assertNotNull(findPersonalTaskByTitle(player, "Reload Personal Task"), "重载后应能找到已持久化的个人任务");
         CapturingCommandSourceStack source = createSource(0, player);
         int listResult = createDispatcher().execute("todo task list", source);
-        assertEquals(1, listResult, "闁插秷娴囬崥?task list 鎼存棁绻戦崶鐐村灇閸?");
-        assertContainsText(source.getSuccessMessages(), "Reload Personal Task", "闁插秷娴囬崥?task list 閺堫亣绶崙鍝勫嚒閹镐椒绠欓崠鏍畱娑擃亙姹夋禒璇插");
+        assertEquals(1, listResult, "task list 应返回成功");
+        assertContainsText(source.getSuccessMessages(), "Reload Personal Task", "task list 应输出持久化任务");
     }
 
     /**
@@ -1792,21 +1792,21 @@ public final class CommandBootstrapTaskIntegrationTestMain {
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
         int createResult = dispatcher.execute("todo project create team Reload Team Project", createSource(0, manager, server));
-        assertEquals(1, createResult, "project create team 鎼存棁绻戦崶鐐村灇閸?");
+        assertEquals(1, createResult, "project create team 应返回成功");
         Project createdProject = findProjectByName("Reload Team Project");
-        assertNotNull(createdProject, "鎼存棁顕氶懗鑺ュ閸掓澘鍨伴崚娑樼紦閻ㄥ嫬娲熼梼鐔笺€嶉惄?");
+        assertNotNull(createdProject, "应能找到刚创建的团队项目");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "project create team 閸氬骸绨查崘娆忓弳閸ャ垽妲︽い鍦窗閺傚洣娆?");
+        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "project create team 应写入团队项目文件");
 
         int addResult = dispatcher.execute("todo task addp " + createdProject.getId() + " \"Reload Team Task\" \"Persist team\" persist", createSource(0, manager, server));
-        assertEquals(1, addResult, "task addp 鎼存棁绻戦崶鐐村灇閸?");
-        assertEquals(Boolean.TRUE, Files.exists(getTeamTaskFilePath()), "task addp 閸氬骸绨查崘娆忓弳閸ァ垽妲︽禒璇插閺傚洣娆?");
+        assertEquals(1, addResult, "task addp 应返回成功");
+        assertEquals(Boolean.TRUE, Files.exists(getTeamTaskFilePath()), "task addp 应写入团队任务文件");
 
         reloadPersistentState();
 
         CapturingCommandSourceStack source = createSource(0, manager, createServer(manager));
         int listResult = createDispatcher().execute("todo task listp " + createdProject.getId(), source);
-        assertEquals(1, listResult, "闁插秷娴囬崥?task listp 鎼存棁绻戦崶鐐村灇閸?");
-        assertContainsText(source.getSuccessMessages(), "Reload Team Task", "闁插秷娴囬崥?task listp 閺堫亣绶崙鍝勫嚒閹镐椒绠欓崠鏍畱閸ァ垽妲︽禒璇插");
+        assertEquals(1, listResult, "task listp 应返回成功");
+        assertContainsText(source.getSuccessMessages(), "Reload Team Task", "task listp 应输出持久化团队任务");
     }
 }

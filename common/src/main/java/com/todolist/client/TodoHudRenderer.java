@@ -5,10 +5,10 @@ import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,11 +24,6 @@ import net.minecraft.network.chat.Component;
  */
 public class TodoHudRenderer {
     private static final long HUD_MODEL_REFRESH_INTERVAL_MS = 250L;
-    private static final Comparator<Task> HUD_TASK_COMPARATOR = (a, b) -> {
-        int priority = Integer.compare(b.getPriority().ordinal(), a.getPriority().ordinal());
-        if (priority != 0) return priority;
-        return Long.compare(a.getCreatedAt(), b.getCreatedAt());
-    };
 
     /**
      * HUD 视图模式，和配置项中的字符串一一对应。
@@ -60,40 +55,52 @@ public class TodoHudRenderer {
     private String cachedPlayerUuid = "";
 
     // 缓存常用组件
-    private static final Component PRIORITY_HIGH_ICON = Component.translatable("hud.todolist.priority.high.icon").withStyle(ChatFormatting.RED);
-    private static final Component PRIORITY_MEDIUM_ICON = Component.translatable("hud.todolist.priority.medium.icon").withStyle(ChatFormatting.GOLD);
-    private static final Component PRIORITY_LOW_ICON = Component.translatable("hud.todolist.priority.low.icon").withStyle(ChatFormatting.GREEN);
     private static final Component CHECKBOX_CHECKED = Component.literal("☑").withStyle(ChatFormatting.DARK_GREEN);
     private static final Component CHECKBOX_UNCHECKED = Component.literal("☐").withStyle(ChatFormatting.WHITE);
     private static final Component SEPARATOR_COMPLETED = Component.translatable("hud.todolist.separator.completed");
     private static final Component ELLIPSIS = Component.literal("...");
     private static final float HUD_LABEL_SCALE = 0.85F;
     private static final int HUD_LABEL_MAX_CHARS = 8;
+    private static final int HUD_PRIORITY_BLOCK_WIDTH = 4;
+    private static final int HUD_PRIORITY_BLOCK_GAP = 4;
     
     // 缓存视图标签
-    private static final Component LABEL_TEAM_UNASSIGNED = Component.translatable("hud.todolist.view_label.team_unassigned");
-    private static final Component LABEL_TEAM_ALL = Component.translatable("hud.todolist.view_label.team_all");
-    private static final Component LABEL_TEAM_ASSIGNED = Component.translatable("hud.todolist.view_label.team_assigned");
-    private static final Component LABEL_PERSONAL = Component.translatable("hud.todolist.view_label.personal");
+    private static final Component LABEL_SPACE_PERSONAL = Component.translatable("hud.todolist.space_label.personal");
+    private static final Component LABEL_SPACE_TEAM = Component.translatable("hud.todolist.space_label.team");
+    private static final Component LABEL_TEAM_VIEW_UNASSIGNED = Component.translatable("hud.todolist.team_view_label.unassigned");
+    private static final Component LABEL_TEAM_VIEW_ALL = Component.translatable("hud.todolist.team_view_label.all");
+    private static final Component LABEL_TEAM_VIEW_ASSIGNED = Component.translatable("hud.todolist.team_view_label.assigned");
+    private static final Component LABEL_PROJECT_SOURCE_STARRED = Component.translatable("gui.todolist.hud.project_source.starred");
+    private static final Component LABEL_PROJECT_SOURCE_ALL = Component.translatable("gui.todolist.hud.project_source.all");
 
-    private static class RowRenderCache {
-        private final String taskId;
-        private final String layoutKey;
-        private final Component priorityText;
+    /**
+     * HUD 行视觉元数据：统一描述优先级色块、前置标签和标题位置。
+     */
+    private static class HudRowVisual {
+        private final int priorityBlockColor;
+        private final String priorityText;
         private final String assigneeText;
         private final String tagText;
         private final int assigneeOffset;
         private final int tagOffset;
         private final int titleOffset;
         private final Component titleText;
-        private final int hudWidth;
-        private final double guiScale;
 
-        private RowRenderCache(String taskId, String layoutKey, Component priorityText, String assigneeText, String tagText,
-                               int assigneeOffset, int tagOffset, int titleOffset, Component titleText,
-                               int hudWidth, double guiScale) {
-            this.taskId = taskId;
-            this.layoutKey = layoutKey;
+        /**
+         * 创建 HUD 行视觉元数据。
+         *
+         * @param priorityBlockColor 优先级色块颜色
+         * @param priorityText 兼容旧版的优先级文本，新版保持为空字符串
+         * @param assigneeText 指派人标签
+         * @param tagText 首个标签文本
+         * @param assigneeOffset 指派人标签偏移
+         * @param tagOffset 标签偏移
+         * @param titleOffset 标题起始偏移
+         * @param titleText 行标题文本
+         */
+        private HudRowVisual(int priorityBlockColor, String priorityText, String assigneeText, String tagText,
+                             int assigneeOffset, int tagOffset, int titleOffset, Component titleText) {
+            this.priorityBlockColor = priorityBlockColor;
             this.priorityText = priorityText;
             this.assigneeText = assigneeText;
             this.tagText = tagText;
@@ -101,6 +108,51 @@ public class TodoHudRenderer {
             this.tagOffset = tagOffset;
             this.titleOffset = titleOffset;
             this.titleText = titleText;
+        }
+    }
+
+    /**
+     * HUD 渲染计划：统一保存展开状态下的可见行数和隐藏数量。
+     */
+    private static class HudRenderPlan {
+        private final int shownPending;
+        private final int shownDone;
+        private final int hiddenCount;
+        private final boolean showDoneSection;
+        private final boolean showMore;
+
+        /**
+         * 创建 HUD 渲染计划。
+         *
+         * @param shownPending 当前显示的未完成任务数量
+         * @param shownDone 当前显示的已完成任务数量
+         * @param hiddenCount 当前隐藏的任务数量
+         * @param showDoneSection 是否需要显示已完成分组
+         * @param showMore 是否需要显示隐藏计数行
+         */
+        private HudRenderPlan(int shownPending, int shownDone, int hiddenCount, boolean showDoneSection, boolean showMore) {
+            this.shownPending = shownPending;
+            this.shownDone = shownDone;
+            this.hiddenCount = hiddenCount;
+            this.showDoneSection = showDoneSection;
+            this.showMore = showMore;
+        }
+    }
+
+    /**
+     * HUD 行缓存：保存任务行布局签名与可复用的视觉元数据。
+     */
+    private static class RowRenderCache {
+        private final String taskId;
+        private final String layoutKey;
+        private final HudRowVisual rowVisual;
+        private final int hudWidth;
+        private final double guiScale;
+
+        private RowRenderCache(String taskId, String layoutKey, HudRowVisual rowVisual, int hudWidth, double guiScale) {
+            this.taskId = taskId;
+            this.layoutKey = layoutKey;
+            this.rowVisual = rowVisual;
             this.hudWidth = hudWidth;
             this.guiScale = guiScale;
         }
@@ -133,22 +185,9 @@ public class TodoHudRenderer {
         if (cachedPendingTasks.isEmpty() && cachedDoneTasks.isEmpty() && !config.isHudShowWhenEmpty()) return;
 
         // Calculate layout
-        int rowHeight = 12;
-        int headerHeight = 14;
-        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
-        
         List<Task> pending = cachedPendingTasks;
         List<Task> done = cachedDoneTasks;
-
-        int todoLimit = Math.max(0, config.getHudTodoLimit());
-        int doneLimit = Math.max(0, config.getHudDoneLimit());
-        int shownPending = Math.min(pending.size(), Math.min(todoLimit, maxRowsByHeight));
-        int rowsAfterPending = maxRowsByHeight - shownPending;
-        boolean showDoneSection = !done.isEmpty() && doneLimit > 0 && rowsAfterPending > 0;
-        int shownDone = showDoneSection ? Math.min(done.size(), Math.min(doneLimit, rowsAfterPending - 1)) : 0;
-        int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
-        int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
-        boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
+        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done);
         int panelHeight = calculatePanelHeight(config, pending, done);
 
         // Clamp coordinates
@@ -160,7 +199,7 @@ public class TodoHudRenderer {
         int x = placement.getX();
         int y = placement.getY();
 
-        renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, shownPending, shownDone, hiddenCount, config, getViewLabel(viewMode));
+        renderTaskList(context, x, y, hudWidth, panelHeight, pending, done, renderPlan, config, viewMode);
     }
 
     private void refreshHudModelIfNeeded(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
@@ -195,9 +234,6 @@ public class TodoHudRenderer {
                 pending.add(task);
             }
         }
-        pending.sort(HUD_TASK_COMPARATOR);
-        done.sort(HUD_TASK_COMPARATOR);
-
         cachedPendingTasks = pending;
         cachedDoneTasks = done;
         rebuildRowRenderCache(pending, done, hudWidth);
@@ -284,7 +320,7 @@ public class TodoHudRenderer {
             boolean assigned = assignee != null && !assignee.isEmpty();
             if (viewMode == HudViewMode.TEAM_UNASSIGNED && !assigned) {
                 result.add(task);
-            } else if (viewMode == HudViewMode.TEAM_ALL && assigned) {
+            } else if (viewMode == HudViewMode.TEAM_ALL) {
                 result.add(task);
             } else if (viewMode == HudViewMode.TEAM_ASSIGNED && assigned && myUuid != null && myUuid.equals(assignee)) {
                 result.add(task);
@@ -389,12 +425,67 @@ public class TodoHudRenderer {
      * @param viewMode HUD 视图模式
      * @return HUD 标题视图标签
      */
-    private Component getViewLabel(HudViewMode viewMode) {
+    private Component buildHeaderTitle(HudViewMode viewMode) {
+        Project.Scope scope = getScopeByView(viewMode);
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        List<Project> scopedProjects = manager.getProjectsByScope(scope);
+        String projectName = buildHeaderProjectSourceText(scope, manager, scopedProjects, ModConfig.getInstance().getHudProjectSource());
+
+        StringBuilder builder = new StringBuilder(getSpaceLabel(scope).getString());
+        if (!projectName.isEmpty()) {
+            builder.append('-').append(projectName);
+        }
+
+        Component teamViewLabel = getTeamViewLabel(viewMode);
+        if (teamViewLabel != null) {
+            builder.append('-').append(teamViewLabel.getString());
+        }
+        return Component.literal(builder.toString());
+    }
+
+    /**
+     * 根据 HUD 项目来源构建标题中的项目段文本。
+     *
+     * @param scope 当前项目范围
+     * @param manager 项目管理器
+     * @param scopedProjects 当前范围下的项目列表
+     * @param sourceMode HUD 项目来源配置
+     * @return 标题中的项目段文本
+     */
+    private String buildHeaderProjectSourceText(Project.Scope scope, ProjectManager manager, List<Project> scopedProjects, String sourceMode) {
+        if ("STARRED".equalsIgnoreCase(sourceMode)) {
+            return LABEL_PROJECT_SOURCE_STARRED.getString();
+        }
+        if ("ALL".equalsIgnoreCase(sourceMode)) {
+            return LABEL_PROJECT_SOURCE_ALL.getString();
+        }
+
+        Project activeProject = resolveScopedActiveProject(manager, scope, scopedProjects);
+        return ProjectNameFormatter.toDisplayText(activeProject).getString().trim();
+    }
+
+    /**
+     * 根据项目范围返回 HUD 标题中的空间标签。
+     *
+     * @param scope 当前项目范围
+     * @return HUD 空间标签
+     */
+    private Component getSpaceLabel(Project.Scope scope) {
+        return scope == Project.Scope.TEAM ? LABEL_SPACE_TEAM : LABEL_SPACE_PERSONAL;
+    }
+
+    /**
+     * 根据团队 HUD 视图返回对应的子视图标签。
+     *
+     * @param viewMode HUD 视图模式
+     * @return 团队子视图标签；个人视图时返回 {@code null}
+     */
+    private Component getTeamViewLabel(HudViewMode viewMode) {
         return switch (viewMode) {
-            case TEAM_UNASSIGNED -> LABEL_TEAM_UNASSIGNED;
-            case TEAM_ALL -> LABEL_TEAM_ALL;
-            case TEAM_ASSIGNED -> LABEL_TEAM_ASSIGNED;
-            case PERSONAL -> LABEL_PERSONAL;
+            case TEAM_UNASSIGNED -> LABEL_TEAM_VIEW_UNASSIGNED;
+            case TEAM_ALL -> LABEL_TEAM_VIEW_ALL;
+            case TEAM_ASSIGNED -> LABEL_TEAM_VIEW_ASSIGNED;
+            case PERSONAL -> null;
         };
     }
 
@@ -407,17 +498,15 @@ public class TodoHudRenderer {
      * @param panelHeight HUD 总高度
      * @param pending 待办任务列表（已排序）
      * @param done 已完成任务列表（已排序）
-     * @param shownPending 显示的待办数量
-     * @param shownDone 显示的已完成数量
-     * @param hiddenCount 隐藏任务数
+     * @param renderPlan 当前 HUD 渲染计划
      * @param config 模组配置
      * @param viewLabel 当前视图标签
      */
-    private void renderTaskList(GuiGraphics context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done, 
-            int shownPending, int shownDone, int hiddenCount, ModConfig config, Component viewLabel) {
+    private void renderTaskList(GuiGraphics context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done,
+            HudRenderPlan renderPlan, ModConfig config, HudViewMode viewMode) {
         int currentY = y;
         float opacity = (float) config.getHudOpacity();
-        int panelColor = applyOpacityToColor(0xFF232323, opacity);
+        int panelColor = applyBackgroundOpacity(0xFF232323, opacity);
         int rowHeight = 12;
         int headerHeight = 14;
 
@@ -425,43 +514,38 @@ public class TodoHudRenderer {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-        Component title = Component.translatable("hud.todolist.header", viewLabel);
+        Component title = buildHeaderTitle(viewMode);
 
         context.fill(x, y, x + width, y + panelHeight, panelColor);
         int headerTextY = y + (headerHeight - client.font.lineHeight) / 2;
-        context.drawString(client.font, title, x + 4, headerTextY, applyOpacityToColor(0xFFE0B240, opacity));
+        context.drawString(client.font, title, x + 4, headerTextY, toOpaqueColor(0xFFE0B240));
         currentY += headerHeight;
 
         if (!expanded) {
-            String summaryKey = done.isEmpty() ? "hud.todolist.summary" : "hud.todolist.summary.with_completed";
-            Component summary = done.isEmpty()
-                    ? Component.translatable(summaryKey, Integer.toString(pending.size()))
-                    : Component.translatable(summaryKey, Integer.toString(pending.size()), Integer.toString(done.size()));
+            Component summary = buildCollapsedSummaryText(pending, done);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, summary, x + 4, summaryY, applyOpacityToColor(0xDDDDDD, opacity));
+            context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xDDDDDD));
             return;
         }
 
-        int renderedCount = 0;
-        for (int i = 0; i < shownPending; i++) {
-            drawTaskRow(context, x, currentY, width, rowHeight, opacity, pending.get(i));
+        for (int i = 0; i < renderPlan.shownPending; i++) {
+            drawTaskRow(context, x, currentY, width, rowHeight, pending.get(i));
             currentY += rowHeight;
-            renderedCount++;
         }
 
-        if (shownDone > 0) {
+        if (renderPlan.showDoneSection) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, applyOpacityToColor(0xAAAAAA, opacity));
+            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xAAAAAA));
             currentY += rowHeight;
-            for (int i = 0; i < shownDone; i++) {
-                drawTaskRow(context, x, currentY, width, rowHeight, opacity, done.get(i));
+            for (int i = 0; i < renderPlan.shownDone; i++) {
+                drawTaskRow(context, x, currentY, width, rowHeight, done.get(i));
                 currentY += rowHeight;
             }
         }
 
-        if (hiddenCount > 0) {
+        if (renderPlan.showMore) {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, Component.translatable("hud.todolist.more_tasks", Integer.toString(hiddenCount)), x + 4, moreY, applyOpacityToColor(0xAAAAAA, opacity));
+            context.drawString(client.font, buildHiddenCountText(renderPlan.hiddenCount), x + 4, moreY, toOpaqueColor(0xAAAAAA));
         }
     }
 
@@ -473,7 +557,7 @@ public class TodoHudRenderer {
      * @param opacity HUD 透明度（用于同步文本与背景的显示效果）
      * @param task 待绘制任务
      */
-    private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, float opacity, Task task) {
+    private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, Task task) {
         RowRenderCache rowCache = rowRenderCacheByTaskId.get(task.getId());
         if (!isRowRenderCacheValid(rowCache, task, width)) {
             rowCache = buildRowRenderCache(task, width);
@@ -484,19 +568,18 @@ public class TodoHudRenderer {
         int titleTextY = y + (rowHeight - client.font.lineHeight) / 2;
         int labelLineHeight = Math.max(1, Math.round(client.font.lineHeight * HUD_LABEL_SCALE));
         int labelTextY = y + (rowHeight - labelLineHeight) / 2;
-        int textColor = applyOpacityToColor(0xFFFFFF, opacity);
-        int labelColor = applyOpacityToColor(0x55FFFF, opacity);
+        int textColor = toOpaqueColor(0xFFFFFF);
+        int labelColor = toOpaqueColor(0x55FFFF);
 
-        context.drawString(client.font, rowCache.priorityText, rowLeft, titleTextY, textColor);
+        HudRowVisual rowVisual = rowCache.rowVisual;
+        context.fill(rowLeft, y + 2, rowLeft + HUD_PRIORITY_BLOCK_WIDTH, y + rowHeight - 2,
+                toOpaqueColor(rowVisual.priorityBlockColor));
 
-        if (rowCache.assigneeText != null && !rowCache.assigneeText.isEmpty()) {
-            drawScaledString(context, rowCache.assigneeText, rowLeft + rowCache.assigneeOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
+        if (rowVisual.tagText != null && !rowVisual.tagText.isEmpty()) {
+            drawScaledString(context, rowVisual.tagText, rowLeft + rowVisual.tagOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
         }
-        if (rowCache.tagText != null && !rowCache.tagText.isEmpty()) {
-            drawScaledString(context, rowCache.tagText, rowLeft + rowCache.tagOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
-        }
-        if (rowCache.titleText != null) {
-            context.drawString(client.font, rowCache.titleText, rowLeft + rowCache.titleOffset, titleTextY, textColor);
+        if (rowVisual.titleText != null) {
+            context.drawString(client.font, rowVisual.titleText, rowLeft + rowVisual.titleOffset, titleTextY, textColor);
         }
     }
 
@@ -530,20 +613,26 @@ public class TodoHudRenderer {
         String taskId = valueOrEmpty(task.getId());
         double guiScale = client.getWindow().getGuiScale();
         String layoutKey = buildRowLayoutKey(task, hudWidth, guiScale);
-        Component priorityText = getPriorityText(task);
+        HudRowVisual rowVisual = buildRowVisual(task, hudWidth);
+
+        return new RowRenderCache(taskId, layoutKey, rowVisual, hudWidth, guiScale);
+    }
+
+    /**
+     * 构建单条 HUD 任务行的视觉元数据。
+     *
+     * @param task 当前任务
+     * @param hudWidth HUD 宽度
+     * @return 行视觉元数据
+     */
+    private HudRowVisual buildRowVisual(Task task, int hudWidth) {
         int rowWidth = Math.max(0, hudWidth - 8);
-        int currentOffset = client.font.width(priorityText);
+        int currentOffset = HUD_PRIORITY_BLOCK_WIDTH + HUD_PRIORITY_BLOCK_GAP;
         int maxLabelWidth = Math.max(18, rowWidth / 3);
 
-        String assigneeToken = buildHudLabelToken(resolveAssigneeLabel(task), maxLabelWidth);
         String tagToken = buildHudLabelToken(resolveFirstTaskTag(task), maxLabelWidth);
 
         int assigneeOffset = 0;
-        if (!assigneeToken.isEmpty()) {
-            assigneeOffset = currentOffset;
-            currentOffset += measureScaledTextWidth(assigneeToken, HUD_LABEL_SCALE);
-        }
-
         int tagOffset = 0;
         if (!tagToken.isEmpty()) {
             tagOffset = currentOffset;
@@ -559,10 +648,10 @@ public class TodoHudRenderer {
                 ? Component.literal(titleCore).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
                 : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
 
-        return new RowRenderCache(taskId, layoutKey, priorityText,
-                assigneeToken.isEmpty() ? null : assigneeToken,
+        return new HudRowVisual(resolvePriorityBlockColor(task.getPriority()), "",
+                null,
                 tagToken.isEmpty() ? null : tagToken,
-                assigneeOffset, tagOffset, titleOffset, titleText, hudWidth, guiScale);
+                assigneeOffset, tagOffset, titleOffset, titleText);
     }
 
     /**
@@ -578,7 +667,6 @@ public class TodoHudRenderer {
                 + valueOrEmpty(task.getTitle()) + '|'
                 + task.getPriority().name() + '|'
                 + task.isCompleted() + '|'
-                + resolveAssigneeLabel(task) + '|'
                 + resolveFirstTaskTag(task) + '|'
                 + hudWidth + '|'
                 + guiScale;
@@ -604,17 +692,13 @@ public class TodoHudRenderer {
     }
 
     /**
-     * 获取 HUD 行使用的优先级文本。
+     * 解析 HUD 优先级色块使用的颜色。
      *
-     * @param task 当前任务
-     * @return 优先级文本
+     * @param priority 当前任务优先级
+     * @return 优先级色块颜色
      */
-    private Component getPriorityText(Task task) {
-        return switch (task.getPriority()) {
-            case HIGH -> PRIORITY_HIGH_ICON;
-            case MEDIUM -> PRIORITY_MEDIUM_ICON;
-            case LOW -> PRIORITY_LOW_ICON;
-        };
+    private int resolvePriorityBlockColor(Task.Priority priority) {
+        return priority == null ? Task.Priority.MEDIUM.getColor() : priority.getColor();
     }
 
     /**
@@ -753,6 +837,27 @@ public class TodoHudRenderer {
     }
 
     /**
+     * 仅对 HUD 背景类颜色应用透明度，不影响文字和前景元素。
+     *
+     * @param color 原始颜色
+     * @param opacity 透明度倍率
+     * @return 应用透明度后的背景颜色
+     */
+    private static int applyBackgroundOpacity(int color, float opacity) {
+        return applyOpacityToColor(color, opacity);
+    }
+
+    /**
+     * 将文字和前景元素颜色统一提升为不透明 ARGB，避免被 HUD 透明度联动影响。
+     *
+     * @param color 原始 RGB 或 ARGB 颜色
+     * @return alpha 固定为 255 的前景颜色
+     */
+    private static int toOpaqueColor(int color) {
+        return 0xFF000000 | (color & 0x00FFFFFF);
+    }
+
+    /**
      * 解析 HUD 使用的指派人标签。
      *
      * @param task 当前任务
@@ -849,6 +954,15 @@ public class TodoHudRenderer {
     }
 
     /**
+     * 返回当前 HUD 顶部标题文本，供离线测试断言标题结构。
+     *
+     * @return 当前 HUD 顶部标题
+     */
+    String getHeaderTitleForTest() {
+        return buildHeaderTitle(resolveViewMode(ModConfig.getInstance())).getString();
+    }
+
+    /**
      * 返回当前缓存中的未完成任务快照，供离线测试断言筛选结果。
      *
      * @return 当前缓存的未完成任务列表
@@ -875,8 +989,220 @@ public class TodoHudRenderer {
         return rowRenderCacheByTaskId.size();
     }
 
+    /**
+     * 返回指定任务行的优先级色块颜色，供离线测试断言 HUD 行视觉同步。
+     *
+     * @param taskId 任务 ID
+     * @return 优先级色块颜色；找不到时返回 0
+     */
+    int getPriorityBlockColorForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null ? 0 : cache.rowVisual.priorityBlockColor;
+    }
+
+    /**
+     * 返回指定任务行的优先级文本元数据，新版 HUD 应保持为空字符串。
+     *
+     * @param taskId 任务 ID
+     * @return 优先级文本元数据
+     */
+    String getPriorityTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null ? "" : cache.rowVisual.priorityText;
+    }
+
+    /**
+     * 返回指定任务行的标题偏移，供离线测试断言色块与前置标签占位语义。
+     *
+     * @param taskId 任务 ID
+     * @return 标题起始偏移
+     */
+    /**
+     * 返回指定任务行中的责任人标签文本，供离线测试断言 HUD 已隐藏责任人标签。
+     *
+     * @param taskId 任务 ID
+     * @return 责任人标签文本
+     */
+    String getAssigneeTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.assigneeText == null ? "" : cache.rowVisual.assigneeText;
+    }
+
+    /**
+     * 返回指定任务行中的任务标签文本，供离线测试确认标签仍然显示。
+     *
+     * @param taskId 任务 ID
+     * @return 任务标签文本
+     */
+    String getTagTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.tagText == null ? "" : cache.rowVisual.tagText;
+    }
+
+    int getRowTitleOffsetForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null ? 0 : cache.rowVisual.titleOffset;
+    }
+
+    /**
+     * 返回当前 HUD 计划中的未完成显示数量，供离线测试断言独立上限逻辑。
+     *
+     * @return 当前显示的未完成任务数量
+     */
+    int getShownPendingCountForTest() {
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        return renderPlan.shownPending;
+    }
+
+    /**
+     * 返回当前 HUD 计划中的已完成显示数量，供离线测试断言独立上限逻辑。
+     *
+     * @return 当前显示的已完成任务数量
+     */
+    int getShownDoneCountForTest() {
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        return renderPlan.shownDone;
+    }
+
+    /**
+     * 返回当前 HUD 计划中的隐藏任务数量，供离线测试断言截断语义。
+     *
+     * @return 隐藏任务数量
+     */
+    int getHiddenCountForTest() {
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        return renderPlan.hiddenCount;
+    }
+
+    /**
+     * 返回给定透明度下的 HUD 背景颜色，供测试断言透明度只作用于背景。
+     *
+     * @param opacity HUD 透明度
+     * @return HUD 背景颜色
+     */
+    int getPanelBackgroundColorForTest(float opacity) {
+        return applyBackgroundOpacity(0xFF232323, opacity);
+    }
+
+    /**
+     * 返回 HUD 标题文字颜色，供测试断言标题文字不受透明度影响。
+     *
+     * @return HUD 标题文字颜色
+     */
+    int getHeaderTextColorForTest() {
+        return toOpaqueColor(0xFFE0B240);
+    }
+
+    /**
+     * 返回 HUD 任务文字颜色，供测试断言任务文字不受透明度影响。
+     *
+     * @return HUD 任务文字颜色
+     */
+    int getTaskTextColorForTest() {
+        return toOpaqueColor(0xFFFFFF);
+    }
+
+    /**
+     * 返回当前 HUD 显示的隐藏计数文本，供离线测试断言展开态截断语义。
+     *
+     * @return 隐藏计数文本
+     */
+    String getHiddenCountTextForTest() {
+        return buildHiddenCountText(getHiddenCountForTest()).getString();
+    }
+
+    /**
+     * 返回当前 HUD 折叠态摘要文本，供离线测试断言折叠语义。
+     *
+     * @return 折叠态摘要文本
+     */
+    String getCollapsedSummaryTextForTest() {
+        return buildCollapsedSummaryText(cachedPendingTasks, cachedDoneTasks).getString();
+    }
+
     private String valueOrEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * 根据当前任务列表构建 HUD 渲染计划。
+     *
+     * @param config 当前模组配置
+     * @param pending 未完成任务列表
+     * @param done 已完成任务列表
+     * @return HUD 渲染计划
+     */
+    private HudRenderPlan buildRenderPlan(ModConfig config, List<Task> pending, List<Task> done) {
+        int rowHeight = 12;
+        int headerHeight = 14;
+        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
+        int todoLimit = Math.max(0, config.getHudTodoLimit());
+        int doneLimit = Math.max(0, config.getHudDoneLimit());
+        if (!expanded) {
+            int hiddenCount = pending.size() + done.size();
+            return new HudRenderPlan(0, 0, hiddenCount, false, false);
+        }
+
+        HudRenderPlan visiblePlan = buildVisibleRowsPlan(maxRowsByHeight, todoLimit, doneLimit, pending.size(), done.size());
+        if (visiblePlan.hiddenCount <= 0 || maxRowsByHeight <= 0) {
+            return visiblePlan;
+        }
+
+        // 只要存在隐藏任务且内容区至少还能显示一行，就优先预留一行给“还有 N 项”提示，
+        // 避免 HUD 在高度刚好不够时直接吞掉隐藏计数语义。
+        HudRenderPlan reservedPlan = buildVisibleRowsPlan(Math.max(0, maxRowsByHeight - 1), todoLimit, doneLimit,
+                pending.size(), done.size());
+        return new HudRenderPlan(reservedPlan.shownPending, reservedPlan.shownDone, reservedPlan.hiddenCount,
+                reservedPlan.showDoneSection, true);
+    }
+
+    /**
+     * 根据可用内容行数计算展开态下的基础可见行方案。
+     *
+     * @param availableRows 内容区可用行数
+     * @param todoLimit 未完成任务上限
+     * @param doneLimit 已完成任务上限
+     * @param pendingCount 未完成任务总数
+     * @param doneCount 已完成任务总数
+     * @return 不含隐藏计数行的基础渲染计划
+     */
+    private HudRenderPlan buildVisibleRowsPlan(int availableRows, int todoLimit, int doneLimit, int pendingCount, int doneCount) {
+        int safeRows = Math.max(0, availableRows);
+        int shownPending = Math.min(pendingCount, Math.min(todoLimit, safeRows));
+        int rowsAfterPending = Math.max(0, safeRows - shownPending);
+        int shownDone = 0;
+        if (doneCount > 0 && doneLimit > 0 && rowsAfterPending > 1) {
+            shownDone = Math.min(doneCount, Math.min(doneLimit, rowsAfterPending - 1));
+        }
+        boolean showDoneSection = shownDone > 0;
+        int hiddenCount = Math.max(0, pendingCount - shownPending) + Math.max(0, doneCount - shownDone);
+        return new HudRenderPlan(shownPending, shownDone, hiddenCount, showDoneSection, false);
+    }
+
+    /**
+     * 构建折叠态下使用的 HUD 摘要文本。
+     *
+     * @param pending 未完成任务列表
+     * @param done 已完成任务列表
+     * @return 折叠态摘要文本
+     */
+    private Component buildCollapsedSummaryText(List<Task> pending, List<Task> done) {
+        String summaryKey = done.isEmpty() ? "hud.todolist.summary" : "hud.todolist.summary.with_completed";
+        return done.isEmpty()
+                ? Component.translatableWithFallback(summaryKey, "Todo: %s", Integer.toString(pending.size()))
+                : Component.translatableWithFallback(summaryKey, "Todo: %s | Done: %s",
+                Integer.toString(pending.size()), Integer.toString(done.size()));
+    }
+
+    /**
+     * 构建展开态下的隐藏任务计数文本。
+     *
+     * @param hiddenCount 隐藏任务数量
+     * @return 隐藏任务计数文本
+     */
+    private Component buildHiddenCountText(int hiddenCount) {
+        return Component.translatableWithFallback("hud.todolist.more_tasks", "... %s more tasks",
+                Integer.toString(Math.max(0, hiddenCount)));
     }
 
     /**
@@ -890,17 +1216,9 @@ public class TodoHudRenderer {
     private int calculatePanelHeight(ModConfig config, List<Task> pending, List<Task> done) {
         int rowHeight = 12;
         int headerHeight = 14;
-        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
-        int todoLimit = Math.max(0, config.getHudTodoLimit());
-        int doneLimit = Math.max(0, config.getHudDoneLimit());
-        int shownPending = Math.min(pending.size(), Math.min(todoLimit, maxRowsByHeight));
-        int rowsAfterPending = maxRowsByHeight - shownPending;
-        boolean showDoneSection = !done.isEmpty() && doneLimit > 0 && rowsAfterPending > 0;
-        int shownDone = showDoneSection ? Math.min(done.size(), Math.min(doneLimit, rowsAfterPending - 1)) : 0;
-        int rowsForSummary = expanded ? shownPending + (showDoneSection ? 1 + shownDone : 0) : 1;
-        int hiddenCount = Math.max(0, pending.size() - shownPending) + Math.max(0, done.size() - shownDone);
-        boolean showMore = expanded && hiddenCount > 0 && (rowsForSummary < maxRowsByHeight);
-        int totalRows = rowsForSummary + (showMore ? 1 : 0);
+        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done);
+        int rowsForSummary = expanded ? renderPlan.shownPending + (renderPlan.showDoneSection ? 1 + renderPlan.shownDone : 0) : 1;
+        int totalRows = rowsForSummary + (renderPlan.showMore ? 1 : 0);
         return headerHeight + totalRows * rowHeight;
     }
 

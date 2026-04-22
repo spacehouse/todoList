@@ -7,6 +7,9 @@ import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.client.TodoHudRenderer;
 import com.todolist.config.ModConfig;
+import com.todolist.gui.TodoScreenLayoutSupport.LayoutRect;
+import com.todolist.gui.TodoScreenLayoutSupport.MainLayoutMetrics;
+import com.todolist.gui.TodoScreenLayoutSupport.ResponsiveTier;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
@@ -18,13 +21,14 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.UUID;
+import java.util.Objects;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
@@ -32,26 +36,13 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
+import org.lwjgl.glfw.GLFW;
 
 /**
- * Todo List GUI Screen
- *
- * Features:
- * - Display task list
- * - Add/Edit/Delete tasks
- * - Mark tasks as complete
- * - Filter by priority/status
- * - Project management (Sidebar)
+ * 待办主界面，负责项目侧栏、任务列表、详情面板以及相关弹窗的交互。
  */
 public class TodoScreen extends Screen implements ProjectManager.ProjectChangeListener {
     private static final Component TITLE = Component.translatable("gui.todolist.title");
-
-    private enum ViewMode {
-        PERSONAL,
-        TEAM_UNASSIGNED,
-        TEAM_ALL,
-        TEAM_ASSIGNED
-    }
 
     private final Screen parent;
     private ProjectManager projectManager;
@@ -61,33 +52,48 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private TaskManager personalTaskManager;
     private TaskManager teamTaskManager;
     private TaskListWidget taskListWidget;
-    private final List<Notification> notifications = new ArrayList<>();
+    private final List<TodoScreenNotificationSupport.NotificationEntry> notifications = new ArrayList<>();
 
     private ViewMode viewMode = ViewMode.PERSONAL;
+    private SpaceMode currentSpaceMode = SpaceMode.PERSONAL;
+    private TaskViewOption currentTaskViewOption = TaskViewOption.MY;
+    private boolean activeExpanded = true;
+    private boolean completedExpanded;
 
-    // Input fields
+    // 输入框
     private EditBox searchField;
+    private EditBox quickAddField;
     private EditBox titleField;
     private MultiLineEditBox descField;
     private EditBox tagField;
 
-    // Buttons
+    // 按钮
+    private Button detailCloseButton;
     private Button claimButton;
     private Button abandonButton;
     private Button assignOthersButton;
+    private Button saveButton;
+    private Button cancelButton;
+    private Button sidebarToggleButton;
 
-    // Selected priority for new/edited tasks
+    // 新建或编辑任务时选中的优先级
     private Task.Priority selectedPriority = Task.Priority.MEDIUM;
 
-    // Filter buttons
+    // 筛选按钮
     private Button filterStatusButton;
-    private Button filterPriorityButton; // Unified priority button
+    private Button filterPriorityButton;
     private Button viewToggleButton;
     private Button configButton;
     
-    // Project Search & Toggle
+    // 项目搜索与展开控制
     private EditBox projectSearchField;
-    private Button projectScopeButton;
+    private boolean projectSearchPrefixDropdownOpen;
+    private Button addProjectBtn;
+    private Button personalSpaceButton;
+    private Button teamSpaceButton;
+    private Button myViewButton;
+    private Button unassignedViewButton;
+    private Button allViewButton;
     private Button editProjectBtn;
     private Button deleteProjectBtn;
     private Button applyJoinProjectBtn;
@@ -97,10 +103,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private String preferredTeamProjectId;
     private boolean teamProjectsEnabled = true;
     private int savedProjectListScrollOffset;
-    
+    private int savedTaskListScrollOffset;
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
     
     private Task selectedTask;
+    private Task pendingClickSelectionTask;
+    private boolean taskRowDragInProgress;
+    private List<String> taskRowDragOrderSnapshot = List.of();
     private List<Task> filteredTasks = new ArrayList<>();
     private List<Task> baseFilteredTasks = new ArrayList<>();
     private String currentFilter = "active";
@@ -116,336 +125,65 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private int contextMenuWidth;
     private int contextMenuItemHeight = 18;
     private List<ContextMenuItem> contextMenuItems = new ArrayList<>();
-
-    private static class LastGuiState {
-        Project.Scope projectScopeFilter;
-        String currentProjectId;
-        ViewMode viewMode;
-        int currentPriorityFilter;
-        String currentFilter;
-        String searchQuery;
-        String projectSearchQuery;
-        String lastPersonalProjectId;
-        String lastTeamProjectId;
-    }
-
-    private static class ContextMenuItem {
-        final Component text;
-        final boolean enabled;
-        final Runnable action;
-
-        ContextMenuItem(Component text, boolean enabled, Runnable action) {
-            this.text = text;
-            this.enabled = enabled;
-            this.action = action;
-        }
-    }
-
+    private ResponsiveTier responsiveTier = ResponsiveTier.LARGE;
+    private boolean sidebarOverlayVisible;
+    private boolean detailOverlayVisible;
+    private MainLayoutMetrics layoutMetrics;
+    private TaskDetailDraft detailDraft;
+    private boolean syncingDetailWidgets;
 
     /**
-     * 创建主界面，并在关闭时返回到父界面。
+     * 创建待办主界面。
+     *
+     * @param parent 父级界面
      */
     public TodoScreen(Screen parent) {
         super(TITLE);
         this.parent = parent;
     }
 
-    /**
-     * 重置主界面的静态运行态，供同包测试代码隔离用例。
-     */
-    static void resetGuiStateForTest() {
-        personalHasUnsavedChanges = false;
-        teamHasUnsavedChanges = false;
-        lastGuiState = null;
-    }
 
     /**
-     * 返回当前项目，供同包测试代码断言项目切换与恢复逻辑。
-     *
-     * @return 当前项目；不存在时返回 null
-     */
-    Project getCurrentProjectForTest() {
-        return currentProject;
-    }
-
-    /**
-     * 返回当前选中任务，供同包测试代码断言选择逻辑。
-     *
-     * @return 当前选中任务；不存在时返回 null
-     */
-    Task getSelectedTaskForTest() {
-        return selectedTask;
-    }
-
-    /**
-     * 返回当前视图模式名称，供同包测试代码断言视图恢复逻辑。
-     *
-     * @return 当前视图模式名称
-     */
-    String getViewModeNameForTest() {
-        return viewMode.name();
-    }
-
-    /**
-     * 返回当前状态筛选值，供同包测试代码断言过滤逻辑。
-     *
-     * @return 当前状态筛选值
-     */
-    String getCurrentFilterForTest() {
-        return currentFilter;
-    }
-
-    /**
-     * 返回当前优先级筛选值，供同包测试代码断言过滤逻辑。
-     *
-     * @return 当前优先级筛选值
-     */
-    int getCurrentPriorityFilterForTest() {
-        return currentPriorityFilter;
-    }
-
-    /**
-     * 返回当前搜索关键字，供同包测试代码断言搜索恢复逻辑。
-     *
-     * @return 当前搜索关键字
-     */
-    String getSearchQueryForTest() {
-        return searchQuery;
-    }
-
-    /**
-     * 返回当前通知数量，供同包测试代码断言提示行为。
-     *
-     * @return 当前通知数量
-     */
-    int getNotificationCountForTest() {
-        return notifications.size();
-    }
-
-    /**
-     * 返回任务标题输入框，供同包测试代码写入任务标题。
-     *
-     * @return 任务标题输入框
-     */
-    EditBox getTitleFieldForTest() {
-        return titleField;
-    }
-
-    /**
-     * 返回任务描述输入框，供同包测试代码写入任务描述。
-     *
-     * @return 任务描述输入框
-     */
-    MultiLineEditBox getDescFieldForTest() {
-        return descField;
-    }
-
-    /**
-     * 返回任务标签输入框，供同包测试代码写入标签内容。
-     *
-     * @return 任务标签输入框
-     */
-    EditBox getTagFieldForTest() {
-        return tagField;
-    }
-
-    /**
-     * 返回搜索输入框，供同包测试代码驱动搜索筛选。
-     *
-     * @return 搜索输入框
-     */
-    EditBox getSearchFieldForTest() {
-        return searchField;
-    }
-
-    /**
-     * 返回状态筛选按钮，供同包测试代码切换完成/未完成筛选。
-     *
-     * @return 状态筛选按钮
-     */
-    Button getFilterStatusButtonForTest() {
-        return filterStatusButton;
-    }
-
-    /**
-     * 返回优先级筛选按钮，供同包测试代码切换优先级筛选。
-     *
-     * @return 优先级筛选按钮
-     */
-    Button getFilterPriorityButtonForTest() {
-        return filterPriorityButton;
-    }
-
-    /**
-     * 返回当前是否存在未保存改动，供同包测试代码断言保存与关闭语义。
-     *
-     * @return true 表示当前存在未保存改动
-     */
-    boolean hasUnsavedChangesForTest() {
-        return hasUnsavedChanges;
-    }
-
-    /**
-     * 返回当前筛选结果任务快照，供同包测试代码断言过滤与上下文菜单行为。
-     *
-     * @return 当前筛选结果任务快照
-     */
-    List<Task> getFilteredTasksForTest() {
-        return List.copyOf(filteredTasks);
-    }
-
-    /**
-     * 返回当前任务管理器中的全部任务快照，供同包测试代码断言保存与关闭后的数据状态。
-     *
-     * @return 当前任务管理器中的全部任务快照
-     */
-    List<Task> getCurrentManagerTasksForTest() {
-        if (taskManager == null) {
-            return List.of();
-        }
-        return taskManager.getAllTasks();
-    }
-
-    /**
-     * 返回当前上下文菜单项文本快照，供同包测试代码断言菜单内容。
-     *
-     * @return 当前上下文菜单项文本快照
-     */
-    List<String> getContextMenuItemTextsForTest() {
-        List<String> texts = new ArrayList<>();
-        for (ContextMenuItem item : contextMenuItems) {
-            texts.add(item.text.getString());
-        }
-        return List.copyOf(texts);
-    }
-
-    /**
-     * 返回当前是否显示任务上下文菜单，供同包测试代码断言菜单行为。
-     *
-     * @return true 表示当前显示任务上下文菜单
-     */
-    boolean hasContextMenuForTest() {
-        return hasContextMenu();
-    }
-
-    /**
-     * 切换当前项目，供同包测试代码直接覆盖项目切换主路径。
-     *
-     * @param project 目标项目；传入 null 表示清空当前项目
-     */
-    void switchProjectForTest(Project project) {
-        switchProject(project);
-    }
-
-    /**
-     * 选中指定任务，供同包测试代码直接覆盖编辑相关分支。
+     * 创建统一使用顶层实现的任务指派弹窗。
      *
      * @param task 目标任务
+     * @return 指派成员弹窗
      */
-    void selectTaskForTest(Task task) {
-        selectTask(task);
+    private Screen createAssignPlayerScreen(Task task) {
+        return new AssignPlayerScreen(
+                this,
+                task,
+                () -> currentProject,
+                (project, memberUuid) -> TodoScreenMemberSupport.resolveProjectMemberDisplayName(this.minecraft, project, memberUuid),
+                (memberUuid, memberName) -> applyAssignResult(task, memberUuid, memberName)
+        );
     }
 
     /**
-     * 触发保存流程，供同包测试代码断言保存后的状态与桥接调用。
-     */
-    void saveTasksForTest() {
-        onSaveTasks();
-    }
-
-    /**
-     * 打开指定任务的上下文菜单，供同包测试代码断言菜单行为。
+     * 应用任务指派结果，并刷新当前搜索后的任务显示。
      *
      * @param task 目标任务
+     * @param memberUuid 被指派成员 UUID
+     * @param memberName 被指派成员显示名称
      */
-    void openTaskContextMenuForTest(Task task) {
-        openTaskContextMenu(task, 32, 32);
-    }
-
-    /**
-     * 点击指定索引的上下文菜单项，供同包测试代码驱动菜单动作。
-     *
-     * @param index 菜单项索引
-     */
-    void clickContextMenuItemForTest(int index) {
-        if (!hasContextMenu() || index < 0 || index >= contextMenuItems.size()) {
-            closeTaskContextMenu();
+    private void applyAssignResult(Task task, String memberUuid, String memberName) {
+        if (task == null) {
             return;
         }
-        ContextMenuItem item = contextMenuItems.get(index);
-        if (item.enabled && item.action != null) {
-            item.action.run();
-        } else {
-            closeTaskContextMenu();
-        }
+        task.setAssigneeUuid(memberUuid);
+        task.setAssigneeName(memberName);
+        addNotification(Component.translatable("message.todolist.assigned_to_player", memberName).getString());
+        markUnsaved();
+        applySearchFilter();
     }
 
-    /**
-     * 创建任务分配弹窗，供同包测试代码覆盖玩家分配流程。
-     *
-     * @param task 目标任务
-     * @return 任务分配弹窗
-     */
-    Screen createAssignPlayerScreenForTest(Task task) {
-        return new AssignPlayerScreen(this, task);
-    }
-
-    /**
-     * 返回任务分配弹窗中的候选玩家名称快照，供同包测试代码断言过滤结果。
-     *
-     * @param screen 任务分配弹窗
-     * @return 候选玩家名称快照
-     */
-    List<String> getAssignablePlayerNamesForTest(Screen screen) {
-        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.filteredMembers == null) {
-            return List.of();
-        }
-        List<String> names = new ArrayList<>();
-        for (AssignableMember member : assignPlayerScreen.filteredMembers) {
-            if (member != null && member.displayName != null && !member.displayName.isEmpty()) {
-                names.add(member.displayName);
-            }
-        }
-        return List.copyOf(names);
-    }
-
-    /**
-     * 向任务分配弹窗的搜索框写入内容，供同包测试代码驱动候选人过滤。
-     *
-     * @param screen 任务分配弹窗
-     * @param value 搜索关键字
-     */
-    void setAssignPlayerSearchForTest(Screen screen, String value) {
-        if (screen instanceof AssignPlayerScreen assignPlayerScreen && assignPlayerScreen.searchField != null) {
-            assignPlayerScreen.searchField.setValue(value == null ? "" : value);
-        }
-    }
-
-    /**
-     * 点击任务分配弹窗中的指定候选人行，供同包测试代码驱动分配动作。
-     *
-     * @param screen 任务分配弹窗
-     * @param rowIndex 候选人行索引
-     */
-    void clickAssignPlayerRowForTest(Screen screen, int rowIndex) {
-        if (!(screen instanceof AssignPlayerScreen assignPlayerScreen) || assignPlayerScreen.playerButtons == null) {
-            return;
-        }
-        if (rowIndex < 0 || rowIndex >= assignPlayerScreen.playerButtons.length) {
-            return;
-        }
-        Button button = assignPlayerScreen.playerButtons[rowIndex];
-        if (button != null && button.active && button.visible) {
-            button.onPress();
-        }
-    }
 
     @Override
     protected void init() {
         super.init();
         openedStorageNamespace = DataPathProvider.getStorageNamespace();
 
-        // Initialize task manager and load tasks from storage
+        // 初始化任务管理器并从存储加载任务
         if (personalTaskManager == null) {
             personalTaskManager = new TaskManager();
             try {
@@ -461,7 +199,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         teamTaskManager = ClientBridge.ops().getTeamTaskManager();
         
-        // Initialize ProjectManager
+        // 初始化项目管理器
         projectManager = TodoListCommon.getProjectManager();
         projectManager.addListener(this);
         teamProjectsEnabled = ClientBridge.ops().isTeamProjectsEnabled();
@@ -474,43 +212,48 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         applyLastGuiState();
-        
-        // Verify currentProject is still valid
+
+        // 恢复当前选中项目，并在项目已不存在时按空间偏好回退。
         if (currentProject != null) {
-            Project p = projectManager.getProject(currentProject.getId());
-            if (p == null) {
-                currentProject = null; // Project was deleted
+            Project project = projectManager.getProject(currentProject.getId());
+            if (project == null) {
+                currentProject = null;
             } else {
-                currentProject = p; // Update reference to fresh object
+                currentProject = project;
             }
         }
-
         if (currentProject == null) {
-            currentProject = getPreferredProjectForScope(projectScopeFilter);
+            currentProject = TodoScreenProjectPreferenceSupport.getPreferredProjectForScope(
+                    projectManager,
+                    projectScopeFilter,
+                    teamProjectsEnabled,
+                    preferredTeamProjectId,
+                    preferredPersonalProjectId);
         }
         if (currentProject != null) {
-            rememberSelectedProject(currentProject);
+            String[] preferredProjectIds = TodoScreenProjectPreferenceSupport.rememberSelectedProject(
+                    currentProject,
+                    preferredPersonalProjectId,
+                    preferredTeamProjectId);
+            preferredPersonalProjectId = preferredProjectIds[0];
+            preferredTeamProjectId = preferredProjectIds[1];
             projectScopeFilter = currentProject.getScope();
         }
+        syncViewStateForCurrentProject();
         
-        // Ensure taskManager matches currentProject
+        // 确保当前任务管理器与当前项目保持一致
         if (currentProject != null) {
-            if (!teamProjectsEnabled || currentProject.getScope() == Project.Scope.PERSONAL) {
+            if (currentSpaceMode == SpaceMode.PERSONAL) {
                 taskManager = personalTaskManager;
-                viewMode = ViewMode.PERSONAL;
             } else {
                 taskManager = teamTaskManager;
-                if (viewMode == ViewMode.PERSONAL) {
-                    viewMode = ViewMode.TEAM_UNASSIGNED;
-                }
             }
         } else {
             taskManager = personalTaskManager;
-            viewMode = ViewMode.PERSONAL;
         }
 
         syncHudViewForProject(currentProject);
-        syncActiveProjectIdWithCurrentProject();
+        currentProject = TodoScreenActiveProjectSupport.syncActiveProjectIdWithCurrentProject(projectManager, currentProject);
         hasUnsavedChanges = (viewMode == ViewMode.PERSONAL) ? personalHasUnsavedChanges : teamHasUnsavedChanges;
 
         rebuildUI();
@@ -525,83 +268,163 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
-    private void applyLastGuiState() {
-        if (lastGuiState == null || projectManager == null) return;
+    /**
+     * 根据当前项目重新同步空间模式、可见视图和兼容状态。
+     */
+    private void syncViewStateForCurrentProject() {
+        currentSpaceMode = SpaceMode.valueOf(TodoScreenViewModeSupport.resolveSpaceModeName(currentProject, teamProjectsEnabled));
+        List<String> visibleOptions = TodoScreenViewModeSupport.getVisibleTaskViewOptionNames(currentSpaceMode.name());
+        TaskViewOption resolvedOption = currentSpaceMode == SpaceMode.TEAM && viewMode == ViewMode.PERSONAL
+                ? TaskViewOption.valueOf(TodoScreenViewModeSupport.resolveDefaultTaskViewOptionName(currentSpaceMode.name()))
+                : TaskViewOption.valueOf(TodoScreenViewModeSupport.resolveTaskViewOptionNameFromLegacyViewModeName(viewMode.name()));
+        if (!visibleOptions.contains(resolvedOption.name())) {
+            resolvedOption = TaskViewOption.valueOf(TodoScreenViewModeSupport.resolveDefaultTaskViewOptionName(currentSpaceMode.name()));
+        }
+        currentTaskViewOption = resolvedOption;
+        viewMode = ViewMode.valueOf(TodoScreenViewModeSupport.resolveLegacyViewModeName(
+                currentSpaceMode.name(),
+                currentTaskViewOption.name()
+        ));
+    }
 
+    /**
+     * 根据分组 ID 切换对应分组的展开状态。
+     *
+     * @param sectionId 分组 ID
+     * @return 若成功切换则返回 {@code true}
+     */
+    private boolean toggleTaskSection(String sectionId) {
+        if ("active".equals(sectionId)) {
+            activeExpanded = !activeExpanded;
+            return true;
+        }
+        if ("completed".equals(sectionId)) {
+            completedExpanded = !completedExpanded;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 应用上一次关闭界面时保存的视图状态。
+     */
+    private void applyLastGuiState() {
+        if (lastGuiState == null || projectManager == null) {
+            return;
+        }
         projectScopeFilter = lastGuiState.projectScopeFilter == null ? Project.Scope.PERSONAL : lastGuiState.projectScopeFilter;
         if (!teamProjectsEnabled) {
             projectScopeFilter = Project.Scope.PERSONAL;
         }
-
         if (lastGuiState.projectSearchQuery != null) {
             projectSearchQuery = lastGuiState.projectSearchQuery;
         }
         preferredPersonalProjectId = lastGuiState.lastPersonalProjectId;
         preferredTeamProjectId = lastGuiState.lastTeamProjectId;
-
+        activeExpanded = lastGuiState.activeExpanded;
+        completedExpanded = lastGuiState.completedExpanded;
         if (lastGuiState.viewMode != null) {
             viewMode = lastGuiState.viewMode;
+        }
+        if (lastGuiState.spaceMode != null) {
+            currentSpaceMode = lastGuiState.spaceMode;
+        }
+        if (lastGuiState.taskViewOption != null) {
+            currentTaskViewOption = lastGuiState.taskViewOption;
         }
         if (!teamProjectsEnabled && viewMode != ViewMode.PERSONAL) {
             viewMode = ViewMode.PERSONAL;
         }
-
         currentPriorityFilter = lastGuiState.currentPriorityFilter;
-        if (lastGuiState.currentFilter != null && !lastGuiState.currentFilter.isEmpty()) {
-            currentFilter = lastGuiState.currentFilter;
-        }
+        currentFilter = lastGuiState.currentFilter == null ? currentFilter : lastGuiState.currentFilter;
         if (lastGuiState.searchQuery != null) {
             searchQuery = lastGuiState.searchQuery;
         }
-
-        if (lastGuiState.currentProjectId != null && !lastGuiState.currentProjectId.isEmpty()) {
-            Project p = projectManager.getProject(lastGuiState.currentProjectId);
-            if (p != null && (teamProjectsEnabled || p.getScope() == Project.Scope.PERSONAL)) {
-                currentProject = p;
-                projectScopeFilter = p.getScope();
-                rememberSelectedProject(p);
-            }
+        if (lastGuiState.currentProjectId == null || lastGuiState.currentProjectId.isEmpty()) {
+            return;
         }
+        Project project = projectManager.getProject(lastGuiState.currentProjectId);
+        if (project == null || (!teamProjectsEnabled && project.getScope() == Project.Scope.TEAM)) {
+            return;
+        }
+        currentProject = project;
+        projectScopeFilter = project.getScope();
+        String[] preferredProjectIds = TodoScreenProjectPreferenceSupport.rememberSelectedProject(
+                project,
+                preferredPersonalProjectId,
+                preferredTeamProjectId);
+        preferredPersonalProjectId = preferredProjectIds[0];
+        preferredTeamProjectId = preferredProjectIds[1];
     }
 
+    /**
+     * 保存当前界面状态，供下次打开时恢复。
+     */
     private void saveLastGuiState() {
-        rememberSelectedProject(currentProject);
-        LastGuiState s = new LastGuiState();
-        s.projectScopeFilter = projectScopeFilter;
-        s.currentProjectId = currentProject == null ? null : currentProject.getId();
-        s.viewMode = viewMode;
-        s.currentPriorityFilter = currentPriorityFilter;
-        s.currentFilter = currentFilter;
-        s.searchQuery = searchQuery;
-        s.projectSearchQuery = projectSearchQuery;
-        s.lastPersonalProjectId = preferredPersonalProjectId;
-        s.lastTeamProjectId = preferredTeamProjectId;
-        lastGuiState = s;
+        String[] preferredProjectIds = TodoScreenProjectPreferenceSupport.rememberSelectedProject(
+                currentProject,
+                preferredPersonalProjectId,
+                preferredTeamProjectId);
+        preferredPersonalProjectId = preferredProjectIds[0];
+        preferredTeamProjectId = preferredProjectIds[1];
+        LastGuiState state = new LastGuiState();
+        state.projectScopeFilter = projectScopeFilter;
+        state.currentProjectId = currentProject == null ? null : currentProject.getId();
+        state.viewMode = viewMode;
+        state.spaceMode = currentSpaceMode;
+        state.taskViewOption = currentTaskViewOption;
+        state.activeExpanded = activeExpanded;
+        state.completedExpanded = completedExpanded;
+        state.currentPriorityFilter = currentPriorityFilter;
+        state.currentFilter = currentFilter;
+        state.searchQuery = searchQuery;
+        state.projectSearchQuery = projectSearchQuery;
+        state.lastPersonalProjectId = preferredPersonalProjectId;
+        state.lastTeamProjectId = preferredTeamProjectId;
+        lastGuiState = state;
     }
 
     @Override
     public void onProjectChanged(ProjectManager.ProjectChangeType type, Project project) {
-        if (this.minecraft == null) return;
+        if (this.minecraft == null) {
+            return;
+        }
         this.minecraft.execute(() -> {
             if (type == ProjectManager.ProjectChangeType.CLEARED) {
                 switchProject(null);
                 return;
             }
 
-            if (project == null) return;
+            if (project == null) {
+                return;
+            }
 
             if (type == ProjectManager.ProjectChangeType.REMOVED) {
                 if (!TodoListCommon.isProjectSyncInProgress()) {
-                    hardDeleteTasksForDeletedProject(project);
+                    TodoScreenProjectCleanupSupport.hardDeleteTasksForDeletedProject(
+                            personalTaskManager,
+                            teamTaskManager,
+                            project);
                 }
                 if (currentProject != null && currentProject.getId().equals(project.getId())) {
-                    switchProject(resolveFallbackProjectAfterRemoval(project));
+                    switchProject(TodoScreenProjectPreferenceSupport.resolveFallbackProjectAfterRemoval(
+                            projectManager,
+                            project,
+                            projectScopeFilter,
+                            teamProjectsEnabled,
+                            preferredTeamProjectId,
+                            preferredPersonalProjectId));
                 } else {
                     refreshAfterProjectMutation();
                 }
             } else if (type == ProjectManager.ProjectChangeType.ADDED) {
                 if (currentProject == null) {
-                    switchProject(resolvePreferredProjectForCurrentScope());
+                    switchProject(TodoScreenProjectPreferenceSupport.resolvePreferredProjectForCurrentScope(
+                            projectManager,
+                            projectScopeFilter,
+                            teamProjectsEnabled,
+                            preferredTeamProjectId,
+                            preferredPersonalProjectId));
                 } else {
                     refreshAfterProjectMutation();
                 }
@@ -615,430 +438,575 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 项目增删改后执行轻量刷新，避免整页重新初始化。
+     * 在项目增删改后刷新当前项目、侧栏和任务列表。
      */
     private void refreshAfterProjectMutation() {
-        syncActiveProjectIdWithCurrentProject();
+        currentProject = TodoScreenActiveProjectSupport.syncActiveProjectIdWithCurrentProject(projectManager, currentProject);
         updateProjectList();
-        refreshTaskList();
+        filterTasks();
         updateButtonStates();
         updateProjectActionButtons();
     }
 
     /**
-     * 将 activeProjectId 与当前项目状态对齐，避免残留失效项目 ID。
+     * 根据当前项目同步 HUD 默认视图以及界面空间/视图状态。
+     *
+     * @param project 当前项目
      */
-    private void syncActiveProjectIdWithCurrentProject() {
-        if (currentProject == null || projectManager == null) {
-            ClientBridge.ops().setActiveProjectId(null);
-            ClientBridge.ops().sendSetActiveProjectId(null);
-            ClientBridge.saveLastActiveProjectId(null);
-            return;
-        }
-        Project fresh = projectManager.getProject(currentProject.getId());
-        if (fresh == null) {
-            currentProject = null;
-            ClientBridge.ops().setActiveProjectId(null);
-            ClientBridge.ops().sendSetActiveProjectId(null);
-            ClientBridge.saveLastActiveProjectId(null);
-            return;
-        }
-        currentProject = fresh;
-        ClientBridge.ops().setActiveProjectId(currentProject.getId());
-        ClientBridge.ops().sendSetActiveProjectId(currentProject.getId());
-        ClientBridge.saveLastActiveProjectId(currentProject.getId());
+    private void syncHudViewForProject(Project project) {
+        ModConfig config = ModConfig.getInstance();
+        TodoScreenViewModeSupport.HudViewState hudViewState = TodoScreenViewModeSupport.resolveHudViewState(
+                project,
+                teamProjectsEnabled,
+                config.getHudDefaultView());
+        currentSpaceMode = SpaceMode.valueOf(hudViewState.spaceModeName);
+        currentTaskViewOption = TaskViewOption.valueOf(hudViewState.taskViewOptionName);
+        viewMode = ViewMode.valueOf(hudViewState.legacyViewModeName);
+        config.setHudDefaultView(hudViewState.hudDefaultViewToSave);
     }
 
     /**
-     * 当前项目被删除时，按当前 scope 优先选择一个可用项目，允许为空。
+     * 根据当前空间与任务视图状态刷新左侧按钮文案和激活状态。
      */
-    private Project resolveFallbackProjectAfterRemoval(Project removedProject) {
-        Project preferred = resolvePreferredProjectForCurrentScope();
-        if (preferred != null) {
-            return preferred;
+    private void updateViewButtonsState() {
+        TodoScreenSidebarViewButtonLayoutSupport.apply(
+                myViewButton,
+                unassignedViewButton,
+                allViewButton,
+                layoutMetrics == null ? null : layoutMetrics.sidebarBounds,
+                responsiveTier,
+                currentSpaceMode.name()
+        );
+        if (personalSpaceButton != null) {
+            personalSpaceButton.active = currentSpaceMode != SpaceMode.PERSONAL;
         }
-        if (removedProject != null) {
-            Project.Scope fallbackScope = removedProject.getScope() == Project.Scope.PERSONAL ? Project.Scope.TEAM : Project.Scope.PERSONAL;
-            return getPreferredProjectForScope(fallbackScope);
+        if (teamSpaceButton != null) {
+            teamSpaceButton.active = teamProjectsEnabled && currentSpaceMode != SpaceMode.TEAM;
         }
-        return null;
+        if (myViewButton != null) {
+            myViewButton.setMessage(Component.literal("我的"));
+            myViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.MY;
+        }
+        if (unassignedViewButton != null) {
+            int sidebarWidth = layoutMetrics == null ? 0 : layoutMetrics.sidebarBounds.width;
+            unassignedViewButton.setMessage(TodoScreenUiMetricsSupport.getUnassignedTeamViewText(sidebarWidth));
+            unassignedViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.UNASSIGNED;
+        }
+        if (allViewButton != null) {
+            allViewButton.setMessage(TodoScreenUiMetricsSupport.getAllTeamViewText());
+            allViewButton.active = currentSpaceMode == SpaceMode.TEAM && currentTaskViewOption != TaskViewOption.ALL;
+        }
     }
 
     /**
-     * 按当前 scope 选择首选项目，不可用时回退到另一 scope。
+     * 切换当前项目，并同步任务管理器、视图状态和列表滚动位置。
+     *
+     * @param project 目标项目
      */
-    private Project resolvePreferredProjectForCurrentScope() {
-        Project preferred = getPreferredProjectForScope(projectScopeFilter);
-        if (preferred != null) {
-            return preferred;
+    private void switchProject(Project project) {
+        if (projectListWidget != null) {
+            savedProjectListScrollOffset = projectListWidget.getScrollOffset();
         }
-        Project.Scope fallbackScope = projectScopeFilter == Project.Scope.PERSONAL ? Project.Scope.TEAM : Project.Scope.PERSONAL;
-        return getPreferredProjectForScope(fallbackScope);
+        this.selectedTask = null;
+        this.detailOverlayVisible = false;
+        this.sidebarOverlayVisible = false;
+        projectSearchPrefixDropdownOpen = false;
+        this.currentProject = project;
+        String[] preferredProjectIds = TodoScreenProjectPreferenceSupport.rememberSelectedProject(
+                project,
+                preferredPersonalProjectId,
+                preferredTeamProjectId);
+        preferredPersonalProjectId = preferredProjectIds[0];
+        preferredTeamProjectId = preferredProjectIds[1];
+
+        if (project == null) {
+            this.taskManager = this.personalTaskManager;
+            currentSpaceMode = SpaceMode.PERSONAL;
+            currentTaskViewOption = TaskViewOption.MY;
+            viewMode = ViewMode.valueOf(TodoScreenViewModeSupport.resolveLegacyViewModeName(
+                    currentSpaceMode.name(),
+                    currentTaskViewOption.name()
+            ));
+            currentProject = TodoScreenActiveProjectSupport.syncActiveProjectIdWithCurrentProject(projectManager, currentProject);
+            syncHudViewForProject(null);
+            rebuildUI();
+            if (projectListWidget != null) {
+                projectListWidget.setScrollOffset(savedProjectListScrollOffset);
+            }
+            return;
+        }
+
+        if (!teamProjectsEnabled && project.getScope() == Project.Scope.TEAM) {
+            addNotification(Component.translatable("message.todolist.team_disabled").getString());
+            return;
+        }
+        projectScopeFilter = project.getScope();
+        currentProject = TodoScreenActiveProjectSupport.syncActiveProjectIdWithCurrentProject(projectManager, currentProject);
+
+        if (project.getScope() == Project.Scope.PERSONAL) {
+            this.taskManager = this.personalTaskManager;
+            currentSpaceMode = SpaceMode.PERSONAL;
+            currentTaskViewOption = TaskViewOption.MY;
+            viewMode = ViewMode.valueOf(TodoScreenViewModeSupport.resolveLegacyViewModeName(
+                    currentSpaceMode.name(),
+                    currentTaskViewOption.name()
+            ));
+        } else {
+            this.taskManager = this.teamTaskManager;
+            currentSpaceMode = SpaceMode.TEAM;
+            if (currentTaskViewOption == TaskViewOption.MY && viewMode == ViewMode.PERSONAL) {
+                currentTaskViewOption = TaskViewOption.UNASSIGNED;
+            }
+            viewMode = ViewMode.valueOf(TodoScreenViewModeSupport.resolveLegacyViewModeName(
+                    currentSpaceMode.name(),
+                    currentTaskViewOption.name()
+            ));
+        }
+        syncHudViewForProject(project);
+        rebuildUI();
+        if (projectListWidget != null) {
+            projectListWidget.setScrollOffset(savedProjectListScrollOffset);
+        }
     }
 
     private void rebuildUI() {
-        if (!teamProjectsEnabled && viewMode != ViewMode.PERSONAL) {
-            viewMode = ViewMode.PERSONAL;
-        }
-        selectedTask = null;
-        if (currentFilter == null || currentFilter.isEmpty()) {
-            currentFilter = "active";
-        }
-        if (searchQuery == null) {
-            searchQuery = "";
-        }
-        if (projectSearchQuery == null) {
-            projectSearchQuery = "";
-        }
+        syncViewStateForCurrentProject();
+        currentFilter = "active";
+        searchQuery = searchQuery == null ? "" : searchQuery.trim().toLowerCase();
+        projectSearchQuery = projectSearchQuery == null ? "" : projectSearchQuery.trim();
+        savedTaskListScrollOffset = taskListWidget == null ? savedTaskListScrollOffset : taskListWidget.getScrollOffset();
         baseFilteredTasks = new ArrayList<>();
         filteredTasks = new ArrayList<>();
         this.clearWidgets();
 
         ModConfig config = ModConfig.getInstance();
-
-        int viewportMargin = 4;
-        int maxGuiWidth = Math.max(300, this.width - viewportMargin * 2);
-        int maxGuiHeight = Math.max(200, this.height - viewportMargin * 2);
-        int guiWidth = clampInt(config.getGuiWidth(), 300, maxGuiWidth);
-        int guiHeight = clampInt(config.getGuiHeight(), 200, maxGuiHeight);
-        int x = (this.width - guiWidth) / 2;
-        int y = (this.height - guiHeight) / 2;
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
-
-        int padding = clampInt(config.getPadding(), 6, 20);
-        int e = clampInt(config.getElementSpacing(), 4, 12);
-        int sidebarGap = 8;
-        int minSidebarWidth = 90;
-        int maxSidebarWidth = Math.max(minSidebarWidth, Math.min(220, guiWidth / 3));
-        int sidebarWidth = clampInt(config.getProjectSidebarWidth(), minSidebarWidth, maxSidebarWidth);
-
-        int minContentWidth = 160;
-        int minRightPanelWidth = 72;
-        int maxRightPanelWidth = 120;
-        int rightPanelWidth = clampInt(96, minRightPanelWidth, maxRightPanelWidth);
-        int contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        if (contentWidth < minContentWidth) {
-            int need = minContentWidth - contentWidth;
-            sidebarWidth = Math.max(minSidebarWidth, sidebarWidth - need);
-            contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        }
-        if (contentWidth < minContentWidth) {
-            int need = minContentWidth - contentWidth;
-            rightPanelWidth = Math.max(minRightPanelWidth, rightPanelWidth - need);
-            contentWidth = guiWidth - padding * 2 - sidebarWidth - sidebarGap * 2 - rightPanelWidth;
-        }
-        contentWidth = Math.max(minContentWidth, contentWidth);
-
-        int topBarY = y + padding + 10; // Extra 10px margin for Title
-        int topBarHeight = 20;
-        int topBarGap = e;
-        int secondRowY = topBarY + topBarHeight + topBarGap;
-        int secondRowHeight = 20;
+        responsiveTier = TodoScreenLayoutSupport.resolveResponsiveTier(this.width, this.height);
+        syncOverlayStateForResponsiveTier();
+        layoutMetrics = TodoScreenLayoutSupport.buildMainLayoutMetrics(
+                config,
+                responsiveTier,
+                this.width,
+                this.height,
+                sidebarOverlayVisible,
+                detailOverlayVisible,
+                selectedTask != null);
+        LayoutRect sidebarBounds = layoutMetrics.sidebarBounds;
+        LayoutRect contentBounds = layoutMetrics.contentBounds;
+        LayoutRect detailBounds = layoutMetrics.detailBounds;
+        int contentControlInset = TodoScreenUiMetricsSupport.getContentControlInset(responsiveTier);
+        int contentControlX = contentBounds.x + contentControlInset;
+        int contentControlWidth = Math.max(80, contentBounds.width - contentControlInset * 2);
+        int contentControlRight = contentControlX + contentControlWidth;
+        int topBarGap = Math.max(3, Math.min(8, config.getElementSpacing()));
+        int topBarHeight = TodoScreenUiMetricsSupport.getContentTopBarHeight(responsiveTier);
+        int topBarY = contentBounds.y + TodoScreenUiMetricsSupport.getContentTopPadding(responsiveTier);
+        int secondRowHeight = TodoScreenUiMetricsSupport.getContentSearchFieldHeight(responsiveTier);
+        int secondRowY = topBarY + topBarHeight + TodoScreenUiMetricsSupport.getContentHeaderGap(responsiveTier);
+        int inputRowHeight = TodoScreenUiMetricsSupport.getContentQuickAddFieldHeight(responsiveTier);
+        int inputRowY = contentBounds.y + contentBounds.height - inputRowHeight - TodoScreenUiMetricsSupport.getContentBottomPadding(responsiveTier);
+        int bottomActionRowHeight = TodoScreenUiMetricsSupport.getContentBottomActionRowHeight(responsiveTier);
+        int actionRowY = this.height - layoutMetrics.padding - bottomActionRowHeight;
         int listTop = secondRowY + secondRowHeight + topBarGap;
-        int bottomBarHeight = 20;
-        int bottomBarY = y + guiHeight - padding - bottomBarHeight;
-        int inputRowHeight = 20;
-        int inputRowY = bottomBarY - topBarGap - inputRowHeight;
-        int sidebarTopY = topBarY;
+        int listBottom = inputRowY - Math.max(4, topBarGap);
+        int listHeight = Math.max(0, listBottom - listTop);
+        int sidebarTopY = sidebarBounds.y;
+        int sidebarWidth = sidebarBounds.width;
+        int contentX = contentBounds.x;
+        int contentWidth = contentBounds.width;
+        int rightPanelX = detailBounds.x;
+        int rightPanelWidth = detailBounds.width;
 
-        int rowHeight = 20;
-        // int minTaskListHeight = Math.max(rowHeight * 2, Math.max(40, config.getTaskItemHeight() * 2));
-        int listInputGap = Math.max(8, topBarGap + 2);
-        int listBottom = inputRowY - listInputGap;
-        int availableListHeight = Math.max(0, listBottom - listTop);
-        int listHeight = availableListHeight; // Strictly use available height to avoid overlap
+        int actionGap = TodoScreenUiMetricsSupport.getContentActionGap(responsiveTier);
+        int cancelButtonWidth = Math.max(44, Math.min(64, this.font.width(Component.translatable("gui.todolist.cancel")) + 10));
+        int saveButtonWidth = Math.max(44, Math.min(64, this.font.width(Component.translatable("gui.todolist.save")) + 10));
+        int bottomActionWidth = saveButtonWidth + actionGap + cancelButtonWidth;
+        int saveButtonX = Math.max(0, (this.width - bottomActionWidth) / 2);
+        int cancelButtonX = saveButtonX + saveButtonWidth + actionGap;
 
-        int sidebarScopeBtnHeight = 20;
-        int sidebarSearchHeight = 16;
-        int gap10 = 8;
-        int projListY = sidebarTopY + sidebarScopeBtnHeight + gap10 + sidebarSearchHeight + gap10;
-        int projBtnGap = 5;
-        int projectButtonsHeight = 20 * 3 + projBtnGap * 2;
-        int sidebarBottomButtonsY = y + guiHeight - padding - projectButtonsHeight;
-        int sidebarListBottom = sidebarBottomButtonsY - gap10;
-        // int minSidebarListHeight = rowHeight * 2;
-        int sidebarListHeight = Math.max(0, sidebarListBottom - projListY);
-
-        int contentX = x + padding + sidebarWidth + sidebarGap;
-        int rightPanelX = contentX + contentWidth + sidebarGap;
-
-        // Scope Toggle
-        projectScopeButton = Button.builder(getProjectScopeText(), b -> {
-            if (!teamProjectsEnabled) return;
-            projectScopeFilter = (projectScopeFilter == Project.Scope.PERSONAL) ? Project.Scope.TEAM : Project.Scope.PERSONAL;
-            Project targetProject = getPreferredProjectForScope(projectScopeFilter);
-            switchProject(targetProject);
-        }).bounds(x + padding, sidebarTopY, sidebarWidth, sidebarScopeBtnHeight).build();
-        projectScopeButton.active = teamProjectsEnabled;
-        this.addRenderableWidget(projectScopeButton);
-        
-        projectSearchField = new EditBox(this.font, x + padding, sidebarTopY + sidebarScopeBtnHeight + gap10, sidebarWidth, sidebarSearchHeight, Component.translatable("gui.todolist.project.search"));
-        projectSearchField.setHint(Component.translatable("gui.todolist.project.search"));
-        projectSearchField.setValue(projectSearchQuery);
-        projectSearchField.setResponder(text -> {
-            projectSearchQuery = text;
-            updateProjectList();
-        });
-        this.addRenderableWidget(projectSearchField);
-
-        projectListWidget = new ProjectListWidget(this.minecraft, x + padding, projListY, sidebarWidth, sidebarListHeight);
-        updateProjectList(); 
-        projectListWidget.setScrollOffset(savedProjectListScrollOffset);
-        projectListWidget.setSelectedProject(currentProject);
-        projectListWidget.setOnProjectSelected(this::switchProject);
-        this.addRenderableWidget(projectListWidget);
-        
-        int projBtnY = sidebarBottomButtonsY;
-
-        Button addProjectBtn = Button.builder(Component.translatable("gui.todolist.add"), b -> onAddProject())
-                .bounds(x + padding, projBtnY, sidebarWidth, 20).build();
-        this.addRenderableWidget(addProjectBtn);
-
-        editProjectBtn = Button.builder(Component.translatable("gui.todolist.edit"), b -> onProjectSettings())
-                .bounds(x + padding, projBtnY + 20 + projBtnGap, sidebarWidth, 20).build();
-        editProjectBtn.active = currentProject != null;
-        this.addRenderableWidget(editProjectBtn);
-
-        deleteProjectBtn = Button.builder(Component.translatable("gui.todolist.delete"), b -> onProjectDelete())
-                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
-        this.addRenderableWidget(deleteProjectBtn);
-
-        applyJoinProjectBtn = Button.builder(Component.translatable("gui.todolist.project.join.apply"), b -> onApplyJoinProject())
-                .bounds(x + padding, projBtnY + (20 + projBtnGap) * 2, sidebarWidth, 20).build();
-        this.addRenderableWidget(applyJoinProjectBtn);
-
-        updateProjectActionButtons();
-
-        // 2. Task List
-        taskListWidget = new TaskListWidget(this.minecraft, contentX, listTop, contentWidth, listHeight);
-        boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
-        taskListWidget.setTeamAllViewForNonOp(getCurrentRole() == Role.MEMBER && teamAllView);
-        taskListWidget.setTasks(filteredTasks);
-        taskListWidget.setOnTaskToggleCompletion(task -> {
-            if (task.isCompleted()) return;
-            boolean wasCompleted = task.isCompleted();
-            toggleTaskCompletion(task);
-            if (!wasCompleted && task.isCompleted()) {
-                addNotification(Component.translatable("message.todolist.completed", task.getTitle()).getString());
-                if (config.isEnableSoundEffects() && this.minecraft != null && this.minecraft.player != null) {
-                    this.minecraft.player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
-                }
-            }
-            refreshTaskList();
-        });
-
-        // 3. Input Fields
-        int labelWidth = 0; // Remove "Title:" label space
-        int fieldX = contentX + labelWidth;
-        int fieldWidth = Math.max(120, contentWidth - labelWidth);
-
-        titleField = new EditBox(this.font, fieldX, inputRowY, fieldWidth, 20, Component.empty());
-        titleField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
-        titleField.setValue("");
-        titleField.setMaxLength(100);
-        this.addRenderableWidget(titleField);
-
-        int rightInnerPadding = 4;
-        int rightFieldWidth = Math.max(60, rightPanelWidth - rightInnerPadding * 2);
-        int rightPanelTop = topBarY; // Align with top bar
-        int rightPanelBottom = inputRowY + inputRowHeight;
-        int rightCurrentY = rightPanelTop;
-        int rightSectionGap = 6;
-        int textH = this.font.lineHeight;
-        int assignButtonWidth = rightFieldWidth;
-        int assignButtonHeight = 20;
-        int assignButtonGap = 4;
-        boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
-        int assignsX = rightPanelX + rightInnerPadding;
-
-        configButton = Button.builder(Component.translatable("gui.todolist.config.title"), b -> this.minecraft.setScreen(new ConfigScreen(this)))
-                .bounds(assignsX, rightCurrentY, rightFieldWidth, 20).build();
-        this.addRenderableWidget(configButton);
-        rightCurrentY += 20 + rightSectionGap;
-
-        int teamButtonsTop = rightPanelBottom;
-        if (showAssignButtons) {
-            int teamButtonsTotalHeight = assignButtonHeight * 3 + assignButtonGap * 2;
-            teamButtonsTop = rightPanelBottom - teamButtonsTotalHeight;
-        }
-
-        int tagFieldY = teamButtonsTop - rightSectionGap - 20;
-        int minTagFieldY = rightCurrentY + textH + 2 + 30;
-        if (tagFieldY < minTagFieldY) {
-            tagFieldY = minTagFieldY;
-        }
-        int descFieldY = rightCurrentY + textH + 2;
-        int descFieldBottom = tagFieldY - rightSectionGap - textH - 2;
-        int descFieldHeight = Math.max(28, descFieldBottom - descFieldY);
-        descField = new MultiLineEditBox(
+        TodoScreenWidgetBuildSupport.ContentWidgets contentWidgets = TodoScreenWidgetBuildSupport.buildContentWidgets(
                 this.font,
-                assignsX,
-                descFieldY,
-                rightFieldWidth,
-                descFieldHeight,
-                Component.translatable("gui.todolist.input.description"),
-                Component.translatable("gui.todolist.input.description.placeholder")
-        );
-        descField.setValue("");
-        descField.setCharacterLimit(2000);
-        this.addRenderableWidget(descField);
-
-        tagField = new EditBox(this.font, assignsX, tagFieldY, rightFieldWidth, 20, Component.empty());
-        tagField.setValue("");
-        tagField.setMaxLength(100);
-        this.addRenderableWidget(tagField);
-
-        claimButton = Button.builder(Component.translatable("gui.todolist.claim_task"), b -> onClaimTask())
-                .bounds(assignsX, teamButtonsTop, assignButtonWidth, assignButtonHeight).build();
-        claimButton.active = false;
-        this.addRenderableWidget(claimButton);
-
-        abandonButton = Button.builder(Component.translatable("gui.todolist.abandon_task"), b -> onAbandonTask())
-                .bounds(assignsX, teamButtonsTop + (assignButtonHeight + assignButtonGap), assignButtonWidth, assignButtonHeight).build();
-        abandonButton.active = false;
-        this.addRenderableWidget(abandonButton);
-
-        assignOthersButton = Button.builder(Component.translatable("gui.todolist.assign_others"), b -> onAssignOthers())
-                .bounds(assignsX, teamButtonsTop + (assignButtonHeight + assignButtonGap) * 2, assignButtonWidth, assignButtonHeight).build();
-        assignOthersButton.active = false;
-        this.addRenderableWidget(assignOthersButton);
-
-        // 6. Save/Cancel
-        int saveCancelWidth = 90;
-        int saveCancelGap = 5;
-        int totalSaveCancelWidth = saveCancelWidth * 2 + saveCancelGap;
-        int saveCancelX = x + (guiWidth - totalSaveCancelWidth) / 2;
-
-        Button saveButton = Button.builder(Component.translatable("gui.todolist.save"), button -> onSaveTasks())
-                .bounds(saveCancelX, bottomBarY, saveCancelWidth, 20).build();
-        this.addRenderableWidget(saveButton);
-
-        Button cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> onCancel())
-                .bounds(saveCancelX + saveCancelWidth + saveCancelGap, bottomBarY, saveCancelWidth, 20).build();
-        this.addRenderableWidget(cancelButton);
-
-        // 7. Filter Row (View/Priority/Status/Config)
-        int filterGap = 4;
-        int filterLabelW = 0; // Remove "Filter:" label
-        int filtersX = contentX + filterLabelW;
-        int filtersY = topBarY;
-        int btnH = 20;
-
-        // this.addRenderableWidget(new TextLabelWidget(contentX, filtersY + (btnH - 8) / 2, Component.translatable("gui.todolist.label.filter"), 0xFFFFFF));
-
-        int availableBeforeConfig = contentWidth - filterLabelW;
-        int minBtnW = 70;
-        int maxBtnW = 140;
-        int viewBtnWidth = Math.min(maxBtnW, Math.max(minBtnW, this.font.width(getViewToggleText()) + 16));
-        int priorityBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getPriorityFilterText()) + 16));
-        int statusBtnWidth = Math.min(120, Math.max(minBtnW, this.font.width(getStatusFilterText()) + 16));
-        int totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        int maxW = Math.max(0, availableBeforeConfig - filterGap);
-        int guard = 0;
-        while (totalW > maxW && guard++ < 200) {
-            if (viewBtnWidth >= priorityBtnWidth && viewBtnWidth >= statusBtnWidth && viewBtnWidth > minBtnW) {
-                viewBtnWidth -= 4;
-            } else if (priorityBtnWidth >= statusBtnWidth && priorityBtnWidth > minBtnW) {
-                priorityBtnWidth -= 4;
-            } else if (statusBtnWidth > minBtnW) {
-                statusBtnWidth -= 4;
-            } else {
-                break;
-            }
-            totalW = viewBtnWidth + priorityBtnWidth + statusBtnWidth + filterGap * 2;
-        }
-
-        viewToggleButton = Button.builder(getViewToggleText(), b -> {
-            if (viewMode == ViewMode.PERSONAL) {
-                return;
-            }
-            if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-                switchView(ViewMode.TEAM_ALL);
-            } else if (viewMode == ViewMode.TEAM_ALL) {
-                switchView(ViewMode.TEAM_ASSIGNED);
-            } else {
-                switchView(ViewMode.TEAM_UNASSIGNED);
-            }
-        }).bounds(filtersX, filtersY, viewBtnWidth, btnH).build();
-        viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-        this.addRenderableWidget(viewToggleButton);
-
-        int priorityBtnX = filtersX + viewBtnWidth + filterGap;
-        filterPriorityButton = Button.builder(getPriorityFilterText(), button -> {
-            currentPriorityFilter = (currentPriorityFilter + 1) % 4;
-            button.setMessage(getPriorityFilterText());
-            applyPriorityFilter();
-        }).bounds(priorityBtnX, filtersY, priorityBtnWidth, btnH).build();
+                layoutMetrics,
+                responsiveTier,
+                contentControlX,
+                contentControlRight,
+                topBarY,
+                topBarHeight,
+                secondRowY,
+                secondRowHeight,
+                currentPriorityFilter,
+                searchQuery,
+                button -> {
+                    currentPriorityFilter = (currentPriorityFilter + 1) % 4;
+                    button.setMessage(TodoScreenFilterTextSupport.getPriorityFilterText(currentPriorityFilter));
+                    filterTasks();
+                },
+                this::toggleSidebarOverlay,
+                () -> this.minecraft.setScreen(new ConfigScreen(this)));
+        sidebarToggleButton = contentWidgets.sidebarToggleButton;
+        configButton = contentWidgets.configButton;
+        filterPriorityButton = contentWidgets.filterPriorityButton;
+        searchField = contentWidgets.searchField;
+        filterStatusButton = null;
+        viewToggleButton = null;
+        this.addRenderableWidget(sidebarToggleButton);
+        this.addRenderableWidget(configButton);
         this.addRenderableWidget(filterPriorityButton);
-
-        int statusBtnX = priorityBtnX + priorityBtnWidth + filterGap;
-        filterStatusButton = Button.builder(getStatusFilterText(), button -> {
-            filterTasks("completed".equals(currentFilter) ? "active" : "completed");
-        }).bounds(statusBtnX, filtersY, statusBtnWidth, btnH).build();
-        this.addRenderableWidget(filterStatusButton);
-        
-        // 9. Search Field
-        int searchY = secondRowY;
-        
-        // Search Label & Field
-        int searchLabelWidth = 0; // Remove "Search:" label
-        int searchFieldX = contentX + searchLabelWidth;
-        int searchFieldWidth = Math.max(120, contentWidth - searchLabelWidth);
-        
-        searchField = new EditBox(this.font, searchFieldX, searchY, searchFieldWidth, 20, Component.empty());
-        searchField.setHint(Component.translatable("gui.todolist.input.search.placeholder"));
-        searchField.setValue(searchQuery);
         this.addRenderableWidget(searchField);
 
-        // Listeners
-        titleField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
-                selectedTask.setTitle(text);
-                markUnsaved();
-            }
-        });
-        descField.setValueListener(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
-                selectedTask.setDescription(text);
-                markUnsaved();
-            }
-        });
-        tagField.setResponder(text -> {
-            if (selectedTask != null && isSelectedTaskValid() && !selectedTask.isCompleted() && canEditTask(selectedTask)) {
-                String value = getFieldValue(tagField, "");
-                if (value.isEmpty()) selectedTask.clearTags();
-                else {
-                    List<String> tags = new ArrayList<>();
-                    for (String part : value.split(",")) {
-                        String t = part.trim();
-                        if (!t.isEmpty()) tags.add(t);
+        TodoScreenWidgetBuildSupport.SidebarWidgets sidebarWidgets = TodoScreenWidgetBuildSupport.buildSidebarWidgets(
+                this.minecraft,
+                this.font,
+                responsiveTier,
+                sidebarBounds,
+                sidebarTopY,
+                sidebarWidth,
+                projectManager,
+                teamProjectsEnabled,
+                preferredTeamProjectId,
+                preferredPersonalProjectId,
+                () -> switchProject(TodoScreenProjectPreferenceSupport.getPreferredProjectForScope(
+                        projectManager,
+                        Project.Scope.PERSONAL,
+                        teamProjectsEnabled,
+                        preferredTeamProjectId,
+                        preferredPersonalProjectId)),
+                () -> {
+                    if (teamProjectsEnabled) {
+                        switchProject(TodoScreenProjectPreferenceSupport.getPreferredProjectForScope(
+                                projectManager,
+                                Project.Scope.TEAM,
+                                teamProjectsEnabled,
+                                preferredTeamProjectId,
+                                preferredPersonalProjectId));
                     }
-                    selectedTask.setTags(tags);
-                }
-                markUnsaved();
-            }
-        });
+                },
+                () -> switchView(currentSpaceMode == SpaceMode.PERSONAL ? ViewMode.PERSONAL : ViewMode.TEAM_ASSIGNED),
+                () -> switchView(ViewMode.TEAM_UNASSIGNED),
+                () -> switchView(ViewMode.TEAM_ALL),
+                projectSearchQuery,
+                text -> {
+                    projectSearchQuery = text;
+                    updateProjectList();
+                },
+                this::switchProject,
+                this::onAddProject,
+                this::onProjectSettings,
+                this::onProjectDelete,
+                this::onApplyJoinProject,
+                sidebarWidth,
+                currentProject != null);
+        personalSpaceButton = sidebarWidgets.personalSpaceButton;
+        teamSpaceButton = sidebarWidgets.teamSpaceButton;
+        myViewButton = sidebarWidgets.myViewButton;
+        unassignedViewButton = sidebarWidgets.unassignedViewButton;
+        allViewButton = sidebarWidgets.allViewButton;
+        projectSearchField = sidebarWidgets.projectSearchField;
+        projectListWidget = sidebarWidgets.projectListWidget;
+        addProjectBtn = sidebarWidgets.addProjectBtn;
+        editProjectBtn = sidebarWidgets.editProjectBtn;
+        deleteProjectBtn = sidebarWidgets.deleteProjectBtn;
+        applyJoinProjectBtn = sidebarWidgets.applyJoinProjectBtn;
+        this.addRenderableWidget(personalSpaceButton);
+        this.addRenderableWidget(teamSpaceButton);
+        this.addRenderableWidget(myViewButton);
+        this.addRenderableWidget(unassignedViewButton);
+        this.addRenderableWidget(allViewButton);
+        this.addRenderableWidget(projectSearchField);
+        this.addRenderableWidget(addProjectBtn);
+        this.addRenderableWidget(editProjectBtn);
+        this.addRenderableWidget(deleteProjectBtn);
+        this.addRenderableWidget(applyJoinProjectBtn);
+        updateProjectList();
+        projectListWidget.setScrollOffset(savedProjectListScrollOffset);
+        projectListWidget.setSelectedProject(currentProject);
+        updateProjectActionButtons();
+
+        boolean teamAllView = viewMode == ViewMode.TEAM_ALL;
+        TodoScreenWidgetBuildSupport.TaskAreaWidgets taskAreaWidgets = TodoScreenWidgetBuildSupport.buildTaskAndQuickAddWidgets(
+                this.minecraft,
+                this.font,
+                contentX,
+                listTop,
+                contentWidth,
+                listHeight,
+                TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject) == Role.MEMBER && teamAllView,
+                TodoScreenPermissionSupport.canTaskReorderInView(
+                        this.minecraft,
+                        currentProject,
+                        viewMode.name()),
+                buildTaskPaneSections(),
+                selectedTask,
+                task -> {
+                    boolean wasCompleted = task.isCompleted();
+                    toggleTaskCompletion(task);
+                    if (!wasCompleted && task.isCompleted()) {
+                        addNotification(Component.translatable("message.todolist.completed", task.getTitle()).getString());
+                        if (config.isEnableSoundEffects() && this.minecraft != null && this.minecraft.player != null) {
+                            this.minecraft.player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
+                        }
+                    }
+                },
+                this::onManualReorderActiveTasks,
+                contentControlX,
+                inputRowY,
+                Math.max(60, contentControlWidth),
+                inputRowHeight);
+        taskListWidget = taskAreaWidgets.taskListWidget;
+        quickAddField = taskAreaWidgets.quickAddField;
+        this.addRenderableWidget(quickAddField);
+
+        TodoScreenWidgetBuildSupport.DetailWidgets detailWidgets = TodoScreenWidgetBuildSupport.buildDetailWidgets(
+                this.font,
+                detailBounds,
+                rightPanelX,
+                rightPanelWidth,
+                viewMode != ViewMode.PERSONAL,
+                this::clearSelectedTask,
+                this::onClaimTask,
+                this::onAbandonTask,
+                this::onAssignOthers);
+        detailCloseButton = detailWidgets.detailCloseButton;
+        titleField = detailWidgets.titleField;
+        descField = detailWidgets.descField;
+        tagField = detailWidgets.tagField;
+        claimButton = detailWidgets.claimButton;
+        abandonButton = detailWidgets.abandonButton;
+        assignOthersButton = detailWidgets.assignOthersButton;
+        this.addRenderableWidget(detailCloseButton);
+        this.addRenderableWidget(titleField);
+        this.addRenderableWidget(descField);
+        this.addRenderableWidget(tagField);
+        this.addRenderableWidget(claimButton);
+        this.addRenderableWidget(abandonButton);
+        this.addRenderableWidget(assignOthersButton);
+
+        TodoScreenWidgetBuildSupport.BottomActionWidgets bottomActionWidgets = TodoScreenWidgetBuildSupport.buildBottomActionWidgets(
+                saveButtonX,
+                saveButtonWidth,
+                cancelButtonX,
+                cancelButtonWidth,
+                actionRowY,
+                bottomActionRowHeight,
+                this::onSaveTasks,
+                this::onClose);
+        saveButton = bottomActionWidgets.saveButton;
+        cancelButton = bottomActionWidgets.cancelButton;
+        this.addRenderableWidget(saveButton);
+        this.addRenderableWidget(cancelButton);
+
+        applyResponsiveWidgetVisibility();
+        bindWidgetResponders();
+        filterTasks();
+        if (taskListWidget != null) {
+            taskListWidget.setScrollOffset(savedTaskListScrollOffset);
+        }
+        syncDetailWidgetsFromState();
+        this.setFocused(quickAddField);
+        updateButtonStates();
+    }
+
+    /**
+     * 统一绑定重建后需要恢复的输入监听器。
+     */
+    private void bindWidgetResponders() {
+        titleField.setResponder(this::onDetailTitleChanged);
+        descField.setValueListener(this::onDetailDescriptionChanged);
+        tagField.setResponder(this::onDetailTagsChanged);
         searchField.setResponder(text -> {
             searchQuery = text == null ? "" : text.trim().toLowerCase();
             applySearchFilter();
         });
-
-        filterTasks(currentFilter);
-        this.setFocused(titleField);
-        updateButtonStates();
     }
 
+    /**
+     * 根据当前响应式档位同步侧栏和详情区的覆盖层显示状态。
+     */
+    private void syncOverlayStateForResponsiveTier() {
+        if (responsiveTier != ResponsiveTier.MINIMAL) {
+            sidebarOverlayVisible = false;
+        }
+        if (responsiveTier == ResponsiveTier.LARGE || responsiveTier == ResponsiveTier.MEDIUM) {
+            detailOverlayVisible = false;
+        } else if (selectedTask == null) {
+            detailOverlayVisible = false;
+        } else {
+            detailOverlayVisible = true;
+        }
+    }
+
+    /**
+     * 根据当前响应式布局更新组件显隐状态。
+     */
+    private void applyResponsiveWidgetVisibility() {
+        if (layoutMetrics == null) {
+            return;
+        }
+        TodoScreenSidebarViewButtonLayoutSupport.apply(
+                myViewButton,
+                unassignedViewButton,
+                allViewButton,
+                layoutMetrics == null ? null : layoutMetrics.sidebarBounds,
+                responsiveTier,
+                currentSpaceMode.name());
+        boolean sidebarVisible = layoutMetrics.sidebarVisible;
+        boolean detailVisible = layoutMetrics.detailVisible;
+        if (myViewButton != null) {
+            myViewButton.visible = sidebarVisible;
+        }
+        boolean teamViewButtonsVisible = sidebarVisible && currentSpaceMode == SpaceMode.TEAM;
+        if (unassignedViewButton != null) {
+            unassignedViewButton.visible = teamViewButtonsVisible;
+        }
+        if (allViewButton != null) {
+            allViewButton.visible = teamViewButtonsVisible;
+        }
+        if (personalSpaceButton != null) {
+            personalSpaceButton.visible = sidebarVisible;
+            personalSpaceButton.active = sidebarVisible && currentSpaceMode != SpaceMode.PERSONAL;
+        }
+        if (teamSpaceButton != null) {
+            teamSpaceButton.visible = sidebarVisible;
+            teamSpaceButton.active = sidebarVisible && teamProjectsEnabled && currentSpaceMode != SpaceMode.TEAM;
+        }
+        if (projectSearchField != null) {
+            projectSearchField.visible = sidebarVisible;
+            projectSearchField.active = sidebarVisible;
+        }
+        TodoScreenProjectActionSupport.applySidebarVisibility(
+                sidebarVisible,
+                addProjectBtn,
+                editProjectBtn,
+                deleteProjectBtn,
+                applyJoinProjectBtn);
+        if (quickAddField != null) {
+            quickAddField.visible = true;
+            quickAddField.active = true;
+        }
+        applyDetailWidgetEditability();
+        if (claimButton != null) {
+            claimButton.visible = detailVisible && claimButton.visible;
+            claimButton.active = detailVisible && claimButton.active;
+        }
+        if (abandonButton != null) {
+            abandonButton.visible = detailVisible && abandonButton.visible;
+            abandonButton.active = detailVisible && abandonButton.active;
+        }
+        if (assignOthersButton != null) {
+            assignOthersButton.visible = detailVisible && assignOthersButton.visible;
+            assignOthersButton.active = detailVisible && assignOthersButton.active;
+        }
+        if (sidebarToggleButton != null) {
+            sidebarToggleButton.visible = layoutMetrics.sidebarOverlay;
+            sidebarToggleButton.active = layoutMetrics.sidebarOverlay;
+        }
+        projectSearchPrefixDropdownOpen = TodoScreenProjectSearchSupport.syncProjectSearchPrefixDropdownState(
+                projectSearchPrefixDropdownOpen,
+                currentSpaceMode == SpaceMode.TEAM,
+                isSidebarPanelVisible(),
+                projectSearchField);
+    }
+
+    /**
+     * 供测试入口复用，判断当前是否允许显示项目搜索前缀下拉面板。
+     *
+     * @return 允许显示时返回 {@code true}
+     */
+    private boolean canUseProjectSearchPrefixDropdown() {
+        return TodoScreenProjectSearchSupport.canUseProjectSearchPrefixDropdown(
+                currentSpaceMode == SpaceMode.TEAM,
+                isSidebarPanelVisible()
+        );
+    }
+
+    /**
+     * 供测试入口复用，尝试打开项目搜索前缀下拉面板。
+     */
+    private void openProjectSearchPrefixDropdown() {
+        if (canUseProjectSearchPrefixDropdown()) {
+            projectSearchPrefixDropdownOpen = true;
+        }
+    }
+
+    /**
+     * 供测试入口复用，同步项目搜索前缀下拉面板显隐状态。
+     */
+    private void syncProjectSearchPrefixDropdownState() {
+        projectSearchPrefixDropdownOpen = TodoScreenProjectSearchSupport.syncProjectSearchPrefixDropdownState(
+                projectSearchPrefixDropdownOpen,
+                currentSpaceMode == SpaceMode.TEAM,
+                isSidebarPanelVisible(),
+                projectSearchField
+        );
+    }
+
+    /**
+     * 切换侧栏的覆盖层显示状态。
+     */
+    private void toggleSidebarOverlay() {
+        if (responsiveTier != ResponsiveTier.MINIMAL) {
+            return;
+        }
+        sidebarOverlayVisible = !sidebarOverlayVisible;
+        layoutMetrics = TodoScreenLayoutSupport.buildMainLayoutMetrics(
+                ModConfig.getInstance(),
+                responsiveTier,
+                this.width,
+                this.height,
+                sidebarOverlayVisible,
+                detailOverlayVisible,
+                selectedTask != null);
+        updateProjectActionButtons();
+        updateButtonStates();
+        applyResponsiveWidgetVisibility();
+    }
+
+    /**
+     * 判断侧栏面板当前是否应该显示。
+     *
+     * @return 侧栏应显示时返回 {@code true}
+     */
+    private boolean isSidebarPanelVisible() {
+        return layoutMetrics != null && layoutMetrics.sidebarVisible;
+    }
+
+    /**
+     * 判断详情面板当前是否应该显示。
+     *
+     * @return 详情面板应显示时返回 {@code true}
+     */
+    private boolean isDetailPanelVisible() {
+        return layoutMetrics != null && layoutMetrics.detailVisible;
+    }
+
+    /**
+     * 切换指定任务的完成状态，并在当前视图中立即刷新分组结果。
+     *
+     * @param task 待切换完成状态的任务
+     */
     private void toggleTaskCompletion(Task task) {
-        if (!canToggleCompletion(task)) {
+        if (!TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.TOGGLE_COMPLETE,
+                task,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        )) {
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
         taskManager.toggleTaskCompletion(task.getId());
         markUnsaved();
-        refreshTaskList();
+        filterTasks();
     }
 
+    /**
+     * 覆盖默认背景渲染，避免父类在 render 阶段重复绘制背景遮罩。
+     *
+     * @param context 绘制上下文
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @param delta 帧间隔
+     */
     @Override
     public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
@@ -1051,26 +1019,35 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         Component title = hasUnsavedChanges ? Component.translatable("gui.todolist.title.unsaved") : TITLE;
         context.drawString(this.font, title, (this.width - this.font.width(title)) / 2, 10, 0xFFFFFFFF, false);
 
+        TodoScreenRenderSupport.renderLayoutPanels(
+                context,
+                layoutMetrics,
+                isSidebarPanelVisible(),
+                isDetailPanelVisible());
+        TodoScreenRenderSupport.renderContentHeaderSummary(
+                context,
+                this.font,
+                layoutMetrics,
+                responsiveTier,
+                currentSpaceMode,
+                currentProject,
+                configButton,
+                sidebarToggleButton);
         if (taskListWidget != null) taskListWidget.render(context, mouseX, mouseY, delta);
-        if (projectListWidget != null) projectListWidget.render(context, mouseX, mouseY, delta);
+        if (projectListWidget != null && isSidebarPanelVisible()) {
+            projectListWidget.render(context, mouseX, mouseY, delta);
+        }
 
         super.render(context, mouseX, mouseY, delta);
 
-        int labelX = titleField != null ? titleField.getX() - 40 : 0;
         int color = 0xFFFFFFFF;
         int textH = this.font.lineHeight;
 
-        /*
-        if (titleField != null) {
-            int ty = titleField.getY() + (titleField.getHeight() - textH) / 2;
-            context.drawString(this.font, Component.translatable("gui.todolist.label.title"), labelX, ty, color, false);
-        }
-        */
-        if (descField != null) {
+        if (descField != null && descField.visible) {
             int dy = descField.getY() - textH - 2;
             context.drawString(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
         }
-        if (tagField != null) {
+        if (tagField != null && tagField.visible) {
             int zy = tagField.getY() - textH - 2;
             context.drawString(this.font, Component.translatable("gui.todolist.label.tags"), tagField.getX(), zy, color, false);
         }
@@ -1081,70 +1058,42 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             context.drawString(this.font, Component.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
         }
         */
-        renderTaskContextMenu(context, mouseX, mouseY);
-        renderNotifications(context);
-    }
-
-    private void renderNotifications(GuiGraphics context) {
-        if (notifications.isEmpty()) return;
-        long now = System.currentTimeMillis();
-
-        int boxWidth = 220;
-        int boxHeight = 20;
-        int startX = Math.max(8, this.width - boxWidth - 8);
-        int startY = (searchField != null) ? searchField.getY() : 35;
-        int gap = 4;
-
-        List<Notification> active = new ArrayList<>();
-        for (Notification n : notifications) {
-            if (n.expireAt > now) active.add(n);
+        TodoScreenRenderSupport.renderProjectSearchPrefixDropdown(
+                context,
+                mouseX,
+                mouseY,
+                this.font,
+                projectSearchField,
+                projectSearchPrefixDropdownOpen,
+                currentSpaceMode == SpaceMode.TEAM,
+                isSidebarPanelVisible()
+        );
+        if (TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
+            TodoScreenContextMenuSupport.renderMenu(
+                    context,
+                    this.font,
+                    contextMenuItems,
+                    contextMenuX,
+                    contextMenuY,
+                    contextMenuWidth,
+                    contextMenuItemHeight,
+                    mouseX,
+                    mouseY);
         }
-        notifications.clear();
-        notifications.addAll(active);
-
-        int dy = 0;
-        for (Notification n : notifications) {
-            int bx1 = startX;
-            int by1 = startY + dy;
-            int bx2 = bx1 + boxWidth;
-            int by2 = by1 + boxHeight;
-            context.fill(bx1, by1, bx2, by2, 0xCC000000);
-            context.renderOutline(bx1, by1, boxWidth, boxHeight, 0xFFFFFFFF);
-            int tx = bx1 + 6;
-            int ty = by1 + (boxHeight - this.font.lineHeight) / 2;
-            context.drawString(this.font, Component.nullToEmpty(n.text), tx, ty, 0xFFFFFF00, false);
-            dy += boxHeight + gap;
-        }
+        TodoScreenRenderSupport.renderNotifications(context, this.font, this.width, searchField, notifications);
     }
 
     private void onSaveTasks() {
-        boolean personalSaved = !personalHasUnsavedChanges;
-        boolean teamSaved = !teamHasUnsavedChanges;
-
-        if (personalHasUnsavedChanges) {
-            try {
-                savePersonalTasks();
-                personalSaved = true;
-                personalHasUnsavedChanges = false;
-            } catch (Exception e) {
-                personalSaved = false;
-                TodoConstants.LOGGER.error("Failed to save personal tasks", e);
-            }
-        }
-
-        if (teamHasUnsavedChanges) {
-            try {
-                saveTeamTasks();
-                teamSaved = true;
-                teamHasUnsavedChanges = false;
-            } catch (Exception e) {
-                teamSaved = false;
-                TodoConstants.LOGGER.error("Failed to save team tasks", e);
-            }
-        }
-
-        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
-        if (personalSaved && teamSaved) {
+        TodoScreenPersistenceSupport.SaveOutcome saveOutcome = TodoScreenPersistenceSupport.saveAll(
+                personalTaskManager,
+                teamTaskManager,
+                this.minecraft,
+                personalHasUnsavedChanges,
+                teamHasUnsavedChanges);
+        personalHasUnsavedChanges = saveOutcome.personalHasUnsavedChanges;
+        teamHasUnsavedChanges = saveOutcome.teamHasUnsavedChanges;
+        hasUnsavedChanges = saveOutcome.hasUnsavedChanges();
+        if (saveOutcome.allSaved()) {
             if (this.minecraft != null && this.minecraft.player != null) {
                 this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
             }
@@ -1157,99 +1106,162 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
-    /**
-     * 保存当前客户端缓存中的个人任务，并同步到服务端与 HUD。
-     *
-     * @throws Exception 当个人任务保存失败时抛出异常
-     */
-    private void savePersonalTasks() throws Exception {
-        if (personalTaskManager == null) {
-            return;
-        }
-        List<Task> personalTasks = personalTaskManager.getAllTasks();
-        ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft, personalTasks);
-        if (ClientBridge.ops() != null) {
-            ClientBridge.ops().sendReplaceAllTasks(personalTasks);
-        }
-        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
-        if (renderer != null) {
-            renderer.forceRefreshTasks();
-        }
-        TodoConstants.LOGGER.info("Personal tasks saved");
-    }
-
-    /**
-     * 保存当前客户端缓存中的团队任务，并同步到服务端。
-     *
-     * @throws Exception 当团队任务保存失败时抛出异常
-     */
-    private void saveTeamTasks() throws Exception {
-        if (teamTaskManager == null) {
-            return;
-        }
-        List<Task> teamTasks = teamTaskManager.getAllTasks();
-        if (ClientTaskStorageHelper.shouldUsePublishedLocalPlayerStorage(this.minecraft)) {
-            TodoListCommon.getTaskStorage().saveTeamTasks(teamTasks);
-        }
-        if (ClientBridge.ops() != null) {
-            ClientBridge.ops().sendReplaceTeamTasks(teamTasks);
-        }
-        TodoConstants.LOGGER.info("Team tasks saved");
-    }
-
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE && hasContextMenu()) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE
+                && TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             closeTaskContextMenu();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
-            if (titleField != null && titleField.isFocused()) {
-                if (!isAddTaskAllowedInCurrentView()) {
-                    addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
-                    return true;
-                }
-                if (selectedTask != null) {
-                    return true;
-                }
-                onAddTask();
+        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+                && quickAddField != null
+                && quickAddField.isFocused()) {
+            if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
+                addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
                 return true;
             }
+            onAddTask();
+            return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    private void updatePrioritySelection() {
-    }
-
-    private boolean isClickInEditArea(double mouseX, double mouseY) {
-        if (titleField != null && titleField.isMouseOver(mouseX, mouseY)) return true;
-        if (descField != null && descField.isMouseOver(mouseX, mouseY)) return true;
-        if (tagField != null && tagField.isMouseOver(mouseX, mouseY)) return true;
-        if (claimButton != null && claimButton.isMouseOver(mouseX, mouseY)) return true;
-        if (abandonButton != null && abandonButton.isMouseOver(mouseX, mouseY)) return true;
-        if (assignOthersButton != null && assignOthersButton.isMouseOver(mouseX, mouseY)) return true;
-        if (isInsideContextMenu(mouseX, mouseY)) return true;
-        return false;
+    /**
+     * 清理当前界面内所有文本输入框的焦点。
+     */
+    private void clearTextFieldFocus() {
+        TodoScreenFocusSupport.clearTextFieldFocus(
+                searchField,
+                projectSearchField,
+                quickAddField,
+                titleField,
+                descField,
+                tagField);
+        projectSearchPrefixDropdownOpen = false;
+        this.setFocused(null);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        syncTaskListReorderState();
         if (handleContextMenuClick(mouseX, mouseY, button)) {
             return true;
         }
+        boolean prefixDropdownVisible = TodoScreenProjectSearchSupport.shouldShowProjectSearchPrefixDropdown(
+                projectSearchPrefixDropdownOpen,
+                currentSpaceMode == SpaceMode.TEAM,
+                isSidebarPanelVisible(),
+                projectSearchField
+        );
+        boolean projectSearchFieldHit = TodoScreenProjectSearchSupport.isProjectSearchFieldHit(projectSearchField, mouseX, mouseY);
+        boolean insideProjectSearchPrefixDropdown = TodoScreenProjectSearchSupport.isInsideProjectSearchPrefixDropdown(
+                prefixDropdownVisible,
+                projectSearchField,
+                mouseX,
+                mouseY);
+        boolean mouseOverQuickAddMarker = false;
+        boolean mouseOverAnyTextField = TodoScreenHitTestSupport.isMouseOverAnyTextField(
+                mouseX,
+                mouseY,
+                searchField,
+                projectSearchField,
+                quickAddField,
+                titleField,
+                descField,
+                tagField,
+                false);
+        boolean sidebarToggleHovered = sidebarToggleButton != null && sidebarToggleButton.isMouseOver(mouseX, mouseY);
+        boolean insideSidebar = layoutMetrics != null && layoutMetrics.sidebarBounds.contains(mouseX, mouseY);
+        if (button == 0
+                && layoutMetrics != null
+                && layoutMetrics.sidebarOverlay
+                && layoutMetrics.sidebarVisible
+                && !insideSidebar
+                && !sidebarToggleHovered) {
+            sidebarOverlayVisible = false;
+            layoutMetrics = TodoScreenLayoutSupport.buildMainLayoutMetrics(
+                    ModConfig.getInstance(),
+                    responsiveTier,
+                    this.width,
+                    this.height,
+                    sidebarOverlayVisible,
+                    detailOverlayVisible,
+                    selectedTask != null);
+            applyResponsiveWidgetVisibility();
+        }
+        String clickedPrefix = button == 0
+                ? TodoScreenProjectSearchSupport.resolveClickedProjectSearchPrefix(
+                        prefixDropdownVisible,
+                        projectSearchField,
+                        mouseX,
+                        mouseY)
+                : null;
+        if (clickedPrefix != null) {
+            String current = projectSearchField == null ? "" : projectSearchField.getValue();
+            String nextValue = TodoScreenProjectSearchSupport.buildProjectSearchValueWithPrefix(current, clickedPrefix);
+            if (projectSearchField != null) {
+                projectSearchField.setValue(nextValue);
+                projectSearchField.setFocused(true);
+                this.setFocused(projectSearchField);
+            }
+            projectSearchQuery = nextValue;
+            updateProjectList();
+            projectSearchPrefixDropdownOpen = false;
+            return true;
+        }
+        if ((button == 0 || button == 1)
+                && prefixDropdownVisible
+                && !projectSearchFieldHit
+                && !insideProjectSearchPrefixDropdown) {
+            projectSearchPrefixDropdownOpen = false;
+        }
+        if (button == 0
+                && TodoScreenProjectSearchSupport.canUseProjectSearchPrefixDropdown(
+                        currentSpaceMode == SpaceMode.TEAM,
+                        isSidebarPanelVisible()
+                )
+                && projectSearchFieldHit) {
+            projectSearchPrefixDropdownOpen = true;
+        }
         if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
+            resetTaskRowDragState();
             closeTaskContextMenu();
             return true;
         }
-        if (projectListWidget != null && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+        if (projectListWidget != null && isSidebarPanelVisible() && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+            resetTaskRowDragState();
             closeTaskContextMenu();
             return true;
         }
 
         if (taskListWidget != null) {
-            Task clickedTask = taskListWidget.getTaskAt((int)mouseX, (int)mouseY);
+            TaskListWidget.TaskSectionHitResult sectionHit = taskListWidget.getSectionAt(mouseX, mouseY);
+            Task clickedTask = taskListWidget.getTaskAt((int) mouseX, (int) mouseY);
+            if (button == 0
+                    && sectionHit != null
+                    && sectionHit.getRowType() == TaskListWidget.RowType.SECTION_HEADER
+                    && toggleTaskSection(sectionHit.getSectionId())) {
+                applySearchFilter();
+                resetTaskRowDragState();
+                closeTaskContextMenu();
+                return true;
+            }
             if (clickedTask != null) {
+                if (button == 0
+                        && TodoScreenPermissionSupport.canTaskReorderInView(
+                        this.minecraft,
+                        currentProject,
+                        viewMode.name())
+                        && taskListWidget.canStartDrag(clickedTask)) {
+                    String dragSectionId = sectionHit == null ? "active" : sectionHit.getSectionId();
+                    taskListWidget.armPendingTaskDrag(clickedTask, dragSectionId, mouseX, mouseY);
+                    pendingClickSelectionTask = clickedTask;
+                    taskRowDragInProgress = false;
+                    taskRowDragOrderSnapshot = TodoScreenTaskSupport.getVisibleIncompleteTaskIds(filteredTasks);
+                    closeTaskContextMenu();
+                    return true;
+                }
+                resetTaskRowDragState();
                 selectTask(clickedTask);
                 if (button == 1) {
                     openTaskContextMenu(clickedTask, (int) mouseX, (int) mouseY);
@@ -1260,15 +1272,69 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
 
+        if (button == 0
+                && titleField != null
+                && titleField.visible
+                && titleField.isMouseOver(mouseX, mouseY)
+                && (detailDraft == null || !detailDraft.titleEditing)) {
+            beginDetailTitleEditing();
+            return true;
+        }
+
+        if (button == 0 && mouseOverQuickAddMarker && quickAddField != null) {
+            quickAddField.setFocused(true);
+            this.setFocused(quickAddField);
+            closeTaskContextMenu();
+            return true;
+        }
+
+        boolean contextMenuHit = TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)
+                && TodoScreenContextMenuSupport.isInsideContextMenu(
+                mouseX,
+                mouseY,
+                contextMenuX,
+                contextMenuY,
+                contextMenuWidth,
+                TodoScreenContextMenuSupport.resolveMenuHeight(contextMenuItems.size(), contextMenuItemHeight));
+        boolean clickInEditArea = TodoScreenHitTestSupport.isClickInEditArea(
+                mouseX,
+                mouseY,
+                searchField,
+                projectSearchField,
+                quickAddField,
+                titleField,
+                descField,
+                tagField,
+                false,
+                detailCloseButton,
+                claimButton,
+                abandonButton,
+                assignOthersButton,
+                contextMenuHit);
+        boolean detailBlankClicked = button == 0
+                && selectedTask != null
+                && layoutMetrics != null
+                && layoutMetrics.detailVisible
+                && layoutMetrics.detailBounds.contains(mouseX, mouseY)
+                && !clickInEditArea;
+        if ((button == 0 || button == 1) && !mouseOverAnyTextField) {
+            clearTextFieldFocus();
+        }
+        resetTaskRowDragState();
         boolean cleared = false;
-        if (button == 0 && selectedTask != null && !isClickInEditArea(mouseX, mouseY)) {
+        if (button == 0 && selectedTask != null && !detailBlankClicked && !clickInEditArea) {
             clearSelectedTask();
             cleared = true;
         }
         if (button == 0 || button == 1) {
             closeTaskContextMenu();
         }
-
+        if (detailBlankClicked) {
+            return true;
+        }
+        if (this.minecraft == null || Minecraft.getInstance() == null) {
+            return cleared;
+        }
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
         return handled || cleared;
     }
@@ -1279,7 +1345,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskListWidget != null) {
             handled = taskListWidget.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
-        if (!handled && projectListWidget != null) {
+        if (!handled && projectListWidget != null && isSidebarPanelVisible()) {
             handled = projectListWidget.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         if (!handled) {
@@ -1289,9 +1355,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        syncTaskListReorderState();
+        if (taskListWidget != null && taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+            if (pendingClickSelectionTask != null || taskListWidget.getDropTargetIndexForTest() >= 0) {
+                taskRowDragInProgress = true;
+                markUnsaved();
+            }
+            resetTaskRowDragState();
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (taskListWidget != null) taskListWidget.mouseReleased(mouseX, mouseY, button);
-        return false;
+        syncTaskListReorderState();
+        if (taskListWidget != null && taskListWidget.mouseReleased(mouseX, mouseY, button)) {
+            if (taskRowDragInProgress || taskListWidget.getDropTargetIndexForTest() >= 0) {
+                markUnsaved();
+                List<Task> reorderedActiveTasks = TodoScreenTaskSupport.extractIncompleteTasks(taskListWidget.getTasks());
+                List<String> reorderedIds = TodoScreenTaskSupport.toNonNullTaskIds(reorderedActiveTasks);
+                if (!reorderedIds.equals(taskRowDragOrderSnapshot)) {
+                    onManualReorderActiveTasks(reorderedActiveTasks);
+                }
+            }
+            resetTaskRowDragState();
+            return true;
+        }
+        if (button == 0 && pendingClickSelectionTask != null) {
+            selectTask(pendingClickSelectionTask);
+            resetTaskRowDragState();
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -1306,174 +1403,273 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
-     * 在关闭界面时丢弃未保存的个人任务改动，保持“仅保存按钮落盘”语义。
+     * 在关闭界面且未保存时，按需丢弃个人任务的临时改动。
      */
     private void discardPersonalTasksOnCloseIfNeeded() {
-        if (!personalHasUnsavedChanges || personalTaskManager == null) {
-            return;
-        }
-        try {
-            List<Task> persistedTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), this.minecraft);
-            personalTaskManager.clearAll();
-            for (Task task : persistedTasks) {
-                personalTaskManager.addTask(task);
-            }
+        boolean discarded = TodoScreenPersistenceSupport.discardUnsavedPersonalTasks(personalTaskManager, this.minecraft);
+        if (discarded) {
             personalHasUnsavedChanges = false;
             if (viewMode == ViewMode.PERSONAL) {
                 hasUnsavedChanges = false;
             }
-        } catch (Exception e) {
-            TodoConstants.LOGGER.error("Failed to discard unsaved personal tasks on close", e);
         }
     }
 
-    private void onCancel() {
-        onClose();
-    }
+    // 事件处理
 
-    // Event handlers
-
+    /**
+     * 在当前视图下快速新增一条任务，并同步写入项目、作用域和默认指派信息。
+     */
     private void onAddTask() {
         if (currentProject == null) {
             addNotification(Component.translatable("message.todolist.select_project_first").getString());
             return;
         }
-        if (!isAddTaskAllowedInCurrentView()) {
+        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
             addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
             return;
         }
+        if (!TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name())) {
+            addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
+            return;
+        }
+        String title = getFieldValue(quickAddField, "");
+        if (title.isEmpty()) {
+            return;
+        }
+        Task task = taskManager.addTask(title, "");
+        task.setPriority(selectedPriority);
+        if (currentProject != null) {
+            task.setProjectId(currentProject.getId());
+        }
         if (viewMode != ViewMode.PERSONAL) {
-            Role role = getCurrentRole();
-            ViewScope scope = getCurrentViewScope();
-            boolean projectMember = isCurrentPlayerProjectMember();
-            boolean allowMemberCreate = currentProject.isAllowMemberCreate();
-            if (!PermissionCenter.canPerform(Operation.ADD_TASK, role, new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate))) {
-                addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
-                return;
-            }
-        }
-        String title = getFieldValue(titleField, "");
-        String desc = getFieldValue(descField, "");
-        String tagsStr = getFieldValue(tagField, "");
-
-        if (!title.isEmpty()) {
-            Task task = taskManager.addTask(title, desc);
-            task.setPriority(selectedPriority);
-            if (currentProject != null) {
-                task.setProjectId(currentProject.getId());
-            }
-
-            if (viewMode != ViewMode.PERSONAL) {
-                if (this.minecraft != null && this.minecraft.player != null) {
-                    String uuid = this.minecraft.player.getUUID().toString();
-                    String name = this.minecraft.player.getName().getString();
-                    task.setScope(Task.Scope.TEAM);
-                    task.setCreatorUuid(uuid);
-                    if (viewMode == ViewMode.TEAM_ASSIGNED) {
-                        task.setAssigneeUuid(uuid);
-                        task.setAssigneeName(name);
-                    }
-                } else {
-                    task.setScope(Task.Scope.TEAM);
+            task.setScope(Task.Scope.TEAM);
+            if (this.minecraft != null && this.minecraft.player != null) {
+                String uuid = this.minecraft.player.getUUID().toString();
+                String name = this.minecraft.player.getName().getString();
+                task.setCreatorUuid(uuid);
+                if (viewMode == ViewMode.TEAM_ASSIGNED) {
+                    task.setAssigneeUuid(uuid);
+                    task.setAssigneeName(name);
                 }
             }
-
-            // Parse and add tags (comma-separated)
-            if (!tagsStr.isEmpty()) {
-                String[] tags = tagsStr.split(",");
-                for (String tag : tags) {
-                    String trimmedTag = tag.trim();
-                    if (!trimmedTag.isEmpty()) {
-                        task.addTag(trimmedTag);
-                    }
-                }
-            }
-
-            clearSelectedTask();
-            selectedPriority = Task.Priority.MEDIUM;
-
-            markUnsaved();
-            refreshTaskList();
         }
-    }
-
-    private void onDeleteTask() {
-        if (selectedTask != null) {
-            String id = selectedTask.getId();
-            taskManager.deleteTask(id);
-            selectedTask = null;
-            closeTaskContextMenu();
-            updateButtonStates();
-            markUnsaved();
-            refreshTaskList();
+        clearSelectedTask();
+        selectedPriority = Task.Priority.MEDIUM;
+        if (quickAddField != null) {
+            quickAddField.setValue("");
         }
+        markUnsaved();
+        filterTasks();
     }
 
     private void selectTask(Task task) {
         selectedTask = task;
         selectedPriority = task.getPriority();
-        titleField.setValue(task.getTitle());
-        descField.setValue(task.getDescription());
-
-        // Display tags as comma-separated string
-        if (task.getTags() != null && !task.getTags().isEmpty()) {
-            String tagsStr = String.join(",", task.getTags());
-            tagField.setValue(tagsStr);
-        } else {
-            tagField.setValue("");
-        }
-
-        taskListWidget.setSelectedTask(task);
-        updateButtonStates();
-        updateTaskEditorEditableState(task);
+        detailDraft = createDetailDraft(task);
+        detailOverlayVisible = true;
+        rebuildUI();
     }
 
     private void clearSelectedTask() {
         selectedTask = null;
-        if (taskListWidget != null) {
-            taskListWidget.clearSelection();
+        detailDraft = null;
+        detailOverlayVisible = false;
+        rebuildUI();
+    }
+
+    /**
+     * 清空当前挂起的任务点击与拖拽状态。
+     */
+    private void resetTaskRowDragState() {
+        pendingClickSelectionTask = null;
+        taskRowDragInProgress = false;
+        taskRowDragOrderSnapshot = List.of();
+    }
+
+    /**
+     * 根据任务创建详情面板使用的编辑草稿。
+     *
+     * @param task 目标任务
+     * @return 对应的详情草稿；若任务为空则返回 {@code null}
+     */
+    private TaskDetailDraft createDetailDraft(Task task) {
+        if (task == null) {
+            return null;
         }
+        return new TaskDetailDraft(task.getId(), task.getTitle(), task.getDescription(), joinTaskTags(task));
+    }
+
+    /**
+     * 将当前详情草稿状态同步到标题、描述和标签输入控件。
+     */
+    private void syncDetailWidgetsFromState() {
+        syncingDetailWidgets = true;
+        try {
+            if (titleField != null) {
+                titleField.setValue(detailDraft == null ? "" : detailDraft.title);
+            }
+            if (descField != null) {
+                descField.setValue(detailDraft == null ? "" : detailDraft.description);
+            }
+            if (tagField != null) {
+                tagField.setValue(detailDraft == null ? "" : detailDraft.tags);
+            }
+        } finally {
+            syncingDetailWidgets = false;
+        }
+        applyDetailWidgetEditability();
+    }
+
+    /**
+     * 根据当前选中任务和权限状态更新详情控件的可编辑性。
+     */
+    private void applyDetailWidgetEditability() {
+        boolean detailVisible = layoutMetrics == null ? selectedTask != null : layoutMetrics.detailVisible;
+        boolean editable = detailVisible && canEditSelectedTaskDetails();
         if (titleField != null) {
-            titleField.setValue("");
+            boolean titleEditing = editable && detailDraft != null && detailDraft.titleEditing;
+            titleField.setEditable(titleEditing);
+            titleField.active = detailVisible;
+            titleField.visible = detailVisible;
         }
         if (descField != null) {
-            descField.setValue("");
+            descField.active = editable;
+            descField.visible = detailVisible;
         }
         if (tagField != null) {
-            tagField.setValue("");
+            tagField.setEditable(editable);
+            tagField.visible = detailVisible;
         }
-        updateTaskEditorEditableState(null);
-        updateButtonStates();
+        if (detailCloseButton != null) {
+            boolean showCloseButton = detailVisible && selectedTask != null;
+            detailCloseButton.visible = showCloseButton;
+            detailCloseButton.active = showCloseButton;
+        }
+    }
+
+    /**
+     * 判断当前选中的任务详情是否允许编辑。
+     *
+     * @return 允许编辑时返回 {@code true}
+     */
+    private boolean canEditSelectedTaskDetails() {
+        return selectedTask != null
+                && isSelectedTaskValid()
+                && !selectedTask.isCompleted()
+                && TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.EDIT_TASK,
+                selectedTask,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        );
+    }
+
+    /**
+     * 让详情标题进入编辑状态。
+     */
+    private void beginDetailTitleEditing() {
+        if (detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.titleEditing = true;
+        applyDetailWidgetEditability();
+        if (titleField != null) {
+            titleField.setFocused(true);
+            this.setFocused(titleField);
+        }
+    }
+
+    /**
+     * 响应详情标题输入框内容变化。
+     *
+     * @param text 最新标题文本
+     */
+    private void onDetailTitleChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.title = text == null ? "" : text;
+        selectedTask.setTitle(detailDraft.title);
+        markUnsaved();
+    }
+
+    /**
+     * 响应详情描述输入框内容变化。
+     *
+     * @param text 最新描述文本
+     */
+    private void onDetailDescriptionChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.description = text == null ? "" : text;
+        selectedTask.setDescription(detailDraft.description);
+        markUnsaved();
+    }
+
+    /**
+     * 响应详情标签输入框内容变化。
+     *
+     * @param text 最新标签文本
+     */
+    private void onDetailTagsChanged(String text) {
+        if (syncingDetailWidgets || detailDraft == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        detailDraft.tags = text == null ? "" : text;
+        String value = getFieldValue(tagField, "");
+        if (value.isEmpty()) {
+            selectedTask.clearTags();
+        } else {
+            List<String> tags = new ArrayList<>();
+            for (String part : value.split(",")) {
+                String tag = part.trim();
+                if (!tag.isEmpty()) {
+                    tags.add(tag);
+                }
+            }
+            selectedTask.setTags(tags);
+        }
+        markUnsaved();
+    }
+
+    /**
+     * 将任务标签列表拼接为输入框使用的文本。
+     *
+     * @param task 目标任务
+     * @return 逗号分隔的标签文本
+     */
+    private String joinTaskTags(Task task) {
+        if (task == null || task.getTags() == null || task.getTags().isEmpty()) {
+            return "";
+        }
+        return String.join(",", task.getTags());
     }
 
     private boolean isSelectedTaskValid() {
-        if (selectedTask == null) {
-            return false;
-        }
-        if (currentProject == null) {
+        if (selectedTask == null || currentProject == null) {
             return false;
         }
         String selectedId = selectedTask.getId();
         if (selectedId == null || selectedId.isEmpty()) {
             return false;
         }
-        String projectId = currentProject.getId();
-        if (!selectedTask.belongsToProject(projectId)) {
+        if (!selectedTask.belongsToProject(currentProject.getId())) {
             return false;
         }
-        if (filteredTasks == null) {
-            return true;
-        }
-        for (Task t : filteredTasks) {
-            if (t != null && selectedId.equals(t.getId())) {
-                return true;
+        for (TaskListWidget.SectionModel section : buildTaskPaneSections()) {
+            if (section == null) {
+                continue;
+            }
+            for (Task task : section.getTasks()) {
+                if (task != null && selectedId.equals(task.getId())) {
+                    return true;
+                }
             }
         }
         return false;
-    }
-
-    private boolean isAddTaskAllowedInCurrentView() {
-        return viewMode == ViewMode.PERSONAL || viewMode == ViewMode.TEAM_UNASSIGNED;
     }
 
     private void updateButtonStates() {
@@ -1482,61 +1678,34 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean isAssigned = hasSelection
                 && selectedTask.getAssigneeUuid() != null
                 && !selectedTask.getAssigneeUuid().isEmpty();
-        Role role = getCurrentRole();
-        ViewScope scope = getCurrentViewScope();
-        boolean isAssigneeSelf = hasSelection && isCurrentPlayerAssignee(selectedTask);
-        boolean projectMember = isCurrentPlayerProjectMember();
+        Role role = TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject);
+        ViewScope scope = TodoScreenPermissionSupport.resolveViewScope(viewMode.name());
+        boolean isAssigneeSelf = hasSelection && TodoScreenPermissionSupport.isCurrentPlayerAssignee(this.minecraft, selectedTask);
+        boolean projectMember = TodoScreenPermissionSupport.isCurrentPlayerProjectMember(this.minecraft, currentProject);
         boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
         Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate);
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
+        boolean detailVisible = layoutMetrics == null ? selectedTask != null : layoutMetrics.detailVisible;
         if (claimButton != null) {
-            claimButton.visible = showAssignButtons;
+            claimButton.visible = detailVisible && showAssignButtons;
             boolean canClaim = hasSelection
                     && PermissionCenter.canPerform(Operation.CLAIM_TASK, role, context);
-            claimButton.active = showAssignButtons && canClaim;
+            claimButton.active = detailVisible && showAssignButtons && canClaim;
         }
         if (abandonButton != null) {
-            abandonButton.visible = showAssignButtons;
+            abandonButton.visible = detailVisible && showAssignButtons;
             boolean canAbandon = hasSelection
                     && PermissionCenter.canPerform(Operation.ABANDON_TASK, role, context);
-            abandonButton.active = showAssignButtons && canAbandon;
+            abandonButton.active = detailVisible && showAssignButtons && canAbandon;
         }
         if (assignOthersButton != null) {
             boolean showAssignOthers = showAssignButtons
                     && PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, context);
-            assignOthersButton.visible = showAssignOthers;
-            boolean canAssignOthers = showAssignOthers && hasSelection;
-            assignOthersButton.active = canAssignOthers;
+            assignOthersButton.visible = detailVisible && showAssignOthers;
+            assignOthersButton.active = detailVisible && showAssignOthers && hasSelection;
         }
-        updateTaskEditorEditableState(selectedTask);
         rebuildContextMenuIfNeeded();
-    }
-
-    /**
-     * 统一更新任务编辑区（标题/描述/标签）的可编辑状态。
-     */
-    private void updateTaskEditorEditableState(Task task) {
-        boolean editable = task == null || canEditTask(task);
-        if (titleField != null) {
-            titleField.setEditable(editable);
-        }
-        if (descField != null) {
-            descField.active = editable;
-            if (!editable && getFocused() == descField) {
-                setFocused(null);
-            }
-        }
-        if (tagField != null) {
-            tagField.setEditable(editable);
-        }
-    }
-
-    private void setSelectedPriority(Task.Priority priority) {
-        this.selectedPriority = priority;
-    }
-
-    private boolean hasContextMenu() {
-        return contextMenuTask != null && !contextMenuItems.isEmpty();
+        applyResponsiveWidgetVisibility();
     }
 
     private void openTaskContextMenu(Task task, int mouseX, int mouseY) {
@@ -1555,9 +1724,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             maxTextWidth = Math.max(maxTextWidth, this.font.width(item.text));
         }
         contextMenuWidth = Math.max(90, maxTextWidth + 16);
-        int menuHeight = contextMenuItems.size() * contextMenuItemHeight;
-        contextMenuX = Math.max(4, Math.min(mouseX, this.width - contextMenuWidth - 4));
-        contextMenuY = Math.max(4, Math.min(mouseY, this.height - menuHeight - 4));
+        int menuHeight = TodoScreenContextMenuSupport.resolveMenuHeight(contextMenuItems.size(), contextMenuItemHeight);
+        int[] origin = TodoScreenContextMenuSupport.resolveMenuOrigin(
+                mouseX,
+                mouseY,
+                this.width,
+                this.height,
+                contextMenuWidth,
+                menuHeight,
+                4
+        );
+        contextMenuX = origin[0];
+        contextMenuY = origin[1];
     }
 
     private List<ContextMenuItem> buildContextMenuItems(Task task) {
@@ -1565,8 +1743,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (task == null) {
             return items;
         }
-        boolean canEdit = canEditTask(task) && !task.isCompleted();
-        boolean canDelete = canDeleteTask(task);
+        boolean canEdit = TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.EDIT_TASK,
+                task,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        ) && !task.isCompleted();
+        boolean canDelete = TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.DELETE_TASK,
+                task,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        );
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.high"), canEdit, () -> applyTaskPriority(task, Task.Priority.HIGH)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.medium"), canEdit, () -> applyTaskPriority(task, Task.Priority.MEDIUM)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.low"), canEdit, () -> applyTaskPriority(task, Task.Priority.LOW)));
@@ -1575,14 +1765,29 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void applyTaskPriority(Task task, Task.Priority priority) {
-        if (task == null || priority == null || !canEditTask(task) || task.isCompleted()) {
+        if (task == null
+                || priority == null
+                || !TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.EDIT_TASK,
+                task,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        )
+                || task.isCompleted()) {
+            closeTaskContextMenu();
+            return;
+        }
+        Task.Priority previousPriority = task.getPriority();
+        if (previousPriority == priority) {
             closeTaskContextMenu();
             return;
         }
         task.setPriority(priority);
-        setSelectedPriority(priority);
+        reorderCurrentViewActiveTasksAfterPriorityChange(task);
+        selectedPriority = priority;
         markUnsaved();
-        refreshTaskList();
+        filterTasks();
         if (taskListWidget != null) {
             taskListWidget.ensureVisible(task);
         }
@@ -1590,51 +1795,80 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         closeTaskContextMenu();
     }
 
+    /**
+     * 处理右键菜单中的删除任务动作，并在允许删除时打开确认弹窗。
+     *
+     * @param task 当前菜单对应的任务
+     */
     private void deleteTaskFromContextMenu(Task task) {
-        if (task == null || !canDeleteTask(task)) {
+        if (task == null || !TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.DELETE_TASK,
+                task,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        )) {
             closeTaskContextMenu();
             return;
         }
-        taskManager.deleteTask(task.getId());
-        if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(task.getId())) {
-            selectedTask = null;
-        }
-        markUnsaved();
-        refreshTaskList();
-        updateButtonStates();
         closeTaskContextMenu();
+        openDeleteTaskConfirmScreen(task);
     }
 
-    private void renderTaskContextMenu(GuiGraphics context, int mouseX, int mouseY) {
-        if (!hasContextMenu()) {
+    /**
+     * 打开任务删除确认弹窗，避免误删任务。
+     *
+     * @param task 待删除任务
+     */
+    private void openDeleteTaskConfirmScreen(Task task) {
+        if (task == null || task.getId() == null || minecraft == null) {
             return;
         }
-        int menuHeight = contextMenuItems.size() * contextMenuItemHeight;
-        context.fill(contextMenuX, contextMenuY, contextMenuX + contextMenuWidth, contextMenuY + menuHeight, 0xEE111111);
-        context.renderOutline(contextMenuX, contextMenuY, contextMenuWidth, menuHeight, 0xFFFFFFFF);
-        for (int i = 0; i < contextMenuItems.size(); i++) {
-            ContextMenuItem item = contextMenuItems.get(i);
-            int itemTop = contextMenuY + i * contextMenuItemHeight;
-            int itemBottom = itemTop + contextMenuItemHeight;
-            boolean hovered = mouseX >= contextMenuX && mouseX < contextMenuX + contextMenuWidth
-                    && mouseY >= itemTop && mouseY < itemBottom;
-            if (hovered) {
-                context.fill(contextMenuX + 1, itemTop + 1, contextMenuX + contextMenuWidth - 1, itemBottom - 1, 0xFF2A2A2A);
-            }
-            int textColor = item.enabled ? 0xFFFFFFFF : 0xFF777777;
-            int textY = itemTop + (contextMenuItemHeight - this.font.lineHeight) / 2;
-            context.drawString(this.font, item.text, contextMenuX + 6, textY, textColor, false);
+        String taskId = task.getId();
+        String taskTitle = task.getTitle() == null ? "" : task.getTitle();
+        Component message = Component.translatable("gui.todolist.task.delete_confirm.message", taskTitle);
+        minecraft.setScreen(new ConfirmActionScreen(
+                this,
+                Component.translatable("gui.todolist.task.delete_confirm.title"),
+                message,
+                Component.translatable("gui.todolist.delete"),
+                () -> confirmDeleteTask(taskId)
+        ));
+    }
+
+    /**
+     * 在用户确认后真正删除任务，并同步刷新选中态与列表显示。
+     *
+     * @param taskId 待删除任务 ID
+     */
+    private void confirmDeleteTask(String taskId) {
+        if (taskManager == null || taskId == null || taskId.isBlank()) {
+            return;
         }
+        taskManager.deleteTask(taskId);
+        if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskId)) {
+            clearSelectedTask();
+        }
+        markUnsaved();
+        filterTasks();
     }
 
     private boolean handleContextMenuClick(double mouseX, double mouseY, int button) {
-        if (!hasContextMenu()) {
+        if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             return false;
         }
         if (button != 0 && button != 1) {
             return false;
         }
-        if (!isInsideContextMenu(mouseX, mouseY)) {
+        int menuHeight = TodoScreenContextMenuSupport.resolveMenuHeight(contextMenuItems.size(), contextMenuItemHeight);
+        if (!TodoScreenContextMenuSupport.isInsideContextMenu(
+                mouseX,
+                mouseY,
+                contextMenuX,
+                contextMenuY,
+                contextMenuWidth,
+                menuHeight
+        )) {
             if (button == 0 || button == 1) {
                 closeTaskContextMenu();
             }
@@ -1643,8 +1877,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (button != 0) {
             return true;
         }
-        int index = ((int) mouseY - contextMenuY) / contextMenuItemHeight;
-        if (index < 0 || index >= contextMenuItems.size()) {
+        int index = TodoScreenContextMenuSupport.resolveClickedItemIndex(
+                mouseY,
+                contextMenuY,
+                contextMenuItemHeight,
+                contextMenuItems.size()
+        );
+        if (index < 0) {
             closeTaskContextMenu();
             return true;
         }
@@ -1657,22 +1896,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return true;
     }
 
-    private boolean isInsideContextMenu(double mouseX, double mouseY) {
-        if (!hasContextMenu()) {
-            return false;
-        }
-        int menuHeight = contextMenuItems.size() * contextMenuItemHeight;
-        return mouseX >= contextMenuX && mouseX < contextMenuX + contextMenuWidth
-                && mouseY >= contextMenuY && mouseY < contextMenuY + menuHeight;
-    }
-
     private void closeTaskContextMenu() {
         contextMenuTask = null;
         contextMenuItems = new ArrayList<>();
     }
 
     private void rebuildContextMenuIfNeeded() {
-        if (!hasContextMenu()) {
+        if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             return;
         }
         Task menuTask = contextMenuTask;
@@ -1693,10 +1923,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         closeTaskContextMenu();
     }
 
-    private boolean isAdminClient() {
-        return this.minecraft != null && this.minecraft.player != null && this.minecraft.player.hasPermissions(2);
-    }
-
     private void markUnsaved() {
         hasUnsavedChanges = true;
         if (viewMode == ViewMode.PERSONAL) {
@@ -1706,326 +1932,195 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
     }
 
+    /**
+     * 处理未完成任务手动拖拽排序后的顺序同步。
+     *
+     * @param reorderedActiveTasks 拖拽后的未完成任务顺序
+     */
+    private void onManualReorderActiveTasks(List<Task> reorderedActiveTasks) {
+        if (!TodoScreenPermissionSupport.canTaskReorderInView(
+                this.minecraft,
+                currentProject,
+                viewMode.name()) || taskManager == null || reorderedActiveTasks == null || reorderedActiveTasks.size() < 2) {
+            return;
+        }
+        List<String> orderedTaskIds = reorderedActiveTasks.stream()
+                .filter(Objects::nonNull)
+                .map(Task::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (orderedTaskIds.size() < 2) {
+            return;
+        }
+        if (!taskManager.reorderTasks(orderedTaskIds)) {
+            return;
+        }
+        if (selectedTask != null && selectedTask.getId() != null) {
+            Task refreshedSelectedTask = taskManager.getTask(selectedTask.getId());
+            if (refreshedSelectedTask != null) {
+                selectedTask = refreshedSelectedTask;
+            }
+        }
+        markUnsaved();
+        filterTasks();
+    }
+
+    /**
+     * 在当前视图内按优先级重新归位未完成任务，同时保留同优先级内部顺序。
+     *
+     * @param updatedTask 刚刚修改优先级的任务
+     */
+    private void reorderCurrentViewActiveTasksAfterPriorityChange(Task updatedTask) {
+        if (updatedTask == null || updatedTask.getId() == null || taskManager == null) {
+            return;
+        }
+        List<Task> scopedActiveTasks = getCurrentViewActiveTasksForOrdering();
+        List<String> orderedTaskIds =
+                TodoScreenTaskSupport.reorderCurrentViewActiveTaskIdsAfterPriorityChange(scopedActiveTasks, updatedTask);
+        if (orderedTaskIds.isEmpty()) {
+            return;
+        }
+        taskManager.reorderTasks(orderedTaskIds);
+    }
+
+    /**
+     * 返回当前视图内参与排序的未完成任务，并保持任务管理器中的稳定顺序。
+     *
+     * @return 当前视图范围内的未完成任务
+     */
+    private List<Task> getCurrentViewActiveTasksForOrdering() {
+        if (taskManager == null) {
+            return List.of();
+        }
+        return TodoScreenTaskSupport.applyAssignedFilterForView(
+                taskManager.getIncompleteTasks(),
+                currentProject == null ? null : currentProject.getId(),
+                viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft));
+    }
+
+    /**
+     * 根据当前视图和权限状态同步任务列表的拖拽排序能力。
+     */
+    private void syncTaskListReorderState() {
+        if (taskListWidget == null) {
+            return;
+        }
+        taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        ));
+    }
+
     public static boolean hasPersonalUnsavedChanges() {
         return personalHasUnsavedChanges;
-    }
-
-    private boolean canEditTask(Task task) {
-        if (task == null) {
-            return false;
-        }
-        Role role = getCurrentRole();
-        ViewScope scope = getCurrentViewScope();
-        boolean isCompleted = task.isCompleted();
-        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
-        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
-        boolean projectMember = isCurrentPlayerProjectMember();
-        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember);
-        return PermissionCenter.canPerform(Operation.EDIT_TASK, role, context);
-    }
-
-    private boolean canDeleteTask(Task task) {
-        if (task == null) {
-            return false;
-        }
-        Role role = getCurrentRole();
-        ViewScope scope = getCurrentViewScope();
-        boolean isCompleted = task.isCompleted();
-        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
-        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
-        boolean projectMember = isCurrentPlayerProjectMember();
-        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember);
-        return PermissionCenter.canPerform(Operation.DELETE_TASK, role, context);
-    }
-
-    private boolean canToggleCompletion(Task task) {
-        if (task == null) {
-            return false;
-        }
-        Role role = getCurrentRole();
-        ViewScope scope = getCurrentViewScope();
-        boolean isCompleted = task.isCompleted();
-        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
-        boolean isAssigneeSelf = isCurrentPlayerAssignee(task);
-        boolean projectMember = isCurrentPlayerProjectMember();
-        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember);
-        return PermissionCenter.canPerform(Operation.TOGGLE_COMPLETE, role, context);
-    }
-
-    private boolean isCurrentPlayerAssignee(Task task) {
-        if (task == null || this.minecraft == null || this.minecraft.player == null) {
-            return false;
-        }
-        String uuid = this.minecraft.player.getUUID().toString();
-        String assignee = task.getAssigneeUuid();
-        return assignee != null && assignee.equals(uuid);
-    }
-
-    private Role getCurrentRole() {
-        if (isAdminClient()) {
-            return Role.OP;
-        }
-        if (this.minecraft == null || this.minecraft.player == null) {
-            return Role.MEMBER;
-        }
-        if (currentProject == null || currentProject.getScope() == Project.Scope.PERSONAL) {
-            return Role.MEMBER;
-        }
-        String uuid = this.minecraft.player.getUUID().toString();
-        if (uuid.equals(currentProject.getOwnerUuid())) {
-            return Role.PROJECT_MANAGER;
-        }
-        Project.ProjectRole projectRole = currentProject.getMemberRole(uuid);
-        if (projectRole == Project.ProjectRole.LEAD) {
-            return Role.LEAD;
-        }
-        return Role.MEMBER;
-    }
-
-    private boolean isCurrentPlayerProjectMember() {
-        if (isAdminClient()) {
-            return true;
-        }
-        if (this.minecraft == null || this.minecraft.player == null) {
-            return false;
-        }
-        if (currentProject == null || currentProject.getScope() == Project.Scope.PERSONAL) {
-            return true;
-        }
-        String uuid = this.minecraft.player.getUUID().toString();
-        if (uuid.equals(currentProject.getOwnerUuid())) {
-            return true;
-        }
-        return currentProject.getMemberRole(uuid) != null;
-    }
-
-    private ViewScope getCurrentViewScope() {
-        if (viewMode == ViewMode.PERSONAL) {
-            return ViewScope.PERSONAL;
-        }
-        if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-            return ViewScope.TEAM_UNASSIGNED;
-        }
-        if (viewMode == ViewMode.TEAM_ASSIGNED) {
-            return ViewScope.TEAM_ASSIGNED;
-        }
-        return ViewScope.TEAM_ALL;
     }
 
     private void onClaimTask() {
         if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
-        if (viewMode == ViewMode.PERSONAL) {
-            addNotification(Component.translatable("message.todolist.assign_only_team").getString());
+        String validationMessageKey = TodoScreenPermissionSupport.validateClaimTask(
+                selectedTask,
+                this.minecraft,
+                viewMode.name());
+        if (validationMessageKey != null) {
+            addNotification(Component.translatable(validationMessageKey).getString());
             return;
         }
         String uuid = this.minecraft.player.getUUID().toString();
-        String assignee = selectedTask.getAssigneeUuid();
-        if (assignee != null && !assignee.isEmpty() && !assignee.equals(uuid)) {
-            addNotification(Component.translatable("message.todolist.already_assigned").getString());
-            return;
-        }
         selectedTask.setAssigneeUuid(uuid);
         selectedTask.setAssigneeName(this.minecraft.player.getName().getString());
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
-        refreshTaskList();
+        applySearchFilter();
     }
 
-    // Helper for rendering labels
-    private class TextLabelWidget extends net.minecraft.client.gui.components.AbstractWidget {
-        private final Component text;
-        private final int color;
-        
-        public TextLabelWidget(int x, int y, Component text, int color) {
-            super(x, y, minecraft.font.width(text), minecraft.font.lineHeight, text);
-            this.text = text;
-            this.color = color;
-            this.active = false; // Not clickable
-        }
-
-        @Override
-        public void renderWidget(GuiGraphics context, int mouseX, int mouseY, float delta) {
-            context.drawString(minecraft.font, text, getX(), getY(), color, false);
-        }
-
-        @Override
-        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput builder) {
-        }
-    }
-    
+    /**
+     * 按当前空间、搜索词和项目作用域刷新左侧项目列表。
+     */
     private void updateProjectList() {
-        if (projectListWidget == null) return;
-        List<Project> all = new ArrayList<>();
-        all.addAll(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
-        all.addAll(projectManager.getProjectsByScope(Project.Scope.TEAM));
-        
-        Project defaultProject = null;
-        for (Project p : all) {
-            if (p == null) continue;
-            if (p.getScope() != projectScopeFilter) continue;
-            if (projectScopeFilter == Project.Scope.PERSONAL && p.isDefaultPersonalProject()) {
-                defaultProject = p;
-                break;
-            }
-            if (projectScopeFilter == Project.Scope.TEAM && p.isDefaultTeamProject()) {
-                defaultProject = p;
-                break;
-            }
+        if (projectListWidget == null) {
+            return;
         }
-
-        List<Project> filtered = new ArrayList<>();
-        String q = projectSearchQuery.toLowerCase().trim();
-        
-        for (Project p : all) {
-            // Scope filter
-            if (p.getScope() != projectScopeFilter) continue;
-            
-            // Name filter
-            String searchableName = ProjectNameFormatter.toDisplayText(p).getString().toLowerCase();
-            if (!q.isEmpty() && !searchableName.contains(q)) continue;
-            
-            filtered.add(p);
-        }
-
-        if (defaultProject != null) {
-            boolean exists = false;
-            String id = defaultProject.getId();
-            for (Project p : filtered) {
-                if (p != null && id != null && id.equals(p.getId())) {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                filtered.add(0, defaultProject);
-            }
-        }
-        
-        projectListWidget.setProjects(filtered);
+        List<Project> visibleProjects = TodoScreenProjectSidebarSupport.buildVisibleProjectsForSidebar(
+                projectManager,
+                projectScopeFilter,
+                projectSearchQuery,
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft)
+        );
+        projectListWidget.setProjects(visibleProjects);
+        projectListWidget.setProjectTaskCounts(TodoScreenProjectSidebarSupport.buildSidebarProjectTaskCounts(
+                visibleProjects,
+                projectScopeFilter,
+                personalTaskManager,
+                teamTaskManager));
         projectListWidget.setSelectedProject(currentProject);
         updateProjectActionButtons();
     }
 
+    /**
+     * 根据当前项目和权限刷新左侧底部项目操作按钮状态。
+     */
     private void updateProjectActionButtons() {
         if (editProjectBtn == null || deleteProjectBtn == null || applyJoinProjectBtn == null) {
             return;
         }
-        if (currentProject == null) {
-            editProjectBtn.active = false;
-            editProjectBtn.setMessage(Component.translatable("gui.todolist.edit"));
-            deleteProjectBtn.visible = true;
-            deleteProjectBtn.active = false;
-            applyJoinProjectBtn.visible = false;
-            applyJoinProjectBtn.active = false;
-            return;
-        }
-        if (currentProject.getScope() != Project.Scope.TEAM) {
-            editProjectBtn.active = true;
-            editProjectBtn.setMessage(Component.translatable("gui.todolist.edit"));
-            deleteProjectBtn.visible = true;
-            deleteProjectBtn.active = canDeleteCurrentProject();
-            applyJoinProjectBtn.visible = false;
-            applyJoinProjectBtn.active = false;
-            return;
-        }
-        Role role = getCurrentRole();
-        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false);
-        boolean canEdit = PermissionCenter.canPerform(Operation.EDIT_PROJECT, role, ctx);
-        editProjectBtn.active = true;
-        editProjectBtn.setMessage(Component.translatable(canEdit ? "gui.todolist.edit" : "gui.todolist.project.view"));
-        boolean member = isCurrentPlayerProjectMember();
-        if (!member) {
-            deleteProjectBtn.visible = false;
-            deleteProjectBtn.active = false;
-            applyJoinProjectBtn.visible = true;
-            applyJoinProjectBtn.active = true;
-            return;
-        }
-        applyJoinProjectBtn.visible = false;
-        applyJoinProjectBtn.active = false;
-        deleteProjectBtn.visible = true;
-        deleteProjectBtn.active = canDeleteCurrentProject();
+        int sidebarWidth = layoutMetrics == null ? 0 : layoutMetrics.sidebarBounds.width;
+        Component joinMessage = Component.translatable(
+                TodoScreenUiMetricsSupport.useCompactSidebarBottomButtons(responsiveTier, sidebarWidth)
+                        ? "gui.todolist.project.join.compact"
+                        : "gui.todolist.project.join.apply"
+        );
+        Component deleteMessage = Component.translatable("gui.todolist.delete");
+        deleteProjectBtn.setMessage(deleteMessage);
+        applyJoinProjectBtn.setMessage(joinMessage);
+        Role role = TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject);
+        boolean projectMember = TodoScreenPermissionSupport.isCurrentPlayerProjectMember(this.minecraft, currentProject);
+        TodoScreenProjectActionSupport.ProjectActionState actionState = TodoScreenProjectActionSupport.resolve(
+                currentProject,
+                role,
+                projectMember,
+                TodoScreenProjectActionSupport.canDeleteCurrentProject(
+                        currentProject,
+                        TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                        role
+                )
+        );
+        editProjectBtn.active = actionState.editActive;
+        editProjectBtn.setMessage(Component.translatable(actionState.editMessageKey));
+        deleteProjectBtn.visible = actionState.deleteVisible;
+        deleteProjectBtn.active = actionState.deleteActive;
+        applyJoinProjectBtn.visible = actionState.joinVisible;
+        applyJoinProjectBtn.active = actionState.joinActive;
+        boolean sidebarVisible = layoutMetrics == null || layoutMetrics.sidebarVisible;
+        TodoScreenProjectActionSupport.applySidebarVisibility(
+                sidebarVisible,
+                addProjectBtn,
+                editProjectBtn,
+                deleteProjectBtn,
+                applyJoinProjectBtn);
     }
     
-    private Component getProjectScopeText() {
-        if (projectScopeFilter == Project.Scope.PERSONAL) {
-            return Component.translatable("gui.todolist.project.toggle.personal");
-        } else {
-            return Component.translatable("gui.todolist.project.toggle.team");
-        }
-    }
     private void onAbandonTask() {
         if (selectedTask == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
-        if (viewMode == ViewMode.PERSONAL) {
-            addNotification(Component.translatable("message.todolist.assign_only_team").getString());
-            return;
-        }
-        Role role = getCurrentRole();
-        ViewScope scope = getCurrentViewScope();
-        boolean completed = selectedTask.isCompleted();
-        String assignee = selectedTask.getAssigneeUuid();
-        boolean assigned = assignee != null && !assignee.isEmpty();
-        boolean assigneeSelf = isCurrentPlayerAssignee(selectedTask);
-        boolean projectMember = isCurrentPlayerProjectMember();
-        Context ctx = new Context(scope, completed, assigned, assigneeSelf, false, false, projectMember);
-        if (!PermissionCenter.canPerform(Operation.ABANDON_TASK, role, ctx)) {
-            addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
+        String validationMessageKey = TodoScreenPermissionSupport.validateAbandonTask(
+                selectedTask,
+                this.minecraft,
+                currentProject,
+                viewMode.name());
+        if (validationMessageKey != null) {
+            addNotification(Component.translatable(validationMessageKey).getString());
             return;
         }
         selectedTask.setAssigneeUuid(null);
         selectedTask.setAssigneeName(null);
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
-        refreshTaskList();
-    }
-
-    private Component getPriorityFilterText() {
-        // String labelKey = "gui.todolist.label.priority";
-        String valueKey;
-        switch (currentPriorityFilter) {
-            case 1: 
-                valueKey = "gui.todolist.filter.priority_high"; 
-                break;
-            case 2: 
-                valueKey = "gui.todolist.filter.priority_medium"; 
-                break;
-            case 3: 
-                valueKey = "gui.todolist.filter.priority_low"; 
-                break;
-            default: 
-                valueKey = "gui.todolist.all"; 
-                break;
-        }
-        return Component.translatable(valueKey);
-    }
-
-    private Component getStatusFilterText() {
-        // MutableComponent label = Component.translatable("gui.todolist.label.status");
-        Component value = "completed".equals(currentFilter) ? Component.translatable("gui.todolist.completed") : Component.translatable("gui.todolist.active");
-        return value;
-    }
-
-    private Component getViewToggleText() {
-        // MutableComponent label = Component.translatable("gui.todolist.label.view");
-        String key;
-        if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-            key = "gui.todolist.view.team_unassigned";
-        } else if (viewMode == ViewMode.TEAM_ALL) {
-            key = "gui.todolist.view.team_all";
-        } else if (viewMode == ViewMode.TEAM_ASSIGNED) {
-            key = "gui.todolist.view.team_assigned";
-        } else {
-            key = "gui.todolist.view.personal";
-        }
-        return Component.translatable(key);
-    }
-
-    private void applyPriorityFilter() {
-        filterTasks(currentFilter);
+        applySearchFilter();
     }
 
     private void onAssignOthers() {
@@ -2036,258 +2131,102 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable("message.todolist.assign_only_team").getString());
             return;
         }
-        if (!canEditTask(selectedTask)) {
+        if (!TodoScreenPermissionSupport.canTaskOperationInView(
+                Operation.EDIT_TASK,
+                selectedTask,
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        )) {
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        this.minecraft.setScreen(new AssignPlayerScreen(this, selectedTask));
+        this.minecraft.setScreen(createAssignPlayerScreen(selectedTask));
     }
 
-    /**
-     * 解析团队项目成员在当前客户端上的显示名称，优先使用缓存名称，并在成员在线时刷新为最新玩家名。
-     *
-     * @param project 当前团队项目
-     * @param memberUuid 成员 UUID
-     * @return 可用于界面展示的成员名称；若没有缓存名称则回退为 UUID
-     */
-    private String resolveProjectMemberDisplayName(Project project, String memberUuid) {
-        if (project == null || memberUuid == null || memberUuid.isBlank()) {
-            return "";
-        }
-        String displayName = project.getMemberName(memberUuid);
-        if (displayName != null && !displayName.isBlank()) {
-            displayName = displayName.trim();
-        }
-        try {
-            if (minecraft != null && minecraft.getConnection() != null) {
-                net.minecraft.client.multiplayer.PlayerInfo playerInfo = minecraft.getConnection().getPlayerInfo(UUID.fromString(memberUuid));
-                if (playerInfo != null && playerInfo.getProfile() != null) {
-                    String onlineName = playerInfo.getProfile().getName();
-                    if (onlineName != null && !onlineName.isBlank()) {
-                        displayName = onlineName;
-                        project.setMemberName(memberUuid, onlineName);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // 忽略非法 UUID 或临时连接状态异常，继续使用缓存名称或 UUID 兜底。
-        }
-        if (displayName == null || displayName.isBlank()) {
-            return memberUuid;
-        }
-        return displayName;
-    }
-
-    /**
-     * 任务指派弹窗中的成员候选项，保存成员 UUID 与当前显示名称。
-     */
-    private static final class AssignableMember {
-        private final String uuid;
-        private final String displayName;
-
-        /**
-         * 创建一个可指派成员候选项。
-         *
-         * @param uuid 成员 UUID
-         * @param displayName 成员显示名称
-         */
-        private AssignableMember(String uuid, String displayName) {
-            this.uuid = uuid;
-            this.displayName = displayName;
-        }
-    }
-
-    private void filterTasks(String filter) {
-        // If filter is "active" or "completed" or "all", update currentFilter (Tab)
-        if (filter.equals("active") || filter.equals("completed") || filter.equals("all")) {
-            currentFilter = filter;
-        }
-        
-        List<Task> result = new ArrayList<>();
-        // 1. First apply Tab filter
-        switch (currentFilter) {
-            case "all":
-                result = taskManager.getAllTasks();
-                break;
-            case "active":
-                result = taskManager.getIncompleteTasks();
-                break;
-            case "completed":
-                result = taskManager.getCompletedTasks();
-                break;
-            default:
-                // Fallback
-                result = taskManager.getIncompleteTasks();
-                break;
-        }
-        
-        // 2. Apply Priority Filter
-        if (currentPriorityFilter != 0) {
-            Task.Priority targetPriority = Task.Priority.MEDIUM;
-            if (currentPriorityFilter == 1) targetPriority = Task.Priority.HIGH;
-            else if (currentPriorityFilter == 2) targetPriority = Task.Priority.MEDIUM;
-            else if (currentPriorityFilter == 3) targetPriority = Task.Priority.LOW;
-            
-            List<Task> priorityFiltered = new ArrayList<>();
-            for (Task t : result) {
-                if (t.getPriority() == targetPriority) {
-                    priorityFiltered.add(t);
-                }
-            }
-            result = priorityFiltered;
-        }
-        
-        // 3. Apply View Scope (Assigned/Unassigned)
-        baseFilteredTasks = applyAssignedFilterIfNeeded(result);
-        
-        // 4. Apply Search
+    private void filterTasks() {
+        currentFilter = "active";
+        List<Task> result = taskManager == null ? List.of() : taskManager.getIncompleteTasks();
+        result = TodoScreenTaskSupport.applyPriorityFilterToTasks(currentPriorityFilter, result);
+        baseFilteredTasks = TodoScreenTaskSupport.applyAssignedFilterForView(
+                result,
+                currentProject == null ? null : currentProject.getId(),
+                viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft));
         applySearchFilter();
         if (selectedTask != null && !isSelectedTaskValid()) {
             clearSelectedTask();
         }
-        if (filterStatusButton != null) {
-            filterStatusButton.setMessage(getStatusFilterText());
-        }
-        if (viewToggleButton != null) {
-            viewToggleButton.setMessage(getViewToggleText());
-        }
-    }
-
-    private void refreshTaskList() {
-        filterTasks(currentFilter);
+        updateViewButtonsState();
     }
 
     private void applySearchFilter() {
-        if (baseFilteredTasks == null) {
-            baseFilteredTasks = new ArrayList<>();
+        baseFilteredTasks = baseFilteredTasks == null ? new ArrayList<>() : baseFilteredTasks;
+        filteredTasks = TodoScreenTaskSupport.applySearchQueryToTasks(searchQuery, baseFilteredTasks);
+        if (taskListWidget != null) {
+            taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
+                    this.minecraft,
+                    currentProject,
+                    viewMode.name()));
+            taskListWidget.setSections(buildTaskPaneSections());
         }
-        if (searchQuery == null || searchQuery.isEmpty()) {
-            filteredTasks = new ArrayList<>(baseFilteredTasks);
-        } else {
-            String q = searchQuery;
-            List<Task> result = new ArrayList<>();
-            for (Task task : baseFilteredTasks) {
-                String title = task.getTitle() == null ? "" : task.getTitle().toLowerCase();
-                String desc = task.getDescription() == null ? "" : task.getDescription().toLowerCase();
-                boolean matchText = title.contains(q) || desc.contains(q);
-                boolean matchTag = false;
-                for (String tag : task.getTags()) {
-                    if (tag != null && tag.toLowerCase().contains(q)) {
-                        matchTag = true;
-                        break;
-                    }
-                }
-                if (matchText || matchTag) {
-                    result.add(task);
-                }
-            }
-            filteredTasks = result;
-        }
-        if (taskListWidget != null) taskListWidget.setTasks(filteredTasks);
+    }
+
+    /**
+     * 构建任务面板的分组模型，包含未完成任务和可折叠的已完成任务。
+     *
+     * @return 任务列表需要渲染的分组模型集合
+     */
+    private List<TaskListWidget.SectionModel> buildTaskPaneSections() {
+        return TodoScreenTaskSupport.buildTaskPaneSections(
+                filteredTasks,
+                TodoScreenTaskSupport.buildCompletedTasksForCurrentView(
+                        taskManager,
+                        currentProject == null ? null : currentProject.getId(),
+                        currentPriorityFilter,
+                        viewMode.name(),
+                        TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                        searchQuery),
+                activeExpanded,
+                completedExpanded);
+    }
+
+    /**
+     * 将组件转换为测试使用的边界数组。
+     *
+     * @param widget 目标组件
+     * @return 组件边界数组；组件为空时返回零值数组
+     */
+    private int[] toWidgetBounds(net.minecraft.client.gui.components.AbstractWidget widget) {
+        return TodoScreenTestSupport.toWidgetBounds(widget);
     }
 
     private String getFieldValue(EditBox field, String hint) {
-        String raw = field.getValue() == null ? "" : field.getValue().trim();
-        if (raw.isEmpty()) return "";
-        if (!hint.isEmpty() && raw.equals(hint)) return "";
-        return raw;
+        return TodoScreenTestSupport.getFieldValue(field, hint);
     }
 
     private String getFieldValue(MultiLineEditBox field, String hint) {
-        String raw = field.getValue() == null ? "" : field.getValue().trim();
-        if (raw.isEmpty()) return "";
-        if (!hint.isEmpty() && raw.equals(hint)) return "";
-        return raw;
-    }
-
-    private ViewMode parseHudViewMode(String raw) {
-        if (raw == null) {
-            return ViewMode.PERSONAL;
-        }
-        String v = raw.trim().toUpperCase();
-        if ("TEAM_UNASSIGNED".equals(v)) return ViewMode.TEAM_UNASSIGNED;
-        if ("TEAM_ALL".equals(v)) return ViewMode.TEAM_ALL;
-        if ("TEAM_ASSIGNED".equals(v)) return ViewMode.TEAM_ASSIGNED;
-        return ViewMode.PERSONAL;
+        return TodoScreenTestSupport.getFieldValue(field, hint);
     }
 
     private void addNotification(String text) {
         long now = System.currentTimeMillis();
-        notifications.add(new Notification(text, now + 2000));
+        notifications.add(TodoScreenNotificationSupport.createNotification(
+                text,
+                now,
+                TodoScreenNotificationSupport.DEFAULT_DURATION_MS
+        ));
     }
 
-    private static class Notification {
-        final String text;
-        final long expireAt;
-
-        Notification(String text, long expireAt) {
-            this.text = text;
-            this.expireAt = expireAt;
-        }
-    }
-
-    private static int clampInt(int value, int min, int max) {
-        if (max < min) {
-            return min;
-        }
-        if (value < min) {
-            return min;
-        }
-        if (value > max) {
-            return max;
-        }
-        return value;
-    }
-    
-    private List<Task> applyAssignedFilterIfNeeded(List<Task> tasks) {
-        if (currentProject == null) {
-            return new ArrayList<>();
-        }
-        List<Task> projectFiltered = new ArrayList<>();
-        for (Task t : tasks) {
-            if (t.belongsToProject(currentProject.getId())) {
-                projectFiltered.add(t);
-            }
-        }
-        
-        List<Task> result = new ArrayList<>();
-        if (viewMode == ViewMode.TEAM_ASSIGNED) {
-            if (this.minecraft != null && this.minecraft.player != null) {
-                String myUuid = this.minecraft.player.getUUID().toString();
-                for (Task t : projectFiltered) {
-                    if (myUuid.equals(t.getAssigneeUuid())) {
-                        result.add(t);
-                    }
-                }
-            }
-            return result;
-        } else if (viewMode == ViewMode.TEAM_UNASSIGNED) {
-            for (Task t : projectFiltered) {
-                String assignee = t.getAssigneeUuid();
-                if (assignee == null || assignee.isEmpty()) {
-                    result.add(t);
-                }
-            }
-            return result;
-        } else if (viewMode == ViewMode.TEAM_ALL) {
-            for (Task t : projectFiltered) {
-                String assignee = t.getAssigneeUuid();
-                if (assignee != null && !assignee.isEmpty()) {
-                    result.add(t);
-                }
-            }
-            return result;
-        }
-        return projectFiltered;
-    }
-    
-    private boolean isTrueSingleplayer() {
-        return false;
-    }
-    
+    /**
+     * 切换当前视图模式，并同步 HUD 默认视图与界面按钮状态。
+     *
+     * @param mode 目标视图模式
+     */
     private void switchView(ViewMode mode) {
         this.viewMode = mode;
-        this.selectedTask = null;
+        syncViewStateForCurrentProject();
+        clearSelectedTask();
         ModConfig config = ModConfig.getInstance();
         if (this.viewMode == ViewMode.PERSONAL) {
             config.setHudDefaultView("PERSONAL");
@@ -2296,146 +2235,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         updateViewButtonsState();
         rebuildUI();
-    }
-
-    private void syncHudViewForProject(Project project) {
-        ModConfig config = ModConfig.getInstance();
-        if (project == null || project.getScope() == Project.Scope.PERSONAL) {
-            config.setHudDefaultView("PERSONAL");
-            return;
-        }
-        ViewMode configView = parseHudViewMode(config.getHudDefaultView());
-        if (this.viewMode == ViewMode.PERSONAL) {
-            this.viewMode = configView;
-        }
-        if (this.viewMode == ViewMode.PERSONAL) {
-            this.viewMode = ViewMode.TEAM_UNASSIGNED;
-        }
-        config.setHudDefaultView(this.viewMode.name());
-    }
-    
-    private void updateViewButtonsState() {
-        if (viewToggleButton != null) {
-            viewToggleButton.active = viewMode != ViewMode.PERSONAL;
-            viewToggleButton.setMessage(getViewToggleText());
-        }
-    }
-    
-    private void switchProject(Project project) {
-        int previousProjectScrollOffset = projectListWidget == null ? savedProjectListScrollOffset : projectListWidget.getScrollOffset();
-        savedProjectListScrollOffset = previousProjectScrollOffset;
-        this.selectedTask = null;
-        this.currentProject = project;
-        rememberSelectedProject(project);
-
-        if (project == null) {
-            this.taskManager = this.personalTaskManager;
-            this.viewMode = ViewMode.PERSONAL;
-            ClientBridge.ops().setActiveProjectId(null);
-            ClientBridge.ops().sendSetActiveProjectId(null);
-            ClientBridge.saveLastActiveProjectId(null);
-            syncHudViewForProject(null);
-            rebuildUI();
-            restoreProjectListScrollOffset(previousProjectScrollOffset);
-            return;
-        }
-
-        if (!teamProjectsEnabled && project.getScope() == Project.Scope.TEAM) {
-            addNotification(Component.translatable("message.todolist.team_disabled").getString());
-            return;
-        }
-        projectScopeFilter = project.getScope();
-        ClientBridge.ops().setActiveProjectId(project.getId());
-        ClientBridge.ops().sendSetActiveProjectId(project.getId());
-        ClientBridge.saveLastActiveProjectId(project.getId());
-        
-        if (project.getScope() == Project.Scope.PERSONAL) {
-            this.taskManager = this.personalTaskManager;
-            this.viewMode = ViewMode.PERSONAL;
-        } else {
-            this.taskManager = this.teamTaskManager;
-            if (this.viewMode == ViewMode.PERSONAL) {
-                this.viewMode = ViewMode.TEAM_UNASSIGNED;
-            }
-        }
-        syncHudViewForProject(project);
-        
-        rebuildUI();
-        restoreProjectListScrollOffset(previousProjectScrollOffset);
-    }
-
-    /**
-     * 鍦?UI 閲嶅缓鍚庢仮澶嶉」鐩垪琛ㄦ粴鍔ㄤ綅缃紝閬垮厤鐐瑰嚮椤圭洰鍚庡洖鍒伴《閮ㄣ€?
-     *
-     * @param scrollOffset 閲嶅缓鍓嶇殑婊氬姩鍋忕Щ閲?
-     */
-    private void restoreProjectListScrollOffset(int scrollOffset) {
-        if (projectListWidget == null) {
-            return;
-        }
-        projectListWidget.setScrollOffset(scrollOffset);
-    }
-
-    /**
-     * 当项目删除时，立即从本地任务管理器硬删除关联任务。
-     */
-    private void hardDeleteTasksForDeletedProject(Project deletedProject) {
-        if (deletedProject == null || deletedProject.getId() == null || deletedProject.getId().isEmpty()) {
-            return;
-        }
-        String deletedProjectId = deletedProject.getId();
-        hardDeleteProjectTasksInManager(personalTaskManager, deletedProjectId);
-        hardDeleteProjectTasksInManager(teamTaskManager, deletedProjectId);
-    }
-
-    /**
-     * 在指定任务管理器中删除目标项目下全部任务。
-     */
-    private void hardDeleteProjectTasksInManager(TaskManager manager, String deletedProjectId) {
-        if (manager == null || deletedProjectId == null || deletedProjectId.isEmpty()) {
-            return;
-        }
-        manager.deleteTasksByProjectId(deletedProjectId);
-    }
-
-    private void rememberSelectedProject(Project project) {
-        if (project == null || project.getId() == null || project.getId().isEmpty()) {
-            return;
-        }
-        if (project.getScope() == Project.Scope.TEAM) {
-            preferredTeamProjectId = project.getId();
-        } else {
-            preferredPersonalProjectId = project.getId();
-        }
-    }
-
-    private Project getPreferredProjectForScope(Project.Scope scope) {
-        if (scope == null) {
-            return null;
-        }
-        if (scope == Project.Scope.TEAM && !teamProjectsEnabled) {
-            return null;
-        }
-        String preferredId = scope == Project.Scope.TEAM ? preferredTeamProjectId : preferredPersonalProjectId;
-        if (preferredId != null && !preferredId.isEmpty()) {
-            Project preferred = projectManager.getProject(preferredId);
-            if (preferred != null && preferred.getScope() == scope) {
-                return preferred;
-            }
-        }
-        List<Project> projects = projectManager.getProjectsByScope(scope);
-        if (projects.isEmpty()) {
-            return null;
-        }
-        for (Project p : projects) {
-            if (scope == Project.Scope.PERSONAL && p.isDefaultPersonalProject()) {
-                return p;
-            }
-            if (scope == Project.Scope.TEAM && p.isDefaultTeamProject()) {
-                return p;
-            }
-        }
-        return projects.get(0);
     }
     
     private void onAddProject() {
@@ -2453,40 +2252,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     private void onProjectSettings() {
         if (currentProject == null) return;
-        if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
+        if (TodoScreenProjectActionSupport.isTeamProjectBlocked(currentProject, teamProjectsEnabled)) {
             addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
         minecraft.setScreen(new ProjectSettingsScreen(this, currentProject));
     }
 
-    private boolean canDeleteCurrentProject() {
-        if (currentProject == null || this.minecraft == null || this.minecraft.player == null) {
-            return false;
-        }
-        if (currentProject.isDefaultPersonalProject() || currentProject.isDefaultTeamProject()) {
-            return false;
-        }
-        String uuid = this.minecraft.player.getUUID().toString();
-        if (currentProject.getScope() == Project.Scope.PERSONAL) {
-            String owner = currentProject.getOwnerUuid();
-            return owner == null || owner.isEmpty() || owner.equals(uuid);
-        }
-        Role role = getCurrentRole();
-        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false);
-        return PermissionCenter.canPerform(Operation.DELETE_PROJECT, role, ctx);
-    }
-
     private void onApplyJoinProject() {
         if (currentProject == null) return;
-        if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
+        if (TodoScreenProjectActionSupport.isTeamProjectBlocked(currentProject, teamProjectsEnabled)) {
             addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
         if (currentProject.getScope() != Project.Scope.TEAM) {
             return;
         }
-        if (isCurrentPlayerProjectMember()) {
+        if (TodoScreenPermissionSupport.isCurrentPlayerProjectMember(this.minecraft, currentProject)) {
             return;
         }
         ClientBridge.ops().sendRequestJoinProject(currentProject.getId());
@@ -2495,11 +2277,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void onProjectDelete() {
         if (currentProject == null) return;
-        if (!teamProjectsEnabled && currentProject.getScope() == Project.Scope.TEAM) {
+        if (TodoScreenProjectActionSupport.isTeamProjectBlocked(currentProject, teamProjectsEnabled)) {
             addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
-        if (!canDeleteCurrentProject()) {
+        if (!TodoScreenProjectActionSupport.canDeleteCurrentProject(
+                currentProject,
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject)
+        )) {
             addNotification(Component.translatable("message.todolist.no_permission_delete_project").getString());
             return;
         }
@@ -2510,232 +2296,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }));
     }
 
-    private class AssignPlayerScreen extends Screen {
-        private final TodoScreen parentScreen;
-        private final Task targetTask;
-        private EditBox searchField;
-        private List<AssignableMember> allMembers;
-        private List<AssignableMember> filteredMembers;
-        private Button[] playerButtons;
-        private int scrollOffset;
-        private int visibleRows;
-        private int listX;
-        private int listY;
-        private int listWidth;
-        private int listHeight;
-        private int rowHeight;
-
-        protected AssignPlayerScreen(TodoScreen parentScreen, Task targetTask) {
-            super(Component.translatable("gui.todolist.assign_others"));
-            this.parentScreen = parentScreen;
-            this.targetTask = targetTask;
-        }
-
-        @Override
-        protected void init() {
-            super.init();
-            if (minecraft == null) {
-                return;
-            }
-            int guiWidth = Math.max(200, Math.min(320, this.width - 20));
-            int x = (this.width - guiWidth) / 2;
-            int topY = Math.max(20, this.height / 6);
-            int searchHeight = 20;
-            int cancelButtonHeight = 20;
-            int buttonGap = 10;
-            rowHeight = 22;
-            int availableListHeight = this.height - topY - searchHeight - 6 - buttonGap - cancelButtonHeight;
-            int maxRowsByHeight = Math.max(1, availableListHeight / rowHeight);
-            visibleRows = Math.min(8, maxRowsByHeight);
-            listWidth = guiWidth;
-            listX = x;
-            listY = topY + searchHeight + 6;
-            listHeight = visibleRows * rowHeight;
-
-            searchField = new EditBox(this.font, x, topY, guiWidth, searchHeight, Component.empty());
-            searchField.setHint(Component.translatable("gui.todolist.member.name"));
-            searchField.setValue("");
-            this.addRenderableWidget(searchField);
-
-            allMembers = collectAssignableMembers();
-            filteredMembers = new ArrayList<>();
-
-            playerButtons = new Button[visibleRows];
-            for (int i = 0; i < visibleRows; i++) {
-                int btnY = listY + i * rowHeight;
-                final int rowIndex = i;
-                Button btn = Button.builder(Component.empty(), b -> {
-                    AssignableMember entry = getMemberForRow(rowIndex);
-                    if (entry != null) {
-                        applyAssignTo(entry.uuid, entry.displayName);
-                    }
-                }).bounds(x, btnY, guiWidth, 20).build();
-                btn.active = false;
-                btn.visible = false;
-                this.addRenderableWidget(btn);
-                playerButtons[i] = btn;
-            }
-
-            int cancelY = listY + listHeight + buttonGap;
-            Button cancel = Button.builder(Component.translatable("gui.todolist.cancel"), b -> {
-                minecraft.setScreen(parentScreen);
-            }).bounds(x, cancelY, guiWidth, cancelButtonHeight).build();
-            this.addRenderableWidget(cancel);
-
-            searchField.setResponder(text -> {
-                updateFilteredPlayers();
-            });
-            updateFilteredPlayers();
-            this.setFocused(searchField);
-        }
-
-        /**
-         * 构建当前团队项目可供指派的成员列表，包含 owner 且去重，并按约定顺序稳定输出。
-         *
-         * @return 可指派成员候选列表
-         */
-        private List<AssignableMember> collectAssignableMembers() {
-            List<AssignableMember> members = new ArrayList<>();
-            if (currentProject == null || currentProject.getScope() != Project.Scope.TEAM) {
-                return members;
-            }
-            String ownerUuid = currentProject.getOwnerUuid();
-            if (ownerUuid != null && !ownerUuid.isBlank()) {
-                members.add(new AssignableMember(ownerUuid, resolveProjectMemberDisplayName(currentProject, ownerUuid)));
-            }
-            List<AssignableMember> otherMembers = new ArrayList<>();
-            for (String memberUuid : currentProject.getMembers().keySet()) {
-                if (memberUuid == null || memberUuid.isBlank()) {
-                    continue;
-                }
-                if (memberUuid.equals(ownerUuid)) {
-                    continue;
-                }
-                otherMembers.add(new AssignableMember(memberUuid, resolveProjectMemberDisplayName(currentProject, memberUuid)));
-            }
-            otherMembers.sort(Comparator.comparing(member -> member.displayName, String.CASE_INSENSITIVE_ORDER));
-            members.addAll(otherMembers);
-            return members;
-        }
-
-        /**
-         * 返回指定行当前对应的成员候选项。
-         *
-         * @param rowIndex 行索引
-         * @return 当前行成员；若越界则返回 null
-         */
-        private AssignableMember getMemberForRow(int rowIndex) {
-            if (filteredMembers == null || filteredMembers.isEmpty()) {
-                return null;
-            }
-            int index = scrollOffset + rowIndex;
-            if (index < 0 || index >= filteredMembers.size()) {
-                return null;
-            }
-            return filteredMembers.get(index);
-        }
-
-        /**
-         * 按搜索关键字过滤可指派成员列表。
-         */
-        private void updateFilteredPlayers() {
-            if (allMembers == null || filteredMembers == null) {
-                return;
-            }
-            filteredMembers.clear();
-            String query = searchField == null ? "" : searchField.getValue();
-            if (query == null) {
-                query = "";
-            }
-            String q = query.trim().toLowerCase();
-            for (AssignableMember entry : allMembers) {
-                String name = entry.displayName;
-                if (name == null || name.isEmpty()) {
-                    continue;
-                }
-                if (q.isEmpty() || name.toLowerCase().contains(q)) {
-                    filteredMembers.add(entry);
-                }
-            }
-            scrollOffset = 0;
-            updatePlayerButtons();
-        }
-
-        /**
-         * 根据当前滚动位置刷新成员按钮文案与可见性。
-         */
-        private void updatePlayerButtons() {
-            if (playerButtons == null) {
-                return;
-            }
-            int maxOffset = 0;
-            if (filteredMembers != null) {
-                maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
-            }
-            if (scrollOffset > maxOffset) {
-                scrollOffset = maxOffset;
-            }
-            if (scrollOffset < 0) {
-                scrollOffset = 0;
-            }
-            for (int i = 0; i < playerButtons.length; i++) {
-                Button btn = playerButtons[i];
-                AssignableMember entry = getMemberForRow(i);
-                if (entry == null) {
-                    btn.visible = false;
-                    btn.active = false;
-                    btn.setMessage(Component.empty());
-                } else {
-                    btn.visible = true;
-                    btn.active = true;
-                    btn.setMessage(Component.nullToEmpty(entry.displayName));
-                }
-            }
-        }
-
-        /**
-         * 将目标任务指派给选中的团队成员，并回到父界面。
-         *
-         * @param uuid 目标成员 UUID
-         * @param name 目标成员显示名称
-         */
-        private void applyAssignTo(String uuid, String name) {
-            targetTask.setAssigneeUuid(uuid);
-            targetTask.setAssigneeName(name);
-            parentScreen.addNotification(Component.translatable("message.todolist.assigned_to_player", name).getString());
-            parentScreen.markUnsaved();
-            parentScreen.refreshTaskList();
-            minecraft.setScreen(parentScreen);
-        }
-
-        @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
-                if (filteredMembers != null && !filteredMembers.isEmpty()) {
-                    int maxOffset = Math.max(0, filteredMembers.size() - visibleRows);
-                    if (verticalAmount < 0 && scrollOffset < maxOffset) {
-                        scrollOffset++;
-                        updatePlayerButtons();
-                    } else if (verticalAmount > 0 && scrollOffset > 0) {
-                        scrollOffset--;
-                        updatePlayerButtons();
-                    }
-                }
-            }
-            return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
-        }
-
-        @Override
-        public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
-            // Background is drawn manually in render to keep cross-loader consistency.
-        }
-
-        @Override
-        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-            context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
-            super.render(context, mouseX, mouseY, delta);
-        }
-    }
 }
 
 

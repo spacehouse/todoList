@@ -2024,8 +2024,8 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         addOwnedPersonalProject(owner, "mixed-keep-personal", "Mixed Keep Personal");
         Project keepPersonalProject = TodoListCommon.getProjectManager().getProject("mixed-keep-personal");
         Project keepTeamProject = addTeamProject(owner, "mixed-keep-team", "Mixed Keep Team");
-        assertNotNull(keepPersonalProject, "鏈壘鍒版贩鍚堝噣鍖栨祴璇曟墍闇€鐨勪釜浜洪」鐩?");
-        assertNotNull(keepTeamProject, "鏈壘鍒版贩鍚堝噣鍖栨祴璇曟墍闇€鐨勫洟闃熼」鐩?");
+        assertNotNull(keepPersonalProject, "未找到混合净化测试所需的个人项目");
+        assertNotNull(keepTeamProject, "未找到混合净化测试所需的团队项目");
         flushProjectSaves(dedicatedServer);
 
         ProjectPlayerStateStorage storage = new ProjectPlayerStateStorage();
@@ -2047,11 +2047,11 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestServerPlayer dedicatedOwner = createPlayer(owner.getStringUUID(), owner.getName().getString(), false);
         TestMinecraftServer reloadedDedicatedServer = createServer(dedicatedOwner);
         ProjectPackets.onPlayerJoin(reloadedDedicatedServer, dedicatedOwner);
-        assertEquals(keepTeamProject.getId(), ProjectPackets.getActiveProjectId(dedicatedOwner), "涓撶敤鏈嶅簲淇濈暀鏈夋晥鐨勫洟闃?current 椤圭洰");
+        assertEquals(keepTeamProject.getId(), ProjectPackets.getActiveProjectId(dedicatedOwner), "专用服应保留有效的团队 current 项目");
         assertListEquals(
                 List.of(keepPersonalProject.getId(), keepTeamProject.getId()),
                 ProjectPackets.getHudStarredProjectIds(dedicatedOwner),
-                "涓撶敤鏈嶅簲淇濈暀骞跺幓閲嶆湁鏁堢殑涓汉涓庡洟闃?starred 椤圭洰"
+                "专用服应保留并去重有效的个人与团队 starred 项目"
         );
 
         storage.savePlayerState(owner.getUUID(), dirtyState);
@@ -2059,11 +2059,11 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestServerPlayer singleplayerOwner = createPlayer(owner.getStringUUID(), owner.getName().getString(), false);
         TestMinecraftServer singleplayerServer = createSingleplayerServer(singleplayerOwner);
         ProjectPackets.onPlayerJoin(singleplayerServer, singleplayerOwner);
-        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "鍗曟満搴旀竻绌烘贩鍚堣剰鐘舵€侀噷鐨勫洟闃?current 椤圭洰");
+        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "单机应清空混合脏状态里的团队 current 项目");
         assertListEquals(
                 List.of(keepPersonalProject.getId()),
                 ProjectPackets.getHudStarredProjectIds(singleplayerOwner),
-                "鍗曟満搴斿彧淇濈暀浠嶅彲鐢ㄧ殑涓汉 starred 椤圭洰"
+                "单机应只保留仍可用的个人 starred 项目"
         );
     }
 
@@ -2087,10 +2087,10 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         Project personalZetaProject = TodoListCommon.getProjectManager().getProject("personal-zeta-project");
         Project personalAlphaProject = TodoListCommon.getProjectManager().getProject("personal-alpha-project");
         Project personalNewProject = TodoListCommon.getProjectManager().getProject("personal-new-project");
-        assertNotNull(personalOldProject, "鏈壘鍒版帓搴忔祴璇曟墍闇€鐨勬棫涓汉椤圭洰");
-        assertNotNull(personalZetaProject, "鏈壘鍒版帓搴忔祴璇曟墍闇€鐨?Zeta 涓汉椤圭洰");
-        assertNotNull(personalAlphaProject, "鏈壘鍒版帓搴忔祴璇曟墍闇€鐨?Alpha 涓汉椤圭洰");
-        assertNotNull(personalNewProject, "鏈壘鍒版帓搴忔祴璇曟墍闇€鐨勬柊涓汉椤圭洰");
+        assertNotNull(personalOldProject, "未找到排序测试所需的旧个人项目");
+        assertNotNull(personalZetaProject, "未找到排序测试所需的 Zeta 个人项目");
+        assertNotNull(personalAlphaProject, "未找到排序测试所需的 Alpha 个人项目");
+        assertNotNull(personalNewProject, "未找到排序测试所需的新个人项目");
 
         personalOldProject.setCreatedAt(1_000L);
         personalZetaProject.setCreatedAt(2_000L);
@@ -2100,22 +2100,22 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         teamNewProject.setCreatedAt(4_000L);
 
         CapturingCommandSourceStack allSource = createSource(0, owner, server);
-        assertEquals(1, dispatcher.execute("todo project list all", allSource), "project list all 搴旇繑鍥炴垚鍔?");
-        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal New Project", "Personal Alpha Project", "project list all 搴斿厛鎸?createdAt 鍊掑簭鎺掑垪涓汉椤圭洰");
-        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Alpha Project", "Personal Zeta Project", "鐩稿悓 createdAt 鐨勪釜浜洪」鐩簲鍐嶆寜鍚嶇О鎺掑簭");
-        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Zeta Project", "Personal Old Project", "杈冩柊鐨勪釜浜洪」鐩簲鎺掑湪杈冩棫涓汉椤圭洰涔嬪墠");
-        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Old Project", "Team New Project", "涓汉椤圭洰搴旀暣浣撴帓鍦ㄥ洟闃熼」鐩箣鍓?");
-        assertTextAppearsBefore(allSource.getSuccessMessages(), "Team New Project", "Team Old Project", "鍥㈤槦椤圭洰搴旀寜 createdAt 鍊掑簭鎺掑垪");
+        assertEquals(1, dispatcher.execute("todo project list all", allSource), "project list all 应返回成功");
+        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal New Project", "Personal Alpha Project", "project list all 应先按 createdAt 倒序排列个人项目");
+        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Alpha Project", "Personal Zeta Project", "相同 createdAt 的个人项目应再按名称排序");
+        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Zeta Project", "Personal Old Project", "较新的个人项目应排在较旧个人项目之前");
+        assertTextAppearsBefore(allSource.getSuccessMessages(), "Personal Old Project", "Team New Project", "个人项目应整体排在团队项目之前");
+        assertTextAppearsBefore(allSource.getSuccessMessages(), "Team New Project", "Team Old Project", "团队项目应按 createdAt 倒序排列");
 
         ProjectPackets.setHudStarredProjectIds(
                 owner,
                 List.of(teamOldProject.getId(), personalZetaProject.getId(), personalAlphaProject.getId(), teamNewProject.getId())
         );
         CapturingCommandSourceStack starSource = createSource(0, owner, server);
-        assertEquals(1, dispatcher.execute("todo project list star", starSource), "project list star 搴旇繑鍥炴垚鍔?");
-        assertTextAppearsBefore(starSource.getSuccessMessages(), "Personal Alpha Project", "Personal Zeta Project", "project list star 搴斿鐩稿悓 createdAt 鐨勪釜浜洪」鐩寜鍚嶇О鎺掑簭");
-        assertTextAppearsBefore(starSource.getSuccessMessages(), "Personal Zeta Project", "Team New Project", "project list star 搴斿厛鏄剧ず涓汉椤圭洰鍐嶆樉绀哄洟闃熼」鐩?");
-        assertTextAppearsBefore(starSource.getSuccessMessages(), "Team New Project", "Team Old Project", "project list star 搴斿鍥㈤槦椤圭洰鎸?createdAt 鍊掑簭鎺掑垪");
+        assertEquals(1, dispatcher.execute("todo project list star", starSource), "project list star 应返回成功");
+        assertTextAppearsBefore(starSource.getSuccessMessages(), "Personal Alpha Project", "Personal Zeta Project", "project list star 应对相同 createdAt 的个人项目按名称排序");
+        assertTextAppearsBefore(starSource.getSuccessMessages(), "Personal Zeta Project", "Team New Project", "project list star 应先显示个人项目再显示团队项目");
+        assertTextAppearsBefore(starSource.getSuccessMessages(), "Team New Project", "Team Old Project", "project list star 应对团队项目按 createdAt 倒序排列");
     }
 
     /**
@@ -2128,22 +2128,22 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer server = createServer(firstOwner, secondOwner);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
-        assertEquals(1, dispatcher.execute("todo project create personal Remove Isolation Project A", createSource(0, firstOwner, server)), "鐜╁ A 鍒涘缓涓汉椤圭洰搴旇繑鍥炴垚鍔?");
-        assertEquals(1, dispatcher.execute("todo project create personal Remove Isolation Project B", createSource(0, secondOwner, server)), "鐜╁ B 鍒涘缓涓汉椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project create personal Remove Isolation Project A", createSource(0, firstOwner, server)), "玩家 A 创建个人项目应返回成功");
+        assertEquals(1, dispatcher.execute("todo project create personal Remove Isolation Project B", createSource(0, secondOwner, server)), "玩家 B 创建个人项目应返回成功");
         Project firstProject = findProjectByName("Remove Isolation Project A");
         Project secondProject = findProjectByName("Remove Isolation Project B");
-        assertNotNull(firstProject, "鏈壘鍒扮帺瀹?A 鐨勫垹闄ら殧绂婚」鐩?");
-        assertNotNull(secondProject, "鏈壘鍒扮帺瀹?B 鐨勫垹闄ら殧绂婚」鐩?");
+        assertNotNull(firstProject, "未找到玩家 A 的删除隔离项目");
+        assertNotNull(secondProject, "未找到玩家 B 的删除隔离项目");
 
-        assertEquals(1, dispatcher.execute("todo project remove " + firstProject.getId(), createSource(0, firstOwner, server)), "鐜╁ A 鍙戣捣 project remove 搴旇繑鍥炴垚鍔?");
-        assertEquals(1, dispatcher.execute("todo project remove " + secondProject.getId(), createSource(0, secondOwner, server)), "鐜╁ B 鍙戣捣 project remove 搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project remove " + firstProject.getId(), createSource(0, firstOwner, server)), "玩家 A 发起 project remove 应返回成功");
+        assertEquals(1, dispatcher.execute("todo project remove " + secondProject.getId(), createSource(0, secondOwner, server)), "玩家 B 发起 project remove 应返回成功");
 
-        assertEquals(1, dispatcher.execute("todo project remove confirm", createSource(0, firstOwner, server)), "鐜╁ A 纭鍒犻櫎搴旇繑鍥炴垚鍔?");
-        assertNull(TodoListCommon.getProjectManager().getProject(firstProject.getId()), "鐜╁ A 纭鍚庡簲鍒犻櫎鑷繁鐨勯」鐩?");
-        assertNotNull(TodoListCommon.getProjectManager().getProject(secondProject.getId()), "鐜╁ A 纭鍚庝笉搴旇鍒犵帺瀹?B 鐨勯」鐩?");
+        assertEquals(1, dispatcher.execute("todo project remove confirm", createSource(0, firstOwner, server)), "玩家 A 确认删除应返回成功");
+        assertNull(TodoListCommon.getProjectManager().getProject(firstProject.getId()), "玩家 A 确认后应删除自己的项目");
+        assertNotNull(TodoListCommon.getProjectManager().getProject(secondProject.getId()), "玩家 A 确认后不应误删玩家 B 的项目");
 
-        assertEquals(1, dispatcher.execute("todo project remove confirm", createSource(0, secondOwner, server)), "鐜╁ B 纭鍒犻櫎搴旇繑鍥炴垚鍔?");
-        assertNull(TodoListCommon.getProjectManager().getProject(secondProject.getId()), "鐜╁ B 纭鍚庡簲鍒犻櫎鑷繁鐨勯」鐩?");
+        assertEquals(1, dispatcher.execute("todo project remove confirm", createSource(0, secondOwner, server)), "玩家 B 确认删除应返回成功");
+        assertNull(TodoListCommon.getProjectManager().getProject(secondProject.getId()), "玩家 B 确认后应删除自己的项目");
     }
 
     /**
@@ -2156,17 +2156,17 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
         int createResult = dispatcher.execute("todo project create personal Reload Personal Project", createSource(0, owner, server));
-        assertEquals(1, createResult, "project create personal 鎼存棁绻戦崶鐐村灇閸?");
+        assertEquals(1, createResult, "project create personal 应返回成功");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getPersonalProjectsFilePath()), "project create personal 閸氬骸绨查崘娆忓弳娑擃亙姹夋い鍦窗閺傚洣娆?");
+        assertEquals(Boolean.TRUE, Files.exists(getPersonalProjectsFilePath()), "project create personal 应写入个人项目文件");
 
         reloadPersistentState();
 
-        assertNotNull(findProjectByName("Reload Personal Project"), "闁插秵鏌婇崚婵嗩潗閸栨牕鎮楁惔鏃囶嚉閼充粙鍣搁弬鏉垮鏉炴垝閲滄禍娲€嶉惄?");
+        assertNotNull(findProjectByName("Reload Personal Project"), "重载后应能找到已持久化的个人项目");
         CapturingCommandSourceStack source = createSource(0, owner, createServer(owner));
         int listResult = createDispatcher().execute("todo project list all", source);
-        assertEquals(1, listResult, "闁插秷娴囬崥?project list all 鎼存棁绻戦崶鐐村灇閸?");
-        assertContainsText(source.getSuccessMessages(), "Reload Personal Project", "闁插秷娴囬崥?project list all 閺堫亣绶崙鍝勫嚒閹镐椒绠欓崠鏍畱妞ゅ湱娲?");
+        assertEquals(1, listResult, "project list all 应返回成功");
+        assertContainsText(source.getSuccessMessages(), "Reload Personal Project", "project list all 应输出持久化项目");
     }
 
     /**
@@ -2181,27 +2181,27 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         assertEquals(
                 1,
                 dispatcher.execute("todo project create personal Reload Current Project", createSource(0, owner, server)),
-                "project create personal 搴旇繑鍥炴垚鍔?"
+                "project create personal 应返回成功"
         );
         assertEquals(
                 1,
                 dispatcher.execute("todo project create personal Reload Starred Project", createSource(0, owner, server)),
-                "绗簩涓?project create personal 搴旇繑鍥炴垚鍔?"
+                "第二个 project create personal 应返回成功"
         );
         Project currentProject = findProjectByName("Reload Current Project");
         Project starredProject = findProjectByName("Reload Starred Project");
-        assertNotNull(currentProject, "閲嶈浇鍓嶆湭鎵惧埌褰撳墠椤圭洰娴嬭瘯鏁版嵁");
-        assertNotNull(starredProject, "閲嶈浇鍓嶆湭鎵惧埌鏄熸爣椤圭洰娴嬭瘯鏁版嵁");
+        assertNotNull(currentProject, "重载前未找到当前项目测试数据");
+        assertNotNull(starredProject, "重载前未找到星标项目测试数据");
 
         assertEquals(
                 1,
                 dispatcher.execute("todo project select " + currentProject.getId(), createSource(0, owner, server)),
-                "project select 搴旇繑鍥炴垚鍔?"
+                "project select 应返回成功"
         );
         assertEquals(
                 1,
                 dispatcher.execute("todo project star " + starredProject.getId(), createSource(0, owner, server)),
-                "project star 搴旇繑鍥炴垚鍔?"
+                "project star 应返回成功"
         );
 
         flushProjectSaves(server);
@@ -2213,19 +2213,19 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer reloadedServer = createServer(reloadedOwner);
         ProjectPackets.onPlayerJoin(reloadedServer, reloadedOwner);
 
-        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(reloadedOwner), "閲嶈浇鍚庢湭鎭㈠褰撳墠椤圭洰");
-        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "閲嶈浇鍚庢湭鎭㈠鏄熸爣椤圭洰");
+        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(reloadedOwner), "重载后未恢复当前项目");
+        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "重载后未恢复星标项目");
 
         CapturingCommandSourceStack currentSource = createSource(0, reloadedOwner, reloadedServer);
         int currentResult = createDispatcher().execute("todo project list current", currentSource);
-        assertEquals(1, currentResult, "閲嶈浇鍚?project list current 搴旇繑鍥炴垚鍔?");
-        assertContainsText(currentSource.getSuccessMessages(), "Reload Current Project", "閲嶈浇鍚?project list current 鏈緭鍑哄綋鍓嶉」鐩?");
+        assertEquals(1, currentResult, "重载后 project list current 应返回成功");
+        assertContainsText(currentSource.getSuccessMessages(), "Reload Current Project", "重载后 project list current 未输出当前项目");
 
         CapturingCommandSourceStack starSource = createSource(0, reloadedOwner, reloadedServer);
         int starResult = createDispatcher().execute("todo project list star", starSource);
-        assertEquals(1, starResult, "閲嶈浇鍚?project list star 搴旇繑鍥炴垚鍔?");
-        assertContainsText(starSource.getSuccessMessages(), "Reload Starred Project", "閲嶈浇鍚?project list star 鏈緭鍑烘槦鏍囬」鐩?");
-        assertNotContainsText(starSource.getSuccessMessages(), "Reload Current Project", "閲嶈浇鍚?project list star 涓嶅簲杈撳嚭鏈槦鏍囬」鐩?");
+        assertEquals(1, starResult, "重载后 project list star 应返回成功");
+        assertContainsText(starSource.getSuccessMessages(), "Reload Starred Project", "重载后 project list star 未输出星标项目");
+        assertNotContainsText(starSource.getSuccessMessages(), "Reload Current Project", "重载后 project list star 不应输出未星标项目");
     }
 
     /**
@@ -2240,32 +2240,32 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         assertEquals(
                 1,
                 dispatcher.execute("todo project create team Reload Singleplayer Current Team", createSource(0, owner, dedicatedServer)),
-                "鍒涘缓褰撳墠鍥㈤槦椤圭洰搴旇繑鍥炴垚鍔?"
+                "创建当前团队项目应返回成功"
         );
         assertEquals(
                 1,
                 dispatcher.execute("todo project create team Reload Singleplayer Star Team", createSource(0, owner, dedicatedServer)),
-                "鍒涘缓鏄熸爣鍥㈤槦椤圭洰搴旇繑鍥炴垚鍔?"
+                "创建星标团队项目应返回成功"
         );
 
         Project currentProject = findProjectByName("Reload Singleplayer Current Team");
         Project starredProject = findProjectByName("Reload Singleplayer Star Team");
-        assertNotNull(currentProject, "鏈壘鍒扮敤浜庡崟鏈哄噣鍖栫殑褰撳墠鍥㈤槦椤圭洰");
-        assertNotNull(starredProject, "鏈壘鍒扮敤浜庡崟鏈哄噣鍖栫殑鏄熸爣鍥㈤槦椤圭洰");
+        assertNotNull(currentProject, "未找到用于单机净化的当前团队项目");
+        assertNotNull(starredProject, "未找到用于单机净化的星标团队项目");
 
         assertEquals(
                 1,
                 dispatcher.execute("todo project select " + currentProject.getId(), createSource(0, owner, dedicatedServer)),
-                "璁剧疆鍥㈤槦褰撳墠椤圭洰搴旇繑鍥炴垚鍔?"
+                "设置团队当前项目应返回成功"
         );
         assertEquals(
                 1,
                 dispatcher.execute("todo project star " + starredProject.getId(), createSource(0, owner, dedicatedServer)),
-                "璁剧疆鍥㈤槦鏄熸爣椤圭洰搴旇繑鍥炴垚鍔?"
+                "设置团队星标项目应返回成功"
         );
 
         flushProjectSaves(dedicatedServer);
-        assertEquals(Boolean.TRUE, Files.exists(getProjectPlayerStateFilePath(owner)), "鍥㈤槦椤圭洰鐘舵€佸簲鍐欏叆鐜╁鐘舵€佹枃浠?");
+        assertEquals(Boolean.TRUE, Files.exists(getProjectPlayerStateFilePath(owner)), "团队项目状态应写入玩家状态文件");
 
         reloadPersistentState();
 
@@ -2273,18 +2273,18 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer singleplayerServer = createSingleplayerServer(singleplayerOwner);
         ProjectPackets.onPlayerJoin(singleplayerServer, singleplayerOwner);
 
-        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "鍒囧埌鍗曟満鍚庡簲娓呯┖鍥㈤槦褰撳墠椤圭洰");
-        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "鍒囧埌鍗曟満鍚庡簲娓呯┖鍥㈤槦鏄熸爣椤圭洰");
+        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "切到单机后应清空团队当前项目");
+        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "切到单机后应清空团队星标项目");
 
         CapturingCommandSourceStack singleplayerCurrentSource = createSource(0, singleplayerOwner, singleplayerServer);
         int singleplayerCurrentResult = createDispatcher().execute("todo project list current", singleplayerCurrentSource);
-        assertEquals(1, singleplayerCurrentResult, "鍗曟満鐜涓?project list current 搴旇繑鍥炴垚鍔?");
-        assertContainsMessageKey(singleplayerCurrentSource.getSuccessMessages(), "command.todolist.project.list.current.empty", "鍗曟満鐜涓嬪綋鍓嶅洟闃熼」鐩簲琛ㄧ幇涓虹┖");
+        assertEquals(1, singleplayerCurrentResult, "单机环境下 project list current 应返回成功");
+        assertContainsMessageKey(singleplayerCurrentSource.getSuccessMessages(), "command.todolist.project.list.current.empty", "单机环境下当前团队项目应表现为空");
 
         CapturingCommandSourceStack singleplayerStarSource = createSource(0, singleplayerOwner, singleplayerServer);
         int singleplayerStarResult = createDispatcher().execute("todo project list star", singleplayerStarSource);
-        assertEquals(1, singleplayerStarResult, "鍗曟満鐜涓?project list star 搴旇繑鍥炴垚鍔?");
-        assertContainsMessageKey(singleplayerStarSource.getSuccessMessages(), "command.todolist.project.list.star.empty", "鍗曟満鐜涓嬪洟闃熸槦鏍囬」鐩簲琛ㄧ幇涓虹┖");
+        assertEquals(1, singleplayerStarResult, "单机环境下 project list star 应返回成功");
+        assertContainsMessageKey(singleplayerStarSource.getSuccessMessages(), "command.todolist.project.list.star.empty", "单机环境下团队星标项目应表现为空");
 
         reloadPersistentState();
 
@@ -2292,8 +2292,8 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer reloadedDedicatedServer = createServer(reloadedOwner);
         ProjectPackets.onPlayerJoin(reloadedDedicatedServer, reloadedOwner);
 
-        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(reloadedOwner), "閲嶆柊杩涘叆鏀寔鍥㈤槦椤圭洰鐨勭幆澧冨悗搴旀仮澶嶅洟闃熷綋鍓嶉」鐩?");
-        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "閲嶆柊杩涘叆鏀寔鍥㈤槦椤圭洰鐨勭幆澧冨悗搴旀仮澶嶅洟闃熸槦鏍囬」鐩?");
+        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(reloadedOwner), "重新进入支持团队项目的环境后应恢复团队当前项目");
+        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "重新进入支持团队项目的环境后应恢复团队星标项目");
     }
 
     /**
@@ -2305,15 +2305,15 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer dedicatedServer = createServer(owner);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
-        assertEquals(1, dispatcher.execute("todo project create team Republish Current Team", createSource(0, owner, dedicatedServer)), "鍒涘缓灞€鍩熺綉鎭㈠ current 椤圭洰搴旇繑鍥炴垚鍔?");
-        assertEquals(1, dispatcher.execute("todo project create team Republish Star Team", createSource(0, owner, dedicatedServer)), "鍒涘缓灞€鍩熺綉鎭㈠ starred 椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project create team Republish Current Team", createSource(0, owner, dedicatedServer)), "创建局域网恢复 current 项目应返回成功");
+        assertEquals(1, dispatcher.execute("todo project create team Republish Star Team", createSource(0, owner, dedicatedServer)), "创建局域网恢复 starred 项目应返回成功");
         Project currentProject = findProjectByName("Republish Current Team");
         Project starredProject = findProjectByName("Republish Star Team");
-        assertNotNull(currentProject, "鏈壘鍒板眬鍩熺綉鎭㈠娴嬭瘯鎵€闇€鐨勫綋鍓嶉」鐩?");
-        assertNotNull(starredProject, "鏈壘鍒板眬鍩熺綉鎭㈠娴嬭瘯鎵€闇€鐨勬槦鏍囬」鐩?");
+        assertNotNull(currentProject, "未找到局域网恢复测试所需的当前项目");
+        assertNotNull(starredProject, "未找到局域网恢复测试所需的星标项目");
 
-        assertEquals(1, dispatcher.execute("todo project select " + currentProject.getId(), createSource(0, owner, dedicatedServer)), "璁剧疆灞€鍩熺綉鎭㈠ current 椤圭洰搴旇繑鍥炴垚鍔?");
-        assertEquals(1, dispatcher.execute("todo project star " + starredProject.getId(), createSource(0, owner, dedicatedServer)), "璁剧疆灞€鍩熺綉鎭㈠ starred 椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project select " + currentProject.getId(), createSource(0, owner, dedicatedServer)), "设置局域网恢复 current 项目应返回成功");
+        assertEquals(1, dispatcher.execute("todo project star " + starredProject.getId(), createSource(0, owner, dedicatedServer)), "设置局域网恢复 starred 项目应返回成功");
         flushProjectSaves(dedicatedServer);
 
         reloadPersistentState();
@@ -2321,8 +2321,8 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestServerPlayer singleplayerOwner = createPlayer(owner.getStringUUID(), owner.getName().getString(), false);
         TestMinecraftServer singleplayerServer = createSingleplayerServer(singleplayerOwner);
         ProjectPackets.onPlayerJoin(singleplayerServer, singleplayerOwner);
-        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "鏈彂甯冨眬鍩熺綉鍓嶄笉搴旀仮澶嶅洟闃?current 椤圭洰");
-        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "鏈彂甯冨眬鍩熺綉鍓嶄笉搴旀仮澶嶅洟闃?starred 椤圭洰");
+        assertEquals(null, ProjectPackets.getActiveProjectId(singleplayerOwner), "未发布局域网前不应恢复团队 current 项目");
+        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "未发布局域网前不应恢复团队 starred 项目");
 
         singleplayerServer.setTestPublished(true);
         ProjectPackets.onRequestSyncProjectsPacket(
@@ -2331,8 +2331,8 @@ public final class CommandBootstrapProjectIntegrationTestMain {
                 new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer())
         );
 
-        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(singleplayerOwner), "鍙戝竷灞€鍩熺綉鍚庡簲绔嬪嵆鎭㈠鍥㈤槦 current 椤圭洰");
-        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "鍙戝竷灞€鍩熺綉鍚庡簲绔嬪嵆鎭㈠鍥㈤槦 starred 椤圭洰");
+        assertEquals(currentProject.getId(), ProjectPackets.getActiveProjectId(singleplayerOwner), "发布局域网后应立即恢复团队 current 项目");
+        assertEquals(List.of(starredProject.getId()), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "发布局域网后应立即恢复团队 starred 项目");
     }
 
     /**
@@ -2344,11 +2344,11 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer dedicatedServer = createServer(owner);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
-        assertEquals(1, dispatcher.execute("todo project create team Preserve Hidden Star Team", createSource(0, owner, dedicatedServer)), "鍒涘缓闅愯棌鏄熸爣淇濈暀鍥㈤槦椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project create team Preserve Hidden Star Team", createSource(0, owner, dedicatedServer)), "创建隐藏星标保留团队项目应返回成功");
         Project teamProject = findProjectByName("Preserve Hidden Star Team");
-        assertNotNull(teamProject, "鏈壘鍒伴殣钘忔槦鏍囦繚鐣欐祴璇曟墍闇€鍥㈤槦椤圭洰");
+        assertNotNull(teamProject, "未找到隐藏星标保留测试所需团队项目");
 
-        assertEquals(1, dispatcher.execute("todo project star " + teamProject.getId(), createSource(0, owner, dedicatedServer)), "璁剧疆闅愯棌鏄熸爣淇濈暀鍥㈤槦椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project star " + teamProject.getId(), createSource(0, owner, dedicatedServer)), "设置隐藏星标保留团队项目应返回成功");
         flushProjectSaves(dedicatedServer);
 
         reloadPersistentState();
@@ -2356,11 +2356,11 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestServerPlayer singleplayerOwner = createPlayer(owner.getStringUUID(), owner.getName().getString(), false);
         TestMinecraftServer singleplayerServer = createSingleplayerServer(singleplayerOwner);
         ProjectPackets.onPlayerJoin(singleplayerServer, singleplayerOwner);
-        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "鍗曟満杩愯鏈熶笉搴旂洿鎺ユ毚闇插洟闃熸槦鏍囬」鐩?");
+        assertEquals(List.of(), ProjectPackets.getHudStarredProjectIds(singleplayerOwner), "单机运行期不应直接暴露团队星标项目");
 
         addOwnedPersonalProject(singleplayerOwner, "singleplayer-visible-personal", "Singleplayer Visible Personal");
         Project personalProject = TodoListCommon.getProjectManager().getProject("singleplayer-visible-personal");
-        assertNotNull(personalProject, "鏈壘鍒扮敤浜庢ā鎷熷崟鏈?GUI 閫変腑閫昏緫鐨勪釜浜洪」鐩?");
+        assertNotNull(personalProject, "未找到用于模拟单机 GUI 选中逻辑的个人项目");
         ProjectPackets.setActiveProjectId(singleplayerOwner, personalProject.getId());
 
         reloadPersistentState();
@@ -2369,7 +2369,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer reloadedDedicatedServer = createServer(reloadedOwner);
         ProjectPackets.onPlayerJoin(reloadedDedicatedServer, reloadedOwner);
 
-        assertEquals(List.of(teamProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "鍗曟満閲岄€夋嫨涓汉椤圭洰鍚庯紝閲嶆柊鍥炲埌鏀寔鍥㈤槦椤圭洰鐨勭幆澧冧粛搴旀仮澶嶅洟闃熸槦鏍囬」鐩?");
+        assertEquals(List.of(teamProject.getId()), ProjectPackets.getHudStarredProjectIds(reloadedOwner), "单机里选择个人项目后，重新回到支持团队项目的环境仍应恢复团队星标项目");
     }
 
     /**
@@ -2381,7 +2381,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer server = createServer(owner);
         addOwnedPersonalProject(owner, "sync-seed-active", "Sync Seed Active");
         addOwnedPersonalProject(owner, "sync-seed-star", "Sync Seed Star");
-        assertEquals(Boolean.FALSE, Files.exists(getProjectPlayerStateFilePath(owner)), "娴嬭瘯鍓嶄笉搴斿凡鏈夌帺瀹堕」鐩姸鎬佹枃浠?");
+        assertEquals(Boolean.FALSE, Files.exists(getProjectPlayerStateFilePath(owner)), "测试前不应已有玩家项目状态文件");
 
         net.minecraft.network.FriendlyByteBuf packet = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         packet.writeBoolean(true);
@@ -2391,13 +2391,13 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         packet.writeBoolean(false);
         ProjectPackets.onRequestSyncProjectsPacket(server, owner, packet);
 
-        assertEquals("sync-seed-active", ProjectPackets.getActiveProjectId(owner), "requestSyncProjects 鏈敤瀹㈡埛绔瀛愬垵濮嬪寲 activeProjectId");
-        assertListEquals(List.of("sync-seed-star"), ProjectPackets.getHudStarredProjectIds(owner), "requestSyncProjects 鏈敤瀹㈡埛绔瀛愬垵濮嬪寲鏄熸爣椤圭洰");
-        assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(owner), "requestSyncProjects 鏈敤瀹㈡埛绔瀛愬垵濮嬪寲 HUD 鍙鎬?");
+        assertEquals("sync-seed-active", ProjectPackets.getActiveProjectId(owner), "requestSyncProjects 未用客户端种子初始化 activeProjectId");
+        assertListEquals(List.of("sync-seed-star"), ProjectPackets.getHudStarredProjectIds(owner), "requestSyncProjects 未用客户端种子初始化星标项目");
+        assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(owner), "requestSyncProjects 未用客户端种子初始化 HUD 可见性");
         ProjectPlayerStateStorage.ProjectPlayerState storedState = new ProjectPlayerStateStorage().loadPlayerState(owner.getUUID());
-        assertEquals("sync-seed-active", storedState.getActiveProjectId(), "瀹㈡埛绔瀛愭湭鍐欏叆鐜╁椤圭洰鐘舵€佹枃浠?");
-        assertListEquals(List.of("sync-seed-star"), storedState.getHudStarredProjectIds(), "瀹㈡埛绔瀛愭槦鏍囬」鐩湭鍐欏叆鐜╁椤圭洰鐘舵€佹枃浠?");
-        assertEquals(Boolean.FALSE, storedState.isHudVisible(), "瀹㈡埛绔瀛?HUD 鍙鎬ф湭鍐欏叆鐜╁椤圭洰鐘舵€佹枃浠?");
+        assertEquals("sync-seed-active", storedState.getActiveProjectId(), "客户端种子未写入玩家项目状态文件");
+        assertListEquals(List.of("sync-seed-star"), storedState.getHudStarredProjectIds(), "客户端种子星标项目未写入玩家项目状态文件");
+        assertEquals(Boolean.FALSE, storedState.isHudVisible(), "客户端种子 HUD 可见性未写入玩家项目状态文件");
     }
 
     /**
@@ -2409,20 +2409,20 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer server = createServer(manager);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
-        assertEquals(1, dispatcher.execute("todo project create team Reload Member Create Project", createSource(0, manager, server)), "鍒涘缓 member-create 閲嶈浇椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project create team Reload Member Create Project", createSource(0, manager, server)), "创建 member-create 重载项目应返回成功");
         Project createdProject = findProjectByName("Reload Member Create Project");
-        assertNotNull(createdProject, "鏈壘鍒?member-create 閲嶈浇娴嬭瘯椤圭洰");
+        assertNotNull(createdProject, "未找到 member-create 重载测试项目");
 
-        assertEquals(1, dispatcher.execute("todo project member-create " + createdProject.getId() + " on", createSource(0, manager, server)), "寮€鍚?member-create 搴旇繑鍥炴垚鍔?");
-        assertEquals(Boolean.TRUE, createdProject.isAllowMemberCreate(), "寮€鍚?member-create 鍚庨」鐩姸鎬佸簲绔嬪嵆鏇存柊");
+        assertEquals(1, dispatcher.execute("todo project member-create " + createdProject.getId() + " on", createSource(0, manager, server)), "开启 member-create 应返回成功");
+        assertEquals(Boolean.TRUE, createdProject.isAllowMemberCreate(), "开启 member-create 后项目状态应立即更新");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "member-create 搴斿啓鍏ュ洟闃熼」鐩枃浠?");
+        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "member-create 应写入团队项目文件");
 
         reloadPersistentState();
 
         Project reloadedProject = TodoListCommon.getProjectManager().getProject(createdProject.getId());
-        assertNotNull(reloadedProject, "閲嶈浇鍚庢湭鎭㈠ member-create 娴嬭瘯椤圭洰");
-        assertEquals(Boolean.TRUE, reloadedProject.isAllowMemberCreate(), "閲嶈浇鍚?member-create 璁剧疆搴斾繚鎸佸紑鍚?");
+        assertNotNull(reloadedProject, "重载后未恢复 member-create 测试项目");
+        assertEquals(Boolean.TRUE, reloadedProject.isAllowMemberCreate(), "重载后 member-create 设置应保持开启");
     }
 
     /**
@@ -2436,26 +2436,26 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer server = createServer(manager, leadCandidate, memberCandidate);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
 
-        assertEquals(1, dispatcher.execute("todo project create team Reload Role Project", createSource(0, manager, server)), "鍒涘缓瑙掕壊閲嶈浇椤圭洰搴旇繑鍥炴垚鍔?");
+        assertEquals(1, dispatcher.execute("todo project create team Reload Role Project", createSource(0, manager, server)), "创建角色重载项目应返回成功");
         Project createdProject = findProjectByName("Reload Role Project");
-        assertNotNull(createdProject, "鏈壘鍒拌鑹查噸杞芥祴璇曢」鐩?");
+        assertNotNull(createdProject, "未找到角色重载测试项目");
 
-        assertEquals(1, dispatcher.execute("todo project member add " + createdProject.getId() + " " + leadCandidate.getName().getString(), createSource(0, manager, server)), "娣诲姞 lead 鍊欓€夋垚鍛樺簲杩斿洖鎴愬姛");
-        assertEquals(1, dispatcher.execute("todo project member add " + createdProject.getId() + " " + memberCandidate.getName().getString(), createSource(0, manager, server)), "娣诲姞鏅€氭垚鍛樺簲杩斿洖鎴愬姛");
-        assertEquals(1, dispatcher.execute("todo project member role " + createdProject.getId() + " " + leadCandidate.getStringUUID() + " lead", createSource(0, manager, server)), "鎻愬崌 lead 鍊欓€夋垚鍛樺簲杩斿洖鎴愬姛");
+        assertEquals(1, dispatcher.execute("todo project member add " + createdProject.getId() + " " + leadCandidate.getName().getString(), createSource(0, manager, server)), "添加 lead 候选成员应返回成功");
+        assertEquals(1, dispatcher.execute("todo project member add " + createdProject.getId() + " " + memberCandidate.getName().getString(), createSource(0, manager, server)), "添加普通成员应返回成功");
+        assertEquals(1, dispatcher.execute("todo project member role " + createdProject.getId() + " " + leadCandidate.getStringUUID() + " lead", createSource(0, manager, server)), "提升 lead 候选成员应返回成功");
 
         Task leadTask = createTeamTask(createdProject.getId(), "Reload Lead Permission Task");
         Task memberTask = createTeamTask(createdProject.getId(), "Reload Member Permission Task");
         saveTeamTasks(leadTask, memberTask);
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "鎴愬憳瑙掕壊鍙樺寲搴斿啓鍏ュ洟闃熼」鐩枃浠?");
+        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "成员角色变化应写入团队项目文件");
 
         reloadPersistentState();
 
         Project reloadedProject = TodoListCommon.getProjectManager().getProject(createdProject.getId());
-        assertNotNull(reloadedProject, "閲嶈浇鍚庢湭鎭㈠瑙掕壊娴嬭瘯椤圭洰");
-        assertEquals(Project.ProjectRole.LEAD, reloadedProject.getMemberRole(leadCandidate.getStringUUID()), "閲嶈浇鍚?lead 瑙掕壊搴斾繚鎸佷笉鍙?");
-        assertEquals(Project.ProjectRole.MEMBER, reloadedProject.getMemberRole(memberCandidate.getStringUUID()), "閲嶈浇鍚庢櫘閫氭垚鍛樿鑹插簲淇濇寔涓嶅彉");
+        assertNotNull(reloadedProject, "重载后未恢复角色测试项目");
+        assertEquals(Project.ProjectRole.LEAD, reloadedProject.getMemberRole(leadCandidate.getStringUUID()), "重载后 lead 角色应保持不变");
+        assertEquals(Project.ProjectRole.MEMBER, reloadedProject.getMemberRole(memberCandidate.getStringUUID()), "重载后普通成员角色应保持不变");
 
         TestServerPlayer reloadedManager = createPlayer(manager.getStringUUID(), manager.getName().getString(), false);
         TestServerPlayer reloadedLead = createPlayer(leadCandidate.getStringUUID(), leadCandidate.getName().getString(), false);
@@ -2464,16 +2464,16 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         CommandDispatcher<CommandSourceStack> reloadedDispatcher = createDispatcher();
 
         int leadAssignResult = reloadedDispatcher.execute("todo task assignp " + createdProject.getId() + " " + leadTask.getId() + " " + reloadedMember.getStringUUID(), createSource(0, reloadedLead, reloadedServer));
-        assertEquals(1, leadAssignResult, "閲嶈浇鍚?lead 鐨?assignp 搴斾粛鐒跺彲鐢?");
+        assertEquals(1, leadAssignResult, "重载后 lead 的 assignp 应仍然可用");
         Task reloadedLeadTask = loadTeamTaskById(leadTask.getId());
-        assertEquals(reloadedMember.getStringUUID(), reloadedLeadTask.getAssigneeUuid(), "閲嶈浇鍚?lead assignp 鏈啓鍏ョ洰鏍囨垚鍛?UUID");
+        assertEquals(reloadedMember.getStringUUID(), reloadedLeadTask.getAssigneeUuid(), "重载后 lead assignp 未写入目标成员 UUID");
 
         CapturingCommandSourceStack deniedSource = createSource(0, reloadedMember, reloadedServer);
         int memberAssignResult = reloadedDispatcher.execute("todo task assignp " + createdProject.getId() + " " + memberTask.getId() + " " + reloadedLead.getStringUUID(), deniedSource);
-        assertEquals(0, memberAssignResult, "閲嶈浇鍚庢櫘閫氭垚鍛?assignp 搴旇繑鍥炲け璐?");
-        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "閲嶈浇鍚庢櫘閫氭垚鍛?assignp 鐨勯敊璇敭涓嶆纭?");
+        assertEquals(0, memberAssignResult, "重载后普通成员 assignp 应返回失败");
+        assertContainsMessageKey(deniedSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "重载后普通成员 assignp 的错误键不正确");
         Task reloadedMemberTask = loadTeamTaskById(memberTask.getId());
-        assertEquals(null, reloadedMemberTask.getAssigneeUuid(), "澶辫触鐨勬櫘閫氭垚鍛?assignp 涓嶅簲鍐欏叆 assigneeUuid");
-        assertEquals(null, reloadedMemberTask.getAssigneeName(), "澶辫触鐨勬櫘閫氭垚鍛?assignp 涓嶅簲鍐欏叆 assigneeName");
+        assertEquals(null, reloadedMemberTask.getAssigneeUuid(), "失败的普通成员 assignp 不应写入 assigneeUuid");
+        assertEquals(null, reloadedMemberTask.getAssigneeName(), "失败的普通成员 assignp 不应写入 assigneeName");
     }
 }

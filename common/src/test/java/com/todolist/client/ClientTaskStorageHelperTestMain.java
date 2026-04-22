@@ -137,13 +137,8 @@ public final class ClientTaskStorageHelperTestMain {
     }
 
     /**
-     * 调用待测迁移逻辑，减少重复样板。
-     *
-     * @param storage 当前测试使用的任务存储
-     * @return 是否发生实际迁移
+     * 验证未发布单人模式下，通过客户端个人任务入口读取时会优先恢复较新的玩家文件。
      */
-    /**
-     * 楠岃瘉鏈彂甯冨崟浜烘ā寮忎笅閫氳繃瀹㈡埛绔釜浜轰换鍔″叆鍙ｈ鍙栨椂锛屼細鍏堣嚜鍔ㄦ仮澶嶈緝鏂扮殑鐜╁鏂囦欢銆?     */
     private static void shouldRestorePlayerTasksWhenLoadingLocalSingleplayerTasks() {
         GuiTestSupport.resetState();
         TaskStorage storage = TodoListCommon.getTaskStorage();
@@ -157,8 +152,8 @@ public final class ClientTaskStorageHelperTestMain {
         List<String> loadedTitles = loadPersonalTitles(storage, minecraft);
         List<String> localTitles = loadLocalTitles(storage);
 
-        GuiTestSupport.assertEquals(List.of("Recovered Player"), loadedTitles, "鏈彂甯冨崟浜烘ā寮忚鍙栦釜浜轰换鍔℃椂搴旇嚜鍔ㄦ仮澶嶈緝鏂扮殑鐜╁鏂囦欢");
-        GuiTestSupport.assertEquals(List.of("Recovered Player"), localTitles, "鑷姩鎭㈠鍚庢湰鍦颁釜浜轰换鍔℃枃浠跺簲琚慨姝ｅ埌鏈€鏂扮姸鎬?");
+        GuiTestSupport.assertEquals(List.of("Recovered Player"), loadedTitles, "未发布单人模式读取个人任务时应自动恢复较新的玩家文件");
+        GuiTestSupport.assertEquals(List.of("Recovered Player"), localTitles, "自动恢复后本地个人任务文件应被修正到最新状态");
     }
 
     private static boolean migrate(TaskStorage storage) {
@@ -240,18 +235,13 @@ public final class ClientTaskStorageHelperTestMain {
     }
 
     /**
-     * 根据标题列表创建测试任务集合。
-     *
-     * @param titles 任务标题列表
-     * @return 对应的任务对象列表
+     * 通过客户端个人任务入口读取标题列表，用于验证未发布单人模式下的自动恢复逻辑。
      */
-    /**
-     * 閫氳繃瀹㈡埛绔釜浜轰换鍔″叆鍙ｈ鍙栨爣棰樺垪琛紝鐢ㄤ簬楠岃瘉鏈彂甯冨崟浜烘ā寮忕殑鑷剤鍥炵亴閫昏緫銆?     */
     private static List<String> loadPersonalTitles(TaskStorage storage, FakeMinecraftClient minecraft) {
         try {
             return ClientTaskStorageHelper.loadPersonalTasks(storage, minecraft).stream().map(Task::getTitle).toList();
         } catch (Exception e) {
-            throw new IllegalStateException("璇诲彇瀹㈡埛绔釜浜轰换鍔″垪琛ㄥけ璐?", e);
+            throw new IllegalStateException("读取客户端个人任务列表失败", e);
         }
     }
 

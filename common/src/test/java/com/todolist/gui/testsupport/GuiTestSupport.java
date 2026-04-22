@@ -5,20 +5,19 @@ import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.config.ModConfig;
-import com.todolist.gui.TodoScreen;
 import com.todolist.platform.DataPathProvider;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.DetectedVersion;
 import net.minecraft.SharedConstants;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.GameNarrator;
 import net.minecraft.client.InputType;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.util.FormattedCharSequence;
 import sun.misc.Unsafe;
 
@@ -30,7 +29,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * GUI 离线测试支撑工具：负责初始化临时环境、创建假客户端并提供基础断言能力。
+ * GUI 测试公共工具类，负责环境初始化、断言辅助和测试对象构造。
  */
 public final class GuiTestSupport {
     private static final Unsafe UNSAFE = loadUnsafe();
@@ -38,17 +37,17 @@ public final class GuiTestSupport {
     private static boolean bootstrapped;
 
     /**
-     * 私有构造方法，避免工具类被实例化。
+     * 工具类不需要实例化。
      */
     private GuiTestSupport() {
     }
 
     /**
-     * 通过反射写入对象的 double 字段，供 HUD 窗口缩放等测试场景复用。
+     * 使用 Unsafe 为目标对象写入 double 字段。
      *
-     * @param owner 字段声明类
+     * @param owner 字段所属类型
      * @param target 目标对象
-     * @param fieldName 字段名
+     * @param fieldName 字段名称
      * @param value 字段值
      */
     public static void setDoubleField(Class<?> owner, Object target, String fieldName, double value) {
@@ -63,7 +62,7 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 初始化 GUI 测试运行环境，确保数据目录和 Minecraft 静态常量可在离线模式下使用。
+     * 初始化 GUI 测试运行环境。
      */
     public static synchronized void bootstrapEnvironment() {
         if (bootstrapped) {
@@ -76,9 +75,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 重置单次 GUI 测试需要的全局状态，并返回新的记录型客户端桥接实现。
+     * 重置 GUI 测试状态并返回新的客户端操作记录器。
      *
-     * @return 本轮测试使用的记录型客户端桥接实现
+     * @return 新的操作记录器
      */
     public static RecordingClientOps resetState() {
         bootstrapEnvironment();
@@ -96,7 +95,7 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 创建带默认玩家的假客户端，供 GUI Screen 初始化和事件驱动测试使用。
+     * 创建默认的假 Minecraft 客户端。
      *
      * @return 假客户端实例
      */
@@ -105,11 +104,11 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 创建带指定玩家身份的假客户端，供权限和成员相关场景测试使用。
+     * 按指定玩家信息创建假 Minecraft 客户端。
      *
      * @param playerUuid 玩家 UUID
      * @param playerName 玩家名称
-     * @param operator 是否具备管理员权限
+     * @param operator 是否为管理员
      * @return 假客户端实例
      */
     public static FakeMinecraftClient createMinecraft(UUID playerUuid, String playerName, boolean operator) {
@@ -145,10 +144,10 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 初始化指定 Screen，模拟 Minecraft 对界面的尺寸注入。
+     * 初始化指定测试界面。
      *
      * @param minecraft 假客户端
-     * @param screen 待初始化的界面
+     * @param screen 目标界面
      * @param width 界面宽度
      * @param height 界面高度
      */
@@ -162,18 +161,18 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 创建测试专用玩家信息对象，供在线成员列表相关界面使用。
+     * 创建假的在线玩家信息。
      *
      * @param uuid 玩家 UUID
      * @param name 玩家名称
-     * @return 测试玩家信息对象
+     * @return 玩家信息对象
      */
     public static FakePlayerInfo createPlayerInfo(UUID uuid, String name) {
         return new FakePlayerInfo(new GameProfile(uuid, name));
     }
 
     /**
-     * 断言两个对象相等，不相等时抛出带说明的异常。
+     * 断言两个值相等。
      *
      * @param expected 期望值
      * @param actual 实际值
@@ -186,9 +185,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 断言条件为真，不满足时抛出带说明的异常。
+     * 断言条件为 true。
      *
-     * @param condition 待断言条件
+     * @param condition 条件值
      * @param message 失败提示
      */
     public static void assertTrue(boolean condition, String message) {
@@ -198,9 +197,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 断言条件为假，不满足时抛出带说明的异常。
+     * 断言条件为 false。
      *
-     * @param condition 待断言条件
+     * @param condition 条件值
      * @param message 失败提示
      */
     public static void assertFalse(boolean condition, String message) {
@@ -210,9 +209,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 断言对象非空，不满足时抛出带说明的异常。
+     * 断言对象不为 null。
      *
-     * @param value 待断言对象
+     * @param value 目标对象
      * @param message 失败提示
      */
     public static void assertNotNull(Object value, String message) {
@@ -222,9 +221,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 断言对象为空，不满足时抛出带说明的异常。
+     * 断言对象为 null。
      *
-     * @param value 待断言对象
+     * @param value 目标对象
      * @param message 失败提示
      */
     public static void assertNull(Object value, String message) {
@@ -234,18 +233,10 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 通过反射读取对象字段，供测试访问私有内部状态。
+     * 运行一组 GUI 测试并输出分组日志。
      *
-     * @param owner 字段声明类
-     * @param target 目标对象
-     * @param fieldName 字段名
-     * @return 字段当前值
-     */
-    /**
-     * 运行具名 GUI 测试组，并输出清晰的开始、通过和失败日志。
-     *
-     * @param groupName 测试组名称
-     * @param action 测试组执行逻辑
+     * @param groupName 分组名称
+     * @param action 测试动作
      */
     public static void runTestGroup(String groupName, Runnable action) {
         long startNs = System.nanoTime();
@@ -257,15 +248,15 @@ public final class GuiTestSupport {
         } catch (Throwable throwable) {
             long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
             System.out.println("[GUI][GROUP][FAIL] " + groupName + " (" + durationMs + " ms)");
-            throw new IllegalStateException("GUI 测试组失败: " + groupName, throwable);
+            throw new IllegalStateException("GUI 测试分组执行失败: " + groupName, throwable);
         }
     }
 
     /**
-     * 运行具名 GUI 测试用例，并在失败时补充明确的用例名称。
+     * 运行单个 GUI 测试用例并输出日志。
      *
-     * @param caseName 测试用例名称
-     * @param action 测试用例执行逻辑
+     * @param caseName 用例名称
+     * @param action 测试动作
      */
     public static void runTestCase(String caseName, Runnable action) {
         long startNs = System.nanoTime();
@@ -277,14 +268,22 @@ public final class GuiTestSupport {
         } catch (AssertionError assertionError) {
             long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
             System.out.println("[GUI][CASE ][FAIL] " + caseName + " (" + durationMs + " ms)");
-            throw new AssertionError("GUI 测试用例失败: " + caseName + " -> " + assertionError.getMessage(), assertionError);
+            throw new AssertionError("GUI 测试断言失败: " + caseName + " -> " + assertionError.getMessage(), assertionError);
         } catch (Throwable throwable) {
             long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
             System.out.println("[GUI][CASE ][FAIL] " + caseName + " (" + durationMs + " ms)");
-            throw new IllegalStateException("GUI 测试用例异常: " + caseName, throwable);
+            throw new IllegalStateException("GUI 测试用例执行失败: " + caseName, throwable);
         }
     }
 
+    /**
+     * 通过反射读取字段值。
+     *
+     * @param owner 字段所属类型
+     * @param target 目标对象
+     * @param fieldName 字段名称
+     * @return 字段值
+     */
     public static Object readField(Class<?> owner, Object target, String fieldName) {
         try {
             Field field = owner.getDeclaredField(fieldName);
@@ -296,11 +295,11 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 通过反射写入对象整数字段，供测试构造内部状态。
+     * 使用 Unsafe 为目标对象写入 int 字段。
      *
-     * @param owner 字段声明类
+     * @param owner 字段所属类型
      * @param target 目标对象
-     * @param fieldName 字段名
+     * @param fieldName 字段名称
      * @param value 字段值
      */
     public static void setIntField(Class<?> owner, Object target, String fieldName, int value) {
@@ -310,31 +309,31 @@ public final class GuiTestSupport {
             long offset = UNSAFE.objectFieldOffset(field);
             UNSAFE.putInt(target, offset, value);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("无法写入整数字段: " + fieldName, e);
+            throw new IllegalStateException("无法写入 int 字段: " + fieldName, e);
         }
     }
 
     /**
-     * 使用 Unsafe 无构造创建测试对象，避免真实客户端依赖。
+     * 使用 Unsafe 创建未执行构造方法的实例。
      *
      * @param type 目标类型
-     * @return 无构造创建的实例
-     * @param <T> 泛型类型
+     * @param <T> 类型参数
+     * @return 新建实例
      */
     public static <T> T allocate(Class<T> type) {
         try {
             return type.cast(UNSAFE.allocateInstance(type));
         } catch (InstantiationException e) {
-            throw new IllegalStateException("无法创建测试实例: " + type.getName(), e);
+            throw new IllegalStateException("无法分配实例: " + type.getName(), e);
         }
     }
 
     /**
-     * 设置对象字段值，必要时使用 Unsafe 绕过 final 限制。
+     * 使用 Unsafe 为目标对象写入引用字段。
      *
-     * @param owner 字段声明类
+     * @param owner 字段所属类型
      * @param target 目标对象
-     * @param fieldName 字段名
+     * @param fieldName 字段名称
      * @param value 字段值
      */
     static void setObjectField(Class<?> owner, Object target, String fieldName, Object value) {
@@ -349,10 +348,10 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 设置静态字段值，必要时使用 Unsafe 绕过 final 限制。
+     * 使用 Unsafe 写入静态对象字段。
      *
-     * @param owner 字段声明类
-     * @param fieldName 字段名
+     * @param owner 字段所属类型
+     * @param fieldName 字段名称
      * @param value 字段值
      */
     private static void setStaticObjectField(Class<?> owner, String fieldName, Object value) {
@@ -363,12 +362,12 @@ public final class GuiTestSupport {
             long offset = UNSAFE.staticFieldOffset(field);
             UNSAFE.putObject(base, offset, value);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("无法写入静态字段: " + fieldName, e);
+            throw new IllegalStateException("无法写入静态对象字段: " + fieldName, e);
         }
     }
 
     /**
-     * 清理测试目录，保证每个 GUI 自测从干净的数据状态启动。
+     * 清空并重建 GUI 测试目录。
      */
     private static void cleanTestGameDir() {
         try {
@@ -380,7 +379,7 @@ public final class GuiTestSupport {
                             try {
                                 Files.deleteIfExists(path);
                             } catch (Exception e) {
-                                throw new IllegalStateException("无法清理测试目录: " + path, e);
+                                throw new IllegalStateException("无法清理 GUI 测试目录中的文件: " + path, e);
                             }
                         });
             }
@@ -391,9 +390,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 创建 GUI 测试使用的临时游戏目录。
+     * 创建 GUI 测试专用目录。
      *
-     * @return 临时目录路径
+     * @return 测试目录路径
      */
     private static Path createTestGameDir() {
         try {
@@ -406,9 +405,9 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 反射读取 Unsafe 单例，供假对象无构造创建与 final 字段写入使用。
+     * 读取 Unsafe 实例。
      *
-     * @return Unsafe 单例
+     * @return Unsafe 实例
      */
     private static Unsafe loadUnsafe() {
         try {
@@ -421,11 +420,12 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 通过反射调用 TodoScreen 的测试重置入口，避免跨包访问限制。
+     * 反射调用 TodoScreenTestAccess 的静态重置方法。
      */
     private static void invokeTodoScreenReset() {
         try {
-            java.lang.reflect.Method method = TodoScreen.class.getDeclaredMethod("resetGuiStateForTest");
+            Class<?> accessClass = Class.forName("com.todolist.gui.TodoScreenTestAccess");
+            java.lang.reflect.Method method = accessClass.getDeclaredMethod("resetGuiStateForTest");
             method.setAccessible(true);
             method.invoke(null);
         } catch (ReflectiveOperationException e) {
@@ -434,21 +434,21 @@ public final class GuiTestSupport {
     }
 
     /**
-     * 极简字体实现：为离线 GUI 测试提供稳定的宽度和裁剪行为。
+     * 简化 GUI 测试所需文本测量行为的字体实现。
      */
     private static final class FakeFont extends Font {
         /**
-         * 创建极简字体实现，测试中只依赖宽度计算和字符串裁剪能力。
+         * 创建测试字体实例。
          */
         private FakeFont() {
             super(id -> null, false);
         }
 
         /**
-         * 返回字符串估算宽度，避免真实字体集依赖。
+         * 计算普通字符串宽度。
          *
-         * @param text 待测文本
-         * @return 文本估算宽度
+         * @param text 文本内容
+         * @return 文本宽度
          */
         @Override
         public int width(String text) {
@@ -456,10 +456,10 @@ public final class GuiTestSupport {
         }
 
         /**
-         * 返回组件估算宽度，供按钮和标签布局使用。
+         * 计算 FormattedText 的宽度。
          *
-         * @param text 待测组件
-         * @return 组件估算宽度
+         * @param text 文本内容
+         * @return 文本宽度
          */
         @Override
         public int width(FormattedText text) {
@@ -467,17 +467,17 @@ public final class GuiTestSupport {
         }
 
         /**
-         * 返回格式化字符序列的估算宽度，供组件布局计算使用。
+         * 计算 FormattedCharSequence 的宽度。
          *
-         * @param text 格式化字符序列
-         * @return 估算宽度
+         * @param text 文本内容
+         * @return 文本宽度
          */
         @Override
         public int width(FormattedCharSequence text) {
             if (text == null) {
                 return 0;
             }
-            final int[] count = new int[] { 0 };
+            final int[] count = new int[] {0};
             text.accept((index, style, codePoint) -> {
                 count[0]++;
                 return true;
@@ -486,11 +486,11 @@ public final class GuiTestSupport {
         }
 
         /**
-         * 按近似宽度截断字符串，供列表组件和输入框测试使用。
+         * 按宽度截取普通字符串。
          *
          * @param text 原始文本
          * @param maxWidth 最大宽度
-         * @return 裁剪后的文本
+         * @return 截取结果
          */
         @Override
         public String plainSubstrByWidth(String text, int maxWidth) {
@@ -498,12 +498,12 @@ public final class GuiTestSupport {
         }
 
         /**
-         * 按近似宽度截断字符串，并兼容带方向参数的重载调用。
+         * 按宽度从前向或反向截取普通字符串。
          *
          * @param text 原始文本
          * @param maxWidth 最大宽度
-         * @param reverse 是否反向截断
-         * @return 裁剪后的文本
+         * @param reverse 是否从末尾反向截取
+         * @return 截取结果
          */
         @Override
         public String plainSubstrByWidth(String text, int maxWidth, boolean reverse) {

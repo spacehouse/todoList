@@ -7,7 +7,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * 删除项目确认弹窗：展示提示信息并在确认后执行回调。
+ * 删除项目确认弹窗。
+ * 用于展示删除提示信息，并在用户确认后执行对应的删除回调。
  */
 public class ConfirmDeleteProjectScreen extends Screen {
     private final Screen parent;
@@ -16,6 +17,10 @@ public class ConfirmDeleteProjectScreen extends Screen {
 
     /**
      * 创建删除项目确认弹窗。
+     *
+     * @param parent 父界面
+     * @param message 删除提示文案
+     * @param onConfirm 确认删除后的回调
      */
     public ConfirmDeleteProjectScreen(Screen parent, Component message, Runnable onConfirm) {
         super(Component.translatable("gui.todolist.project.delete_confirm.title"));
@@ -24,6 +29,9 @@ public class ConfirmDeleteProjectScreen extends Screen {
         this.onConfirm = onConfirm;
     }
 
+    /**
+     * 初始化删除确认弹窗中的按钮布局。
+     */
     @Override
     protected void init() {
         int w = Math.max(220, Math.min(360, width - 20));
@@ -40,6 +48,9 @@ public class ConfirmDeleteProjectScreen extends Screen {
                 .bounds(x + w - 105, y + 85, 95, 20).build());
     }
 
+    /**
+     * 关闭弹窗并返回父界面。
+     */
     @Override
     public void onClose() {
         if (minecraft != null) {
@@ -47,6 +58,14 @@ public class ConfirmDeleteProjectScreen extends Screen {
         }
     }
 
+    /**
+     * 渲染删除确认弹窗的背景、标题与提示文案。
+     *
+     * @param context 绘制上下文
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @param delta 帧间隔
+     */
     @Override
     public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
@@ -70,6 +89,3 @@ public class ConfirmDeleteProjectScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
     }
 }
-
-
-

@@ -6,7 +6,9 @@ import com.todolist.project.ProjectNameFormatter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ComponentPath;
@@ -17,9 +19,16 @@ import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 
 /**
- * 项目侧边栏列表组件：展示项目并处理选择、滚动与测试辅助读取。
+ * 项目侧栏列表组件，负责展示项目、处理选择、星标切换与滚动交互。
  */
 public class ProjectListWidget implements Renderable, GuiEventListener, NarratableEntry {
+    private static final int ITEM_HORIZONTAL_INSET = 3;
+    private static final int ITEM_VERTICAL_GAP = 3;
+    private static final int ITEM_COLOR_BAR_WIDTH = 2;
+    private static final int ITEM_TEXT_LEFT_GAP = 4;
+    private static final int ITEM_COUNT_MAX_WIDTH = 16;
+    private static final int ITEM_STAR_WIDTH = 8;
+
     private final Minecraft client;
     private final int x;
     private final int y;
@@ -29,6 +38,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
 
     private List<Project> projects = new ArrayList<>();
     private List<Project> sourceProjects = new ArrayList<>();
+    private Map<String, Integer> projectTaskCounts = new HashMap<>();
     private Project selectedProject;
     private Consumer<Project> onProjectSelected;
     private int scrollOffset = 0;
@@ -51,7 +61,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目数据源并重建可见列表。
+     * 设置项目数据源，并重建当前可见的项目列表。
      *
      * @param projects 项目列表
      */
@@ -66,7 +76,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目选择回调。
+     * 设置项目点击后的选择回调。
      *
      * @param callback 选择回调
      */
@@ -75,9 +85,22 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置当前选中项目。
+     * 设置项目对应的任务数量，用于在侧栏右侧显示计数。
      *
-     * @param project 当前选中项目
+     * @param taskCounts 项目 ID 到任务数的映射
+     */
+    public void setProjectTaskCounts(Map<String, Integer> taskCounts) {
+        if (taskCounts == null || taskCounts.isEmpty()) {
+            this.projectTaskCounts = new HashMap<>();
+            return;
+        }
+        this.projectTaskCounts = new HashMap<>(taskCounts);
+    }
+
+    /**
+     * 设置当前选中的项目，并在选中项失效时自动回退。
+     *
+     * @param project 当前选中的项目
      */
     public void setSelectedProject(Project project) {
         this.selectedProject = project;
@@ -103,7 +126,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置项目列表滚动偏移量，并自动裁剪到可见范围。
+     * 设置项目列表的滚动偏移量，并裁剪到合法范围。
      *
      * @param scrollOffset 目标滚动偏移量
      */
@@ -113,7 +136,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 返回当前用于渲染的项目列表快照，供同包测试代码断言排序与筛选结果。
+     * 返回当前可见项目列表快照，供同包测试校验排序结果。
      *
      * @return 当前可见项目列表快照
      */
@@ -122,7 +145,16 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 重建用于渲染的项目列表。
+     * 返回组件边界，供同包测试验证侧栏布局。
+     *
+     * @return 依次包含 x、y、width、height 的数组
+     */
+    int[] getBoundsForTest() {
+        return new int[] {x, y, width, height};
+    }
+
+    /**
+     * 按星标状态重建项目列表顺序。
      */
     private void rebuildProjects() {
         ModConfig config = ModConfig.getInstance();
@@ -146,7 +178,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 确保当前选中项在项目列表变化后仍然有效。
+     * 确保当前选中项仍然有效，否则回退到默认项目或首项。
      */
     private void ensureSelectionFallback() {
         if (projects == null || projects.isEmpty()) {
@@ -173,7 +205,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 将滚动偏移限制在当前列表的可用范围内。
+     * 将滚动偏移量限制在当前列表可滚动范围内。
      */
     private void clampScrollOffset() {
         int visibleItems = Math.max(1, height / itemHeight);
@@ -187,7 +219,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 渲染项目列表组件。
+     * 渲染项目侧栏的背景、项目行、星标与滚动条。
      *
      * @param context GUI 绘制上下文
      * @param mouseX 鼠标 X 坐标
@@ -199,53 +231,69 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
         ModConfig config = ModConfig.getInstance();
         Font textRenderer = client.font;
 
-        context.fill(x, y, x + width, y + height, 0xFF101010);
+        context.fill(x, y, x + width, y + height, 0xFF0D1115);
+        context.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF111820);
         context.renderOutline(x, y, width, height, config.getBorderColor());
 
         int visibleItems = height / itemHeight;
-        for (int indexInView = 0; indexInView < visibleItems; indexInView++) {
-            int index = indexInView + scrollOffset;
+        for (int i = 0; i < visibleItems; i++) {
+            int index = i + scrollOffset;
             if (index >= projects.size()) {
                 break;
             }
 
             Project project = projects.get(index);
-            int itemY = y + indexInView * itemHeight;
+            int itemY = y + i * itemHeight;
             boolean isSelected = selectedProject != null
                     && selectedProject.getId() != null
                     && selectedProject.getId().equals(project.getId());
             boolean isHovered = mouseX >= x && mouseX < x + width && mouseY >= itemY && mouseY < itemY + itemHeight;
 
+            int rowTop = itemY + ITEM_VERTICAL_GAP;
+            int rowBottom = itemY + itemHeight - ITEM_VERTICAL_GAP;
+            int rowLeft = x + ITEM_HORIZONTAL_INSET;
+            int rowRight = x + width - ITEM_HORIZONTAL_INSET;
             if (isSelected) {
-                context.fill(x + 1, itemY, x + width - 1, itemY + itemHeight, 0xFF303030);
+                context.fill(rowLeft, rowTop, rowRight, rowBottom, 0xFF283648);
             } else if (isHovered) {
-                context.fill(x + 1, itemY, x + width - 1, itemY + itemHeight, 0xFF202020);
+                context.fill(rowLeft, rowTop, rowRight, rowBottom, 0xFF1A2530);
             }
 
-            int color = project.getColor() | 0xFF000000;
-            context.fill(x + 4, itemY + 4, x + 8, itemY + 16, color);
+            int nameLeadInset = 2;
+            if (isSelected || isHovered) {
+                int color = project.getColor() | 0xFF000000;
+                context.fill(rowLeft + 1, rowTop + 3, rowLeft + 1 + ITEM_COLOR_BAR_WIDTH, rowBottom - 3, color);
+                nameLeadInset = 1 + ITEM_COLOR_BAR_WIDTH + ITEM_TEXT_LEFT_GAP;
+            }
 
             boolean starred = config.isHudProjectStarred(project.getId());
-            int starX = x + width - 12;
+            int starX = rowRight - ITEM_STAR_WIDTH - 1;
             int starColor = starred ? 0xFFFFD700 : 0xFF666666;
             context.drawString(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
 
             String name = ProjectNameFormatter.toDisplayText(project).getString();
-            int nameColor = isSelected ? 0xFFFFFFFF : 0xFFAAAAAA;
-            int nameWidth = Math.max(16, width - 28);
+            String taskCountText = getProjectTaskCountText(project);
+            int nameColor = isSelected ? 0xFFFFFFFF : 0xFFD6E0EC;
+            int countColor = isSelected ? 0xFFAEC3DD : 0xFF8FA0B5;
+            int countWidth = Math.min(ITEM_COUNT_MAX_WIDTH, textRenderer.width(taskCountText));
+            int countX = starX - countWidth - 3;
+            int nameX = rowLeft + nameLeadInset;
+            int nameWidth = Math.max(16, countX - 4 - nameX);
             String displayName = textRenderer.plainSubstrByWidth(name, nameWidth);
-            context.drawString(textRenderer, displayName, x + 12, itemY + (itemHeight - 8) / 2, nameColor, false);
+            context.drawString(textRenderer, displayName, nameX, itemY + (itemHeight - 8) / 2, nameColor, false);
+            context.drawString(textRenderer, taskCountText, countX, itemY + (itemHeight - 8) / 2, countColor, false);
         }
 
         if (projects.size() > visibleItems) {
             int barHeight = (int) ((float) visibleItems / projects.size() * height);
             int barY = y + (int) ((float) scrollOffset / projects.size() * height);
-            context.fill(x + width - 2, barY, x + width, barY + barHeight, 0xFF808080);
+            context.fill(x + width - 3, y + 2, x + width - 1, y + height - 2, 0xFF1C2731);
+            context.fill(x + width - 3, barY, x + width - 1, barY + barHeight, 0xFF6E8093);
         }
     }
 
     /**
-     * 处理鼠标点击。
+     * 处理项目项点击与星标切换点击。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
@@ -278,7 +326,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 处理鼠标滚轮滚动。
+     * 处理项目列表区域内的滚轮滚动。
      *
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
@@ -306,7 +354,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 设置焦点状态。
+     * 接收焦点变化通知；当前组件不维护独立焦点状态。
      *
      * @param focused 是否聚焦
      */
@@ -315,7 +363,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 判断当前组件是否聚焦。
+     * 返回当前组件是否持有焦点；当前始终不参与焦点管理。
      *
      * @return 始终返回 false
      */
@@ -325,7 +373,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 返回旁白优先级。
+     * 返回旁白优先级；当前组件不提供旁白内容。
      *
      * @return 旁白优先级
      */
@@ -335,7 +383,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 更新旁白内容。
+     * 更新旁白内容；当前组件不输出旁白文本。
      *
      * @param builder 旁白输出构建器
      */
@@ -344,7 +392,24 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     }
 
     /**
-     * 计算下一个焦点路径。
+     * 返回项目在侧栏中的任务数量文本，并对极端值做收敛显示。
+     *
+     * @param project 目标项目
+     * @return 任务数量文本
+     */
+    private String getProjectTaskCountText(Project project) {
+        if (project == null || project.getId() == null || project.getId().isEmpty()) {
+            return "0";
+        }
+        int count = Math.max(0, projectTaskCounts.getOrDefault(project.getId(), 0));
+        if (count > 99) {
+            return "99+";
+        }
+        return Integer.toString(count);
+    }
+
+    /**
+     * 返回下一个可聚焦路径；当前组件不支持键盘焦点导航。
      *
      * @param navigation 焦点导航事件
      * @return 当前组件不参与焦点导航时返回 null
