@@ -31,19 +31,28 @@ jobs:
         id: meta
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          MOD_VERSION="$(sed -n 's/^mod_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
           GAME_VERSION="$(sed -n 's/^minecraft_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
+          EXPECTED_TAG="v${MOD_VERSION}-mc${GAME_VERSION}"
+          if [ -z "$MOD_VERSION" ]; then
+            echo "Failed to resolve mod_version from gradle.properties" >&2
+            exit 1
+          fi
           if [ -z "$GAME_VERSION" ]; then
             echo "Failed to resolve minecraft_version from gradle.properties" >&2
             exit 1
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match expected release tag ${EXPECTED_TAG}" >&2
+            exit 1
+          fi
+          echo "version=${MOD_VERSION}" >> "$GITHUB_OUTPUT"
           echo "game_version=${GAME_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_name=TodoList-v${VERSION}-mc${GAME_VERSION}-release" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_name=TodoList-v${VERSION}-mc${GAME_VERSION}-Fabric" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_version=${VERSION}-mc${GAME_VERSION}-fabric" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_name=TodoList-v${VERSION}-mc${GAME_VERSION}-Forge" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_version=${VERSION}-mc${GAME_VERSION}-forge" >> "$GITHUB_OUTPUT"
+          echo "release_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-release" >> "$GITHUB_OUTPUT"
+          echo "fabric_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Fabric" >> "$GITHUB_OUTPUT"
+          echo "fabric_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-fabric" >> "$GITHUB_OUTPUT"
+          echo "forge_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Forge" >> "$GITHUB_OUTPUT"
+          echo "forge_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-forge" >> "$GITHUB_OUTPUT"
 
       - name: Extract Release Notes
         id: extract_changelog
