@@ -61,13 +61,14 @@ public final class TodoListCommon {
         if (projectStorage == null || projectManager == null) {
             return;
         }
-        projectManager.clearAll();
         try {
             List<Project> personal = projectStorage.loadProjects();
+            List<Project> team = projectStorage.loadTeamProjects();
+            List<Project> reloadedProjects = new java.util.ArrayList<>();
             boolean hasPersonal = false;
             for (Project project : personal) {
                 project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
-                projectManager.addProject(project);
+                reloadedProjects.add(project);
                 if (project.getScope() == Project.Scope.PERSONAL) {
                     hasPersonal = true;
                 }
@@ -75,17 +76,40 @@ public final class TodoListCommon {
             if (!hasPersonal) {
                 Project defaultPersonal = new Project(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY, Project.Scope.PERSONAL, null);
                 defaultPersonal.setId(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID);
-                projectManager.addProject(defaultPersonal);
-                projectStorage.saveProjects(projectManager.getProjectsByScope(Project.Scope.PERSONAL));
+                reloadedProjects.add(defaultPersonal);
+                projectStorage.saveProjects(filterProjectsByScope(reloadedProjects, Project.Scope.PERSONAL));
             }
-            List<Project> team = projectStorage.loadTeamProjects();
             for (Project project : team) {
                 project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));
+                reloadedProjects.add(project);
+            }
+            projectManager.clearAll();
+            for (Project project : reloadedProjects) {
                 projectManager.addProject(project);
             }
         } catch (Exception e) {
             TodoConstants.LOGGER.error("Failed to reload projects from storage", e);
         }
+    }
+
+    /**
+     * 从项目列表中过滤出指定范围的项目。
+     *
+     * @param projects 原始项目列表
+     * @param scope 目标范围
+     * @return 过滤后的项目列表
+     */
+    private static List<Project> filterProjectsByScope(List<Project> projects, Project.Scope scope) {
+        List<Project> filtered = new java.util.ArrayList<>();
+        if (projects == null || scope == null) {
+            return filtered;
+        }
+        for (Project project : projects) {
+            if (project != null && project.getScope() == scope) {
+                filtered.add(project);
+            }
+        }
+        return filtered;
     }
 
     /**

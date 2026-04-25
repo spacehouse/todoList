@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.todolist.TodoConstants;
 import com.todolist.client.ClientBridge;
+import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 
 import java.io.File;
@@ -216,35 +217,35 @@ public class ModConfig {
      * Load configuration from file
      */
     public static void load() {
-        if (Files.exists(CONFIG_PATH)) {
-            try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
-                JsonReader jsonReader = new JsonReader(reader);
-                jsonReader.setLenient(true);
-                instance = GSON.fromJson(jsonReader, ModConfig.class);
-                TodoConstants.LOGGER.info("Loaded configuration from {}", CONFIG_PATH);
-                boolean changed = instance == null || instance.normalize();
-                if (instance == null) {
-                    instance = new ModConfig();
-                    changed = true;
-                }
-                if (instance.gui.guiHeight < 400) {
-                    instance.gui.guiHeight = 400;
-                    changed = true;
-                }
-                if (changed) {
-                    save();
-                }
-                instance.commandAccessModeDirty = false;
-            } catch (IOException e) {
-                TodoConstants.LOGGER.error("Failed to load configuration, using defaults", e);
+        try {
+            SafePersistenceHelper.ReadResult<ModConfig> readResult = SafePersistenceHelper.readWithRecovery(
+                    CONFIG_PATH,
+                    "mod config",
+                    path -> readConfigFromPath(path),
+                    value -> value != null
+            );
+            if (!readResult.isFound()) {
                 instance = new ModConfig();
+                save();
                 instance.commandAccessModeDirty = false;
+                TodoConstants.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
+                return;
             }
-        } else {
-            instance = new ModConfig();
-            save();
+            instance = readResult.getValue();
+            TodoConstants.LOGGER.info("Loaded configuration from {}", CONFIG_PATH);
+            boolean changed = instance.normalize();
+            if (instance.gui.guiHeight < 400) {
+                instance.gui.guiHeight = 400;
+                changed = true;
+            }
+            if (changed) {
+                save();
+            }
             instance.commandAccessModeDirty = false;
-            TodoConstants.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to load configuration, using defaults", e);
+            instance = new ModConfig();
+            instance.commandAccessModeDirty = false;
         }
     }
 
@@ -361,11 +362,13 @@ public class ModConfig {
         try {
             preserveExternalCommandAccessModeIfNeeded();
             Files.createDirectories(CONFIG_PATH.getParent());
-            try (java.io.Writer writer = Files.newBufferedWriter(CONFIG_PATH, StandardCharsets.UTF_8)) {
-                String json = GSON.toJson(instance);
-                writer.write(addCommandAccessModeComment(json));
-                TodoConstants.LOGGER.info("Saved configuration to {}", CONFIG_PATH);
-            }
+            String json = GSON.toJson(instance);
+            SafePersistenceHelper.writeBytes(
+                    CONFIG_PATH,
+                    addCommandAccessModeComment(json).getBytes(StandardCharsets.UTF_8),
+                    "mod config"
+            );
+            TodoConstants.LOGGER.info("Saved configuration to {}", CONFIG_PATH);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save configuration", e);
         }
@@ -390,17 +393,39 @@ public class ModConfig {
      * @return the persisted command access mode, or null when unavailable
      */
     private static CommandAccessMode loadPersistedCommandAccessMode() {
-        if (!Files.exists(CONFIG_PATH)) {
+        if (!SafePersistenceHelper.existsOrBackup(CONFIG_PATH)) {
             return null;
         }
-        try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(CONFIG_PATH), StandardCharsets.UTF_8)) {
-            JsonReader jsonReader = new JsonReader(reader);
-            jsonReader.setLenient(true);
-            ModConfig persisted = GSON.fromJson(jsonReader, ModConfig.class);
+        try {
+            SafePersistenceHelper.ReadResult<ModConfig> readResult = SafePersistenceHelper.readWithRecovery(
+                    CONFIG_PATH,
+                    "mod config",
+                    path -> readConfigFromPath(path),
+                    value -> value != null
+            );
+            if (!readResult.isFound()) {
+                return null;
+            }
+            ModConfig persisted = readResult.getValue();
             return persisted == null ? null : persisted.commandAccessMode;
         } catch (Exception e) {
             TodoConstants.LOGGER.warn("Failed to read persisted commandAccessMode from {}", CONFIG_PATH, e);
             return null;
+        }
+    }
+
+    /**
+     * 从指定路径读取配置对象。
+     *
+     * @param path 配置文件路径
+     * @return 读取到的配置对象
+     * @throws IOException 当读取失败时抛出
+     */
+    private static ModConfig readConfigFromPath(Path path) throws IOException {
+        try (InputStreamReader reader = new InputStreamReader(Files.newInputStream(path), StandardCharsets.UTF_8)) {
+            JsonReader jsonReader = new JsonReader(reader);
+            jsonReader.setLenient(true);
+            return GSON.fromJson(jsonReader, ModConfig.class);
         }
     }
 
