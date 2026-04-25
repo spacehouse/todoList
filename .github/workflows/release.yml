@@ -32,8 +32,18 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          GAME_VERSION="$(sed -n 's/^minecraft_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
+          if [ -z "$GAME_VERSION" ]; then
+            echo "Failed to resolve minecraft_version from gradle.properties" >&2
+            exit 1
+          fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_name=TodoList-v${VERSION}-release" >> "$GITHUB_OUTPUT"
+          echo "game_version=${GAME_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_name=TodoList-v${VERSION}-mc${GAME_VERSION}-release" >> "$GITHUB_OUTPUT"
+          echo "fabric_publish_name=TodoList-v${VERSION}-mc${GAME_VERSION}-Fabric" >> "$GITHUB_OUTPUT"
+          echo "fabric_publish_version=${VERSION}-mc${GAME_VERSION}-fabric" >> "$GITHUB_OUTPUT"
+          echo "forge_publish_name=TodoList-v${VERSION}-mc${GAME_VERSION}-Forge" >> "$GITHUB_OUTPUT"
+          echo "forge_publish_version=${VERSION}-mc${GAME_VERSION}-forge" >> "$GITHUB_OUTPUT"
 
       - name: Extract Release Notes
         id: extract_changelog
@@ -71,8 +81,8 @@ jobs:
       - name: Publish Fabric Version
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          name: "TodoList-${{ github.ref_name }}-Fabric"
-          version: "${{ github.ref_name }}-fabric"
+          name: ${{ steps.meta.outputs.fabric_publish_name }}
+          version: ${{ steps.meta.outputs.fabric_publish_version }}
           changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
 
           files: build/libs/*-fabric-*!(*-dev|*-sources|*-javadoc).jar
@@ -84,13 +94,13 @@ jobs:
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
           loaders: fabric
-          game-versions: 1.20.1
+          game-versions: ${{ steps.meta.outputs.game_version }}
 
       - name: Publish Forge Version
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          name: "TodoList-${{ github.ref_name }}-Forge"
-          version: "${{ github.ref_name }}-forge"
+          name: ${{ steps.meta.outputs.forge_publish_name }}
+          version: ${{ steps.meta.outputs.forge_publish_version }}
           changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
 
           files: build/libs/*-forge-*!(*-dev|*-sources|*-javadoc).jar
@@ -102,4 +112,4 @@ jobs:
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
           loaders: forge
-          game-versions: 1.20.1
+          game-versions: ${{ steps.meta.outputs.game_version }}
