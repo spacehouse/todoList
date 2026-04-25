@@ -75,6 +75,7 @@ public final class ClientTaskStorageHelper {
 
     /**
      * 保存当前客户端应使用的个人任务列表。
+     * 本地集成服务端环境下会同时更新本地单文件与玩家文件，避免两份个人任务副本长期漂移。
      *
      * @param storage 任务存储服务
      * @param client 当前客户端实例
@@ -86,11 +87,9 @@ public final class ClientTaskStorageHelper {
             return;
         }
         UUID playerUuid = getClientPlayerUuid(client);
-        if (playerUuid != null && shouldUsePublishedLocalPlayerStorage(client)) {
+        if (playerUuid != null && isLocalIntegratedServer(client)) {
             storage.savePlayerTasks(playerUuid, tasks);
-            if (isLocalIntegratedServer(client)) {
-                storage.saveTasks(tasks);
-            }
+            storage.saveTasks(tasks);
             return;
         }
         storage.saveTasks(tasks);
