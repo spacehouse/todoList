@@ -114,8 +114,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     
     private Task selectedTask;
     private Task pendingClickSelectionTask;
-    private boolean taskRowDragInProgress;
-    private List<String> taskRowDragOrderSnapshot = List.of();
     private List<Task> filteredTasks = new ArrayList<>();
     private List<Task> baseFilteredTasks = new ArrayList<>();
     private String searchQuery = "";
@@ -1107,8 +1105,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     String dragSectionId = sectionHit == null ? "active" : sectionHit.getSectionId();
                     taskListWidget.armPendingTaskDrag(clickedTask, dragSectionId, mouseX, mouseY);
                     pendingClickSelectionTask = clickedTask;
-                    taskRowDragInProgress = false;
-                    taskRowDragOrderSnapshot = TodoScreenTaskSupport.getVisibleIncompleteTaskIds(filteredTasks);
                     closeTaskContextMenu();
                     return true;
                 }
@@ -1217,10 +1213,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
-            if (pendingClickSelectionTask != null || taskListWidget.getDropTargetIndexForTest() >= 0) {
-                taskRowDragInProgress = true;
-                markUnsaved();
-            }
             pendingClickSelectionTask = null;
             return true;
         }
@@ -1231,14 +1223,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseReleased(mouseX, mouseY, button)) {
-            if (taskRowDragInProgress || taskListWidget.getDropTargetIndexForTest() >= 0) {
-                markUnsaved();
-                List<Task> reorderedActiveTasks = TodoScreenTaskSupport.extractIncompleteTasks(taskListWidget.getTasks());
-                List<String> reorderedIds = TodoScreenTaskSupport.toNonNullTaskIds(reorderedActiveTasks);
-                if (!reorderedIds.equals(taskRowDragOrderSnapshot)) {
-                    onManualReorderActiveTasks(reorderedActiveTasks);
-                }
-            }
             resetTaskRowDragState();
             return true;
         }
@@ -1254,8 +1238,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void resetTaskRowDragState() {
         pendingClickSelectionTask = null;
-        taskRowDragInProgress = false;
-        taskRowDragOrderSnapshot = List.of();
     }
 
     @Override
@@ -1885,7 +1867,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
         markUnsaved();
-        applySearchFilter();
+        filterTasks();
     }
 
     /**

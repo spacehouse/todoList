@@ -103,6 +103,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMarkUnsavedAfterManualReorder", TodoScreenTestMain::shouldMarkUnsavedAfterManualReorder);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskListScrollOffsetWhenSelectingTask", TodoScreenTestMain::shouldKeepTaskListScrollOffsetWhenSelectingTask);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMovePromotedTaskAheadOfLowerPriorities", TodoScreenTestMain::shouldMovePromotedTaskAheadOfLowerPriorities);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMoveDemotedTaskBehindHigherPriorities", TodoScreenTestMain::shouldMoveDemotedTaskBehindHigherPriorities);
@@ -1261,6 +1263,63 @@ public final class TodoScreenTestMain {
                 List.of("Gamma", "Alpha", "Beta"),
                 access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "手动拖拽排序后当前任务管理器应保留新的任务顺序"
+        );
+    }
+
+    /**
+     * 验证个人任务拖拽排序后，当前可见列表会立即刷新为最新顺序。
+     */
+    private static void shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Alpha");
+        addTaskViaInput(screen, "Beta");
+        addTaskViaInput(screen, "Gamma");
+        access(screen).saveTasksForTest();
+
+        Task gamma = requireTaskByTitle(screen, "Gamma");
+        Task alpha = requireTaskByTitle(screen, "Alpha");
+        dragTaskBefore(screen, gamma, alpha);
+
+        GuiTestSupport.assertEquals(
+                List.of("Gamma", "Alpha", "Beta"),
+                access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
+                "个人任务拖拽释放后，当前可见列表应立即刷新为新的顺序"
+        );
+    }
+
+    /**
+     * 验证团队任务拖拽排序后，当前可见列表会立即刷新为最新顺序。
+     */
+    private static void shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-reorder-visible-refresh", "Team Reorder Visible Refresh");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Alpha");
+        addTaskViaInput(screen, "Beta");
+        addTaskViaInput(screen, "Gamma");
+        access(screen).saveTasksForTest();
+
+        Task gamma = requireTaskByTitle(screen, "Gamma");
+        Task alpha = requireTaskByTitle(screen, "Alpha");
+        dragTaskBefore(screen, gamma, alpha);
+
+        GuiTestSupport.assertEquals(
+                List.of("Gamma", "Alpha", "Beta"),
+                access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
+                "团队任务拖拽释放后，当前可见列表应立即刷新为新的顺序"
         );
     }
 
