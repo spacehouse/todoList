@@ -55,6 +55,9 @@ public final class CommandBootstrapTaskIntegrationTestMain {
             "shouldRejectMissingTeamTaskWhenClaiming",
             "shouldRejectClaimingAssignedTeamTaskWithoutPermission",
             "shouldRejectAbandoningOthersTaskWithoutPermission",
+            "shouldRejectNonMemberClaimAbandonDoneWhenAllPlayerClaimCompleteDisabledSuccessfully",
+            "shouldAllowNonMemberClaimAbandonDoneWhenAllPlayerClaimCompleteEnabledSuccessfully",
+            "shouldKeepNonMemberDeniedForAddRemoveAssignWhenAllPlayerClaimCompleteEnabledSuccessfully",
             "shouldRejectInvalidAssignmentTargetByProject",
             "shouldRejectClaimingAssignedTeamTaskAfterManagerAssignmentSuccessfully",
             "shouldAllowManagerAndLeadClaimingUnassignedTeamTasksSuccessfully",
@@ -1119,6 +1122,133 @@ public final class CommandBootstrapTaskIntegrationTestMain {
         int result = dispatcher.execute("todo task abandonp team-abandon-denied " + task.getId(), source);
         assertEquals(0, result, "普通成员放弃他人任务应返回失败");
         assertContainsMessageKey(source.getFailureMessages(), "command.todolist.task.project.permission_denied", "abandonp 权限拒绝错误键不正确");
+    }
+
+    /**
+     * 校验开关关闭时，非成员执行 claimp/abandonp/donep 均会被拒绝。
+     */
+    private static void shouldRejectNonMemberClaimAbandonDoneWhenAllPlayerClaimCompleteDisabledSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000328", "manager-all-player-off", false);
+        TestServerPlayer outsider = createPlayer("00000000-0000-0000-0000-000000000329", "outsider-all-player-off", false);
+        TestMinecraftServer server = createServer(manager, outsider);
+        Project project = addTeamProject(manager, "team-all-player-off", "All Player Off");
+        Task claimTask = createTeamTask(project.getId(), "Outsider Claim Denied Task");
+        Task abandonTask = createTeamTask(project.getId(), "Outsider Abandon Denied Task");
+        abandonTask.setAssigneeUuid(outsider.getStringUUID());
+        abandonTask.setAssigneeName(outsider.getName().getString());
+        Task doneTask = createTeamTask(project.getId(), "Outsider Done Denied Task");
+        doneTask.setAssigneeUuid(outsider.getStringUUID());
+        doneTask.setAssigneeName(outsider.getName().getString());
+        saveTeamTasks(claimTask, abandonTask, doneTask);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        CapturingCommandSourceStack claimSource = createSource(0, outsider, server);
+        int claimResult = dispatcher.execute("todo task claimp team-all-player-off " + claimTask.getId(), claimSource);
+        assertEquals(0, claimResult, "开关关闭时非成员 claimp 应返回失败");
+        assertContainsMessageKey(claimSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关关闭时非成员 claimp 的错误键不正确");
+
+        CapturingCommandSourceStack abandonSource = createSource(0, outsider, server);
+        int abandonResult = dispatcher.execute("todo task abandonp team-all-player-off " + abandonTask.getId(), abandonSource);
+        assertEquals(0, abandonResult, "开关关闭时非成员 abandonp 应返回失败");
+        assertContainsMessageKey(abandonSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关关闭时非成员 abandonp 的错误键不正确");
+
+        CapturingCommandSourceStack doneSource = createSource(0, outsider, server);
+        int doneResult = dispatcher.execute("todo task donep team-all-player-off " + doneTask.getId(), doneSource);
+        assertEquals(0, doneResult, "开关关闭时非成员 donep 应返回失败");
+        assertContainsMessageKey(doneSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关关闭时非成员 donep 的错误键不正确");
+
+        Task savedClaimTask = loadTeamTaskById(claimTask.getId());
+        Task savedAbandonTask = loadTeamTaskById(abandonTask.getId());
+        Task savedDoneTask = loadTeamTaskById(doneTask.getId());
+        assertEquals(null, savedClaimTask.getAssigneeUuid(), "开关关闭时失败的非成员 claimp 不应写入 assigneeUuid");
+        assertEquals(outsider.getStringUUID(), savedAbandonTask.getAssigneeUuid(), "开关关闭时失败的非成员 abandonp 不应清空 assigneeUuid");
+        assertEquals(Boolean.FALSE, savedDoneTask.isCompleted(), "开关关闭时失败的非成员 donep 不应将任务标记为已完成");
+        assertEquals(Boolean.FALSE, project.getMembers().containsKey(outsider.getStringUUID()), "非成员执行任务命令失败后不应被加入成员列表");
+    }
+
+    /**
+     * 校验开关开启时，非成员可按 MEMBER 语义执行 claimp/abandonp/donep。
+     */
+    private static void shouldAllowNonMemberClaimAbandonDoneWhenAllPlayerClaimCompleteEnabledSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000330", "manager-all-player-on", false);
+        TestServerPlayer outsider = createPlayer("00000000-0000-0000-0000-000000000331", "outsider-all-player-on", false);
+        TestMinecraftServer server = createServer(manager, outsider);
+        Project project = addTeamProject(manager, "team-all-player-on", "All Player On");
+        project.setAllowAllPlayersClaimComplete(true);
+        TodoListCommon.getProjectManager().updateProject(project);
+        Task claimTask = createTeamTask(project.getId(), "Outsider Claim Allowed Task");
+        Task assignedToManagerTask = createTeamTask(project.getId(), "Outsider Claim Denied Assigned Task");
+        assignedToManagerTask.setAssigneeUuid(manager.getStringUUID());
+        assignedToManagerTask.setAssigneeName(manager.getName().getString());
+        Task abandonTask = createTeamTask(project.getId(), "Outsider Abandon Allowed Task");
+        abandonTask.setAssigneeUuid(outsider.getStringUUID());
+        abandonTask.setAssigneeName(outsider.getName().getString());
+        Task doneTask = createTeamTask(project.getId(), "Outsider Done Allowed Task");
+        doneTask.setAssigneeUuid(outsider.getStringUUID());
+        doneTask.setAssigneeName(outsider.getName().getString());
+        saveTeamTasks(claimTask, assignedToManagerTask, abandonTask, doneTask);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int claimResult = dispatcher.execute("todo task claimp team-all-player-on " + claimTask.getId(), createSource(0, outsider, server));
+        assertEquals(1, claimResult, "开关开启时非成员 claimp 未分配任务应返回成功");
+
+        CapturingCommandSourceStack deniedClaimSource = createSource(0, outsider, server);
+        int deniedClaimResult = dispatcher.execute("todo task claimp team-all-player-on " + assignedToManagerTask.getId(), deniedClaimSource);
+        assertEquals(0, deniedClaimResult, "开关开启时非成员 claimp 他人已分配任务应返回失败");
+        assertContainsMessageKey(deniedClaimSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关开启时非成员 claimp 他人任务的错误键不正确");
+
+        int abandonResult = dispatcher.execute("todo task abandonp team-all-player-on " + abandonTask.getId(), createSource(0, outsider, server));
+        assertEquals(1, abandonResult, "开关开启时非成员 abandonp 自己任务应返回成功");
+
+        int doneResult = dispatcher.execute("todo task donep team-all-player-on " + doneTask.getId(), createSource(0, outsider, server));
+        assertEquals(1, doneResult, "开关开启时非成员 donep 自己任务应返回成功");
+
+        Task savedClaimTask = loadTeamTaskById(claimTask.getId());
+        Task savedAssignedToManagerTask = loadTeamTaskById(assignedToManagerTask.getId());
+        Task savedAbandonTask = loadTeamTaskById(abandonTask.getId());
+        Task savedDoneTask = loadTeamTaskById(doneTask.getId());
+        assertEquals(outsider.getStringUUID(), savedClaimTask.getAssigneeUuid(), "开关开启后非成员 claimp 未写入 assigneeUuid");
+        assertEquals(manager.getStringUUID(), savedAssignedToManagerTask.getAssigneeUuid(), "开关开启后非成员 claimp 他人任务不应改动 assigneeUuid");
+        assertEquals(null, savedAbandonTask.getAssigneeUuid(), "开关开启后非成员 abandonp 应清空 assigneeUuid");
+        assertEquals(Boolean.TRUE, savedDoneTask.isCompleted(), "开关开启后非成员 donep 应将任务标记为已完成");
+        assertEquals(Boolean.FALSE, project.getMembers().containsKey(outsider.getStringUUID()), "开关开启后非成员执行任务命令不应被加入成员列表");
+    }
+
+    /**
+     * 校验开关开启后，非成员仍不能执行 addp/removep/assignp。
+     */
+    private static void shouldKeepNonMemberDeniedForAddRemoveAssignWhenAllPlayerClaimCompleteEnabledSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000332", "manager-all-player-non-task-denied", false);
+        TestServerPlayer outsider = createPlayer("00000000-0000-0000-0000-000000000333", "outsider-all-player-non-task-denied", false);
+        TestMinecraftServer server = createServer(manager, outsider);
+        Project project = addTeamProject(manager, "team-all-player-non-task-denied", "All Player Non Task Denied");
+        project.setAllowAllPlayersClaimComplete(true);
+        TodoListCommon.getProjectManager().updateProject(project);
+        Task task = createTeamTask(project.getId(), "Outsider Non Task Denied");
+        saveTeamTasks(task);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        CapturingCommandSourceStack addSource = createSource(0, outsider, server);
+        int addResult = dispatcher.execute("todo task addp team-all-player-non-task-denied \"Denied Add Task\" \"x\" denied", addSource);
+        assertEquals(0, addResult, "开关开启后非成员 addp 仍应返回失败");
+        assertContainsMessageKey(addSource.getFailureMessages(), "command.todolist.task.add.no_permission_team", "开关开启后非成员 addp 的错误键不正确");
+
+        CapturingCommandSourceStack removeSource = createSource(0, outsider, server);
+        int removeResult = dispatcher.execute("todo task removep team-all-player-non-task-denied " + task.getId(), removeSource);
+        assertEquals(0, removeResult, "开关开启后非成员 removep 仍应返回失败");
+        assertContainsMessageKey(removeSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关开启后非成员 removep 的错误键不正确");
+
+        CapturingCommandSourceStack assignSource = createSource(0, outsider, server);
+        int assignResult = dispatcher.execute("todo task assignp team-all-player-non-task-denied " + task.getId() + " " + manager.getStringUUID(), assignSource);
+        assertEquals(0, assignResult, "开关开启后非成员 assignp 仍应返回失败");
+        assertContainsMessageKey(assignSource.getFailureMessages(), "command.todolist.task.project.permission_denied", "开关开启后非成员 assignp 的错误键不正确");
+
+        assertNull(findTeamTaskByTitleOrNull("Denied Add Task"), "开关开启后失败的非成员 addp 不应写入任务");
+        assertNotNull(loadTeamTaskById(task.getId()), "开关开启后失败的非成员 removep 不应删除任务");
+        assertEquals(Boolean.FALSE, project.getMembers().containsKey(outsider.getStringUUID()), "开关开启后非成员执行任务命令不应被加入成员列表");
     }
 
     /**

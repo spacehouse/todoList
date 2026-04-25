@@ -1688,7 +1688,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean isAssigneeSelf = hasSelection && TodoScreenPermissionSupport.isCurrentPlayerAssignee(this.minecraft, selectedTask);
         boolean projectMember = TodoScreenPermissionSupport.isCurrentPlayerProjectMember(this.minecraft, currentProject);
         boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
-        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate);
+        boolean allowAllPlayersClaimComplete = currentProject != null && currentProject.isAllowAllPlayersClaimComplete();
+        Context context = new Context(scope, isCompleted, isAssigned, isAssigneeSelf, false, false, projectMember, allowMemberCreate, allowAllPlayersClaimComplete);
         boolean showAssignButtons = viewMode != ViewMode.PERSONAL;
         boolean detailVisible = layoutMetrics == null ? selectedTask != null : layoutMetrics.detailVisible;
         if (claimButton != null) {

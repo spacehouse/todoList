@@ -73,6 +73,12 @@ public final class CommandBootstrapProjectIntegrationTestMain {
             "shouldRejectProjectMemberCreateForMissingProjectSuccessfully",
             "shouldRejectProjectMemberCreateForInvalidValueSuccessfully",
             "shouldRejectProjectMemberCreateForRegularMemberSuccessfully",
+            "shouldEnableTeamProjectAllPlayerClaimCompleteSuccessfully",
+            "shouldDisableTeamProjectAllPlayerClaimCompleteSuccessfully",
+            "shouldRejectProjectAllPlayerClaimCompleteForPersonalProjectSuccessfully",
+            "shouldRejectProjectAllPlayerClaimCompleteForMissingProjectSuccessfully",
+            "shouldRejectProjectAllPlayerClaimCompleteForInvalidValueSuccessfully",
+            "shouldRejectProjectAllPlayerClaimCompleteForRegularMemberSuccessfully",
             "shouldAddProjectMemberSuccessfully",
             "shouldRejectProjectMemberAddWithInvalidTargetSuccessfully",
             "shouldRejectProjectMemberAddWhenTargetAlreadyExistsSuccessfully",
@@ -111,6 +117,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
             "shouldKeepHiddenTeamStarredStateAfterSingleplayerProjectSelectionSuccessfully",
             "shouldSeedMissingProjectStateFromRequestSyncSuccessfully",
             "shouldPersistTeamProjectMemberCreateSettingAfterReloadSuccessfully",
+            "shouldPersistTeamProjectAllPlayerClaimCompleteSettingAfterReloadSuccessfully",
             "shouldPersistProjectMemberRolesAndPermissionsAfterReloadSuccessfully"
     );
 
@@ -1280,6 +1287,107 @@ public final class CommandBootstrapProjectIntegrationTestMain {
     }
 
     /**
+     * 校验团队项目可以成功开启全员领取/放弃/完成开关。
+     */
+    private static void shouldEnableTeamProjectAllPlayerClaimCompleteSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000320", "manager-all-player-claim-complete-on", false);
+        TestMinecraftServer server = createServer(manager);
+        addTeamProject(manager, "all-player-claim-complete-project", "All Player Claim Complete");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo project all-player-claim-complete all-player-claim-complete-project on", createSource(0, manager, server));
+        assertEquals(1, result, "project all-player-claim-complete 成功时应返回成功");
+        assertEquals(Boolean.TRUE, TodoListCommon.getProjectManager().getProject("all-player-claim-complete-project").isAllowAllPlayersClaimComplete(), "all-player-claim-complete 未开启 allowAllPlayersClaimComplete");
+    }
+
+    /**
+     * 校验团队项目可以成功关闭全员领取/放弃/完成开关。
+     */
+    private static void shouldDisableTeamProjectAllPlayerClaimCompleteSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000321", "manager-all-player-claim-complete-off", false);
+        TestMinecraftServer server = createServer(manager);
+        Project project = addTeamProject(manager, "all-player-claim-complete-off-project", "All Player Claim Complete Off");
+        project.setAllowAllPlayersClaimComplete(true);
+        TodoListCommon.getProjectManager().updateProject(project);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        int result = dispatcher.execute("todo project all-player-claim-complete all-player-claim-complete-off-project off", createSource(0, manager, server));
+        assertEquals(1, result, "project all-player-claim-complete off 成功时应返回成功");
+        assertEquals(Boolean.FALSE, TodoListCommon.getProjectManager().getProject("all-player-claim-complete-off-project").isAllowAllPlayersClaimComplete(), "all-player-claim-complete off 未关闭 allowAllPlayersClaimComplete");
+    }
+
+    /**
+     * 校验个人项目不支持全员领取/放弃/完成开关。
+     */
+    private static void shouldRejectProjectAllPlayerClaimCompleteForPersonalProjectSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer owner = createPlayer("00000000-0000-0000-0000-000000000322", "owner-all-player-claim-complete-personal", false);
+        TestMinecraftServer server = createServer(owner);
+        addOwnedPersonalProject(owner, "all-player-claim-complete-personal-project", "All Player Claim Complete Personal");
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        CapturingCommandSourceStack source = createSource(0, owner, server);
+
+        int result = dispatcher.execute("todo project all-player-claim-complete all-player-claim-complete-personal-project on", source);
+        assertEquals(0, result, "个人项目执行 all-player-claim-complete 应返回失败");
+        assertContainsMessageKey(source.getFailureMessages(), "command.todolist.project.all_player_claim_complete.team_only", "个人项目 all-player-claim-complete 的错误键不正确");
+    }
+
+    /**
+     * 校验不存在项目执行全员领取/放弃/完成开关会返回 not_found。
+     */
+    private static void shouldRejectProjectAllPlayerClaimCompleteForMissingProjectSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000323", "manager-all-player-claim-complete-missing", false);
+        TestMinecraftServer server = createServer(manager);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        CapturingCommandSourceStack source = createSource(0, manager, server);
+
+        int result = dispatcher.execute("todo project all-player-claim-complete missing-all-player-claim-complete-project on", source);
+        assertEquals(0, result, "不存在项目执行 all-player-claim-complete 应返回失败");
+        assertContainsMessageKey(source.getFailureMessages(), "command.todolist.project.all_player_claim_complete.not_found", "不存在项目 all-player-claim-complete 的错误键不正确");
+    }
+
+    /**
+     * 校验全员领取/放弃/完成开关拒绝非法值。
+     */
+    private static void shouldRejectProjectAllPlayerClaimCompleteForInvalidValueSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000324", "manager-all-player-claim-complete-invalid", false);
+        TestMinecraftServer server = createServer(manager);
+        Project project = addTeamProject(manager, "all-player-claim-complete-invalid-project", "All Player Claim Complete Invalid");
+        project.setAllowAllPlayersClaimComplete(false);
+        TodoListCommon.getProjectManager().updateProject(project);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        CapturingCommandSourceStack source = createSource(0, manager, server);
+
+        int result = dispatcher.execute("todo project all-player-claim-complete all-player-claim-complete-invalid-project maybe", source);
+        assertEquals(0, result, "非法值 all-player-claim-complete 应返回失败");
+        assertContainsMessageKey(source.getFailureMessages(), "command.todolist.project.all_player_claim_complete.invalid_value", "非法值 all-player-claim-complete 的错误键不正确");
+        assertEquals(Boolean.FALSE, TodoListCommon.getProjectManager().getProject("all-player-claim-complete-invalid-project").isAllowAllPlayersClaimComplete(), "失败的 all-player-claim-complete 不应改动 allowAllPlayersClaimComplete");
+    }
+
+    /**
+     * 校验普通成员不能修改团队项目的全员领取/放弃/完成开关。
+     */
+    private static void shouldRejectProjectAllPlayerClaimCompleteForRegularMemberSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000325", "manager-all-player-claim-complete-denied", false);
+        TestServerPlayer member = createPlayer("00000000-0000-0000-0000-000000000326", "member-all-player-claim-complete-denied", false);
+        TestMinecraftServer server = createServer(manager, member);
+        Project project = addTeamProject(manager, "all-player-claim-complete-denied-project", "All Player Claim Complete Denied");
+        project.addMember(member.getStringUUID(), Project.ProjectRole.MEMBER, member.getName().getString());
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        CapturingCommandSourceStack source = createSource(0, member, server);
+
+        int result = dispatcher.execute("todo project all-player-claim-complete all-player-claim-complete-denied-project on", source);
+        assertEquals(0, result, "普通成员修改全员领取/放弃/完成开关应返回失败");
+        assertContainsMessageKey(source.getFailureMessages(), "command.todolist.project.all_player_claim_complete.no_permission", "普通成员 all-player-claim-complete 的错误键不正确");
+        assertEquals(Boolean.FALSE, TodoListCommon.getProjectManager().getProject("all-player-claim-complete-denied-project").isAllowAllPlayersClaimComplete(), "失败的 all-player-claim-complete 不应修改 allowAllPlayersClaimComplete");
+    }
+
+    /**
      * 校验项目经理可以成功添加项目成员。
      */
     private static void shouldAddProjectMemberSuccessfully() throws Exception {
@@ -2423,6 +2531,31 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         Project reloadedProject = TodoListCommon.getProjectManager().getProject(createdProject.getId());
         assertNotNull(reloadedProject, "重载后未恢复 member-create 测试项目");
         assertEquals(Boolean.TRUE, reloadedProject.isAllowMemberCreate(), "重载后 member-create 设置应保持开启");
+    }
+
+    /**
+     * 验证团队项目 all-player-claim-complete 设置在重载后仍会保持。
+     */
+    private static void shouldPersistTeamProjectAllPlayerClaimCompleteSettingAfterReloadSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer manager = createPlayer("00000000-0000-0000-0000-000000000327", "reload-all-player-claim-complete-manager", false);
+        TestMinecraftServer server = createServer(manager);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+
+        assertEquals(1, dispatcher.execute("todo project create team Reload All Player Claim Complete Project", createSource(0, manager, server)), "创建 all-player-claim-complete 重载项目应返回成功");
+        Project createdProject = findProjectByName("Reload All Player Claim Complete Project");
+        assertNotNull(createdProject, "未找到 all-player-claim-complete 重载测试项目");
+
+        assertEquals(1, dispatcher.execute("todo project all-player-claim-complete " + createdProject.getId() + " on", createSource(0, manager, server)), "开启 all-player-claim-complete 应返回成功");
+        assertEquals(Boolean.TRUE, createdProject.isAllowAllPlayersClaimComplete(), "开启 all-player-claim-complete 后项目状态应立即更新");
+        flushProjectSaves(server);
+        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "all-player-claim-complete 应写入团队项目文件");
+
+        reloadPersistentState();
+
+        Project reloadedProject = TodoListCommon.getProjectManager().getProject(createdProject.getId());
+        assertNotNull(reloadedProject, "重载后未恢复 all-player-claim-complete 测试项目");
+        assertEquals(Boolean.TRUE, reloadedProject.isAllowAllPlayersClaimComplete(), "重载后 all-player-claim-complete 设置应保持开启");
     }
 
     /**

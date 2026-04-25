@@ -45,29 +45,37 @@ public final class PermissionCenter {
         private final boolean targetProjectManager;
         private final boolean projectMember;
         private final boolean allowMemberCreate;
+        private final boolean allowAllPlayersClaimComplete;
 
         /**
          * 创建用于任务相关操作的上下文（默认视为项目成员，且不涉及成员目标）。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf) {
-            this(viewScope, completed, assigned, assigneeSelf, false, false, true, false);
+            this(viewScope, completed, assigned, assigneeSelf, false, false, true, false, false);
         }
 
         /**
          * 创建用于成员管理相关操作的上下文（默认视为项目成员）。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager) {
-            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true, false);
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, true, false, false);
         }
 
         /**
          * 创建完整上下文。
          */
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember) {
-            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, projectMember, false);
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, projectMember, false, false);
         }
 
         public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember, boolean allowMemberCreate) {
+            this(viewScope, completed, assigned, assigneeSelf, targetSelf, targetProjectManager, projectMember, allowMemberCreate, false);
+        }
+
+        /**
+         * 创建完整上下文（包含团队项目“全员可领取/放弃/完成”能力位）。
+         */
+        public Context(ViewScope viewScope, boolean completed, boolean assigned, boolean assigneeSelf, boolean targetSelf, boolean targetProjectManager, boolean projectMember, boolean allowMemberCreate, boolean allowAllPlayersClaimComplete) {
             this.viewScope = viewScope;
             this.completed = completed;
             this.assigned = assigned;
@@ -76,6 +84,7 @@ public final class PermissionCenter {
             this.targetProjectManager = targetProjectManager;
             this.projectMember = projectMember;
             this.allowMemberCreate = allowMemberCreate;
+            this.allowAllPlayersClaimComplete = allowAllPlayersClaimComplete;
         }
 
         public ViewScope getViewScope() {
@@ -109,6 +118,10 @@ public final class PermissionCenter {
         public boolean isAllowMemberCreate() {
             return allowMemberCreate;
         }
+
+        public boolean isAllowAllPlayersClaimComplete() {
+            return allowAllPlayersClaimComplete;
+        }
     }
 
     private PermissionCenter() {
@@ -132,11 +145,15 @@ public final class PermissionCenter {
                 case ADD_TASK:
                 case DELETE_TASK:
                 case EDIT_TASK:
+                case ASSIGN_OTHERS:
+                    return false;
                 case TOGGLE_COMPLETE:
                 case CLAIM_TASK:
                 case ABANDON_TASK:
-                case ASSIGN_OTHERS:
-                    return false;
+                    if (!context.isAllowAllPlayersClaimComplete()) {
+                        return false;
+                    }
+                    break;
                 default:
                     break;
             }
