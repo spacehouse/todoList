@@ -1005,10 +1005,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         taskManager.toggleTaskCompletion(task.getId());
         markUnsaved();
-        if (viewMode != ViewMode.PERSONAL) {
-            String operationName = task.isCompleted() ? "complete" : "uncomplete";
-            persistCurrentViewTasksImmediately(operationName);
-        }
+        String operationName = task.isCompleted() ? "complete" : "uncomplete";
+        persistCurrentViewTasksImmediately(operationName);
         filterTasks();
     }
 
