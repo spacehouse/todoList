@@ -29,6 +29,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldToggleCompletionWhenClickingCheckbox", TaskListWidgetTestMain::shouldToggleCompletionWhenClickingCheckbox);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldToggleCompletedTaskWhenClickingCheckbox", TaskListWidgetTestMain::shouldToggleCompletedTaskWhenClickingCheckbox);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldBlockToggleWhenNonOpTeamAllViewEnabled", TaskListWidgetTestMain::shouldBlockToggleWhenNonOpTeamAllViewEnabled);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView", TaskListWidgetTestMain::shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskByCoordinates", TaskListWidgetTestMain::shouldReturnTaskByCoordinates);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderPriorityColorBlockInsteadOfPriorityText", TaskListWidgetTestMain::shouldRenderPriorityColorBlockInsteadOfPriorityText);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldPlaceTagsBeforeTaskTitle", TaskListWidgetTestMain::shouldPlaceTagsBeforeTaskTitle);
@@ -132,6 +133,29 @@ public final class TaskListWidgetTestMain {
         widget.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
 
         GuiTestSupport.assertNull(toggledId.get(), "非 OP 的 TEAM_ALL 视图不应允许点击复选框完成任务");
+    }
+
+    /**
+     * 校验 TEAM_ALL 视图中本人任务仍会正确显示 hover 和选中背景色。
+     */
+    private static void shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        Task selfTask = createTask("task-self", "Self Task");
+        selfTask.setAssigneeUuid(minecraft.player.getUUID().toString());
+        widget.setTasks(List.of(selfTask));
+        widget.setTeamAllViewForNonOp(true);
+
+        int defaultColor = widget.getTaskBackgroundColorForTest(selfTask.getId(), -1, -1);
+        int hoverY = widget.getTaskRowCenterYForTest(selfTask.getId());
+        int hoverColor = widget.getTaskBackgroundColorForTest(selfTask.getId(), widget.getInteractXForTest(), hoverY);
+        widget.setSelectedTask(selfTask);
+        int selectedColor = widget.getTaskBackgroundColorForTest(selfTask.getId(), -1, -1);
+
+        GuiTestSupport.assertEquals(0xFF202020, defaultColor, "TEAM_ALL 视图下本人任务默认应保持特殊底色");
+        GuiTestSupport.assertEquals(com.todolist.config.ModConfig.getInstance().getHoveredBackgroundColor(), hoverColor, "本人任务在 TEAM_ALL 视图下仍应显示 hover 背景色");
+        GuiTestSupport.assertEquals(com.todolist.config.ModConfig.getInstance().getSelectedBackgroundColor(), selectedColor, "本人任务在 TEAM_ALL 视图下仍应显示选中背景色");
     }
 
     /**
