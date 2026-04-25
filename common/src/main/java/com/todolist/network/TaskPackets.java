@@ -424,7 +424,18 @@ public class TaskPackets {
                 && player.getStringUUID().equals(task.getAssigneeUuid());
         boolean projectMember = isProjectMember(player, project);
         boolean allowMemberCreate = project != null && project.isAllowMemberCreate();
-        return new Context(viewScope, task.isCompleted(), assigned, assigneeSelf, false, false, projectMember, allowMemberCreate);
+        boolean allowAllPlayersClaimComplete = project != null && project.isAllowAllPlayersClaimComplete();
+        return new Context(
+                viewScope,
+                task.isCompleted(),
+                assigned,
+                assigneeSelf,
+                false,
+                false,
+                projectMember,
+                allowMemberCreate,
+                allowAllPlayersClaimComplete
+        );
     }
 
     /**
