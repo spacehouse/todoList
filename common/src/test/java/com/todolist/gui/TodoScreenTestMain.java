@@ -2,6 +2,7 @@ package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.FakeClientConnection;
 import com.todolist.gui.testsupport.FakeMinecraftClient;
 import com.todolist.gui.testsupport.GuiTestSupport;
@@ -77,6 +78,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistClaimAndAbandonImmediatelyInTeamView", TodoScreenTestMain::shouldPersistClaimAndAbandonImmediatelyInTeamView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTeamTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistTeamTaskCompletionToggleImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
@@ -549,6 +551,50 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应立即同步团队任务整表");
         GuiTestSupport.assertNull(abandonedTask.getAssigneeUuid(), "放弃后 assigneeUuid 应立即清空");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "放弃成功后不应残留未保存标记");
+    }
+
+    /**
+     * 验证团队任务勾选完成/取消完成后会立即持久化，避免后续实时操作把旧完成态重新带回界面。
+     */
+    private static void shouldPersistTeamTaskCompletionToggleImmediately() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        ModConfig.getInstance().setEnableSoundEffects(false);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-complete-toggle-persist", "Complete Toggle Persist Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Complete Toggle Persist Task");
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int syncCallsBeforeComplete = ops.getReplaceTeamTaskCalls().size();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        Task completedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
+        GuiTestSupport.assertTrue(completedTask.isCompleted(), "团队任务勾选完成后应立即写入已完成状态");
+        GuiTestSupport.assertEquals(syncCallsBeforeComplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务勾选完成后应立即同步团队任务整表");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务勾选完成后不应残留未保存标记");
+
+        access(screen).toggleCompletedSectionForTest();
+        widget = access(screen).getTaskListWidgetForTest();
+        int syncCallsBeforeUncomplete = ops.getReplaceTeamTaskCalls().size();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        Task reopenedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
+        GuiTestSupport.assertFalse(reopenedTask.isCompleted(), "团队任务取消完成后应立即恢复为未完成");
+        GuiTestSupport.assertEquals(syncCallsBeforeUncomplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务取消完成后应立即同步团队任务整表");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务取消完成后不应残留未保存标记");
+
+        List<Task> latestSyncedTasks = ops.getReplaceTeamTaskCalls().get(ops.getReplaceTeamTaskCalls().size() - 1);
+        restoreTasksToManager(ops.getTeamTaskManager(), latestSyncedTasks);
+        access(screen).switchProjectForTest(teamProject);
+
+        Task restoredTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
+        GuiTestSupport.assertFalse(restoredTask.isCompleted(), "后续实时操作触发的任务回推不应把旧完成态重新带回团队任务");
     }
 
     /**
