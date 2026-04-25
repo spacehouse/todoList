@@ -1,12 +1,15 @@
 package com.todolist.task;
 
 import com.todolist.TodoConstants;
+import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -142,9 +145,7 @@ public class TaskStorage {
             taskList.add(task.toNbt());
         }
         root.put("tasks", taskList);
-
-        // Write to file
-        NbtIo.write(root, file);
+        SafePersistenceHelper.writeBytes(file, serializeTaskRoot(root), "task data");
     }
 
     /**
@@ -171,14 +172,20 @@ public class TaskStorage {
     public List<Task> loadTasks() throws IOException {
         ensureDirectoryExists();
         Path dataFile = getDataDirectory().resolve(DATA_FILE);
-        if (!Files.exists(dataFile)) {
+        SafePersistenceHelper.ReadResult<List<Task>> readResult = SafePersistenceHelper.readWithRecovery(
+                dataFile,
+                "task data",
+                this::loadTasksFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             if (!loggedNoTaskData) {
                 loggedNoTaskData = true;
                 TodoConstants.LOGGER.info("No existing task data found, starting fresh");
             }
             return new ArrayList<>();
         }
-        return loadTasksFromFile(dataFile);
+        return readResult.getValue();
     }
 
     /**
@@ -192,11 +199,17 @@ public class TaskStorage {
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
-        if (!Files.exists(playerFile)) {
+        SafePersistenceHelper.ReadResult<List<Task>> readResult = SafePersistenceHelper.readWithRecovery(
+                playerFile,
+                "player task data",
+                this::loadTasksFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             TodoConstants.LOGGER.info("No existing task data for player {}", playerUuid);
             return new ArrayList<>();
         }
-        return loadTasksFromFile(playerFile);
+        return readResult.getValue();
     }
 
     /**
@@ -224,14 +237,20 @@ public class TaskStorage {
     public List<Task> loadTeamTasks() throws IOException {
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
-        if (!Files.exists(teamFile)) {
+        SafePersistenceHelper.ReadResult<List<Task>> readResult = SafePersistenceHelper.readWithRecovery(
+                teamFile,
+                "team task data",
+                this::loadTasksFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             if (!loggedNoTeamTaskData) {
                 loggedNoTeamTaskData = true;
                 TodoConstants.LOGGER.info("No existing team task data");
             }
             return new ArrayList<>();
         }
-        return loadTasksFromFile(teamFile);
+        return readResult.getValue();
     }
 
     /**
@@ -244,8 +263,7 @@ public class TaskStorage {
     private List<Task> loadTasksFromFile(Path file) throws IOException {
         CompoundTag root = NbtIo.read(file);
         if (root == null) {
-            TodoConstants.LOGGER.warn("Failed to read task data from {}", file);
-            return new ArrayList<>();
+            throw new IOException("Failed to read task data from " + file);
         }
 
         long lastSaved = root.getLong("lastSaved");
@@ -253,6 +271,7 @@ public class TaskStorage {
 
         ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
         List<Task> tasks = new ArrayList<>();
+        IOException malformedTaskException = null;
 
         for (int i = 0; i < taskList.size(); i++) {
             CompoundTag taskNbt = taskList.getCompound(i);
@@ -261,7 +280,17 @@ public class TaskStorage {
                 tasks.add(task);
             } catch (Exception e) {
                 TodoConstants.LOGGER.error("Failed to load task at index {}", i, e);
+                IOException currentException = new IOException("Failed to parse task data at index " + i + " from " + file, e);
+                if (malformedTaskException == null) {
+                    malformedTaskException = currentException;
+                } else {
+                    malformedTaskException.addSuppressed(currentException);
+                }
             }
+        }
+
+        if (malformedTaskException != null) {
+            throw malformedTaskException;
         }
 
         maybeLogLoadSummary(file, version, lastSaved, tasks.size());
@@ -315,14 +344,20 @@ public class TaskStorage {
      * @return 最后保存时间戳，不存在或读取失败时返回 0
      */
     private long readLastSavedSafe(Path file) {
-        if (file == null || !Files.exists(file)) {
+        if (file == null || !SafePersistenceHelper.existsOrBackup(file)) {
             return 0L;
         }
         try {
-            CompoundTag root = NbtIo.read(file);
-            if (root == null) {
+            SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecovery(
+                    file,
+                    "task timestamp data",
+                    NbtIo::read,
+                    root -> root != null
+            );
+            if (!readResult.isFound()) {
                 return 0L;
             }
+            CompoundTag root = readResult.getValue();
             return root.getLong("lastSaved");
         } catch (Exception e) {
             return 0L;
@@ -359,7 +394,7 @@ public class TaskStorage {
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
-        return Files.exists(playerFile);
+        return SafePersistenceHelper.existsOrBackup(playerFile);
     }
 
     /**
@@ -370,6 +405,22 @@ public class TaskStorage {
      */
     public Path getDataDirectoryPath() {
         return getDataDirectory();
+    }
+
+    /**
+     * 将任务 NBT 根节点序列化为字节数组。
+     *
+     * @param root 任务 NBT 根节点
+     * @return 序列化后的字节数组
+     * @throws IOException 当序列化失败时抛出
+     */
+    private byte[] serializeTaskRoot(CompoundTag root) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream)) {
+            NbtIo.write(root, dataOutputStream);
+            dataOutputStream.flush();
+            return byteArrayOutputStream.toByteArray();
+        }
     }
 
     /**

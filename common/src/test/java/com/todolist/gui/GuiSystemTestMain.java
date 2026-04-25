@@ -23,6 +23,7 @@ public final class GuiSystemTestMain {
     public static void main(String[] args) throws Exception {
         GuiTestSupport.bootstrapEnvironment();
         GuiTestSupport.runTestGroup("ClientTaskStorageHelperTestMain", () -> ClientTaskStorageHelperTestMain.main(args));
+        GuiTestSupport.runTestGroup("PersistenceSafetyTestMain", () -> PersistenceSafetyTestMain.main(args));
         GuiTestSupport.runTestGroup("ProjectListWidgetTestMain", () -> ProjectListWidgetTestMain.main(args));
         GuiTestSupport.runTestGroup("TaskListWidgetTestMain", () -> TaskListWidgetTestMain.main(args));
         GuiTestSupport.runTestGroup("ScrollBarTestMain", () -> ScrollBarTestMain.main(args));

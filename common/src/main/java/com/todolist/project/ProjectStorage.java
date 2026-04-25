@@ -1,11 +1,14 @@
 package com.todolist.project;
 
 import com.todolist.TodoConstants;
+import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,10 +62,16 @@ public class ProjectStorage {
     public List<Project> loadProjects() throws IOException {
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
-        if (!Files.exists(file)) {
+        SafePersistenceHelper.ReadResult<List<Project>> readResult = SafePersistenceHelper.readWithRecovery(
+                file,
+                "personal project data",
+                this::loadProjectsFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             return new ArrayList<>();
         }
-        return loadProjectsFromFile(file);
+        return readResult.getValue();
     }
 
     /**
@@ -74,10 +83,16 @@ public class ProjectStorage {
     public List<Project> loadTeamProjects() throws IOException {
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(TEAM_PROJECTS_FILE);
-        if (!Files.exists(file)) {
+        SafePersistenceHelper.ReadResult<List<Project>> readResult = SafePersistenceHelper.readWithRecovery(
+                file,
+                "team project data",
+                this::loadProjectsFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             return new ArrayList<>();
         }
-        return loadProjectsFromFile(file);
+        return readResult.getValue();
     }
 
     /**
@@ -113,7 +128,7 @@ public class ProjectStorage {
     public boolean hasPersonalProjectsFile() {
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
-        return Files.exists(file);
+        return SafePersistenceHelper.existsOrBackup(file);
     }
 
     /**
@@ -126,8 +141,11 @@ public class ProjectStorage {
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
         CompoundTag root = NbtIo.read(file);
+        if (root == null) {
+            throw new IOException("Failed to read project data from " + file);
+        }
         boolean dirty = false;
-        if (root != null && root.contains("projects", 9)) {
+        if (root.contains("projects", 9)) {
             ListTag list = root.getList("projects", 10);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag projectNbt = list.getCompound(i);
@@ -174,6 +192,22 @@ public class ProjectStorage {
             list.add(project.toNbt());
         }
         root.put("projects", list);
-        NbtIo.write(root, file);
+        SafePersistenceHelper.writeBytes(file, serializeProjectRoot(root), "project data");
+    }
+
+    /**
+     * 将项目 NBT 根节点序列化为字节数组。
+     *
+     * @param root 项目 NBT 根节点
+     * @return 序列化后的字节数组
+     * @throws IOException 当序列化失败时抛出
+     */
+    private byte[] serializeProjectRoot(CompoundTag root) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream)) {
+            NbtIo.write(root, dataOutputStream);
+            dataOutputStream.flush();
+            return byteArrayOutputStream.toByteArray();
+        }
     }
 }
