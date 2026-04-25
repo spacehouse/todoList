@@ -1,11 +1,14 @@
 package com.todolist.project;
 
 import com.todolist.TodoConstants;
+import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -77,7 +80,7 @@ public class ProjectPlayerStateStorage {
         if (playerUuid == null) {
             return false;
         }
-        return Files.exists(getPlayerStateFilePath(playerUuid));
+        return SafePersistenceHelper.existsOrBackup(getPlayerStateFilePath(playerUuid));
     }
 
     /**
@@ -107,7 +110,7 @@ public class ProjectPlayerStateStorage {
             starredProjectList.add(projectTag);
         }
         root.put(HUD_STARRED_PROJECT_IDS_KEY, starredProjectList);
-        NbtIo.write(root, getPlayerStateFilePath(playerUuid).toFile());
+        SafePersistenceHelper.writeBytes(getPlayerStateFilePath(playerUuid), serializePlayerStateRoot(root), "project player state");
     }
 
     /**
@@ -119,12 +122,29 @@ public class ProjectPlayerStateStorage {
      */
     public ProjectPlayerState loadPlayerState(UUID playerUuid) throws IOException {
         Path playerStateFile = getPlayerStateFilePath(playerUuid);
-        if (!Files.exists(playerStateFile)) {
+        SafePersistenceHelper.ReadResult<ProjectPlayerState> readResult = SafePersistenceHelper.readWithRecovery(
+                playerStateFile,
+                "project player state",
+                this::loadPlayerStateFromFile,
+                value -> value != null
+        );
+        if (!readResult.isFound()) {
             return ProjectPlayerState.empty();
         }
+        return readResult.getValue();
+    }
+
+    /**
+     * 从指定文件读取玩家项目状态。
+     *
+     * @param playerStateFile 玩家项目状态文件
+     * @return 读取到的项目状态
+     * @throws IOException 当读取失败时抛出
+     */
+    private ProjectPlayerState loadPlayerStateFromFile(Path playerStateFile) throws IOException {
         CompoundTag root = NbtIo.read(playerStateFile.toFile());
         if (root == null) {
-            return ProjectPlayerState.empty();
+            throw new IOException("Failed to read project player state from " + playerStateFile);
         }
         String activeProjectId = readOptionalTrimmedString(root, ACTIVE_PROJECT_ID_KEY);
         boolean hudVisible = !root.contains(HUD_VISIBLE_KEY) || root.getBoolean(HUD_VISIBLE_KEY);
@@ -159,6 +179,22 @@ public class ProjectPlayerStateStorage {
         }
         String trimmedValue = value.trim();
         return trimmedValue.isEmpty() ? null : trimmedValue;
+    }
+
+    /**
+     * 将玩家项目状态 NBT 根节点序列化为字节数组。
+     *
+     * @param root 玩家项目状态 NBT 根节点
+     * @return 序列化后的字节数组
+     * @throws IOException 当序列化失败时抛出
+     */
+    private byte[] serializePlayerStateRoot(CompoundTag root) throws IOException {
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             DataOutputStream dataOutputStream = new DataOutputStream(byteArrayOutputStream)) {
+            NbtIo.write(root, dataOutputStream);
+            dataOutputStream.flush();
+            return byteArrayOutputStream.toByteArray();
+        }
     }
 
     /**
