@@ -22,6 +22,7 @@ public class Project {
     
     // Permission settings
     private boolean allowMemberCreate = false; // Whether members can create tasks
+    private boolean allowAllPlayersClaimComplete = false; // Whether non-members can claim/abandon/complete team tasks
     
     // Member roles: UUID -> Role
     private Map<String, ProjectRole> members = new HashMap<>();
@@ -162,6 +163,24 @@ public class Project {
         this.allowMemberCreate = allowMemberCreate;
     }
 
+    /**
+     * 获取团队项目是否允许所有玩家领取/放弃/完成任务。
+     *
+     * @return true 表示允许非成员按成员语义执行领取/放弃/完成
+     */
+    public boolean isAllowAllPlayersClaimComplete() {
+        return allowAllPlayersClaimComplete;
+    }
+
+    /**
+     * 设置团队项目是否允许所有玩家领取/放弃/完成任务。
+     *
+     * @param allowAllPlayersClaimComplete true 表示允许非成员执行领取/放弃/完成
+     */
+    public void setAllowAllPlayersClaimComplete(boolean allowAllPlayersClaimComplete) {
+        this.allowAllPlayersClaimComplete = allowAllPlayersClaimComplete;
+    }
+
     public Map<String, ProjectRole> getMembers() {
         return members;
     }
@@ -219,6 +238,7 @@ public class Project {
         if (ownerUuid != null) nbt.putString("ownerUuid", ownerUuid);
         nbt.putLong("createdAt", createdAt);
         nbt.putBoolean("allowMemberCreate", allowMemberCreate);
+        nbt.putBoolean("allowAllPlayersClaimComplete", allowAllPlayersClaimComplete);
         
         ListTag memberList = new ListTag();
         for (Map.Entry<String, ProjectRole> entry : members.entrySet()) {
@@ -263,6 +283,9 @@ public class Project {
         if (nbt.contains("ownerUuid")) project.setOwnerUuid(nbt.getString("ownerUuid"));
         if (nbt.contains("createdAt")) project.setCreatedAt(nbt.getLong("createdAt"));
         if (nbt.contains("allowMemberCreate")) project.setAllowMemberCreate(nbt.getBoolean("allowMemberCreate"));
+        if (nbt.contains("allowAllPlayersClaimComplete")) {
+            project.setAllowAllPlayersClaimComplete(nbt.getBoolean("allowAllPlayersClaimComplete"));
+        }
         
         if (nbt.contains("members")) {
             ListTag memberList = nbt.getList("members", NBT_COMPOUND_TYPE);

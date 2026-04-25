@@ -72,13 +72,24 @@ final class TodoScreenPermissionSupport {
                                     Role role,
                                     ViewScope scope,
                                     boolean projectMember,
-                                    boolean assigneeSelf) {
+                                    boolean assigneeSelf,
+                                    boolean allowAllPlayersClaimComplete) {
         if (task == null) {
             return false;
         }
         boolean isCompleted = task.isCompleted();
         boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
-        Context context = new Context(scope, isCompleted, isAssigned, assigneeSelf, false, false, projectMember);
+        Context context = new Context(
+                scope,
+                isCompleted,
+                isAssigned,
+                assigneeSelf,
+                false,
+                false,
+                projectMember,
+                false,
+                allowAllPlayersClaimComplete
+        );
         return PermissionCenter.canPerform(operation, role, context);
     }
 
@@ -103,7 +114,8 @@ final class TodoScreenPermissionSupport {
                                   String viewModeName,
                                   Role role,
                                   boolean projectMember,
-                                  boolean allowMemberCreate) {
+                                  boolean allowMemberCreate,
+                                  boolean allowAllPlayersClaimComplete) {
         if (currentProject == null) {
             return false;
         }
@@ -111,7 +123,7 @@ final class TodoScreenPermissionSupport {
             return true;
         }
         ViewScope scope = resolveViewScope(viewModeName);
-        Context context = new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate);
+        Context context = new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate, allowAllPlayersClaimComplete);
         return PermissionCenter.canPerform(Operation.EDIT_TASK, role, context);
     }
 
@@ -121,7 +133,8 @@ final class TodoScreenPermissionSupport {
                 viewModeName,
                 getCurrentRole(minecraft, currentProject),
                 isCurrentPlayerProjectMember(minecraft, currentProject),
-                currentProject != null && currentProject.isAllowMemberCreate()
+                currentProject != null && currentProject.isAllowMemberCreate(),
+                currentProject != null && currentProject.isAllowAllPlayersClaimComplete()
         );
     }
 
@@ -136,7 +149,8 @@ final class TodoScreenPermissionSupport {
         ViewScope scope = resolveViewScope(viewModeName);
         boolean projectMember = isCurrentPlayerProjectMember(minecraft, currentProject);
         boolean allowMemberCreate = currentProject.isAllowMemberCreate();
-        Context context = new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate);
+        boolean allowAllPlayersClaimComplete = currentProject.isAllowAllPlayersClaimComplete();
+        Context context = new Context(scope, false, false, false, false, false, projectMember, allowMemberCreate, allowAllPlayersClaimComplete);
         return PermissionCenter.canPerform(Operation.ADD_TASK, role, context);
     }
 
@@ -151,7 +165,8 @@ final class TodoScreenPermissionSupport {
                 getCurrentRole(minecraft, currentProject),
                 resolveViewScope(viewModeName),
                 isCurrentPlayerProjectMember(minecraft, currentProject),
-                isCurrentPlayerAssignee(minecraft, task)
+                isCurrentPlayerAssignee(minecraft, task),
+                currentProject != null && currentProject.isAllowAllPlayersClaimComplete()
         );
     }
 

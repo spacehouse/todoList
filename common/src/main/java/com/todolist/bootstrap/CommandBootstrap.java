@@ -418,6 +418,15 @@ public final class CommandBootstrap {
                                                         StringArgumentType.getString(ctx, "projectId"),
                                                         StringArgumentType.getString(ctx, "enabled")
                                                 )))))
+                        .then(Commands.literal("all-player-claim-complete")
+                                .then(Commands.argument("projectId", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestSelectableProjectIds)
+                                        .then(Commands.argument("enabled", StringArgumentType.word())
+                                                .executes(ctx -> executeProjectAllowAllPlayersClaimComplete(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "projectId"),
+                                                        StringArgumentType.getString(ctx, "enabled")
+                                                )))))
                         .then(Commands.literal("star")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.HUD_CONTROL, null))
                                 .then(Commands.argument("projectId", StringArgumentType.word())
@@ -629,6 +638,7 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_project_create",
                 "command.todolist.help.todo_project_rename",
                 "command.todolist.help.todo_project_member_create",
+                "command.todolist.help.todo_project_all_player_claim_complete",
                 "command.todolist.help.todo_project_member_add",
                 "command.todolist.help.todo_project_member_remove",
                 "command.todolist.help.todo_project_member_role",
@@ -1897,6 +1907,49 @@ public final class CommandBootstrap {
     }
 
     /**
+     * 设置团队项目“允许所有玩家领取/放弃/完成任务”开关，并在成功后同步项目列表。
+     */
+    private static int executeProjectAllowAllPlayersClaimComplete(CommandSourceStack source, String projectId, String enabled) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedProjectId = projectId == null ? "" : projectId.trim();
+        if (normalizedProjectId.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.not_found", projectId);
+        }
+        Project project = TodoListCommon.getProjectManager().getProject(normalizedProjectId);
+        if (project == null) {
+            return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.not_found", normalizedProjectId);
+        }
+        if (project.getScope() != Project.Scope.TEAM) {
+            return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.team_only");
+        }
+        if (!canEditProject(source, player, project)) {
+            return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.no_permission");
+        }
+        Boolean normalizedEnabled = CommandInputNormalizer.normalizeToggleState(enabled);
+        if (normalizedEnabled == null) {
+            return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.invalid_value");
+        }
+        project.setAllowAllPlayersClaimComplete(normalizedEnabled);
+        TodoListCommon.getProjectManager().updateProject(project);
+        saveProjects(source.getServer(), project.getScope());
+        refreshProjectsAfterMutation(source.getServer(), player, project.getScope());
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.project.all_player_claim_complete.success",
+                buildProjectNameComponent(project),
+                getCommandToggleText(normalizedEnabled)
+        );
+    }
+
+    /**
      * 向团队项目添加成员，支持在线玩家名或 UUID 输入。
      */
     /**
@@ -2553,7 +2606,8 @@ public final class CommandBootstrap {
                 false,
                 false,
                 projectMember,
-                project.isAllowMemberCreate()
+                project.isAllowMemberCreate(),
+                project.isAllowAllPlayersClaimComplete()
         );
         return PermissionCenter.canPerform(operation, role, context);
     }
@@ -3090,7 +3144,8 @@ public final class CommandBootstrap {
         boolean projectMember = isTeamProjectMember(player, project);
         Role role = resolveProjectRole(player, project);
         boolean allowMemberCreate = project.isAllowMemberCreate();
-        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, false, false, projectMember, allowMemberCreate);
+        boolean allowAllPlayersClaimComplete = project.isAllowAllPlayersClaimComplete();
+        Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, false, false, projectMember, allowMemberCreate, allowAllPlayersClaimComplete);
         return PermissionCenter.canPerform(Operation.ADD_TASK, role, ctx);
     }
 

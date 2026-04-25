@@ -76,8 +76,10 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     private MemberListWidget memberList;
     private Button addMemberBtn;
     private Button allowMemberCreateBtn;
+    private Button allowAllPlayersClaimCompleteBtn;
     private Button saveButton;
     private boolean allowMemberCreate;
+    private boolean allowAllPlayersClaimComplete;
     private SettingsLayout layout;
 
     /**
@@ -144,6 +146,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     /**
+     * 返回允许所有玩家领取/放弃/完成任务开关按钮，供同包测试代码驱动开关切换。
+     *
+     * @return 允许所有玩家领取/放弃/完成任务开关按钮
+     */
+    Button getAllowAllPlayersClaimCompleteButtonForTest() {
+        return allowAllPlayersClaimCompleteBtn;
+    }
+
+    /**
      * 返回保存按钮，供同包测试代码触发保存流程。
      *
      * @return 保存按钮
@@ -204,6 +215,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
      */
     String getAllowMemberCreateStateKeyForTest() {
         return allowMemberCreate ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+    }
+
+    /**
+     * 返回允许所有玩家领取/放弃/完成任务开关当前使用的语义键。
+     *
+     * @return 开关键值语义键
+     */
+    String getAllowAllPlayersClaimCompleteStateKeyForTest() {
+        return allowAllPlayersClaimComplete ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
     }
 
     /**
@@ -278,6 +298,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         canEdit = checkPermission();
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         allowMemberCreate = project.isAllowMemberCreate();
+        allowAllPlayersClaimComplete = project.isAllowAllPlayersClaimComplete();
         layout = computeResponsiveLayout(isTeam);
 
         // Name Field
@@ -300,6 +321,13 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }).bounds(contentRight - 108, layout.dialogY + 34, 108, 18).build();
             allowMemberCreateBtn.active = canEdit;
             addRenderableWidget(allowMemberCreateBtn);
+
+            allowAllPlayersClaimCompleteBtn = Button.builder(getAllowAllPlayersClaimCompleteText(), button -> {
+                allowAllPlayersClaimComplete = !allowAllPlayersClaimComplete;
+                button.setMessage(getAllowAllPlayersClaimCompleteText());
+            }).bounds(contentRight - 108, layout.dialogY + 54, 108, 18).build();
+            allowAllPlayersClaimCompleteBtn.active = canEdit;
+            addRenderableWidget(allowAllPlayersClaimCompleteBtn);
 
             memberSearchField = new EditBox(font, contentLeft, layout.dialogY + 95, layout.dialogWidth - 20, 16, Component.empty());
             memberSearchField.setHint(Component.translatable("gui.todolist.member.search"));
@@ -458,6 +486,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         String normalizedName = normalizeProjectNameForSave(name, project.getName());
         project.setName(normalizedName);
         project.setAllowMemberCreate(allowMemberCreate);
+        project.setAllowAllPlayersClaimComplete(allowAllPlayersClaimComplete);
         ClientBridge.ops().sendUpdateProject(project);
         onClose();
     }
@@ -466,6 +495,18 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         return Component.translatable(
                 "gui.todolist.project.allow_member_create",
                 Component.translatable(allowMemberCreate ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off")
+        );
+    }
+
+    /**
+     * 返回“允许所有玩家领取/放弃/完成任务”开关按钮文案。
+     *
+     * @return 开关按钮文案组件
+     */
+    private Component getAllowAllPlayersClaimCompleteText() {
+        return Component.translatable(
+                "gui.todolist.project.allow_all_players_claim_complete",
+                Component.translatable(allowAllPlayersClaimComplete ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off")
         );
     }
 

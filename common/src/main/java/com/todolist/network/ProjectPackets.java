@@ -479,6 +479,7 @@ public class ProjectPackets {
         existingProject.setName(incomingProject.getName());
         existingProject.setColor(incomingProject.getColor());
         existingProject.setAllowMemberCreate(incomingProject.isAllowMemberCreate());
+        existingProject.setAllowAllPlayersClaimComplete(incomingProject.isAllowAllPlayersClaimComplete());
 
         manager.updateProject(existingProject);
 

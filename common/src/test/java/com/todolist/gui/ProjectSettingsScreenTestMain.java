@@ -37,6 +37,7 @@ public final class ProjectSettingsScreenTestMain {
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldRefreshVisibleMembersAfterProjectChanged", ProjectSettingsScreenTestMain::shouldRefreshVisibleMembersAfterProjectChanged);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldShowTopRightScopeBadgeForTeamProject", ProjectSettingsScreenTestMain::shouldShowTopRightScopeBadgeForTeamProject);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldToggleAllowMemberCreateFromButton", ProjectSettingsScreenTestMain::shouldToggleAllowMemberCreateFromButton);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldToggleAllowAllPlayersClaimCompleteFromButton", ProjectSettingsScreenTestMain::shouldToggleAllowAllPlayersClaimCompleteFromButton);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldRenderRoleAndRemoveActionsOnRightSide", ProjectSettingsScreenTestMain::shouldRenderRoleAndRemoveActionsOnRightSide);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldFilterMemberListWithSearchBar", ProjectSettingsScreenTestMain::shouldFilterMemberListWithSearchBar);
     }
@@ -56,12 +57,14 @@ public final class ProjectSettingsScreenTestMain {
         ScreenDriver.init(minecraft, screen);
         ScreenDriver.setText(screen.getNameFieldForTest(), "Team Rocket");
         ScreenDriver.click(screen.getAllowMemberCreateButtonForTest());
+        ScreenDriver.click(screen.getAllowAllPlayersClaimCompleteButtonForTest());
         ScreenDriver.click(screen.getSaveButtonForTest());
 
         GuiTestSupport.assertTrue(screen.canEditForTest(), "项目管理者应具有项目编辑权限");
         GuiTestSupport.assertTrue(screen.getAddMemberButtonForTest().active, "项目管理者应可打开新增成员入口");
         GuiTestSupport.assertEquals("Team Rocket", project.getName(), "保存后应更新项目名称");
         GuiTestSupport.assertTrue(project.isAllowMemberCreate(), "保存后应写回允许成员创建任务开关");
+        GuiTestSupport.assertTrue(project.isAllowAllPlayersClaimComplete(), "保存后应写回允许所有玩家领取/放弃/完成任务开关");
         GuiTestSupport.assertEquals(1, ops.getUpdateProjectCalls().size(), "保存后应向桥接层发送一次项目更新");
         GuiTestSupport.assertEquals("Team Rocket", ops.getUpdateProjectCalls().get(0).getName(), "桥接层应收到更新后的项目名称");
     }
@@ -83,6 +86,7 @@ public final class ProjectSettingsScreenTestMain {
         GuiTestSupport.assertFalse(screen.canEditForTest(), "普通成员不应具有项目编辑权限");
         GuiTestSupport.assertFalse(screen.getSaveButtonForTest().active, "普通成员不应能触发保存");
         GuiTestSupport.assertFalse(screen.getAllowMemberCreateButtonForTest().active, "普通成员不应能切换成员创建开关");
+        GuiTestSupport.assertFalse(screen.getAllowAllPlayersClaimCompleteButtonForTest().active, "普通成员不应能切换全员领取/放弃/完成开关");
         GuiTestSupport.assertFalse(screen.getAddMemberButtonForTest().active, "普通成员不应能新增项目成员");
     }
 
@@ -153,6 +157,28 @@ public final class ProjectSettingsScreenTestMain {
 
         ScreenDriver.click(screen.getSaveButtonForTest());
         GuiTestSupport.assertTrue(project.isAllowMemberCreate(), "保存后应写回允许成员创建任务状态");
+        GuiTestSupport.assertEquals(1, ops.getUpdateProjectCalls().size(), "切换并保存后应发送一次项目更新");
+    }
+
+    /**
+     * 校验允许所有玩家领取/放弃/完成任务按钮可切换开关，并在保存时写回项目。
+     */
+    private static void shouldToggleAllowAllPlayersClaimCompleteFromButton() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertFalse(project.isAllowAllPlayersClaimComplete(), "初始团队项目不应允许所有玩家领取/放弃/完成任务");
+        GuiTestSupport.assertEquals("gui.todolist.config.toggle.off", screen.getAllowAllPlayersClaimCompleteStateKeyForTest(), "初始开关状态应为关闭");
+
+        ScreenDriver.click(screen.getAllowAllPlayersClaimCompleteButtonForTest());
+        GuiTestSupport.assertEquals("gui.todolist.config.toggle.on", screen.getAllowAllPlayersClaimCompleteStateKeyForTest(), "点击后开关状态应切换为开启");
+
+        ScreenDriver.click(screen.getSaveButtonForTest());
+        GuiTestSupport.assertTrue(project.isAllowAllPlayersClaimComplete(), "保存后应写回允许所有玩家领取/放弃/完成任务状态");
         GuiTestSupport.assertEquals(1, ops.getUpdateProjectCalls().size(), "切换并保存后应发送一次项目更新");
     }
 
