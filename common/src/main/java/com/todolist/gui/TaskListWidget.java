@@ -481,18 +481,19 @@ public class TaskListWidget implements Renderable {
 
     private int getTaskBackgroundColor(int taskIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
         ModConfig config = ModConfig.getInstance();
+        int baseColor = 0xFF1A1A1A;
 
         if (teamAllViewForNonOp && client != null && client.player != null &&
                 taskIndex >= 0 && taskIndex < displayRows.size()) {
             DisplayRow row = displayRows.get(taskIndex);
             Task task = row.task;
             if (task == null) {
-                return 0xFF1A1A1A;
+                return baseColor;
             }
             String assignee = task.getAssigneeUuid();
             String uuid = client.player.getUUID().toString();
             if (assignee != null && assignee.equals(uuid)) {
-                return 0xFF202020;
+                baseColor = 0xFF202020;
             }
         }
 
@@ -512,7 +513,7 @@ public class TaskListWidget implements Renderable {
             hoveredTaskIndex = taskIndex;
             return config.getHoveredBackgroundColor();
         }
-        return 0xFF1A1A1A;
+        return baseColor;
     }
 
     /**
@@ -1232,6 +1233,28 @@ public class TaskListWidget implements Renderable {
     String getTaskLeadingMetaTextForTest(String taskId) {
         Task task = findTaskById(taskId);
         return buildTaskLeadingMetaText(task);
+    }
+
+    /**
+     * 返回指定任务在给定鼠标位置下的背景色，供测试覆盖 hover 与选中态渲染。
+     *
+     * @param taskId 任务 ID
+     * @param mouseX 当前鼠标横坐标
+     * @param mouseY 当前鼠标纵坐标
+     * @return 任务背景色；任务不存在时返回默认底色
+     */
+    int getTaskBackgroundColorForTest(String taskId, int mouseX, int mouseY) {
+        if (taskId == null || displayRows == null) {
+            return 0xFF1A1A1A;
+        }
+        for (int index = 0; index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType != RowType.TASK || row.task == null || !taskId.equals(row.task.getId())) {
+                continue;
+            }
+            return getTaskBackgroundColor(index, getRowTopForVisibleIndex(index), getRowHeight(index), mouseX, mouseY);
+        }
+        return 0xFF1A1A1A;
     }
 
     /**
