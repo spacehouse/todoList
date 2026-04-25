@@ -51,6 +51,10 @@ public final class ClientTaskStorageHelperTestMain {
                 "ClientTaskStorageHelperTestMain.shouldRestorePlayerTasksWhenLoadingLocalSingleplayerTasks",
                 ClientTaskStorageHelperTestMain::shouldRestorePlayerTasksWhenLoadingLocalSingleplayerTasks
         );
+        GuiTestSupport.runTestCase(
+                "ClientTaskStorageHelperTestMain.shouldKeepPlayerFileInSyncWhenSavingLocalSingleplayerTasks",
+                ClientTaskStorageHelperTestMain::shouldKeepPlayerFileInSyncWhenSavingLocalSingleplayerTasks
+        );
     }
 
     /**
@@ -154,6 +158,31 @@ public final class ClientTaskStorageHelperTestMain {
 
         GuiTestSupport.assertEquals(List.of("Recovered Player"), loadedTitles, "未发布单人模式读取个人任务时应自动恢复较新的玩家文件");
         GuiTestSupport.assertEquals(List.of("Recovered Player"), localTitles, "自动恢复后本地个人任务文件应被修正到最新状态");
+    }
+
+    /**
+     * 验证未发布单人模式保存个人任务时，也会同步更新玩家文件，避免旧玩家文件后续再次回灌覆盖本地数据。
+     */
+    private static void shouldKeepPlayerFileInSyncWhenSavingLocalSingleplayerTasks() {
+        GuiTestSupport.resetState();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        saveLocalTasks(storage, "Old Local");
+        sleepForTimestampTick();
+        savePlayerTasks(storage, "Stale Player");
+
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(PLAYER_ID, "gui-tester", false);
+        minecraft.setLocalServer(true);
+
+        try {
+            ClientTaskStorageHelper.savePersonalTasks(storage, minecraft, createTasks("Fresh Local"));
+        } catch (Exception e) {
+            throw new IllegalStateException("未发布单人模式保存个人任务时发生异常", e);
+        }
+
+        List<String> loadedTitles = loadPersonalTitles(storage, minecraft);
+        GuiTestSupport.assertEquals(List.of("Fresh Local"), loadLocalTitles(storage), "未发布单人模式保存后本地文件应保留最新个人任务");
+        GuiTestSupport.assertEquals(List.of("Fresh Local"), loadPlayerTitles(storage), "未发布单人模式保存后玩家文件也应同步为最新个人任务");
+        GuiTestSupport.assertEquals(List.of("Fresh Local"), loadedTitles, "后续再次读取个人任务时不应被旧玩家文件回灌覆盖");
     }
 
     private static boolean migrate(TaskStorage storage) {

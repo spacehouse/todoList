@@ -1,6 +1,7 @@
 package com.todolist.client;
 
 import com.todolist.TodoListMod;
+import com.todolist.gui.TodoScreen;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
@@ -24,6 +25,10 @@ public class ClientTaskPackets {
                 if (!namespaceAtReceive.equals(DataPathProvider.getStorageNamespace())) {
                     TodoListMod.LOGGER.info("Skip stale task sync write due to namespace switch: {} -> {}",
                             namespaceAtReceive, DataPathProvider.getStorageNamespace());
+                    return;
+                }
+                if (TodoScreen.hasPersonalUnsavedChanges()) {
+                    TodoListMod.LOGGER.info("Skip Fabric personal task sync write because local personal tasks are unsaved");
                     return;
                 }
                 try {
