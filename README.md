@@ -6,13 +6,13 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.2.2 Capability Overview / 1.2.2 版本能力概览
+### v1.3.0 Capability Overview / 1.3.0 版本能力概览
 - ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
-- ✅ In-game GUI task management: CRUD, priority, tags, filter & search / 游戏内GUI任务管理：增删改查、优先级、标签、筛选与搜索
-- ✅ HUD todo list: expand/collapse, view header, configurable size/position/opacity / HUD待办列表：展开/收起、视图标题、可配置尺寸/位置/透明度
-- ✅ Multiplayer & team collaboration: team tasks, view semantics, server-side permission checks and audit logs / 多人团队协作：团队任务、视图语义、服务端权限校验与操作审计日志
-- ✅ Projects: personal/team projects, project sidebar, basic project management / 项目：个人/团队项目、项目侧边栏与基础管理
-- ✅ Stability upgrades in LAN/team sync, personal task restore, and assign dialog UX / 局域网/团队同步、个人任务恢复与指派弹窗体验稳定性增强
+- ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks / 游戏内 GUI 任务管理：增删改查、优先级、标签、筛选搜索，以及未完成任务拖拽排序
+- ✅ Reworked main UI flow: clearer project sidebar, detail drawer, segmented todo/done list, and delete confirmation / 重构主界面交互：更清晰的项目侧栏、详情抽屉、待办/已办分段列表与删除确认
+- ✅ Team collaboration upgrades: project search hints, offline-member assignment, and optional all-player mode / 团队协作增强：项目搜索提示、离线成员指派，以及可选的全服任务模式
+- ✅ HUD improvements: expand/collapse, visibility toggle, synchronized priority colors, hidden-count summary, and view sync / HUD 增强：支持展开/收起、显示切换、优先级色块、隐藏数量摘要与视图同步
+- ✅ Safer persistence: backup-aware safe writes and automatic recovery for task/project/config data / 更安全的持久化：任务/项目/配置文件支持带备份的安全写盘与自动恢复
 - ✅ i18n: Chinese & English / 多语言：中文与英文
 
 More details / 更多说明：
@@ -24,31 +24,31 @@ More details / 更多说明：
 
 ### Singleplayer / 单人游戏
 
-![image-20260308182353464](https://qiniuyun.emptycity.top/typora-img/image-20260308182353464.png)
+![image-20260426004104159](https://qiniuyun.emptycity.top/typora-img/image-20260426004104159.png)
 
-![image-20260308182431099](https://qiniuyun.emptycity.top/typora-img/image-20260308182431099.png)
+![image-20260426004123960](https://qiniuyun.emptycity.top/typora-img/image-20260426004123960.png)
 
 ### Multiplayer / 多人游戏
 
 #### Op View / 管理员视角
 
-![image-20260308182538945](https://qiniuyun.emptycity.top/typora-img/image-20260308182538945.png)
+![image-20260426004230993](https://qiniuyun.emptycity.top/typora-img/image-20260426004230993.png)
 
-![image-20260308182634208](https://qiniuyun.emptycity.top/typora-img/image-20260308182634208.png)
+![image-20260426004306031](https://qiniuyun.emptycity.top/typora-img/image-20260426004306031.png)
 
-![image-20260308182736610](https://qiniuyun.emptycity.top/typora-img/image-20260308182736610.png)
+![image-20260426004324754](https://qiniuyun.emptycity.top/typora-img/image-20260426004324754.png)
 
-![image-20260308182916689](https://qiniuyun.emptycity.top/typora-img/image-20260308182916689.png)
+![image-20260426004442973](https://qiniuyun.emptycity.top/typora-img/image-20260426004442973.png)
 
 #### Player View / 普通玩家视角
 
-![image-20260308182825917](https://qiniuyun.emptycity.top/typora-img/image-20260308182825917.png)
+![image-20260426004411293](https://qiniuyun.emptycity.top/typora-img/image-20260426004411293.png)
 
-![image-20260308182952758](https://qiniuyun.emptycity.top/typora-img/image-20260308182952758.png)
+![image-20260426004508553](https://qiniuyun.emptycity.top/typora-img/image-20260426004508553.png)
 
-![image-20260308183029983](https://qiniuyun.emptycity.top/typora-img/image-20260308183029983.png)
+![image-20260426004535554](https://qiniuyun.emptycity.top/typora-img/image-20260426004535554.png)
 
-![image-20260308183053439](https://qiniuyun.emptycity.top/typora-img/image-20260308183053439.png)
+![image-20260426004556405](https://qiniuyun.emptycity.top/typora-img/image-20260426004556405.png)
 
 ## 🚀 Installation / 安装
 
@@ -61,7 +61,7 @@ More details / 更多说明：
 
 ### Steps / 步骤
 
-1. Download the latest mod JAR file / 下载最新的模组JAR文件
+1. Download the latest mod JAR file that matches your loader / 下载与你所用加载器对应的最新模组JAR文件
 2. Place it in your `mods` folder / 将文件放入`mods`文件夹
 3. Launch Minecraft / 启动Minecraft
 4. Press **K** key in-game to open the todo list / 在游戏中按**K**键打开待办列表
@@ -78,6 +78,7 @@ More details / 更多说明：
 - Use the top button in the sidebar to switch between **Personal Projects** and **Team Projects** (team projects require server support). / 侧边栏顶部按钮可在**个人项目/团队项目**之间切换（团队项目需要服务端支持）。
 - Click a project to switch context; starred projects are sorted to the top. / 点击项目切换当前项目；星标项目会自动置顶排序。
 - Click ★/☆ to star/unstar a project (used by HUD “Starred projects” source). / 点击 ★/☆ 可星标/取消星标项目（用于 HUD 的“星标项目”来源）。
+- Use search prefixes and dropdown hints to locate projects faster in large lists. / 可以通过搜索前缀与下拉提示更快定位项目。
 - Use Add/Edit/Delete buttons in the sidebar to manage projects (delete requires confirmation). / 使用侧边栏的新增/编辑/删除管理项目（删除需要二次确认）。
 
 ### Creating Tasks / 创建任务
@@ -89,6 +90,7 @@ More details / 更多说明：
 ### Managing Tasks / 管理任务
 - Click on a task to select it / 点击任务选中
 - **Complete** - Mark as completed by clicking the checkbox / 点击复选框标记完成
+- **Drag Sort** - Unfinished tasks can be reordered directly by dragging / **拖拽排序** - 未完成任务可以直接拖拽调整顺序
 - **Right-Click Menu** - Right-click a task to open the context menu for more actions: / **右键菜单** - 右键点击任务打开上下文菜单以执行更多操作：
   - **Edit** - Modify the task / 编辑任务
   - **Delete** - Remove the task / 删除任务
@@ -103,14 +105,21 @@ More details / 更多说明：
 - After **Save**, **Cancel**, or closing with **Esc** in team views, the client always re-syncs team tasks from the server so that local unsaved edits are discarded and the list matches server state / 在团队视图中点击**保存**、**取消**或按 **Esc** 关闭界面后，客户端都会从服务器重新同步团队任务，本地未保存修改会被丢弃，列表始终与服务器一致
 - Project members with role **MEMBER** can only claim/abandon and complete their own team tasks; **PROJECT_MANAGER/LEAD/OP** can fully manage team tasks. The “Assign Others” button is shown only when you have permission. / 角色为 **成员** 的项目成员只能领取/放弃并完成自己的团队任务；**项目经理/负责人/OP** 可完整管理团队任务。“指派他人”按钮仅在拥有权限时显示
 - In team projects, adding new tasks is only enabled in **Unassigned** view; other team views disable the Add button and Enter-to-add. / 在团队项目中，仅 **待分配** 视图允许新增任务；其他团队视图会禁用添加按钮与 Enter 添加操作。
+- Team projects can optionally enable an all-player task mode for broader shared workflows. / 团队项目可按需开启全服任务模式，适配更宽松的共享协作流程。
 
 ### HUD Config / HUD 配置
 - Open the todo GUI with **K**, then click the top-right **Config** button to open the config screen / 按 **K** 打开待办界面，点击右上角的 **配置** 按钮进入配置界面
 - Configure HUD width, max height, todo/done limits (0–30), default expanded state, whether to show when empty, default list view, list project source and opacity / 可配置HUD宽度、最大高度、待办/已办显示条数（0–30）、默认展开、无任务时是否显示、默认列表视图、列表项目来源与透明度
 - **Real-time View Sync** - The HUD task list automatically syncs with the current view filter in the main GUI (e.g., Personal/Team views, Priority filters) / **实时视图同步** - HUD 任务列表会根据主界面的当前视图过滤项（如个人/团队视图、优先级筛选）实时同步显示内容
+- HUD priority color blocks and hidden-count summaries are aligned with the current GUI semantics. / HUD 的优先级色块与隐藏数量摘要已和当前 GUI 语义对齐。
 - In true single-player worlds, the HUD default list view is locked to **Personal** and cannot be changed; HUD team views are hidden / 在真正的单人世界中，HUD默认列表视图固定为**个人**且不可修改，同时HUD中不显示团队视图
 - Drag the HUD preview rectangle to set a custom position; changes apply after clicking **Save & Apply** / 在配置界面中拖动HUD预览矩形设置自定义位置，点击**保存并应用**后生效
 - If you use Mod Menu, you can also open this config screen from the mod’s entry / 如果安装了 Mod Menu，也可以从 Mod Menu 中打开该配置界面
+
+### Persistence / 持久化
+- Tasks, projects, player project state, and config files now use safer temp-write plus backup recovery flow. / 任务、项目、玩家项目状态和配置文件现在使用更安全的临时写入加备份恢复流程。
+- When a main data file is corrupted, the mod can attempt to recover from the latest backup automatically. / 当主数据文件损坏时，模组会自动尝试从最近一次备份恢复。
+- Local singleplayer personal-task files now keep local and player-specific copies in sync to reduce accidental rollback-like restores. / 本地单人个人任务文件会同步维护本地与玩家副本，减少类似意外回滚的问题。
 
 
 ## 🛡️ Permission System / 权限系统
@@ -175,7 +184,8 @@ cd todoList
 
 ### Release / 发布
 
-- Releases are published by pushing a Git tag that starts with `v`, for example `v1.2.2`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.2.2`
+- Releases are published by pushing a Git tag that starts with `v`, for example `v1.3.0`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.3.0`
+- Release names include the Minecraft version suffix, for example `TodoList-v1.3.0-mc1.21.1-release`. / 发布名称会带上 Minecraft 版本后缀，例如 `TodoList-v1.3.0-mc1.21.1-release`
 - The release workflow extracts notes from `CHANGELOG.md` based on the tag version. / 发布工作流会根据标签版本从 `CHANGELOG.md` 提取发布说明
 
 ### Project Structure / 项目结构
