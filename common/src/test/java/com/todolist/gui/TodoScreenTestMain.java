@@ -78,6 +78,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistClaimAndAbandonImmediatelyInTeamView", TodoScreenTestMain::shouldPersistClaimAndAbandonImmediatelyInTeamView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowCompletionFeedbackForEachSequentialTeamToggle", TodoScreenTestMain::shouldShowCompletionFeedbackForEachSequentialTeamToggle);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistPersonalTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistPersonalTaskCompletionToggleImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTeamTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistTeamTaskCompletionToggleImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
@@ -594,6 +595,47 @@ public final class TodoScreenTestMain {
 
         Task restoredTask = requireTaskByTitle(screen, "Complete Toggle Personal Task");
         GuiTestSupport.assertFalse(restoredTask.isCompleted(), "后续界面刷新不应把旧完成态重新带回个人任务");
+    }
+
+    /**
+     * 验证团队任务连续勾选完成时，每次都应触发成功通知与提示音。
+     */
+    private static void shouldShowCompletionFeedbackForEachSequentialTeamToggle() {
+        GuiTestSupport.resetState();
+        ModConfig.getInstance().setEnableSoundEffects(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-complete-feedback", "Team Complete Feedback");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Feedback Team Task 1");
+        addTaskViaInput(screen, "Feedback Team Task 2");
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "第一个团队任务完成后应新增一条通知");
+        GuiTestSupport.assertEquals(
+                Component.translatable("message.todolist.completed", "Feedback Team Task 1").getString(),
+                access(screen).getLastNotificationTextForTest(),
+                "第一个团队任务完成提示文案应匹配"
+        );
+        GuiTestSupport.assertEquals(1, minecraft.getPlayedSoundCount(), "第一个团队任务完成后应播放一次提示音");
+
+        widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+
+        GuiTestSupport.assertEquals(2, access(screen).getNotificationCountForTest(), "第二个团队任务完成后也应新增通知");
+        GuiTestSupport.assertEquals(
+                Component.translatable("message.todolist.completed", "Feedback Team Task 2").getString(),
+                access(screen).getLastNotificationTextForTest(),
+                "第二个团队任务完成提示文案应匹配"
+        );
+        GuiTestSupport.assertEquals(2, minecraft.getPlayedSoundCount(), "第二个团队任务完成后也应播放提示音");
     }
 
     /**
