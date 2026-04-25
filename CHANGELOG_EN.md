@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.3.0] - 2026-04-26
+
+### New Features
+- **Main Todo GUI Overhaul**: Reworked the main layout, project sidebar, task list, and task-detail drawer with clearer view switching and more responsive space allocation.
+- **Drag Sorting for Open Tasks**: Added direct drag-and-drop reordering for unfinished tasks so personal and team backlogs can be reprioritized in-game.
+- **Segmented Task List & Delete Confirmation**: Introduced a clearer open/done split with completed-section folding baseline, plus a dedicated delete confirmation flow to reduce accidental removals.
+- **Team Project Search & Member Interaction Upgrade**: Added project search prefixes with dropdown hints and unified the member-selection / assignment dialog layout for faster multiplayer workflows.
+- **Team All-player Mode**: Added an optional all-player mode for team projects, giving team tasks a more consistent collaboration model in shared environments.
+
+### Improvements & Fixes
+- **HUD / View Consistency**: Synchronized HUD priority color blocks, hidden-count semantics, and team-view display logic so the HUD follows the main GUI more consistently.
+- **Team Interaction Feedback**: Improved feedback for claim, abandon, assign, and team-all-view interactions to reduce cases where actions succeed but the GUI feels stale.
+- **Immediate Completion Persistence**: Fixed task completion toggles not being persisted quickly enough, reducing rollback-like behavior after refreshes or screen close.
+- **Drag-sort Input Fix**: Fixed drag sorting occasionally requiring an extra click before it actually took effect.
+- **Singleplayer Personal-task Restore Fix**: Fixed local singleplayer personal-task rollback/clearing caused by drift between the local task file and the per-player task file.
+
+### Stability & Testing
+- **Safer Persistence & Recovery**: Task, project, player-project-state, and config persistence now use temp writes, backup recovery, and corrupt-file preservation for much safer crash / power-loss handling.
+- **Two-phase Project Reload**: Project reload now uses a two-phase flow so failed reads do not clear the in-memory project state before recovery completes.
+- **Regression Coverage Expansion**: Added persistence safety regression tests and local-singleplayer dual-copy synchronization tests to improve release confidence.
+
 ## [1.1.4] - 2026-03-29
 
 ### New Features
