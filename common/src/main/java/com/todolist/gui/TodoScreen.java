@@ -610,9 +610,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 selectedTask,
                 task -> {
                     boolean wasCompleted = task.isCompleted();
+                    String toggledTaskId = task.getId();
+                    String toggledTaskTitle = task.getTitle();
                     toggleTaskCompletion(task);
-                    if (!wasCompleted && task.isCompleted()) {
-                        addNotification(Component.translatable("message.todolist.completed", task.getTitle()).getString());
+                    Task updatedTask = toggledTaskId == null || taskManager == null ? task : taskManager.getTask(toggledTaskId);
+                    boolean completedAfterToggle = updatedTask != null && updatedTask.isCompleted();
+                    String completedTaskTitle = updatedTask != null && updatedTask.getTitle() != null
+                            ? updatedTask.getTitle()
+                            : toggledTaskTitle;
+                    if (!wasCompleted && completedAfterToggle) {
+                        addNotification(Component.translatable("message.todolist.completed", completedTaskTitle).getString());
                         if (config.isEnableSoundEffects() && this.minecraft != null && this.minecraft.player != null) {
                             this.minecraft.player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.7F, 1.0F);
                         }

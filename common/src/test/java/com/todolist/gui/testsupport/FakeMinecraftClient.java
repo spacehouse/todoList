@@ -159,6 +159,18 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
+     * 返回测试玩家累计播放的提示音次数。
+     *
+     * @return 提示音播放次数
+     */
+    public int getPlayedSoundCount() {
+        if (testPlayer instanceof FakeClientPlayer fakeClientPlayer) {
+            return fakeClientPlayer.getPlayedSoundCount();
+        }
+        return 0;
+    }
+
+    /**
      * 记录界面切换，并同步到父类 screen 字段。
      *
      * @param guiScreen 新界面
