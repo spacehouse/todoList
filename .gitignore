@@ -70,6 +70,7 @@ local.properties
 *.log
 
 docs/*
+!docs/h2-storage-migration*.md
 
 *.bak.*
 

@@ -23,6 +23,10 @@ import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.storage.H2ConnectionProvider;
+import com.todolist.storage.H2StorageAvailability;
+import com.todolist.storage.StorageFailureNotifier;
+import com.todolist.storage.StorageUnavailableException;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -987,7 +991,7 @@ public final class CommandBootstrap {
             return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to render task list page for command", e);
-            return sendCommandFailure(source, "command.todolist.task.list.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.list.failed", e);
         }
     }
 
@@ -1159,7 +1163,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to add task for command", e);
-            return sendCommandFailure(source, "command.todolist.task.add.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.add.failed", e);
         }
     }
 
@@ -1545,7 +1549,7 @@ public final class CommandBootstrap {
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to resolve task clean request", e);
             if (sendErrors) {
-                sendCommandFailure(source, "command.todolist.task.clean.failed");
+                sendStorageAwareCommandFailure(source, "command.todolist.task.clean.failed", e);
             }
             return null;
         }
@@ -1613,7 +1617,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to clean tasks for command", e);
-            return sendCommandFailure(source, "command.todolist.task.clean.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.clean.failed", e);
         }
     }
 
@@ -1719,6 +1723,9 @@ public final class CommandBootstrap {
         if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(source.getServer())) {
             return sendCommandFailure(source, "command.todolist.project.select.singleplayer_team_forbidden");
         }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         ProjectPackets.setActiveProjectId(player, normalizedProjectId);
         return sendCommandSuccess(
                 source,
@@ -1809,6 +1816,9 @@ public final class CommandBootstrap {
         if (projectScope == Project.Scope.TEAM && isSingleplayerServer(source.getServer())) {
             return sendCommandFailure(source, "command.todolist.project.create.singleplayer_forbidden");
         }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         Project project = new Project(normalizedName, projectScope, player.getStringUUID());
         project.addMember(player.getStringUUID(), Project.ProjectRole.PROJECT_MANAGER, player.getName().getString());
         TodoListCommon.getProjectManager().addProject(project);
@@ -1849,6 +1859,9 @@ public final class CommandBootstrap {
         String normalizedName = name == null ? "" : name.trim();
         if (normalizedName.isEmpty()) {
             return sendCommandFailure(source, "command.todolist.project.create.invalid_name");
+        }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
         }
         project.setName(normalizedName);
         TodoListCommon.getProjectManager().updateProject(project);
@@ -1891,6 +1904,9 @@ public final class CommandBootstrap {
         Boolean normalizedEnabled = CommandInputNormalizer.normalizeToggleState(enabled);
         if (normalizedEnabled == null) {
             return sendCommandFailure(source, "command.todolist.project.member_create.invalid_value");
+        }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
         }
         project.setAllowMemberCreate(normalizedEnabled);
         TodoListCommon.getProjectManager().updateProject(project);
@@ -1935,6 +1951,9 @@ public final class CommandBootstrap {
         if (normalizedEnabled == null) {
             return sendCommandFailure(source, "command.todolist.project.all_player_claim_complete.invalid_value");
         }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         project.setAllowAllPlayersClaimComplete(normalizedEnabled);
         TodoListCommon.getProjectManager().updateProject(project);
         saveProjects(source.getServer(), project.getScope());
@@ -1978,6 +1997,9 @@ public final class CommandBootstrap {
                     buildProjectNameComponent(project)
             );
         }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         List<String> updatedProjectIds = CommandInputNormalizer.applyHudStarredProjectState(currentProjectIds, project.getId(), starred);
         ProjectPackets.setHudStarredProjectIds(player, updatedProjectIds);
         return sendCommandSuccess(
@@ -2013,6 +2035,9 @@ public final class CommandBootstrap {
         }
         if (target.uuid.equals(project.getOwnerUuid()) || project.getMemberRole(target.uuid) != null) {
             return sendCommandFailure(source, "command.todolist.project.member.add.already_exists", target.displayName);
+        }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
         }
         project.addMember(target.uuid, Project.ProjectRole.MEMBER, target.displayName);
         ProjectPackets.clearPendingJoinRequest(project.getId(), target.uuid);
@@ -2050,6 +2075,9 @@ public final class CommandBootstrap {
         }
         if (!canManageProjectMember(player, project, normalizedMemberUuid, Operation.REMOVE_MEMBER)) {
             return sendCommandFailure(source, "command.todolist.project.member.remove.no_permission");
+        }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
         }
         String memberName = getProjectMemberDisplayName(project, normalizedMemberUuid);
         project.removeMember(normalizedMemberUuid);
@@ -2091,6 +2119,9 @@ public final class CommandBootstrap {
         String normalizedRole = CommandInputNormalizer.normalizeProjectMemberRole(role);
         if (normalizedRole.isEmpty()) {
             return sendCommandFailure(source, "command.todolist.project.member.role.invalid_value");
+        }
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
         }
         Project.ProjectRole newRole = "lead".equals(normalizedRole) ? Project.ProjectRole.LEAD : Project.ProjectRole.MEMBER;
         String memberName = getProjectMemberDisplayName(project, normalizedMemberUuid);
@@ -2353,6 +2384,9 @@ public final class CommandBootstrap {
     }
 
     private static int executeProjectRemoveNow(CommandSourceStack source, ServerPlayer player, Project project) {
+        if (ensureStorageAvailableForCommand(source) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
         String projectId = project.getId();
         Project.Scope scope = project.getScope();
         ProjectPackets.clearPendingJoinRequestsForProject(projectId);
@@ -2689,7 +2723,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to mark task as done for command", e);
-            return sendCommandFailure(source, "command.todolist.task.done.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.done.failed", e);
         }
     }
 
@@ -2738,7 +2772,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to mark project task as done for command, projectId={}", project.getId(), e);
-            return sendCommandFailure(source, "command.todolist.task.done.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.done.failed", e);
         }
     }
 
@@ -2782,7 +2816,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to claim project task for command, projectId={}", project.getId(), e);
-            return sendCommandFailure(source, "command.todolist.task.claim.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.claim.failed", e);
         }
     }
 
@@ -2823,7 +2857,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to abandon project task for command, projectId={}", project.getId(), e);
-            return sendCommandFailure(source, "command.todolist.task.abandon.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.abandon.failed", e);
         }
     }
 
@@ -2869,7 +2903,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to assign project task for command, projectId={}", project.getId(), e);
-            return sendCommandFailure(source, "command.todolist.task.assign.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.assign.failed", e);
         }
     }
 
@@ -2905,7 +2939,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to remove task for command", e);
-            return sendCommandFailure(source, "command.todolist.task.remove.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.remove.failed", e);
         }
     }
 
@@ -2945,7 +2979,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to remove project task for command, projectId={}", project.getId(), e);
-            return sendCommandFailure(source, "command.todolist.task.remove.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.remove.failed", e);
         }
     }
 
@@ -3123,7 +3157,7 @@ public final class CommandBootstrap {
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to add task with project for command", e);
-            return sendCommandFailure(source, "command.todolist.task.add.failed");
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.add.failed", e);
         }
     }
 
@@ -3637,6 +3671,31 @@ public final class CommandBootstrap {
         sendErrorByTranslationKey(source, translationKey, args);
         logCommandResultTriplet(COMMAND_FAILURE, translationKey, SIDE_EFFECT_NONE);
         return COMMAND_FAILURE;
+    }
+
+    /**
+     * 根据存储异常类型发送命令失败反馈。
+     */
+    private static int sendStorageAwareCommandFailure(CommandSourceStack source, String fallbackTranslationKey, Throwable throwable) {
+        return sendCommandFailure(source, StorageFailureNotifier.toCommandMessageKey(throwable, fallbackTranslationKey));
+    }
+
+    /**
+     * 在命令修改内存状态前检查当前存储后端是否可写。
+     */
+    private static int ensureStorageAvailableForCommand(CommandSourceStack source) {
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return COMMAND_SUCCESS;
+        }
+        try {
+            H2StorageAvailability.ensureAvailable(new H2ConnectionProvider().getDatabaseBasePath());
+            return COMMAND_SUCCESS;
+        } catch (StorageUnavailableException exception) {
+            return sendStorageAwareCommandFailure(source, "command.todolist.storage_unavailable", exception);
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to check H2 storage availability before command mutation", exception);
+            return COMMAND_SUCCESS;
+        }
     }
 
     /**

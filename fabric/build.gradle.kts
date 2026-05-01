@@ -7,6 +7,7 @@ plugins {
 
 val archives_name: String by project
 val commonProject = project(":common")
+val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
 base {
     val minecraftVersion = property("minecraft_version") as String
@@ -44,4 +45,7 @@ val commonMainOutput = commonProject.extensions
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(commonMainOutput)
+    from(zipTree(h2Jar)) {
+        exclude("META-INF/MANIFEST.MF")
+    }
 }

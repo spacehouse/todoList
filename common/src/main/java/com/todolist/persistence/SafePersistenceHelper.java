@@ -129,6 +129,49 @@ public final class SafePersistenceHelper {
     }
 
     /**
+     * 以只读恢复方式读取目标文件。
+     * 与 readWithRecovery 不同，该方法即使使用备份也不会恢复、覆盖或移动主文件。
+     *
+     * @param target 目标文件
+     * @param label 日志标签
+     * @param reader 读取函数
+     * @param validator 结果校验器
+     * @param <T> 读取结果类型
+     * @return 读取结果；文件不存在且备份也不存在时返回 missing
+     * @throws IOException 当主文件和备份都不可用时抛出
+     */
+    public static <T> ReadResult<T> readWithRecoveryReadOnly(Path target,
+                                                             String label,
+                                                             ThrowingPathReader<T> reader,
+                                                             Predicate<T> validator) throws IOException {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(reader, "reader");
+        Predicate<T> safeValidator = validator == null ? value -> true : validator;
+        Path backup = resolveBackupPath(target);
+        if (!Files.exists(target)) {
+            if (!Files.exists(backup)) {
+                return ReadResult.missing();
+            }
+            T backupValue = readAndValidate(backup, label + " backup", reader, safeValidator);
+            TodoConstants.LOGGER.warn("Read {} from backup file {} without rewriting primary file", safeLabel(label), backup);
+            return ReadResult.present(backupValue, true);
+        }
+
+        try {
+            T value = readAndValidate(target, label, reader, safeValidator);
+            return ReadResult.present(value, false);
+        } catch (IOException primaryException) {
+            if (!Files.exists(backup)) {
+                throw primaryException;
+            }
+            T backupValue = readAndValidate(backup, label + " backup", reader, safeValidator);
+            TodoConstants.LOGGER.warn("Primary {} at {} was unreadable, read backup without rewriting primary file: {}",
+                    safeLabel(label), target, primaryException.getMessage());
+            return ReadResult.present(backupValue, true);
+        }
+    }
+
+    /**
      * 从备份文件恢复目标文件并返回读取结果。
      *
      * @param target 目标文件

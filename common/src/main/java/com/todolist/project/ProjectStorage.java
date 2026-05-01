@@ -3,6 +3,8 @@ package com.todolist.project;
 import com.todolist.TodoConstants;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2ProjectStore;
+import com.todolist.storage.StorageBackendFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
@@ -22,6 +24,7 @@ import java.util.List;
 public class ProjectStorage {
     private static final String PERSONAL_PROJECTS_FILE = "projects.dat";
     private static final String TEAM_PROJECTS_FILE = "team_projects.dat";
+    private final H2ProjectStore h2ProjectStore = new H2ProjectStore();
 
     /**
      * 创建项目存储组件，并预热项目目录。
@@ -60,6 +63,9 @@ public class ProjectStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     public List<Project> loadProjects() throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2ProjectStore.loadProjects();
+        }
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         SafePersistenceHelper.ReadResult<List<Project>> readResult = SafePersistenceHelper.readWithRecovery(
@@ -81,6 +87,9 @@ public class ProjectStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     public List<Project> loadTeamProjects() throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2ProjectStore.loadTeamProjects();
+        }
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(TEAM_PROJECTS_FILE);
         SafePersistenceHelper.ReadResult<List<Project>> readResult = SafePersistenceHelper.readWithRecovery(
@@ -102,6 +111,10 @@ public class ProjectStorage {
      * @throws IOException 当写入文件失败时抛出
      */
     public void saveProjects(List<Project> projects) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2ProjectStore.saveProjects(projects);
+            return;
+        }
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
@@ -114,6 +127,10 @@ public class ProjectStorage {
      * @throws IOException 当写入文件失败时抛出
      */
     public void saveTeamProjects(List<Project> projects) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2ProjectStore.saveTeamProjects(projects);
+            return;
+        }
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(TEAM_PROJECTS_FILE);
         saveProjectsToFile(projects, file);
@@ -126,6 +143,14 @@ public class ProjectStorage {
      * @return 若个人项目文件存在则返回 true
      */
     public boolean hasPersonalProjectsFile() {
+        if (StorageBackendFactory.isH2Selected()) {
+            try {
+                return h2ProjectStore.hasPersonalProjects();
+            } catch (IOException exception) {
+                TodoConstants.LOGGER.warn("Failed to query H2 personal projects", exception);
+                return false;
+            }
+        }
         ensureDirectoryExists();
         Path file = getProjectsDirectory().resolve(PERSONAL_PROJECTS_FILE);
         return SafePersistenceHelper.existsOrBackup(file);

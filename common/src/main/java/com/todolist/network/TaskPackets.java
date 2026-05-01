@@ -2,6 +2,7 @@ package com.todolist.network;
 
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
+import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.nbt.CompoundTag;
@@ -43,7 +44,7 @@ public class TaskPackets {
 
     public static void onTeamReplaceTasksPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         List<Task> tasks = readTaskList(buf);
-        server.execute(() -> handleTeamReplaceTasks(server, tasks));
+        server.execute(() -> handleTeamReplaceTasks(server, player, tasks));
     }
 
     public static void onTeamRequestSyncPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
@@ -119,6 +120,7 @@ public class TaskPackets {
             serverPacketSender.send(player, SYNC_TASKS_ID, buf);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load player tasks for sync", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -134,6 +136,7 @@ public class TaskPackets {
             serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for sync", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -143,16 +146,18 @@ public class TaskPackets {
             storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
-    private static void handleTeamReplaceTasks(MinecraftServer server, List<Task> tasks) {
+    private static void handleTeamReplaceTasks(MinecraftServer server, ServerPlayer player, List<Task> tasks) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTeamTasks(tasks);
             broadcastTeamTasks(server);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save team tasks", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -190,6 +195,11 @@ public class TaskPackets {
             }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for broadcast", e);
+            if (StorageFailureNotifier.isStorageUnavailable(e)) {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
+                }
+            }
         }
     }
 

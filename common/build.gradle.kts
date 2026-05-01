@@ -15,6 +15,7 @@ base {
 dependencies {
     val minecraftVersion = property("minecraft_version") as String
     val loaderVersion = property("loader_version") as String
+    val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
     minecraft("com.mojang:minecraft:$minecraftVersion")
     mappings(loom.officialMojangMappings())
@@ -22,6 +23,7 @@ dependencies {
     testCompileOnly("net.fabricmc:fabric-loader:$loaderVersion")
 
     compileOnly("org.slf4j:slf4j-api:2.0.7")
+    testImplementation(files(h2Jar))
 }
 
 loom {
@@ -62,9 +64,63 @@ tasks.register<JavaExec>("guiSystemTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("h2DiagnosticTest") {
+    group = "verification"
+    description = "Run the H2 M1-0 driver, temporary database, DDL, backup, script, and TCP API diagnostics."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2DiagnosticTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("storageBackendSelectionTest") {
+    group = "verification"
+    description = "Run the M1-A storage backend selection self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.StorageBackendSelectionTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("h2SchemaInitializerTest") {
+    group = "verification"
+    description = "Run the M1-B H2 schema initializer self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2SchemaInitializerTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("h2LegacyMigrationTest") {
+    group = "verification"
+    description = "Run the M1-C legacy NBT to H2 migration self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2LegacyMigrationTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("h2StorageBackendIntegrationTest") {
+    group = "verification"
+    description = "Run the M1-D H2 storage backend integration self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2StorageBackendIntegrationTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("h2StorageAvailabilityTest") {
+    group = "verification"
+    description = "Run the M1-E H2 storage availability self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2StorageAvailabilityTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
+    dependsOn("h2DiagnosticTest")
+    dependsOn("storageBackendSelectionTest")
+    dependsOn("h2SchemaInitializerTest")
+    dependsOn("h2LegacyMigrationTest")
+    dependsOn("h2StorageBackendIntegrationTest")
+    dependsOn("h2StorageAvailabilityTest")
 }
 
 tasks.withType<Test>().configureEach {

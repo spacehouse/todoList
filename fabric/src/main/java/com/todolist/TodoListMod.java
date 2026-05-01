@@ -54,11 +54,11 @@ public class TodoListMod implements ModInitializer {
         // Initialize platform paths
         DataPathProvider.setGameDirSupplier(() -> FabricLoader.getInstance().getGameDir().toAbsolutePath());
 
-        // Initialize common logic
-        TodoListCommon.init();
-
         // Initialize configuration
         ModConfig.load();
+
+        // Initialize common logic
+        TodoListCommon.init();
 
         // Use common storage instances
         taskStorage = TodoListCommon.getTaskStorage();
