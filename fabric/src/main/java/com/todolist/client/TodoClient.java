@@ -180,6 +180,7 @@ public class TodoClient implements ClientModInitializer {
                 return;
             }
             client.execute(() -> {
+                TodoListCommon.closeStorageContext();
                 DataPathProvider.resetStorageNamespace();
                 TodoListCommon.reloadProjectsFromStorage();
                 setActiveProjectId(null);

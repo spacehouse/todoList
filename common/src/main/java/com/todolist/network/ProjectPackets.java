@@ -13,6 +13,7 @@ import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.ChatFormatting;
@@ -1114,6 +1115,7 @@ public class ProjectPackets {
             getProjectPlayerStateStorage().savePlayerState(player.getUUID(), mergedState);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to persist project player state for {}", player.getStringUUID(), e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -1199,6 +1201,7 @@ public class ProjectPackets {
             state = getProjectPlayerStateStorage().loadPlayerState(player.getUUID());
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load project player state for {}", player.getStringUUID(), e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
         ProjectPlayerStateStorage.ProjectPlayerState runtimeState = sanitizePlayerProjectState(server, state, true);
         applyPlayerProjectState(player, runtimeState);

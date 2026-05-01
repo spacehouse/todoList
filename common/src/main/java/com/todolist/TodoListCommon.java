@@ -1,9 +1,13 @@
 package com.todolist;
 
+import com.todolist.config.ModConfig;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.Project;
+import com.todolist.storage.H2ConnectionProvider;
+import com.todolist.storage.H2StorageBootstrap;
+import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.TaskStorage;
 
 import java.util.List;
@@ -25,6 +29,8 @@ public final class TodoListCommon {
      * 初始化通用组件。
      */
     public static void init() {
+        ModConfig.getInstance();
+        StorageBackendFactory.getConfiguredBackend();
         taskStorage = new TaskStorage();
         projectStorage = new ProjectStorage();
         projectManager = new ProjectManager();
@@ -124,5 +130,19 @@ public final class TodoListCommon {
      */
     public static boolean isProjectSyncInProgress() {
         return projectSyncInProgress;
+    }
+
+    /**
+     * 清理当前存储上下文相关的运行期状态。
+     * 当前用于服务端停止、客户端离开世界等生命周期边界，避免 H2 状态串到下一次启动。
+     */
+    public static void closeStorageContext() {
+        try {
+            if (StorageBackendFactory.isH2Selected()) {
+                H2StorageBootstrap.resetDatabaseState(new H2ConnectionProvider().getDatabaseBasePath());
+            }
+        } catch (Exception e) {
+            TodoConstants.LOGGER.warn("Failed to close TodoList storage context", e);
+        }
     }
 }

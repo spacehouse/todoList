@@ -98,7 +98,21 @@ public final class ProjectSaveDebouncer {
                 storage.saveTeamProjects(manager.getProjectsByScope(Project.Scope.TEAM));
             }
         } catch (Exception e) {
+            restoreDirtyFlags(doPersonal, doTeam);
             TodoConstants.LOGGER.error("Failed to save projects (debounced)", e);
+        }
+    }
+
+    /**
+     * 保存失败时恢复 dirty 标记，避免内存改动被误认为已经落盘。
+     *
+     * @param personalFailed 本次是否尝试保存个人项目
+     * @param teamFailed 本次是否尝试保存团队项目
+     */
+    private static void restoreDirtyFlags(boolean personalFailed, boolean teamFailed) {
+        synchronized (LOCK) {
+            dirtyPersonal = dirtyPersonal || personalFailed;
+            dirtyTeam = dirtyTeam || teamFailed;
         }
     }
 }

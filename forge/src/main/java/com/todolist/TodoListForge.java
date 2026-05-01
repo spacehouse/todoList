@@ -57,9 +57,9 @@ public class TodoListForge {
 
         DataPathProvider.setGameDirSupplier(() -> FMLPaths.GAMEDIR.get());
 
-        TodoListCommon.init();
-
         ModConfig.load();
+
+        TodoListCommon.init();
 
         taskStorage = TodoListCommon.getTaskStorage();
         projectStorage = TodoListCommon.getProjectStorage();

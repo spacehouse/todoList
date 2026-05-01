@@ -11,6 +11,7 @@ import com.todolist.gui.TodoScreenLayoutSupport.LayoutRect;
 import com.todolist.gui.TodoScreenLayoutSupport.MainLayoutMetrics;
 import com.todolist.gui.TodoScreenLayoutSupport.ResponsiveTier;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -1114,7 +1115,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         if (this.minecraft != null && this.minecraft.player != null) {
-            this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
+            this.minecraft.player.displayClientMessage(resolveSaveFailureMessage(outcome.failure()), false);
         }
     }
 
@@ -1871,13 +1872,24 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return true;
         } catch (Exception exception) {
             TodoConstants.LOGGER.error("Failed to persist task {} immediately", operationName, exception);
+            Component failureMessage = resolveSaveFailureMessage(exception);
             if (this.minecraft != null && this.minecraft.player != null) {
-                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.save_failed"), false);
+                this.minecraft.player.displayClientMessage(failureMessage, false);
             } else {
-                addNotification(Component.translatable("message.todolist.save_failed").getString());
+                addNotification(failureMessage.getString());
             }
             return false;
         }
+    }
+
+    /**
+     * 根据保存异常类型生成用户可见的保存失败提示。
+     *
+     * @param throwable 保存异常
+     * @return 本地化提示组件
+     */
+    private Component resolveSaveFailureMessage(Throwable throwable) {
+        return StorageFailureNotifier.toUserMessage(throwable, "message.todolist.save_failed");
     }
 
     /**

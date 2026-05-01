@@ -1,4 +1,5 @@
 import org.gradle.internal.os.OperatingSystem
+import java.util.zip.ZipFile
 
 plugins {
     id("maven-publish")
@@ -8,6 +9,9 @@ val tripletCompareScript = layout.projectDirectory.file("tools/triplet-compare/c
 val tripletBaselineSample = layout.projectDirectory.file("tools/triplet-compare/baseline-sample.json")
 val tripletLogSample = layout.projectDirectory.file("tools/triplet-compare/log-sample.txt")
 val tripletReport = layout.buildDirectory.file("reports/triplet-sample-diff.json")
+val h2JarContentReport = layout.buildDirectory.file("reports/h2-driver-content-check.txt")
+val releaseMinecraftVersion = property("minecraft_version") as String
+val releaseModVersion = property("mod_version") as String
 
 subprojects {
     apply(plugin = "java")
@@ -58,16 +62,50 @@ tasks.register<Copy>("distReleaseJars") {
     into(layout.buildDirectory.dir("libs"))
 
     from(project(":fabric").layout.buildDirectory.dir("libs")) {
-        include("todolist-fabric-*.jar")
+        include("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
     from(project(":forge").layout.buildDirectory.dir("libs")) {
-        include("todolist-forge-*.jar")
+        include("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
     from(project(":neoforge").layout.buildDirectory.dir("libs")) {
         include("todolist-neoforge-*.jar")
         exclude("*-sources.jar", "*-dev.jar")
+    }
+}
+
+tasks.register("h2JarContentCheck") {
+    group = "verification"
+    description = "Check Fabric and Forge release jars contain exactly one org/h2/Driver.class entry."
+
+    dependsOn("distReleaseJars")
+    outputs.file(h2JarContentReport)
+
+    doLast {
+        val distDir = layout.buildDirectory.dir("libs").get().asFile
+        val releaseJars = listOf(
+            "fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"),
+            "forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
+        )
+
+        val reportLines = mutableListOf<String>()
+        releaseJars.forEach { (loader, jarFile) ->
+            if (!jarFile.isFile) {
+                throw GradleException("Missing $loader release jar: ${jarFile.absolutePath}")
+            }
+            val driverCount = ZipFile(jarFile).use { zipFile ->
+                zipFile.entries().asSequence().count { it.name == "org/h2/Driver.class" }
+            }
+            reportLines += "$loader=${jarFile.name}, org/h2/Driver.class=$driverCount"
+            if (driverCount != 1) {
+                throw GradleException("$loader release jar must contain exactly one org/h2/Driver.class, actual: $driverCount")
+            }
+        }
+
+        val reportFile = h2JarContentReport.get().asFile
+        reportFile.parentFile.mkdirs()
+        reportFile.writeText(reportLines.joinToString(System.lineSeparator()) + System.lineSeparator(), Charsets.UTF_8)
     }
 }
 
@@ -104,7 +142,7 @@ tasks.register<Exec>("tripletSampleCheck") {
 
 // 注册根目录 build 任务，并让其触发 distReleaseJars
 tasks.register("build") {
-    dependsOn("distReleaseJars", "tripletSampleCheck")
+    dependsOn("distReleaseJars", "h2JarContentCheck", "tripletSampleCheck")
 }
 
 // 注册 clean 任务，用于清理根目录 build 文件夹

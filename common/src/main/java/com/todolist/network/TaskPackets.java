@@ -9,6 +9,7 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.nbt.CompoundTag;
@@ -129,6 +130,7 @@ public class TaskPackets {
             serverPacketSender.send(player, SYNC_TASKS_ID, buf);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load player tasks for sync", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -144,6 +146,7 @@ public class TaskPackets {
             serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for sync", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -153,12 +156,10 @@ public class TaskPackets {
             storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
-    /**
-     * 澶勭悊鍥㈤槦浠诲姟鏁撮噺鏇挎崲锛屼粎鍏佽鐜╁淇敼鑷繁鏈夋潈闄愮殑椤圭洰浠诲姟銆?
-     */
     private static void handleTeamReplaceTasks(MinecraftServer server, ServerPlayer player, List<Task> tasks) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
@@ -168,6 +169,7 @@ public class TaskPackets {
             broadcastTeamTasks(server);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save team tasks", e);
+            StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
     }
 
@@ -522,6 +524,11 @@ public class TaskPackets {
             }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for broadcast", e);
+            if (StorageFailureNotifier.isStorageUnavailable(e)) {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
+                }
+            }
         }
     }
 

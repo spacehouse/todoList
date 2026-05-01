@@ -2,6 +2,7 @@ package com.todolist.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.todolist.TodoConstants;
@@ -79,6 +80,17 @@ public class ModConfig {
         FULL
     }
 
+    /**
+     * 存储后端类型。
+     * NBT 是当前默认文件存储，H2 用于后续关系型存储迁移阶段。
+     */
+    public enum StorageBackend {
+        @SerializedName("nbt")
+        NBT,
+        @SerializedName("h2")
+        H2
+    }
+
     // Configuration options
     private boolean enableHud = true;
     private boolean enableTaskBook = true;
@@ -95,6 +107,7 @@ public class ModConfig {
     // FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器）
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
     private transient boolean commandAccessModeDirty;
+    private StorageBackend storageBackend = StorageBackend.NBT;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -251,9 +264,13 @@ public class ModConfig {
 
     private boolean normalize() {
         boolean changed = false;
+        if (storageBackend == null) {
+            storageBackend = StorageBackend.NBT;
+            changed = true;
+        }
         if (gui == null) {
             gui = new GuiConfig();
-            return true;
+            changed = true;
         }
         if (commandAccessMode == null) {
             commandAccessMode = CommandAccessMode.OP_ONLY;
@@ -588,6 +605,25 @@ public class ModConfig {
     public void setCommandAccessMode(CommandAccessMode commandAccessMode) {
         this.commandAccessMode = commandAccessMode == null ? CommandAccessMode.OP_ONLY : commandAccessMode;
         this.commandAccessModeDirty = true;
+        save();
+    }
+
+    /**
+     * 获取当前配置的存储后端。
+     *
+     * @return 存储后端；缺失或非法时返回 NBT
+     */
+    public StorageBackend getStorageBackend() {
+        return storageBackend == null ? StorageBackend.NBT : storageBackend;
+    }
+
+    /**
+     * 设置存储后端并立即写盘。
+     *
+     * @param storageBackend 新的存储后端；传入 null 时回退 NBT
+     */
+    public void setStorageBackend(StorageBackend storageBackend) {
+        this.storageBackend = storageBackend == null ? StorageBackend.NBT : storageBackend;
         save();
     }
 

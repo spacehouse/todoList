@@ -209,6 +209,7 @@ public final class ForgeTodoClient {
         pendingRemoteResync = false;
         pendingLocalWorldInitialization = false;
         lastLocalPublishedState = null;
+        TodoListCommon.closeStorageContext();
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }
 
@@ -300,6 +301,7 @@ public final class ForgeTodoClient {
         if (namespace.equals(lastAppliedStorageNamespace)) {
             return;
         }
+        TodoListCommon.closeStorageContext();
         DataPathProvider.setStorageNamespace(namespace);
         lastAppliedStorageNamespace = namespace;
         TodoListCommon.reloadProjectsFromStorage();
