@@ -6,6 +6,7 @@ import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.TodoHudRenderer;
+import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 
@@ -86,6 +87,7 @@ final class TodoScreenPersistenceSupport {
 
         if (personalDirty) {
             try {
+                H2MaintenanceGuard.ensureWritableIfH2();
                 savePersonalTasks(personalTaskManager, minecraft);
                 personalSaved = true;
                 personalHasUnsavedChanges = false;
@@ -98,6 +100,7 @@ final class TodoScreenPersistenceSupport {
 
         if (teamDirty) {
             try {
+                H2MaintenanceGuard.ensureWritableIfH2();
                 saveTeamTasks(teamTaskManager, minecraft);
                 teamSaved = true;
                 teamHasUnsavedChanges = false;

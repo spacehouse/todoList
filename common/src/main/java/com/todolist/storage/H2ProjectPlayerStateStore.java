@@ -71,6 +71,7 @@ public final class H2ProjectPlayerStateStore {
         if (playerUuid == null) {
             throw new IOException("playerUuid is required");
         }
+        H2MaintenanceLock.ensureWritable();
         ProjectPlayerState safeState = state == null ? ProjectPlayerState.empty() : state;
         long now = System.currentTimeMillis();
         bootstrap.ensureReady();

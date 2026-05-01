@@ -1,5 +1,7 @@
 package com.todolist.storage;
 
+import com.todolist.config.ModConfig;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,12 +22,13 @@ public final class H2StorageBootstrap {
     private final H2SchemaInitializer schemaInitializer;
     private final H2LegacyMigrationReader migrationReader;
     private final H2LegacyMigrator migrator;
+    private final H2BackupService backupService;
 
     /**
      * 创建默认 H2 存储启动器。
      */
     public H2StorageBootstrap() {
-        this(new H2ConnectionProvider(), new H2SchemaInitializer(), new H2LegacyMigrationReader(), new H2LegacyMigrator());
+        this(new H2ConnectionProvider(), new H2SchemaInitializer(), new H2LegacyMigrationReader(), new H2LegacyMigrator(), null);
     }
 
     /**
@@ -35,15 +38,18 @@ public final class H2StorageBootstrap {
      * @param schemaInitializer schema 初始化器
      * @param migrationReader 旧 NBT 读取器
      * @param migrator 旧 NBT 迁移器
+     * @param backupService H2 备份服务
      */
     public H2StorageBootstrap(H2ConnectionProvider connectionProvider,
                               H2SchemaInitializer schemaInitializer,
                               H2LegacyMigrationReader migrationReader,
-                              H2LegacyMigrator migrator) {
+                              H2LegacyMigrator migrator,
+                              H2BackupService backupService) {
         this.connectionProvider = connectionProvider;
         this.schemaInitializer = schemaInitializer;
         this.migrationReader = migrationReader;
         this.migrator = migrator;
+        this.backupService = backupService == null ? new H2BackupService(connectionProvider, null) : backupService;
     }
 
     /**
@@ -68,6 +74,7 @@ public final class H2StorageBootstrap {
                 if (!isMigrationCompleted(connection)) {
                     migrator.migrate(connection, migrationReader.readAll());
                 }
+                backupOnStartIfEnabled(connection, databasePath);
                 H2StorageAvailability.markAvailable(databasePath);
                 READY_DATABASES.add(databasePath);
             } catch (SQLException exception) {
@@ -76,9 +83,15 @@ public final class H2StorageBootstrap {
                         : H2StorageAvailability.Reason.SCHEMA_INIT_FAILED;
                 H2StorageAvailability.markUnavailable(databasePath, reason, exception.getMessage());
                 throw new StorageUnavailableException(reason, "Failed to prepare H2 storage", exception);
+            } catch (H2SchemaUpgradeException exception) {
+                H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, exception.getMessage());
+                throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, "Failed to upgrade H2 schema", exception);
             } catch (LegacyMigrationException exception) {
                 H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.MIGRATION_FAILED, exception.getMessage());
                 throw new StorageUnavailableException(H2StorageAvailability.Reason.MIGRATION_FAILED, "Failed to migrate legacy data to H2", exception);
+            } catch (IOException exception) {
+                H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.BACKUP_FAILED, exception.getMessage());
+                throw new StorageUnavailableException(H2StorageAvailability.Reason.BACKUP_FAILED, "Failed to backup H2 storage on start", exception);
             }
         }
     }
@@ -96,15 +109,36 @@ public final class H2StorageBootstrap {
             if (!isMigrationCompleted(connection)) {
                 migrator.migrate(connection, migrationReader.readAll());
             }
+            backupOnStartIfEnabled(connection, databasePath);
             H2StorageAvailability.markAvailable(databasePath);
             READY_DATABASES.add(databasePath);
         } catch (SQLException exception) {
             H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, exception.getMessage());
             throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, "Failed to prepare H2 storage before TCP startup", exception);
+        } catch (H2SchemaUpgradeException exception) {
+            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, exception.getMessage());
+            throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, "Failed to upgrade H2 schema before TCP startup", exception);
         } catch (LegacyMigrationException exception) {
             H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.MIGRATION_FAILED, exception.getMessage());
             throw new StorageUnavailableException(H2StorageAvailability.Reason.MIGRATION_FAILED, "Failed to migrate legacy data before TCP startup", exception);
+        } catch (IOException exception) {
+            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.BACKUP_FAILED, exception.getMessage());
+            throw new StorageUnavailableException(H2StorageAvailability.Reason.BACKUP_FAILED, "Failed to backup H2 storage on start before TCP startup", exception);
         }
+    }
+
+    /**
+     * 在配置启用时为启动后的 H2 数据库创建备份。
+     *
+     * @param connection H2 连接
+     * @param databasePath H2 数据库基础路径
+     * @throws IOException 备份失败时抛出
+     */
+    private void backupOnStartIfEnabled(Connection connection, Path databasePath) throws IOException {
+        if (!ModConfig.getInstance().isH2BackupOnStart()) {
+            return;
+        }
+        backupService.backupPreparedDatabase(connection, "startup-" + databasePath.getFileName());
     }
 
     /**
@@ -158,5 +192,6 @@ public final class H2StorageBootstrap {
             READY_DATABASES.clear();
         }
         H2StorageAvailability.resetForTests();
+        H2MaintenanceLock.resetForTests();
     }
 }

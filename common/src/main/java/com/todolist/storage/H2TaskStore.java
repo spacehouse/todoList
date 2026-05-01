@@ -183,6 +183,7 @@ public final class H2TaskStore {
      * @throws IOException 保存失败时抛出
      */
     private void saveBucket(String bucketType, String ownerUuid, List<Task> tasks) throws IOException {
+        H2MaintenanceLock.ensureWritable();
         bootstrap.ensureReady();
         List<Task> safeTasks = tasks == null ? List.of() : tasks;
         long now = System.currentTimeMillis();
