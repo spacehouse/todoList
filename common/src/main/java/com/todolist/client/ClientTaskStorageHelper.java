@@ -147,6 +147,16 @@ public final class ClientTaskStorageHelper {
     }
 
     /**
+     * 返回当前客户端用于个人任务存储的玩家 UUID，供只读查询路径复用同一桶选择逻辑。
+     *
+     * @param client 当前客户端实例
+     * @return 存储使用的玩家 UUID；不可用时返回 null
+     */
+    public static UUID resolveStoragePlayerUuid(Minecraft client) {
+        return getClientPlayerUuid(client);
+    }
+
+    /**
      * 提取当前客户端玩家 UUID。
      * 在本地集成服务端场景下，会尽量对齐服务端玩家 UUID。
      *
