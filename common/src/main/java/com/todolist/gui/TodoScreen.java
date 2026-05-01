@@ -14,7 +14,10 @@ import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchPrefixOption
 import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchQuery;
 import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchRoleFilter;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2TaskQueryService;
+import com.todolist.storage.H2TaskStore;
 import com.todolist.storage.StorageFailureNotifier;
+import com.todolist.storage.StorageBackendFactory;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -2018,7 +2021,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 visibleProjects,
                 projectScopeFilter,
                 personalTaskManager,
-                teamTaskManager
+                teamTaskManager,
+                this.minecraft
         ));
         projectListWidget.setSelectedProject(currentProject);
         updateProjectActionButtons();
@@ -2154,6 +2158,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void filterTasks() {
+        if (applyH2GuiTaskFilter()) {
+            if (selectedTask != null && !isSelectedTaskValid()) {
+                clearSelectedTask();
+            }
+            updateViewButtonsState();
+            return;
+        }
         List<Task> result = taskManager == null ? new ArrayList<>() : taskManager.getIncompleteTasks();
         result = TodoScreenTaskSupport.applyPriorityFilterToTasks(currentPriorityFilter, result);
 
@@ -2174,6 +2185,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (baseFilteredTasks == null) {
             baseFilteredTasks = new ArrayList<>();
         }
+        if (applyH2GuiSearchFilter()) {
+            return;
+        }
         filteredTasks = TodoScreenTaskSupport.applySearchQueryToTasks(searchQuery, baseFilteredTasks);
         if (taskListWidget != null) {
             taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
@@ -2192,20 +2206,233 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private List<TaskListWidget.SectionModel> buildTaskPaneSections() {
         List<Task> activeTasks = filteredTasks == null ? List.of() : List.copyOf(filteredTasks);
-        List<Task> completedTasks = TodoScreenTaskSupport.buildCompletedTasksForCurrentView(
-                taskManager,
-                currentProject == null ? null : currentProject.getId(),
-                currentPriorityFilter,
-                viewMode.name(),
-                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
-                searchQuery
-        );
+        int activeTotalCount = activeTasks.size();
+        int completedTotalCount = -1;
+        List<Task> completedTasks;
+        if (!completedExpanded && (selectedTask == null || !selectedTask.isCompleted())) {
+            Integer h2CompletedTotalCount = queryH2GuiTaskCount(true, searchQuery);
+            completedTotalCount = h2CompletedTotalCount == null ? -1 : h2CompletedTotalCount;
+            completedTasks = h2CompletedTotalCount == null ? null : List.of();
+        } else {
+            completedTasks = queryH2GuiTasks(true, searchQuery);
+        }
+        if (completedTasks == null) {
+            completedTasks = TodoScreenTaskSupport.buildCompletedTasksForCurrentView(
+                    taskManager,
+                    currentProject == null ? null : currentProject.getId(),
+                    currentPriorityFilter,
+                    viewMode.name(),
+                    TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                    searchQuery
+            );
+        }
+        if (completedTotalCount < 0) {
+            Integer h2CompletedTotalCount = queryH2GuiTaskCount(true, searchQuery);
+            completedTotalCount = h2CompletedTotalCount == null ? completedTasks.size() : h2CompletedTotalCount;
+        }
         return TodoScreenTaskSupport.buildTaskPaneSections(
                 activeTasks,
+                activeTotalCount,
                 completedTasks,
+                completedTotalCount,
                 activeExpanded,
                 completedExpanded
         );
+    }
+
+    /**
+     * 在 H2 后端下使用 SQL 查询刷新 GUI 任务筛选结果。
+     *
+     * @return 成功接管筛选时返回 true，失败或非 H2 后端返回 false
+     */
+    private boolean applyH2GuiTaskFilter() {
+        List<Task> baseTasks = queryH2GuiTasks(false, "");
+        if (baseTasks == null) {
+            return false;
+        }
+        List<Task> searchedTasks = queryH2GuiTasks(false, searchQuery);
+        if (searchedTasks == null) {
+            return false;
+        }
+        baseFilteredTasks = baseTasks;
+        filteredTasks = searchedTasks;
+        updateTaskListWidgetSections();
+        return true;
+    }
+
+    /**
+     * 在 H2 后端下使用 SQL 查询刷新当前搜索结果。
+     *
+     * @return 成功接管搜索时返回 true，失败或非 H2 后端返回 false
+     */
+    private boolean applyH2GuiSearchFilter() {
+        List<Task> searchedTasks = queryH2GuiTasks(false, searchQuery);
+        if (searchedTasks == null) {
+            return false;
+        }
+        filteredTasks = searchedTasks;
+        updateTaskListWidgetSections();
+        return true;
+    }
+
+    /**
+     * 刷新任务列表控件的重排状态和分组模型。
+     */
+    private void updateTaskListWidgetSections() {
+        if (taskListWidget == null) {
+            return;
+        }
+        taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
+                this.minecraft,
+                currentProject,
+                viewMode.name()
+        ));
+        taskListWidget.setSections(buildTaskPaneSections());
+    }
+
+    /**
+     * 通过 H2 SQL 查询当前 GUI 任务 ID，并映射回 TaskManager 中的任务对象。
+     *
+     * @param completed 是否查询已完成任务
+     * @param rawSearchQuery 搜索关键词
+     * @return 任务列表；非 H2 后端或查询失败时返回 null
+     */
+    private List<Task> queryH2GuiTasks(boolean completed, String rawSearchQuery) {
+        if (!StorageBackendFactory.isH2Selected() || taskManager == null || currentProject == null || currentProject.getId() == null) {
+            return null;
+        }
+        try {
+            H2GuiBucket bucket = resolveH2GuiBucket();
+            List<String> ids = new H2TaskQueryService().queryGuiTaskIds(
+                    bucket.bucketType,
+                    bucket.ownerUuid,
+                    currentProject.getId(),
+                    completed,
+                    resolveCurrentPriorityName(),
+                    resolveH2GuiAssigneeFilter(),
+                    TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                    rawSearchQuery
+            );
+            return mapTaskIdsToCurrentManager(ids);
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to query H2 GUI task list, falling back to memory filtering", exception);
+            return null;
+        }
+    }
+
+    /**
+     * 通过 H2 SQL 统计当前 GUI 任务过滤条件下的任务总数。
+     *
+     * @param completed 是否统计已完成任务
+     * @param rawSearchQuery 搜索关键词
+     * @return 匹配总数；非 H2 后端或查询失败时返回 null
+     */
+    private Integer queryH2GuiTaskCount(boolean completed, String rawSearchQuery) {
+        if (!StorageBackendFactory.isH2Selected() || taskManager == null || currentProject == null || currentProject.getId() == null) {
+            return null;
+        }
+        try {
+            H2GuiBucket bucket = resolveH2GuiBucket();
+            return new H2TaskQueryService().countGuiTaskIds(
+                    bucket.bucketType,
+                    bucket.ownerUuid,
+                    currentProject.getId(),
+                    completed,
+                    resolveCurrentPriorityName(),
+                    resolveH2GuiAssigneeFilter(),
+                    TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                    rawSearchQuery
+            );
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to count H2 GUI task list, falling back to memory filtering", exception);
+            return null;
+        }
+    }
+
+    /**
+     * 将 H2 查询返回的任务 ID 映射为当前 TaskManager 中的任务对象。
+     *
+     * @param taskIds 任务 ID 列表
+     * @return 当前任务管理器中的任务对象列表
+     */
+    private List<Task> mapTaskIdsToCurrentManager(List<String> taskIds) {
+        if (taskIds == null || taskIds.isEmpty() || taskManager == null) {
+            return List.of();
+        }
+        List<Task> tasks = new ArrayList<>();
+        for (String taskId : taskIds) {
+            Task task = taskManager.getTask(taskId);
+            if (task != null) {
+                tasks.add(task);
+            }
+        }
+        return tasks;
+    }
+
+    /**
+     * 解析当前 GUI 视图对应的 H2 任务桶。
+     *
+     * @return H2 GUI 查询桶
+     */
+    private H2GuiBucket resolveH2GuiBucket() {
+        if (viewMode != ViewMode.PERSONAL) {
+            return new H2GuiBucket(H2TaskStore.TEAM_BUCKET, H2TaskStore.TEAM_OWNER);
+        }
+        if (this.minecraft != null
+                && this.minecraft.player != null
+                && ClientTaskStorageHelper.shouldUsePublishedLocalPlayerStorage(this.minecraft)) {
+            UUID storagePlayerUuid = ClientTaskStorageHelper.resolveStoragePlayerUuid(this.minecraft);
+            return new H2GuiBucket(H2TaskStore.PLAYER_PERSONAL_BUCKET, storagePlayerUuid == null ? "" : storagePlayerUuid.toString());
+        }
+        return new H2GuiBucket(H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER);
+    }
+
+    /**
+     * 解析当前 GUI 优先级筛选对应的 H2 字段值。
+     *
+     * @return 优先级名称；全部优先级时返回空字符串
+     */
+    private String resolveCurrentPriorityName() {
+        return switch (currentPriorityFilter) {
+            case 1 -> Task.Priority.HIGH.name();
+            case 2 -> Task.Priority.MEDIUM.name();
+            case 3 -> Task.Priority.LOW.name();
+            default -> "";
+        };
+    }
+
+    /**
+     * 解析当前 GUI 团队视图对应的 H2 指派过滤模式。
+     *
+     * @return H2 指派过滤模式
+     */
+    private H2TaskQueryService.HudAssigneeFilter resolveH2GuiAssigneeFilter() {
+        if (viewMode == ViewMode.TEAM_UNASSIGNED) {
+            return H2TaskQueryService.HudAssigneeFilter.UNASSIGNED;
+        }
+        if (viewMode == ViewMode.TEAM_ASSIGNED) {
+            return H2TaskQueryService.HudAssigneeFilter.ASSIGNED_TO_PLAYER;
+        }
+        return H2TaskQueryService.HudAssigneeFilter.ANY;
+    }
+
+    /**
+     * H2GuiBucket 描述 GUI 查询当前使用的任务桶。
+     */
+    private static final class H2GuiBucket {
+        private final String bucketType;
+        private final String ownerUuid;
+
+        /**
+         * 创建 GUI 查询桶。
+         *
+         * @param bucketType 桶类型
+         * @param ownerUuid 桶拥有者
+         */
+        private H2GuiBucket(String bucketType, String ownerUuid) {
+            this.bucketType = bucketType;
+            this.ownerUuid = ownerUuid;
+        }
     }
 
     private void addNotification(String text) {
