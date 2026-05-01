@@ -9,11 +9,22 @@ import java.sql.Statement;
  */
 public final class H2SchemaInitializer {
     public static final String SCHEMA_VERSION = "1";
+    private final H2SchemaUpgrader schemaUpgrader;
 
     /**
      * 创建 H2 schema 初始化器。
      */
     public H2SchemaInitializer() {
+        this(new H2SchemaUpgrader());
+    }
+
+    /**
+     * 创建可注入升级器的 H2 schema 初始化器。
+     *
+     * @param schemaUpgrader schema 升级器
+     */
+    public H2SchemaInitializer(H2SchemaUpgrader schemaUpgrader) {
+        this.schemaUpgrader = schemaUpgrader == null ? new H2SchemaUpgrader() : schemaUpgrader;
     }
 
     /**
@@ -21,14 +32,15 @@ public final class H2SchemaInitializer {
      *
      * @param connection H2 数据库连接
      * @throws SQLException schema 初始化失败时抛出
+     * @throws H2SchemaUpgradeException schema 升级失败时抛出
      */
-    public void initialize(Connection connection) throws SQLException {
+    public void initialize(Connection connection) throws SQLException, H2SchemaUpgradeException {
         try (Statement statement = connection.createStatement()) {
             createTables(statement);
             createIndexes(statement);
-            upsertSchemaVersion(statement);
             ensureTcpUsers(statement);
         }
+        schemaUpgrader.upgradeIfNeeded(connection);
     }
 
     /**
@@ -144,16 +156,6 @@ public final class H2SchemaInitializer {
         statement.execute("CREATE INDEX IF NOT EXISTS idx_projects_bucket_order ON projects(bucket_type, sort_order, created_at, id)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_project_members_lookup ON project_members(bucket_type, project_id, player_uuid)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_player_hud_starred_order ON player_hud_starred_projects(player_uuid, sort_order)");
-    }
-
-    /**
-     * 写入当前 schema 版本元数据。
-     *
-     * @param statement SQL statement
-     * @throws SQLException 写入元数据失败时抛出
-     */
-    private void upsertSchemaVersion(Statement statement) throws SQLException {
-        statement.execute("MERGE INTO storage_meta KEY(\"key\") VALUES ('schema_version', '" + SCHEMA_VERSION + "', " + System.currentTimeMillis() + ")");
     }
 
     /**

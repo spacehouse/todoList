@@ -108,6 +108,7 @@ public class ModConfig {
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
     private transient boolean commandAccessModeDirty;
     private StorageBackend storageBackend = StorageBackend.NBT;
+    private boolean h2BackupOnStart = false;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -624,6 +625,25 @@ public class ModConfig {
      */
     public void setStorageBackend(StorageBackend storageBackend) {
         this.storageBackend = storageBackend == null ? StorageBackend.NBT : storageBackend;
+        save();
+    }
+
+    /**
+     * 获取 H2 启动时自动备份配置。
+     *
+     * @return 启用时返回 true
+     */
+    public boolean isH2BackupOnStart() {
+        return h2BackupOnStart;
+    }
+
+    /**
+     * 设置 H2 启动时自动备份配置并立即写盘。
+     *
+     * @param h2BackupOnStart true 表示 H2 初始化完成后自动备份
+     */
+    public void setH2BackupOnStart(boolean h2BackupOnStart) {
+        this.h2BackupOnStart = h2BackupOnStart;
         save();
     }
 

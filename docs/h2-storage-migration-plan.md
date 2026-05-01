@@ -239,7 +239,7 @@
 - `/todolist h2 backup [name]` 仅控制台或 OP 可执行。
 - backup 执行期间启用维护锁或暂停自动保存，避免 H2 `BACKUP TO` 阻塞时产生一致性问题。
 - backup 命令反馈中提示“备份期间数据库写入暂停，预计耗时 X 秒”；实际完成后输出备份路径。
-- `backupOnStart` 默认 false；schema version 小于当前代码版本时，升级前自动备份。
+- `h2BackupOnStart` 默认 false；schema version 小于当前代码版本时，升级前自动备份。
 - schema 升级失败时不得更新 `schema_version`，不得用半升级库继续写入；本次启动应进入存储不可用状态或旧 `.dat` 只读 fallback。
 - 如果 `dat_migration_completed=true` 或检测到 H2 已包含迁移后数据，schema 升级失败时默认进入存储不可用状态，不自动 fallback 到旧 `.dat`，避免展示过期数据造成“数据丢失”的误判。
 - 只有首次迁移前、H2 中不存在迁移后数据，或用户显式选择恢复旧 `.dat` 时，schema 升级失败才允许进入旧 `.dat` 只读 fallback。

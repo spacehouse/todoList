@@ -7,10 +7,12 @@ import com.todolist.project.ProjectStorage;
 import com.todolist.project.Project;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2StorageBootstrap;
+import com.todolist.storage.H2TcpConfig;
 import com.todolist.storage.H2TcpServerManager;
 import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.TaskStorage;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -65,6 +67,32 @@ public final class TodoListCommon {
      * 从磁盘重新加载项目列表，用于在多人/单人切换时恢复本地项目数据。
      */
     public static void reloadProjectsFromStorage() {
+        reloadProjectsFromStorage(true);
+    }
+
+    /**
+     * 从 H2 数据库重新构建当前存储对象，并重载内存中的项目列表。
+     *
+     * @throws IOException H2 初始化或重载失败时抛出
+     */
+    public static void reloadH2StorageContextFromDatabase() throws IOException {
+        H2StorageBootstrap.resetDatabaseState(new H2ConnectionProvider().getDatabaseBasePath());
+        H2TcpServerManager.ensureStarted(H2TcpConfig.load());
+        new H2StorageBootstrap().ensureReady();
+        taskStorage = new TaskStorage();
+        projectStorage = new ProjectStorage();
+        if (projectManager == null) {
+            projectManager = new ProjectManager();
+        }
+        reloadProjectsFromStorage(false);
+    }
+
+    /**
+     * 从磁盘重新加载项目列表，可选择是否持久化缺省个人项目。
+     *
+     * @param persistDefaultPersonal 是否在缺少个人项目时回写默认项目
+     */
+    private static void reloadProjectsFromStorage(boolean persistDefaultPersonal) {
         if (projectStorage == null || projectManager == null) {
             return;
         }
@@ -84,7 +112,9 @@ public final class TodoListCommon {
                 Project defaultPersonal = new Project(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_KEY, Project.Scope.PERSONAL, null);
                 defaultPersonal.setId(ProjectNameFormatter.DEFAULT_PERSONAL_PROJECT_ID);
                 reloadedProjects.add(defaultPersonal);
-                projectStorage.saveProjects(filterProjectsByScope(reloadedProjects, Project.Scope.PERSONAL));
+                if (persistDefaultPersonal) {
+                    projectStorage.saveProjects(filterProjectsByScope(reloadedProjects, Project.Scope.PERSONAL));
+                }
             }
             for (Project project : team) {
                 project.setName(ProjectNameFormatter.normalizeDefaultName(project.getName(), project.getScope()));

@@ -2,6 +2,7 @@ package com.todolist.project;
 
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
+import com.todolist.storage.H2MaintenanceGuard;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.concurrent.Executors;
@@ -89,6 +90,7 @@ public final class ProjectSaveDebouncer {
         }
 
         try {
+            H2MaintenanceGuard.ensureWritableIfH2();
             ProjectManager manager = TodoListCommon.getProjectManager();
             ProjectStorage storage = TodoListCommon.getProjectStorage();
             if (doPersonal) {
