@@ -79,6 +79,22 @@ public final class H2StorageAvailability {
     }
 
     /**
+     * 返回指定数据库的可用状态快照。
+     *
+     * @param databasePath H2 数据库基础路径
+     * @return 状态快照
+     */
+    public static StatusSnapshot getStatusSnapshot(Path databasePath) {
+        synchronized (STATUS_BY_DATABASE) {
+            Status status = STATUS_BY_DATABASE.get(normalize(databasePath));
+            if (status == null || status.available) {
+                return new StatusSnapshot(true, null, "");
+            }
+            return new StatusSnapshot(false, status.reason, status.message);
+        }
+    }
+
+    /**
      * 清理测试期间记录的所有可用状态。
      */
     public static void resetForTests() {
@@ -126,6 +142,55 @@ public final class H2StorageAvailability {
             this.available = false;
             this.reason = reason;
             this.message = message == null || message.isBlank() ? "H2 storage is unavailable" : message;
+        }
+    }
+
+    /**
+     * H2 可用性状态快照。
+     */
+    public static final class StatusSnapshot {
+        private final boolean available;
+        private final Reason reason;
+        private final String message;
+
+        /**
+         * 创建 H2 可用性状态快照。
+         *
+         * @param available 是否可用
+         * @param reason 不可用原因
+         * @param message 最近失败说明
+         */
+        private StatusSnapshot(boolean available, Reason reason, String message) {
+            this.available = available;
+            this.reason = reason;
+            this.message = message == null ? "" : message;
+        }
+
+        /**
+         * 返回 H2 是否可用。
+         *
+         * @return 可用时返回 true
+         */
+        public boolean isAvailable() {
+            return available;
+        }
+
+        /**
+         * 返回不可用原因。
+         *
+         * @return 不可用原因，可用时为 null
+         */
+        public Reason getReason() {
+            return reason;
+        }
+
+        /**
+         * 返回最近失败说明。
+         *
+         * @return 最近失败说明
+         */
+        public String getMessage() {
+            return message;
         }
     }
 }

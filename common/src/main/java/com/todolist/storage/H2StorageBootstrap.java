@@ -1,6 +1,7 @@
 package com.todolist.storage;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -54,10 +55,15 @@ public final class H2StorageBootstrap {
         Path databasePath = connectionProvider.getDatabaseBasePath().toAbsolutePath().normalize();
         H2StorageAvailability.ensureAvailable(databasePath);
         synchronized (READY_DATABASES) {
+            H2TcpConfig tcpConfig = H2TcpConfig.load();
+            if (tcpConfig.isTcpEnabled() && !databaseFileExists(databasePath)) {
+                prepareEmbeddedBeforeTcp(databasePath);
+            }
+            H2TcpServerManager.ensureStarted(tcpConfig);
             if (READY_DATABASES.contains(databasePath)) {
                 return;
             }
-            try (Connection connection = connectionProvider.openConnection()) {
+            try (Connection connection = connectionProvider.openBootstrapConnection()) {
                 schemaInitializer.initialize(connection);
                 if (!isMigrationCompleted(connection)) {
                     migrator.migrate(connection, migrationReader.readAll());
@@ -75,6 +81,44 @@ public final class H2StorageBootstrap {
                 throw new StorageUnavailableException(H2StorageAvailability.Reason.MIGRATION_FAILED, "Failed to migrate legacy data to H2", exception);
             }
         }
+    }
+
+    /**
+     * TCP 首次启用前用嵌入式连接预创建数据库，避免 H2 TCP 拒绝创建远程库。
+     *
+     * @param databasePath H2 数据库基础路径
+     * @throws IOException 初始化或迁移失败时抛出
+     */
+    private void prepareEmbeddedBeforeTcp(Path databasePath) throws IOException {
+        H2TcpServerManager.stop();
+        try (Connection connection = connectionProvider.openEmbeddedBootstrapConnection()) {
+            schemaInitializer.initialize(connection);
+            if (!isMigrationCompleted(connection)) {
+                migrator.migrate(connection, migrationReader.readAll());
+            }
+            H2StorageAvailability.markAvailable(databasePath);
+            READY_DATABASES.add(databasePath);
+        } catch (SQLException exception) {
+            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, exception.getMessage());
+            throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, "Failed to prepare H2 storage before TCP startup", exception);
+        } catch (LegacyMigrationException exception) {
+            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.MIGRATION_FAILED, exception.getMessage());
+            throw new StorageUnavailableException(H2StorageAvailability.Reason.MIGRATION_FAILED, "Failed to migrate legacy data before TCP startup", exception);
+        }
+    }
+
+    /**
+     * 判断 H2 数据库文件是否已经存在。
+     *
+     * @param databasePath H2 数据库基础路径
+     * @return 存在时返回 true
+     */
+    private boolean databaseFileExists(Path databasePath) {
+        Path fileName = databasePath.getFileName();
+        if (fileName == null) {
+            return false;
+        }
+        return Files.exists(databasePath.resolveSibling(fileName + ".mv.db"));
     }
 
     /**

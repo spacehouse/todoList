@@ -27,6 +27,7 @@ public final class H2SchemaInitializer {
             createTables(statement);
             createIndexes(statement);
             upsertSchemaVersion(statement);
+            ensureTcpUsers(statement);
         }
     }
 
@@ -153,5 +154,44 @@ public final class H2SchemaInitializer {
      */
     private void upsertSchemaVersion(Statement statement) throws SQLException {
         statement.execute("MERGE INTO storage_meta KEY(\"key\") VALUES ('schema_version', '" + SCHEMA_VERSION + "', " + System.currentTimeMillis() + ")");
+    }
+
+    /**
+     * 创建或修复 H2 TCP 外部访问账号。
+     *
+     * @param statement SQL statement
+     * @throws SQLException 用户或授权 DDL 执行失败时抛出
+     */
+    private void ensureTcpUsers(Statement statement) throws SQLException {
+        H2TcpConfig config = H2TcpConfig.load();
+        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getAdminUser()) + " PASSWORD '" + escapeSql(config.getAdminPassword()) + "' ADMIN");
+        statement.execute("ALTER USER " + quoteIdentifier(config.getAdminUser()) + " SET PASSWORD '" + escapeSql(config.getAdminPassword()) + "'");
+        statement.execute("ALTER USER " + quoteIdentifier(config.getAdminUser()) + " ADMIN TRUE");
+        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getReadonlyUser()) + " PASSWORD '" + escapeSql(config.getReadonlyPassword()) + "'");
+        statement.execute("ALTER USER " + quoteIdentifier(config.getReadonlyUser()) + " SET PASSWORD '" + escapeSql(config.getReadonlyPassword()) + "'");
+        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getReadwriteUser()) + " PASSWORD '" + escapeSql(config.getReadwritePassword()) + "'");
+        statement.execute("ALTER USER " + quoteIdentifier(config.getReadwriteUser()) + " SET PASSWORD '" + escapeSql(config.getReadwritePassword()) + "'");
+        statement.execute("GRANT SELECT ON SCHEMA PUBLIC TO " + quoteIdentifier(config.getReadonlyUser()));
+        statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA PUBLIC TO " + quoteIdentifier(config.getReadwriteUser()));
+    }
+
+    /**
+     * 转义 SQL 字符串字面量。
+     *
+     * @param value 原始值
+     * @return 已转义值
+     */
+    private String escapeSql(String value) {
+        return value == null ? "" : value.replace("'", "''");
+    }
+
+    /**
+     * 构造安全的 H2 标识符。
+     *
+     * @param value 原始标识符
+     * @return 引号包裹的标识符
+     */
+    private String quoteIdentifier(String value) {
+        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
     }
 }

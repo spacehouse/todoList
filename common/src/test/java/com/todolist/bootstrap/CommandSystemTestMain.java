@@ -20,6 +20,7 @@ public final class CommandSystemTestMain {
     public static void main(String[] args) throws Exception {
         CommandTestSupport.runTestGroup("CommandInputNormalizerTestMain", () -> CommandInputNormalizerTestMain.main(args));
         CommandTestSupport.runTestGroup("CommandBootstrapIntegrationTestMain", () -> CommandBootstrapIntegrationTestMain.main(args));
+        CommandTestSupport.runTestGroup("CommandBootstrapH2IntegrationTestMain", () -> CommandBootstrapH2IntegrationTestMain.main(args));
         CommandTestSupport.runTestGroup("CommandBootstrapProjectIntegrationTestMain", () -> CommandBootstrapProjectIntegrationTestMain.main(args));
         CommandTestSupport.runTestGroup("CommandBootstrapTaskIntegrationTestMain", () -> CommandBootstrapTaskIntegrationTestMain.main(args));
         CommandTestSupport.runTestGroup("CommandBootstrapJoinIntegrationTestMain", () -> CommandBootstrapJoinIntegrationTestMain.main(args));

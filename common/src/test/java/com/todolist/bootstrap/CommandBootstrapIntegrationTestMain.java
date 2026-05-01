@@ -9,6 +9,8 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.storage.H2StorageBootstrap;
+import com.todolist.storage.H2TcpServerManager;
 import com.todolist.task.Task;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
@@ -57,19 +59,24 @@ public final class CommandBootstrapIntegrationTestMain {
      */
     public static void main(String[] args) throws Exception {
         bootstrapEnvironment();
-        runCase("CommandBootstrapIntegrationTestMain.shouldRegisterTodoAlias", CommandBootstrapIntegrationTestMain::shouldRegisterTodoAlias);
-        runCase("CommandBootstrapIntegrationTestMain.shouldExecuteHelpThroughAlias", CommandBootstrapIntegrationTestMain::shouldExecuteHelpThroughAlias);
-        runCase("CommandBootstrapIntegrationTestMain.shouldExecuteDirectHelpCommandSuccessfully", CommandBootstrapIntegrationTestMain::shouldExecuteDirectHelpCommandSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldAddPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAddPersonalTaskSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldListPersonalTasksWithFilters", CommandBootstrapIntegrationTestMain::shouldListPersonalTasksWithFilters);
-        runCase("CommandBootstrapIntegrationTestMain.shouldCompletePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldCompletePersonalTaskSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenCompleting", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenCompleting);
-        runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalTaskSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
-        runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
+        try {
+            runCase("CommandBootstrapIntegrationTestMain.shouldRegisterTodoAlias", CommandBootstrapIntegrationTestMain::shouldRegisterTodoAlias);
+            runCase("CommandBootstrapIntegrationTestMain.shouldExecuteHelpThroughAlias", CommandBootstrapIntegrationTestMain::shouldExecuteHelpThroughAlias);
+            runCase("CommandBootstrapIntegrationTestMain.shouldExecuteDirectHelpCommandSuccessfully", CommandBootstrapIntegrationTestMain::shouldExecuteDirectHelpCommandSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldAddPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldAddPersonalTaskSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldListPersonalTasksWithFilters", CommandBootstrapIntegrationTestMain::shouldListPersonalTasksWithFilters);
+            runCase("CommandBootstrapIntegrationTestMain.shouldCompletePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldCompletePersonalTaskSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenCompleting", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenCompleting);
+            runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalTaskSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
+            runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
         runCase("CommandBootstrapIntegrationTestMain.shouldPreserveCommandAccessModeAfterExternalConfigEdit", CommandBootstrapIntegrationTestMain::shouldPreserveCommandAccessModeAfterExternalConfigEdit);
+        } finally {
+            H2TcpServerManager.stop();
+            H2StorageBootstrap.resetAllForTests();
+        }
     }
 
     /**
@@ -308,6 +315,7 @@ public final class CommandBootstrapIntegrationTestMain {
      */
     static void resetState(ModConfig.CommandAccessMode accessMode) {
         storageNamespaceCounter++;
+        H2StorageBootstrap.resetAllForTests();
         DataPathProvider.setStorageNamespace("command-test-" + storageNamespaceCounter);
         TodoListCommon.init();
         ModConfig.getInstance().setCommandAccessMode(accessMode);
