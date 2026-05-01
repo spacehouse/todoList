@@ -136,6 +136,7 @@ public final class H2ProjectStore {
      * @throws IOException 保存失败时抛出
      */
     private void saveBucket(String bucketType, List<Project> projects) throws IOException {
+        H2MaintenanceLock.ensureWritable();
         bootstrap.ensureReady();
         List<Project> safeProjects = projects == null ? List.of() : projects;
         try (Connection connection = connectionProvider.openConnection()) {

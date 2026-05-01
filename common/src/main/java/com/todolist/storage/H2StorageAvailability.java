@@ -15,8 +15,11 @@ public final class H2StorageAvailability {
      */
     public enum Reason {
         DRIVER_MISSING,
+        BACKUP_FAILED,
         SCHEMA_INIT_FAILED,
+        SCHEMA_UPGRADE_FAILED,
         MIGRATION_FAILED,
+        MAINTENANCE,
         READ_FAILED,
         WRITE_FAILED,
         QUERY_FAILED

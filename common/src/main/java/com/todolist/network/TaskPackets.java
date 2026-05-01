@@ -9,6 +9,7 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
+import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
@@ -111,6 +112,7 @@ public class TaskPackets {
                 if (!playerFileExists) {
                     if (!fallback.isEmpty()) {
                         tasks = fallback;
+                        H2MaintenanceGuard.ensureWritableIfH2();
                         storage.savePlayerTasks(playerUuid, tasks);
                         TodoConstants.LOGGER.info("Migrated {} tasks from local storage to player file {}", tasks.size(), playerUuid);
                     }
@@ -119,6 +121,7 @@ public class TaskPackets {
                     long localLastSaved = storage.getLocalTasksLastSaved();
                     if (localLastSaved > playerLastSaved) {
                         tasks = fallback;
+                        H2MaintenanceGuard.ensureWritableIfH2();
                         storage.savePlayerTasks(playerUuid, tasks);
                         TodoConstants.LOGGER.info("Recovered newer local tasks for player file {}, localLastSaved={}, playerLastSaved={}, taskCount={}",
                                 playerUuid, localLastSaved, playerLastSaved, tasks.size());
@@ -153,6 +156,7 @@ public class TaskPackets {
     private static void handleReplaceTasks(ServerPlayer player, List<Task> tasks) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
+            H2MaintenanceGuard.ensureWritableIfH2();
             storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
@@ -165,6 +169,7 @@ public class TaskPackets {
         try {
             List<Task> currentTasks = storage.loadTeamTasks();
             List<Task> mergedTasks = mergeTeamTasksWithPermission(player, currentTasks, tasks);
+            H2MaintenanceGuard.ensureWritableIfH2();
             storage.saveTeamTasks(mergedTasks);
             broadcastTeamTasks(server);
         } catch (IOException e) {

@@ -13,6 +13,7 @@ import com.todolist.project.ProjectNameFormatter;
 import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
@@ -256,6 +257,9 @@ public class ProjectPackets {
         if (player == null) {
             return;
         }
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
+        }
         String uuid = player.getStringUUID();
         if (projectId == null || projectId.isBlank()) {
             playerActiveProjectIdMap.remove(uuid);
@@ -303,6 +307,9 @@ public class ProjectPackets {
         if (player == null) {
             return;
         }
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
+        }
         List<String> sanitizedProjectIds = sanitizeProjectIds(projectIds);
         if (sanitizedProjectIds.isEmpty()) {
             playerHudStarredProjectIdsMap.remove(player.getStringUUID());
@@ -322,6 +329,9 @@ public class ProjectPackets {
 
     public static void setHudVisible(ServerPlayer player, boolean visible) {
         if (player == null) {
+            return;
+        }
+        if (!ensureWritableBeforeMutation(player)) {
             return;
         }
         if (visible) {
@@ -359,6 +369,23 @@ public class ProjectPackets {
         return !server.isPublished();
     }
 
+    /**
+     * 在修改项目运行期状态前确认 H2 维护锁允许写入。
+     *
+     * @param player 触发操作的玩家
+     * @return 允许修改时返回 true
+     */
+    private static boolean ensureWritableBeforeMutation(ServerPlayer player) {
+        try {
+            H2MaintenanceGuard.ensureWritableIfH2();
+            return true;
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Rejected project mutation while H2 maintenance is running", exception);
+            StorageFailureNotifier.notifyPlayer(player, exception, "message.todolist.save_failed");
+            return false;
+        }
+    }
+
     private static void ensureDefaultTeamProjectOwner(MinecraftServer server, ServerPlayer player) {
         if (server == null || player == null) {
             return;
@@ -377,11 +404,17 @@ public class ProjectPackets {
         String ownerUuid = defaultTeam.getOwnerUuid();
         if (ownerUuid != null && !ownerUuid.isEmpty()) {
             if (defaultTeam.getMemberRole(ownerUuid) == null) {
+                if (!ensureWritableBeforeMutation(player)) {
+                    return;
+                }
                 defaultTeam.addMember(ownerUuid, Project.ProjectRole.PROJECT_MANAGER);
                 manager.updateProject(defaultTeam);
                 saveProjects(server, Project.Scope.TEAM);
                 broadcastProjects(server);
             }
+            return;
+        }
+        if (!ensureWritableBeforeMutation(player)) {
             return;
         }
         String myUuid = player.getStringUUID();
@@ -400,6 +433,9 @@ public class ProjectPackets {
         String uuid = player.getStringUUID();
         String name = player.getName().getString();
         boolean changed = false;
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
+        }
         for (Project project : manager.getProjectsByScope(Project.Scope.TEAM)) {
             if (project == null) {
                 continue;
@@ -423,6 +459,9 @@ public class ProjectPackets {
     private static void handleAddProject(MinecraftServer server, ServerPlayer player, Project project) {
         // Validation
         if (project.getName() == null || project.getName().isEmpty()) {
+            return;
+        }
+        if (!ensureWritableBeforeMutation(player)) {
             return;
         }
 
@@ -475,6 +514,9 @@ public class ProjectPackets {
                 return;
             }
         }
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
+        }
 
         // Update fields
         existingProject.setName(incomingProject.getName());
@@ -524,6 +566,9 @@ public class ProjectPackets {
                 TodoConstants.LOGGER.warn("Player {} tried to delete project {} without permission", player.getName().getString(), projectId);
                 return;
             }
+        }
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
         }
 
         clearPendingJoinRequestsForProject(projectId);
@@ -627,6 +672,9 @@ public class ProjectPackets {
             if (project.getMembers().containsKey(memberUuid)) {
                 return;
             }
+            if (!ensureWritableBeforeMutation(player)) {
+                return;
+            }
 
             String finalName = memberName;
             try {
@@ -652,6 +700,7 @@ public class ProjectPackets {
             optionalProfile.ifPresent(profile -> server.execute(() -> {
                 String uuid = profile.getId().toString();
                 if (project.getMembers().containsKey(uuid)) return;
+                if (!ensureWritableBeforeMutation(player)) return;
 
                 project.addMember(uuid, Project.ProjectRole.MEMBER, profile.getName());
                 manager.updateProject(project);
@@ -677,6 +726,9 @@ public class ProjectPackets {
         if (!PermissionCenter.canPerform(Operation.REMOVE_MEMBER, role, ctx)) {
             return;
         }
+        if (!ensureWritableBeforeMutation(player)) {
+            return;
+        }
         
         project.removeMember(memberUuid);
         manager.updateProject(project);
@@ -696,6 +748,9 @@ public class ProjectPackets {
         boolean targetProjectManager = project.getOwnerUuid() != null && project.getOwnerUuid().equals(memberUuid);
         Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false, targetSelf, targetProjectManager);
         if (!PermissionCenter.canPerform(Operation.CHANGE_MEMBER_ROLE, role, ctx)) {
+            return;
+        }
+        if (!ensureWritableBeforeMutation(player)) {
             return;
         }
 
@@ -867,8 +922,11 @@ public class ProjectPackets {
         }
 
         MutableComponent projectName = getProjectDisplayName(project);
-        pendingJoinRequestMap.remove(joinRequestKey);
         if (accepted) {
+            if (!ensureWritableBeforeMutation(approver)) {
+                return false;
+            }
+            pendingJoinRequestMap.remove(joinRequestKey);
             project.addMember(applicantUuid, Project.ProjectRole.MEMBER, applicant.getName().getString());
             manager.updateProject(project);
             saveProjects(server, project.getScope());
@@ -876,6 +934,7 @@ public class ProjectPackets {
             applicant.displayClientMessage(Component.translatable("message.todolist.project.join.accepted", projectName), false);
             approver.displayClientMessage(Component.translatable("message.todolist.project.join.approved", applicant.getName().getString()), false);
         } else {
+            pendingJoinRequestMap.remove(joinRequestKey);
             applicant.displayClientMessage(Component.translatable("message.todolist.project.join.denied", projectName), false);
             approver.displayClientMessage(Component.translatable("message.todolist.project.join.rejected", applicant.getName().getString()), false);
         }
@@ -1111,6 +1170,7 @@ public class ProjectPackets {
             return;
         }
         try {
+            H2MaintenanceGuard.ensureWritableIfH2();
             ProjectPlayerStateStorage.ProjectPlayerState mergedState = mergeTemporarilyUnavailableTeamState(player, state);
             getProjectPlayerStateStorage().savePlayerState(player.getUUID(), mergedState);
         } catch (IOException e) {

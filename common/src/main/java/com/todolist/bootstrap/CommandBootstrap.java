@@ -24,6 +24,9 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.storage.H2ConnectionProvider;
+import com.todolist.storage.H2BackupService;
+import com.todolist.storage.H2HealthCheckService;
+import com.todolist.storage.H2MaintenanceLock;
 import com.todolist.storage.H2StorageAvailability;
 import com.todolist.storage.H2TcpAccountRole;
 import com.todolist.storage.H2TcpConfig;
@@ -535,12 +538,26 @@ public final class CommandBootstrap {
                                         ))))
                         .then(buildJoinDecisionLiteral("accept", true))
                         .then(buildJoinDecisionLiteral("deny", false)))
+                .then(Commands.literal("reload-db")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
+                        .executes(ctx -> reloadH2Database(ctx.getSource())))
                 .then(Commands.literal("h2")
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
                         .then(Commands.literal("status")
                                 .executes(ctx -> sendH2Status(ctx.getSource())))
                         .then(Commands.literal("restart-tcp")
                                 .executes(ctx -> restartH2Tcp(ctx.getSource())))
+                        .then(Commands.literal("backup")
+                                .executes(ctx -> backupH2(ctx.getSource(), null))
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .executes(ctx -> backupH2(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "name")
+                                        ))))
+                        .then(Commands.literal("reload-db")
+                                .executes(ctx -> reloadH2Database(ctx.getSource())))
+                        .then(Commands.literal("health")
+                                .executes(ctx -> checkH2Health(ctx.getSource())))
                         .then(Commands.literal("reset-password")
                                 .then(Commands.argument("role", StringArgumentType.word())
                                         .suggests(CommandBootstrap::suggestH2AccountRoles)
@@ -677,6 +694,10 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_hud_set",
                 "command.todolist.help.todo_h2_status",
                 "command.todolist.help.todo_h2_restart_tcp",
+                "command.todolist.help.todo_h2_backup",
+                "command.todolist.help.todo_h2_reload_db",
+                "command.todolist.help.todo_reload_db",
+                "command.todolist.help.todo_h2_health",
                 "command.todolist.help.todo_h2_reset_password",
                 "command.todolist.help.todo_admin_command_access",
                 "command.todolist.help.todo_join_project",
@@ -840,6 +861,103 @@ public final class CommandBootstrap {
             );
         }
         return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.restart_tcp.fallback", status.getMode());
+    }
+
+    /**
+     * 创建 H2 在线备份文件。
+     *
+     * @param source 命令源
+     * @param requestedName 用户指定备份名，可为空
+     * @return 命令执行结果
+     */
+    private static int backupH2(CommandSourceStack source, String requestedName) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.backup.requires_h2");
+        }
+        try {
+            H2BackupService.BackupResult result = new H2BackupService().backup(requestedName);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    "command.todolist.h2.backup.success",
+                    result.getBackupPath().toString(),
+                    result.getSizeBytes()
+            );
+        } catch (StorageUnavailableException exception) {
+            if (exception.getReason() != H2StorageAvailability.Reason.MAINTENANCE) {
+                return sendStorageAwareCommandFailure(source, "command.todolist.h2.backup.failed", exception);
+            }
+            return sendCommandFailure(source, "command.todolist.h2.maintenance_busy", sanitizeStatusMessage(exception.getMessage()));
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to create H2 backup", exception);
+            return sendCommandFailure(source, "command.todolist.h2.backup.failed");
+        }
+    }
+
+    /**
+     * 重新加载 H2 数据库并刷新当前内存存储上下文。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int reloadH2Database(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.reload_db.requires_h2");
+        }
+        try (H2MaintenanceLock.MaintenanceToken ignored = H2MaintenanceLock.enter("reload-db")) {
+            TodoListCommon.reloadH2StorageContextFromDatabase();
+            refreshAvailableCommands(source.getServer());
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.reload_db.success");
+        } catch (StorageUnavailableException exception) {
+            if (exception.getReason() != H2StorageAvailability.Reason.MAINTENANCE) {
+                return sendStorageAwareCommandFailure(source, "command.todolist.h2.reload_db.failed", exception);
+            }
+            return sendCommandFailure(source, "command.todolist.h2.maintenance_busy", sanitizeStatusMessage(exception.getMessage()));
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to reload H2 database", exception);
+            return sendCommandFailure(source, "command.todolist.h2.reload_db.failed");
+        }
+    }
+
+    /**
+     * 执行 H2 健康检查并输出关键状态。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int checkH2Health(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.health.requires_h2");
+        }
+        try {
+            H2HealthCheckService.HealthSnapshot snapshot = new H2HealthCheckService().check();
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.health.schema", snapshot.getSchemaVersion());
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.health.tasks", snapshot.getTaskCount());
+            if (!snapshot.isHealthy()) {
+                return sendCommandFailure(source, "command.todolist.h2.health.failed");
+            }
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    "command.todolist.h2.health.success"
+            );
+        } catch (StorageUnavailableException exception) {
+            return sendStorageAwareCommandFailure(source, "command.todolist.h2.health.failed", exception);
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to check H2 health", exception);
+            return sendCommandFailure(source, "command.todolist.h2.health.failed");
+        }
     }
 
     /**
@@ -3889,6 +4007,7 @@ public final class CommandBootstrap {
         }
         try {
             H2StorageAvailability.ensureAvailable(new H2ConnectionProvider().getDatabaseBasePath());
+            H2MaintenanceLock.ensureWritable();
             return COMMAND_SUCCESS;
         } catch (StorageUnavailableException exception) {
             return sendStorageAwareCommandFailure(source, "command.todolist.storage_unavailable", exception);

@@ -44,7 +44,7 @@
 ## 阶段产出
 
 - 全局维护锁组件和所有写入口接入。
-- `/todolist h2 backup [name]`、`/todolist reload-db` 和健康检查能力。
+- `/todolist h2 backup [name]`、`/todolist h2 reload-db`、`/todolist reload-db` 和健康检查能力。
 - schema upgrade 框架、升级前自动备份和升级失败状态。
 - 维护期间 GUI/命令/网络写入拒绝提示。
 - backup、reload、schema upgrade 组合测试。
@@ -56,10 +56,10 @@
 3. 维护锁占用时，写入口在修改内存前失败，不得先改对象再保存。
 4. 实现 `/todolist h2 backup [name]`，仅控制台或 OP 可执行，输出预计影响和最终备份路径。
 5. backup 执行期间暂停写入，并使用 H2 `BACKUP TO` 或已验证的等价方式生成一致性备份。
-6. 新增 `backupOnStart` 配置，默认 false；schema version 小于当前代码版本时升级前强制备份。
+6. 新增 `h2BackupOnStart` 配置，默认 false；schema version 小于当前代码版本时升级前强制备份。
 7. 新增 schema upgrade 框架：版本读取、升级步骤、事务边界、失败状态和升级后版本写入。
 8. schema 升级失败时不更新 `schema_version`，不允许半升级库继续写入。
-9. 实现 `/todolist reload-db`：后台线程读取当前配置后端，成功后主线程切换内存状态并刷新 GUI/HUD。
+9. 实现 `/todolist h2 reload-db` 与 `/todolist reload-db`：读取当前 H2 后端，成功后切换内存状态并刷新命令可用性。
 10. reload 失败时保留旧内存状态，释放维护锁并提示错误。
 11. 新增健康检查：`SELECT 1`、读取 `storage_meta`、`SELECT COUNT(*) FROM tasks`。
 

@@ -128,6 +128,14 @@ tasks.register<JavaExec>("h2CommandIntegrationTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("h2MaintenanceBackupTest") {
+    group = "verification"
+    description = "Run the M3-A H2 maintenance lock and backup self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2MaintenanceBackupTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -139,6 +147,7 @@ tasks.named("check").configure {
     dependsOn("h2StorageAvailabilityTest")
     dependsOn("h2TcpAccessTest")
     dependsOn("h2CommandIntegrationTest")
+    dependsOn("h2MaintenanceBackupTest")
 }
 
 tasks.withType<Test>().configureEach {
