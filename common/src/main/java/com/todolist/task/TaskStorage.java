@@ -3,6 +3,8 @@ package com.todolist.task;
 import com.todolist.TodoConstants;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2TaskStore;
+import com.todolist.storage.StorageBackendFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
@@ -32,6 +34,7 @@ public class TaskStorage {
     private boolean loggedNoTeamTaskData;
     private final Map<Path, Long> lastLoggedLastSavedByFile = new HashMap<>();
     private final Map<Path, Integer> lastLoggedTaskCountByFile = new HashMap<>();
+    private final H2TaskStore h2TaskStore = new H2TaskStore();
 
     /**
      * 创建任务存储组件，并预热所需的数据目录。
@@ -77,6 +80,10 @@ public class TaskStorage {
      * @throws IOException 当写入文件失败时抛出
      */
     public void saveTasks(List<Task> tasks) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2TaskStore.saveLocalTasks(tasks);
+            return;
+        }
         ensureDirectoryExists();
         Path dataFile = getDataDirectory().resolve(DATA_FILE);
         saveTasksToFile(tasks, dataFile);
@@ -91,6 +98,10 @@ public class TaskStorage {
      * @throws IOException 当写入文件失败时抛出
      */
     public void savePlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2TaskStore.savePlayerTasks(playerUuid, tasks);
+            return;
+        }
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
@@ -122,6 +133,10 @@ public class TaskStorage {
      * @throws IOException 当写入文件失败时抛出
      */
     public void saveTeamTasks(List<Task> tasks) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2TaskStore.saveTeamTasks(tasks);
+            return;
+        }
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
         saveTasksToFile(tasks, teamFile);
@@ -170,6 +185,9 @@ public class TaskStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadTasks() throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2TaskStore.loadLocalTasks();
+        }
         ensureDirectoryExists();
         Path dataFile = getDataDirectory().resolve(DATA_FILE);
         SafePersistenceHelper.ReadResult<List<Task>> readResult = SafePersistenceHelper.readWithRecovery(
@@ -196,6 +214,9 @@ public class TaskStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadPlayerTasks(UUID playerUuid) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2TaskStore.loadPlayerTasks(playerUuid);
+        }
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");
@@ -235,6 +256,9 @@ public class TaskStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     public List<Task> loadTeamTasks() throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2TaskStore.loadTeamTasks();
+        }
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
         SafePersistenceHelper.ReadResult<List<Task>> readResult = SafePersistenceHelper.readWithRecovery(
@@ -303,6 +327,14 @@ public class TaskStorage {
      * @return 最后保存时间戳，不存在时返回 0
      */
     public long getLocalTasksLastSaved() {
+        if (StorageBackendFactory.isH2Selected()) {
+            try {
+                return h2TaskStore.getBucketLastSaved(H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER);
+            } catch (IOException exception) {
+                TodoConstants.LOGGER.warn("Failed to read H2 local task timestamp", exception);
+                return 0L;
+            }
+        }
         ensureDirectoryExists();
         return readLastSavedSafe(getDataDirectory().resolve(DATA_FILE));
     }
@@ -316,6 +348,14 @@ public class TaskStorage {
     public long getPlayerTasksLastSaved(UUID playerUuid) {
         if (playerUuid == null) {
             return 0L;
+        }
+        if (StorageBackendFactory.isH2Selected()) {
+            try {
+                return h2TaskStore.getBucketLastSaved(H2TaskStore.PLAYER_PERSONAL_BUCKET, playerUuid.toString());
+            } catch (IOException exception) {
+                TodoConstants.LOGGER.warn("Failed to read H2 player task timestamp for {}", playerUuid, exception);
+                return 0L;
+            }
         }
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
@@ -391,6 +431,14 @@ public class TaskStorage {
      * @return 若玩家任务文件存在则返回 true
      */
     public boolean hasPlayerTasks(UUID playerUuid) {
+        if (StorageBackendFactory.isH2Selected()) {
+            try {
+                return h2TaskStore.hasPlayerTasks(playerUuid);
+            } catch (IOException exception) {
+                TodoConstants.LOGGER.warn("Failed to query H2 player task bucket for {}", playerUuid, exception);
+                return false;
+            }
+        }
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
         Path playerFile = playersDir.resolve(playerUuid.toString() + ".dat");

@@ -1,5 +1,6 @@
 package com.todolist.bootstrap;
 
+import com.todolist.TodoListCommon;
 import net.minecraft.server.MinecraftServer;
 import java.util.function.Consumer;
 
@@ -33,6 +34,7 @@ public final class EventBootstrap {
         if (onStopped != null) {
             onStopped.accept(server);
         }
+        TodoListCommon.closeStorageContext();
     }
 }
 

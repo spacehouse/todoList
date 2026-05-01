@@ -25,15 +25,18 @@ final class TodoScreenPersistenceSupport {
         final boolean teamSaved;
         final boolean personalHasUnsavedChanges;
         final boolean teamHasUnsavedChanges;
+        final Throwable failure;
 
         SaveOutcome(boolean personalSaved,
                     boolean teamSaved,
                     boolean personalHasUnsavedChanges,
-                    boolean teamHasUnsavedChanges) {
+                    boolean teamHasUnsavedChanges,
+                    Throwable failure) {
             this.personalSaved = personalSaved;
             this.teamSaved = teamSaved;
             this.personalHasUnsavedChanges = personalHasUnsavedChanges;
             this.teamHasUnsavedChanges = teamHasUnsavedChanges;
+            this.failure = failure;
         }
 
         boolean allSaved() {
@@ -42,6 +45,15 @@ final class TodoScreenPersistenceSupport {
 
         boolean hasUnsavedChanges() {
             return personalHasUnsavedChanges || teamHasUnsavedChanges;
+        }
+
+        /**
+         * 返回保存流程中的首个失败异常。
+         *
+         * @return 首个失败异常；全部成功时返回 null
+         */
+        Throwable failure() {
+            return failure;
         }
     }
 
@@ -70,6 +82,7 @@ final class TodoScreenPersistenceSupport {
         boolean teamSaved = !teamDirty;
         boolean personalHasUnsavedChanges = personalDirty;
         boolean teamHasUnsavedChanges = teamDirty;
+        Throwable failure = null;
 
         if (personalDirty) {
             try {
@@ -78,6 +91,7 @@ final class TodoScreenPersistenceSupport {
                 personalHasUnsavedChanges = false;
             } catch (Exception e) {
                 personalSaved = false;
+                failure = e;
                 TodoConstants.LOGGER.error("Failed to save personal tasks", e);
             }
         }
@@ -89,6 +103,9 @@ final class TodoScreenPersistenceSupport {
                 teamHasUnsavedChanges = false;
             } catch (Exception e) {
                 teamSaved = false;
+                if (failure == null) {
+                    failure = e;
+                }
                 TodoConstants.LOGGER.error("Failed to save team tasks", e);
             }
         }
@@ -97,7 +114,8 @@ final class TodoScreenPersistenceSupport {
                 personalSaved,
                 teamSaved,
                 personalHasUnsavedChanges,
-                teamHasUnsavedChanges
+                teamHasUnsavedChanges,
+                failure
         );
     }
 

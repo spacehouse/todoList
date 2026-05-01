@@ -3,6 +3,8 @@ package com.todolist.project;
 import com.todolist.TodoConstants;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2ProjectPlayerStateStore;
+import com.todolist.storage.StorageBackendFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
@@ -28,6 +30,7 @@ public class ProjectPlayerStateStorage {
     private static final String HUD_VISIBLE_KEY = "hudVisible";
     private static final String HUD_STARRED_PROJECT_IDS_KEY = "hudStarredProjectIds";
     private static final String PROJECT_ID_KEY = "projectId";
+    private final H2ProjectPlayerStateStore h2PlayerStateStore = new H2ProjectPlayerStateStore();
 
     /**
      * 创建玩家项目状态存储组件，并确保状态目录存在。
@@ -80,6 +83,14 @@ public class ProjectPlayerStateStorage {
         if (playerUuid == null) {
             return false;
         }
+        if (StorageBackendFactory.isH2Selected()) {
+            try {
+                return h2PlayerStateStore.hasPlayerState(playerUuid);
+            } catch (IOException exception) {
+                TodoConstants.LOGGER.warn("Failed to query H2 project player state for {}", playerUuid, exception);
+                return false;
+            }
+        }
         return SafePersistenceHelper.existsOrBackup(getPlayerStateFilePath(playerUuid));
     }
 
@@ -91,6 +102,10 @@ public class ProjectPlayerStateStorage {
      * @throws IOException 当写盘失败时抛出
      */
     public void savePlayerState(UUID playerUuid, ProjectPlayerState state) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2PlayerStateStore.savePlayerState(playerUuid, state);
+            return;
+        }
         ensureDirectoryExists();
         ProjectPlayerState safeState = state == null ? ProjectPlayerState.empty() : state;
         CompoundTag root = new CompoundTag();
@@ -121,6 +136,9 @@ public class ProjectPlayerStateStorage {
      * @throws IOException 当读盘失败时抛出
      */
     public ProjectPlayerState loadPlayerState(UUID playerUuid) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            return h2PlayerStateStore.loadPlayerState(playerUuid);
+        }
         Path playerStateFile = getPlayerStateFilePath(playerUuid);
         SafePersistenceHelper.ReadResult<ProjectPlayerState> readResult = SafePersistenceHelper.readWithRecovery(
                 playerStateFile,
