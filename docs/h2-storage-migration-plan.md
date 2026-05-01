@@ -18,6 +18,7 @@
 - [M1-0 详细计划：依赖、打包与运行时验证](h2-storage-migration-m1-0-plan.md)
 - [M1 详细计划：嵌入式 H2 存储基础](h2-storage-migration-m1-plan.md)
 - [M2 详细计划：TCP 外部访问](h2-storage-migration-m2-plan.md)
+- [M2 验证记录：TCP 外部访问](h2-storage-migration-m2-validation.md)
 - [M3 详细计划：备份、维护锁与 reload-db](h2-storage-migration-m3-plan.md)
 - [M4 详细计划：SQL 查询优化](h2-storage-migration-m4-plan.md)
 

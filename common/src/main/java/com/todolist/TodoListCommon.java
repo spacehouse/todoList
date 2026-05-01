@@ -7,6 +7,7 @@ import com.todolist.project.ProjectStorage;
 import com.todolist.project.Project;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2StorageBootstrap;
+import com.todolist.storage.H2TcpServerManager;
 import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.TaskStorage;
 
@@ -140,6 +141,7 @@ public final class TodoListCommon {
         try {
             if (StorageBackendFactory.isH2Selected()) {
                 H2StorageBootstrap.resetDatabaseState(new H2ConnectionProvider().getDatabaseBasePath());
+                H2TcpServerManager.stop();
             }
         } catch (Exception e) {
             TodoConstants.LOGGER.warn("Failed to close TodoList storage context", e);

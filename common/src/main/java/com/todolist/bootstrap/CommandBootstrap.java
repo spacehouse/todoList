@@ -25,6 +25,9 @@ import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2StorageAvailability;
+import com.todolist.storage.H2TcpAccountRole;
+import com.todolist.storage.H2TcpConfig;
+import com.todolist.storage.H2TcpServerManager;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.storage.StorageUnavailableException;
 import com.mojang.brigadier.CommandDispatcher;
@@ -39,6 +42,9 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -114,6 +120,9 @@ public final class CommandBootstrap {
     );
     private static final List<String> COMMAND_ACCESS_MODE_SUGGESTIONS = List.of(
             "op_only", "view_only", "full"
+    );
+    private static final List<String> H2_ACCOUNT_ROLE_SUGGESTIONS = List.of(
+            "admin", "readonly", "readwrite"
     );
     private static final List<String> TASK_CLEAN_SCOPE_SUGGESTIONS = List.of(
             "personal", "team"
@@ -526,6 +535,19 @@ public final class CommandBootstrap {
                                         ))))
                         .then(buildJoinDecisionLiteral("accept", true))
                         .then(buildJoinDecisionLiteral("deny", false)))
+                .then(Commands.literal("h2")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
+                        .then(Commands.literal("status")
+                                .executes(ctx -> sendH2Status(ctx.getSource())))
+                        .then(Commands.literal("restart-tcp")
+                                .executes(ctx -> restartH2Tcp(ctx.getSource())))
+                        .then(Commands.literal("reset-password")
+                                .then(Commands.argument("role", StringArgumentType.word())
+                                        .suggests(CommandBootstrap::suggestH2AccountRoles)
+                                        .executes(ctx -> resetH2Password(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "role")
+                                        )))))
                 .then(Commands.literal("admin")
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
                         .then(Commands.literal("command-access")
@@ -653,6 +675,9 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_project_unstar",
                 "command.todolist.help.todo_hud_toggle",
                 "command.todolist.help.todo_hud_set",
+                "command.todolist.help.todo_h2_status",
+                "command.todolist.help.todo_h2_restart_tcp",
+                "command.todolist.help.todo_h2_reset_password",
                 "command.todolist.help.todo_admin_command_access",
                 "command.todolist.help.todo_join_project",
                 "command.todolist.help.todo_join_accept",
@@ -756,6 +781,170 @@ public final class CommandBootstrap {
                 "command.todolist.command_access_mode.success",
                 getCommandAccessModeText(resolvedMode)
         );
+    }
+
+    /**
+     * 输出 H2 当前连接模式、TCP 状态和最近失败信息。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int sendH2Status(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        H2ConnectionProvider provider = new H2ConnectionProvider();
+        H2TcpConfig tcpConfig = H2TcpConfig.load();
+        H2TcpServerManager.StatusSnapshot tcpStatus = H2TcpServerManager.getStatus();
+        H2StorageAvailability.StatusSnapshot storageStatus = H2StorageAvailability.getStatusSnapshot(provider.getDatabaseBasePath());
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.backend", ModConfig.getInstance().getStorageBackend().name().toLowerCase(Locale.ROOT));
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.storage", storageStatus.isAvailable() ? "available" : "unavailable");
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.tcp_enabled", tcpConfig.isTcpEnabled() ? "true" : "false");
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.mode", tcpStatus.getMode());
+        if (tcpStatus.isTcpActive()) {
+            sendFeedbackByTranslationKey(
+                    source,
+                    "command.todolist.h2.status.tcp_address",
+                    tcpStatus.getBindAddress(),
+                    tcpStatus.getActualPort(),
+                    tcpStatus.isAllowRemote() ? "remote" : "local"
+            );
+        }
+        if (!storageStatus.isAvailable()) {
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", storageStatus.getReason(), sanitizeStatusMessage(storageStatus.getMessage()));
+        } else if (tcpStatus.getLastFailure() != null && !tcpStatus.getLastFailure().isBlank()) {
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", "TCP", sanitizeStatusMessage(tcpStatus.getLastFailure()));
+        }
+        return sendCommandSuccess(source, COMMAND_SUCCESS, "command.todolist.h2.status", SIDE_EFFECT_NONE);
+    }
+
+    /**
+     * 重启 H2 TCP Server，并输出新的连接模式。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int restartH2Tcp(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        H2TcpServerManager.StatusSnapshot status = H2TcpServerManager.restart(H2TcpConfig.load());
+        if (status.isTcpActive()) {
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    "command.todolist.h2.restart_tcp.success",
+                    status.getBindAddress(),
+                    status.getActualPort()
+            );
+        }
+        return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.restart_tcp.fallback", status.getMode());
+    }
+
+    /**
+     * 重置 H2 TCP 指定角色密码。
+     *
+     * @param source 命令源
+     * @param role 原始角色文本
+     * @return 命令执行结果
+     */
+    private static int resetH2Password(CommandSourceStack source, String role) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        H2TcpAccountRole accountRole = H2TcpAccountRole.fromCommandValue(role);
+        if (accountRole == null) {
+            return sendCommandFailure(source, "command.todolist.h2.reset_password.invalid_role");
+        }
+        H2TcpConfig config = H2TcpConfig.load();
+        String newPassword = H2TcpConfig.createPassword();
+        try {
+            updateH2AccountPassword(config, accountRole, newPassword);
+            config.setPassword(accountRole, newPassword);
+            config.save();
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to reset H2 TCP password for role {}", accountRole.commandValue(), exception);
+            return sendCommandFailure(source, "command.todolist.h2.reset_password.failed");
+        }
+        return sendCommandSuccess(
+                source,
+                COMMAND_SUCCESS,
+                SIDE_EFFECT_PERSIST_DATA,
+                "command.todolist.h2.reset_password.success",
+                accountRole.commandValue()
+        );
+    }
+
+    /**
+     * 更新 H2 数据库内指定 TCP 账号密码。
+     *
+     * @param config 当前 H2 TCP 配置
+     * @param role 账号角色
+     * @param newPassword 新密码
+     * @throws IOException 打开管理连接失败时抛出
+     * @throws SQLException 更新数据库用户失败时抛出
+     */
+    private static void updateH2AccountPassword(H2TcpConfig config, H2TcpAccountRole role, String newPassword) throws IOException, SQLException {
+        try (Connection connection = openH2PasswordResetConnection(config);
+             Statement statement = connection.createStatement()) {
+            String user = switch (role) {
+                case ADMIN -> config.getAdminUser();
+                case READONLY -> config.getReadonlyUser();
+                case READWRITE -> config.getReadwriteUser();
+            };
+            statement.execute("ALTER USER " + quoteH2Identifier(user) + " SET PASSWORD '" + escapeH2Sql(newPassword) + "'");
+        }
+    }
+
+    /**
+     * 打开密码重置所需的管理连接。
+     *
+     * @param config 当前 H2 TCP 配置
+     * @return 管理连接
+     * @throws IOException 打开连接失败时抛出
+     * @throws SQLException 打开连接失败时抛出
+     */
+    private static Connection openH2PasswordResetConnection(H2TcpConfig config) throws IOException, SQLException {
+        H2ConnectionProvider provider = new H2ConnectionProvider();
+        if (H2TcpServerManager.getStatus().isTcpActive()) {
+            return java.sql.DriverManager.getConnection(provider.getJdbcUrl(), config.getAdminUser(), config.getAdminPassword());
+        }
+        return provider.openEmbeddedBootstrapConnection();
+    }
+
+    /**
+     * 转义 H2 SQL 字符串。
+     *
+     * @param value 原始值
+     * @return 已转义值
+     */
+    private static String escapeH2Sql(String value) {
+        return value == null ? "" : value.replace("'", "''");
+    }
+
+    /**
+     * 转义 H2 标识符。
+     *
+     * @param value 原始标识符
+     * @return 引号包裹的标识符
+     */
+    private static String quoteH2Identifier(String value) {
+        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
+    }
+
+    /**
+     * 清理状态命令中的敏感片段，避免输出完整 JDBC URL 或密码。
+     *
+     * @param message 原始状态说明
+     * @return 脱敏后的状态说明
+     */
+    private static String sanitizeStatusMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+        String sanitized = message.replaceAll("jdbc:h2:[^\\s]+", "jdbc:h2:<hidden>");
+        return sanitized.length() > 160 ? sanitized.substring(0, 160) + "..." : sanitized;
     }
 
     private static Component getHudSwitchText(boolean enabled) {
@@ -3306,6 +3495,17 @@ public final class CommandBootstrap {
      */
     private static CompletableFuture<Suggestions> suggestCommandAccessModes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(COMMAND_ACCESS_MODE_SUGGESTIONS, builder);
+    }
+
+    /**
+     * 为 H2 TCP 账号角色参数提供自动补全。
+     *
+     * @param ctx 命令上下文
+     * @param builder 补全构建器
+     * @return 补全结果
+     */
+    private static CompletableFuture<Suggestions> suggestH2AccountRoles(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(H2_ACCOUNT_ROLE_SUGGESTIONS, builder);
     }
 
     private static CompletableFuture<Suggestions> suggestSelectableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
