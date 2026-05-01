@@ -9,6 +9,7 @@ import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.gui.testsupport.RecordingClientOps;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
+import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.task.Task;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -110,6 +111,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMoveDemotedTaskBehindHigherPriorities", TodoScreenTestMain::shouldMoveDemotedTaskBehindHigherPriorities);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange", TodoScreenTestMain::shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTasksBySearchAndStatus", TodoScreenTestMain::shouldFilterTasksBySearchAndStatus);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseH2CompletedCountWhenCompletedSectionCollapsed", TodoScreenTestMain::shouldUseH2CompletedCountWhenCompletedSectionCollapsed);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowUncompleteCompletedTaskInPersonalView", TodoScreenTestMain::shouldAllowUncompleteCompletedTaskInPersonalView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUncompletedTaskInActiveSectionImmediately", TodoScreenTestMain::shouldShowUncompletedTaskInActiveSectionImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowEnterAddWhileTaskSelected", TodoScreenTestMain::shouldAllowEnterAddWhileTaskSelected);
@@ -1502,6 +1504,47 @@ public final class TodoScreenTestMain {
         List<String> expandedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
         GuiTestSupport.assertEquals(4, expandedRows.size(), "展开已完成分组后应额外显示已完成任务");
         GuiTestSupport.assertEquals("TASK:" + alpha.getId(), expandedRows.get(3), "展开已完成分组后应显示 Alpha 任务");
+    }
+
+    /**
+     * 验证 H2 后端下已完成分组收起时只显示总数，展开后再加载具体已完成任务。
+     */
+    private static void shouldUseH2CompletedCountWhenCompletedSectionCollapsed() {
+        GuiTestSupport.resetState();
+        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+        H2StorageBootstrap.resetAllForTests();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Active H2 Task");
+        addTaskViaInput(screen, "Done H2 Task 1");
+        addTaskViaInput(screen, "Done H2 Task 2");
+        addTaskViaInput(screen, "Done H2 Task 3");
+        List<Task> tasks = access(screen).getCurrentManagerTasksForTest();
+        Task active = requireTaskByTitle(screen, "Active H2 Task");
+        List<Task> completedTasks = tasks.stream()
+                .filter(task -> task.getTitle().startsWith("Done H2 Task"))
+                .toList();
+        completedTasks.forEach(task -> task.setCompleted(true));
+        access(screen).saveTasksForTest();
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        List<String> collapsedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(3, collapsedRows.size(), "H2 已完成分组收起时应只显示两个标题和一条未完成任务");
+        GuiTestSupport.assertEquals("TASK:" + active.getId(), collapsedRows.get(1), "H2 收起时未完成任务仍应显示");
+        GuiTestSupport.assertTrue(collapsedRows.get(2).startsWith("HEADER:"), "H2 收起时最后一行应为已完成标题");
+        GuiTestSupport.assertTrue(collapsedRows.get(2).contains("3"), "H2 收起时已完成标题应显示 SQL 统计总数");
+
+        access(screen).toggleCompletedSectionForTest();
+
+        List<String> expandedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(6, expandedRows.size(), "H2 已完成分组展开后应显示三个已完成任务");
+        for (Task completedTask : completedTasks) {
+            GuiTestSupport.assertTrue(expandedRows.contains("TASK:" + completedTask.getId()), "H2 展开后应显示已完成任务 " + completedTask.getTitle());
+        }
     }
 
     /**

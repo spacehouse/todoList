@@ -136,6 +136,14 @@ tasks.register<JavaExec>("h2MaintenanceBackupTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("h2TaskQueryServiceTest") {
+    group = "verification"
+    description = "Run the M4-A H2 task query service self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.storage.H2TaskQueryServiceTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -148,6 +156,7 @@ tasks.named("check").configure {
     dependsOn("h2TcpAccessTest")
     dependsOn("h2CommandIntegrationTest")
     dependsOn("h2MaintenanceBackupTest")
+    dependsOn("h2TaskQueryServiceTest")
 }
 
 tasks.withType<Test>().configureEach {

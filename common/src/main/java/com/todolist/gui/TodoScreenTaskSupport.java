@@ -308,22 +308,51 @@ final class TodoScreenTaskSupport {
     }
 
     static List<TaskListWidget.SectionModel> buildTaskPaneSections(List<Task> activeTasks,
-                                                                   List<Task> completedTasks,
-                                                                   boolean activeExpanded,
-                                                                   boolean completedExpanded) {
+                                                                    List<Task> completedTasks,
+                                                                    boolean activeExpanded,
+                                                                    boolean completedExpanded) {
+        List<Task> safeActiveTasks = activeTasks == null ? List.of() : List.copyOf(activeTasks);
+        List<Task> safeCompletedTasks = completedTasks == null ? List.of() : List.copyOf(completedTasks);
+        return buildTaskPaneSections(
+                safeActiveTasks,
+                safeActiveTasks.size(),
+                safeCompletedTasks,
+                safeCompletedTasks.size(),
+                activeExpanded,
+                completedExpanded
+        );
+    }
+
+    /**
+     * 构建任务面板分组模型，并允许标题计数使用 SQL 总数而非已加载行数。
+     *
+     * @param activeTasks 已加载的未完成任务
+     * @param activeTotalCount 未完成任务总数
+     * @param completedTasks 已加载的已完成任务
+     * @param completedTotalCount 已完成任务总数
+     * @param activeExpanded 未完成分组是否展开
+     * @param completedExpanded 已完成分组是否展开
+     * @return 任务列表需要渲染的分组模型集合
+     */
+    static List<TaskListWidget.SectionModel> buildTaskPaneSections(List<Task> activeTasks,
+                                                                    int activeTotalCount,
+                                                                    List<Task> completedTasks,
+                                                                    int completedTotalCount,
+                                                                    boolean activeExpanded,
+                                                                    boolean completedExpanded) {
         List<Task> safeActiveTasks = activeTasks == null ? List.of() : List.copyOf(activeTasks);
         List<Task> safeCompletedTasks = completedTasks == null ? List.of() : List.copyOf(completedTasks);
         return List.of(
                 new TaskListWidget.SectionModel(
                         "active",
-                        formatTaskSectionTitle("gui.todolist.active", safeActiveTasks.size()),
+                        formatTaskSectionTitle("gui.todolist.active", Math.max(activeTotalCount, safeActiveTasks.size())),
                         safeActiveTasks,
                         true,
                         activeExpanded
                 ),
                 new TaskListWidget.SectionModel(
                         "completed",
-                        formatTaskSectionTitle("gui.todolist.completed", safeCompletedTasks.size()),
+                        formatTaskSectionTitle("gui.todolist.completed", Math.max(completedTotalCount, safeCompletedTasks.size())),
                         safeCompletedTasks,
                         true,
                         completedExpanded

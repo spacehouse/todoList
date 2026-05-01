@@ -6,6 +6,9 @@ import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
+import com.todolist.storage.H2TaskQueryService;
+import com.todolist.storage.H2TaskStore;
+import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import java.util.ArrayList;
@@ -47,6 +50,8 @@ public class TodoHudRenderer {
     private List<Task> cachedTeamTasks = new ArrayList<>();
     private List<Task> cachedPendingTasks = new ArrayList<>();
     private List<Task> cachedDoneTasks = new ArrayList<>();
+    private int cachedPendingTotalCount;
+    private int cachedDoneTotalCount;
     private final Map<String, RowRenderCache> rowRenderCacheByTaskId = new HashMap<>();
     private HudViewMode cachedHudViewMode = HudViewMode.PERSONAL;
     private Project.Scope cachedHudScope = Project.Scope.PERSONAL;
@@ -140,6 +145,25 @@ public class TodoHudRenderer {
     }
 
     /**
+     * HUD SQL 项目过滤上下文，描述当前项目来源应匹配哪些项目。
+     */
+    private static class HudSqlProjectFilter {
+        private final Set<String> projectIds;
+        private final boolean includeAnyAssignedProject;
+
+        /**
+         * 创建 HUD SQL 项目过滤上下文。
+         *
+         * @param projectIds 指定项目 ID 集合
+         * @param includeAnyAssignedProject 是否包含任意已分配项目
+         */
+        private HudSqlProjectFilter(Set<String> projectIds, boolean includeAnyAssignedProject) {
+            this.projectIds = projectIds;
+            this.includeAnyAssignedProject = includeAnyAssignedProject;
+        }
+    }
+
+    /**
      * HUD 行缓存：保存任务行布局签名与可复用的视觉元数据。
      */
     private static class RowRenderCache {
@@ -187,7 +211,7 @@ public class TodoHudRenderer {
         // Calculate layout
         List<Task> pending = cachedPendingTasks;
         List<Task> done = cachedDoneTasks;
-        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done);
+        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done, cachedPendingTotalCount, cachedDoneTotalCount);
         int panelHeight = calculatePanelHeight(config, pending, done);
 
         // Clamp coordinates
@@ -221,21 +245,37 @@ public class TodoHudRenderer {
             return;
         }
 
-        List<Task> tasks = loadTasksByScope(scope);
-        tasks = filterByViewMode(tasks, viewMode);
-        tasks = filterByProjectSource(tasks, scope, config);
+        H2TaskQueryService.HudTaskQueryResult sqlResult = queryHudTasksFromH2(config, viewMode, scope);
+        List<Task> pending;
+        List<Task> done;
+        int pendingTotal;
+        int doneTotal;
+        if (sqlResult != null) {
+            pending = new ArrayList<>(sqlResult.getPendingTasks());
+            done = new ArrayList<>(sqlResult.getDoneTasks());
+            pendingTotal = sqlResult.getPendingTotal();
+            doneTotal = sqlResult.getDoneTotal();
+        } else {
+            List<Task> tasks = loadTasksByScope(scope);
+            tasks = filterByViewMode(tasks, viewMode);
+            tasks = filterByProjectSource(tasks, scope, config);
 
-        List<Task> pending = new ArrayList<>();
-        List<Task> done = new ArrayList<>();
-        for (Task task : tasks) {
-            if (task.isCompleted()) {
-                done.add(task);
-            } else {
-                pending.add(task);
+            pending = new ArrayList<>();
+            done = new ArrayList<>();
+            for (Task task : tasks) {
+                if (task.isCompleted()) {
+                    done.add(task);
+                } else {
+                    pending.add(task);
+                }
             }
+            pendingTotal = pending.size();
+            doneTotal = done.size();
         }
         cachedPendingTasks = pending;
         cachedDoneTasks = done;
+        cachedPendingTotalCount = pendingTotal;
+        cachedDoneTotalCount = doneTotal;
         rebuildRowRenderCache(pending, done, hudWidth);
         cachedHudViewMode = viewMode;
         cachedHudScope = scope;
@@ -245,6 +285,112 @@ public class TodoHudRenderer {
         cachedLayoutHudWidth = hudWidth;
         cachedGuiScale = guiScale;
         lastHudModelRefreshMs = now;
+    }
+
+    /**
+     * 在 H2 后端下通过 SQL 查询 HUD 当前视图所需任务，失败时返回 null 以保留内存路径兜底。
+     *
+     * @param config 模组配置
+     * @param viewMode HUD 视图模式
+     * @param scope 当前项目空间
+     * @return H2 查询结果；不可用或失败时返回 null
+     */
+    private H2TaskQueryService.HudTaskQueryResult queryHudTasksFromH2(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
+        if (!StorageBackendFactory.isH2Selected()) {
+            return null;
+        }
+        try {
+            H2TaskQueryService.HudTaskQuery query = buildHudTaskQuery(config, viewMode, scope);
+            if (query == null) {
+                return null;
+            }
+            return new H2TaskQueryService().queryHudTasks(query);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    /**
+     * 构建 H2 HUD 查询参数。
+     *
+     * @param config 模组配置
+     * @param viewMode HUD 视图模式
+     * @param scope 当前项目空间
+     * @return HUD 查询参数；无法确定桶时返回 null
+     */
+    private H2TaskQueryService.HudTaskQuery buildHudTaskQuery(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
+        String bucketType = scope == Project.Scope.TEAM ? H2TaskStore.TEAM_BUCKET : H2TaskStore.LOCAL_PERSONAL_BUCKET;
+        String ownerUuid = scope == Project.Scope.TEAM ? H2TaskStore.TEAM_OWNER : H2TaskStore.LOCAL_OWNER;
+        if (scope == Project.Scope.PERSONAL && client != null && client.player != null && ClientTaskStorageHelper.shouldUsePublishedLocalPlayerStorage(client)) {
+            var storagePlayerUuid = ClientTaskStorageHelper.resolveStoragePlayerUuid(client);
+            bucketType = H2TaskStore.PLAYER_PERSONAL_BUCKET;
+            ownerUuid = storagePlayerUuid == null ? "" : storagePlayerUuid.toString();
+        }
+
+        HudSqlProjectFilter projectFilter = resolveHudSqlProjectFilter(scope, config);
+        H2TaskQueryService.HudAssigneeFilter assigneeFilter = resolveHudAssigneeFilter(viewMode);
+        String playerUuid = client.player == null ? "" : client.player.getStringUUID();
+        int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - 14) / 12);
+        int pendingLimit = Math.min(Math.max(0, config.getHudTodoLimit()), maxRowsByHeight);
+        int doneLimit = Math.min(Math.max(0, config.getHudDoneLimit()), maxRowsByHeight);
+        return new H2TaskQueryService.HudTaskQuery(
+                bucketType,
+                ownerUuid,
+                projectFilter.projectIds,
+                projectFilter.includeAnyAssignedProject,
+                assigneeFilter,
+                playerUuid,
+                pendingLimit,
+                doneLimit
+        );
+    }
+
+    /**
+     * 将 HUD 项目来源解析为 SQL 项目过滤条件。
+     *
+     * @param scope 当前项目空间
+     * @param config 模组配置
+     * @return SQL 项目过滤上下文
+     */
+    private HudSqlProjectFilter resolveHudSqlProjectFilter(Project.Scope scope, ModConfig config) {
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        List<Project> scopedProjects = manager.getProjectsByScope(scope);
+        String sourceMode = config.getHudProjectSource();
+        Set<String> allowedProjectIds = new HashSet<>();
+        Project activeProject = resolveScopedActiveProject(manager, scope, scopedProjects);
+
+        if ("CURRENT".equalsIgnoreCase(sourceMode)) {
+            if (activeProject != null) {
+                allowedProjectIds.add(activeProject.getId());
+            } else {
+                collectProjectIds(scopedProjects, allowedProjectIds);
+            }
+        } else if ("STARRED".equalsIgnoreCase(sourceMode)) {
+            for (Project project : scopedProjects) {
+                if (config.isHudProjectStarred(project.getId())) {
+                    allowedProjectIds.add(project.getId());
+                }
+            }
+        } else {
+            collectProjectIds(scopedProjects, allowedProjectIds);
+        }
+        return new HudSqlProjectFilter(allowedProjectIds, scope == Project.Scope.TEAM && allowedProjectIds.isEmpty());
+    }
+
+    /**
+     * 将 HUD 视图模式解析为 H2 指派过滤模式。
+     *
+     * @param viewMode HUD 视图模式
+     * @return H2 指派过滤模式
+     */
+    private H2TaskQueryService.HudAssigneeFilter resolveHudAssigneeFilter(HudViewMode viewMode) {
+        if (viewMode == HudViewMode.TEAM_UNASSIGNED) {
+            return H2TaskQueryService.HudAssigneeFilter.UNASSIGNED;
+        }
+        if (viewMode == HudViewMode.TEAM_ASSIGNED) {
+            return H2TaskQueryService.HudAssigneeFilter.ASSIGNED_TO_PLAYER;
+        }
+        return H2TaskQueryService.HudAssigneeFilter.ANY;
     }
 
     /**
@@ -522,7 +668,7 @@ public class TodoHudRenderer {
         currentY += headerHeight;
 
         if (!expanded) {
-            Component summary = buildCollapsedSummaryText(pending, done);
+            Component summary = buildCollapsedSummaryText(cachedPendingTotalCount, cachedDoneTotalCount);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
             context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xDDDDDD));
             return;
@@ -918,6 +1064,8 @@ public class TodoHudRenderer {
         cachedGuiScale = -1D;
         cachedPendingTasks = new ArrayList<>();
         cachedDoneTasks = new ArrayList<>();
+        cachedPendingTotalCount = 0;
+        cachedDoneTotalCount = 0;
         rowRenderCacheByTaskId.clear();
     }
 
@@ -931,7 +1079,7 @@ public class TodoHudRenderer {
         HudViewMode viewMode = resolveViewMode(config);
         Project.Scope scope = getScopeByView(viewMode);
         refreshHudModelIfNeeded(config, viewMode, scope);
-        return calculatePanelHeight(config, cachedPendingTasks, cachedDoneTasks);
+        return calculatePanelHeight(config, cachedPendingTasks, cachedDoneTasks, cachedPendingTotalCount, cachedDoneTotalCount);
     }
 
     /**
@@ -1050,7 +1198,7 @@ public class TodoHudRenderer {
      * @return 当前显示的未完成任务数量
      */
     int getShownPendingCountForTest() {
-        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks, cachedPendingTotalCount, cachedDoneTotalCount);
         return renderPlan.shownPending;
     }
 
@@ -1060,7 +1208,7 @@ public class TodoHudRenderer {
      * @return 当前显示的已完成任务数量
      */
     int getShownDoneCountForTest() {
-        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks, cachedPendingTotalCount, cachedDoneTotalCount);
         return renderPlan.shownDone;
     }
 
@@ -1070,7 +1218,7 @@ public class TodoHudRenderer {
      * @return 隐藏任务数量
      */
     int getHiddenCountForTest() {
-        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks);
+        HudRenderPlan renderPlan = buildRenderPlan(ModConfig.getInstance(), cachedPendingTasks, cachedDoneTasks, cachedPendingTotalCount, cachedDoneTotalCount);
         return renderPlan.hiddenCount;
     }
 
@@ -1117,7 +1265,7 @@ public class TodoHudRenderer {
      * @return 折叠态摘要文本
      */
     String getCollapsedSummaryTextForTest() {
-        return buildCollapsedSummaryText(cachedPendingTasks, cachedDoneTasks).getString();
+        return buildCollapsedSummaryText(cachedPendingTotalCount, cachedDoneTotalCount).getString();
     }
 
     private String valueOrEmpty(String value) {
@@ -1133,27 +1281,57 @@ public class TodoHudRenderer {
      * @return HUD 渲染计划
      */
     private HudRenderPlan buildRenderPlan(ModConfig config, List<Task> pending, List<Task> done) {
+        return buildRenderPlan(config, pending, done, pending == null ? 0 : pending.size(), done == null ? 0 : done.size());
+    }
+
+    /**
+     * 根据任务总数和当前可绘制行构建 HUD 渲染计划。
+     *
+     * @param config 当前模组配置
+     * @param pending 未完成任务可绘制行
+     * @param done 已完成任务可绘制行
+     * @param pendingTotal 未完成任务总数
+     * @param doneTotal 已完成任务总数
+     * @return HUD 渲染计划
+     */
+    private HudRenderPlan buildRenderPlan(ModConfig config, List<Task> pending, List<Task> done, int pendingTotal, int doneTotal) {
         int rowHeight = 12;
         int headerHeight = 14;
         int maxRowsByHeight = Math.max(0, (config.getHudMaxHeight() - headerHeight) / rowHeight);
         int todoLimit = Math.max(0, config.getHudTodoLimit());
         int doneLimit = Math.max(0, config.getHudDoneLimit());
         if (!expanded) {
-            int hiddenCount = pending.size() + done.size();
+            int hiddenCount = Math.max(0, pendingTotal) + Math.max(0, doneTotal);
             return new HudRenderPlan(0, 0, hiddenCount, false, false);
         }
 
-        HudRenderPlan visiblePlan = buildVisibleRowsPlan(maxRowsByHeight, todoLimit, doneLimit, pending.size(), done.size());
+        HudRenderPlan visiblePlan = buildVisibleRowsPlan(maxRowsByHeight, todoLimit, doneLimit, Math.max(0, pendingTotal), Math.max(0, doneTotal));
         if (visiblePlan.hiddenCount <= 0 || maxRowsByHeight <= 0) {
-            return visiblePlan;
+            return clampRenderPlanToLoadedRows(visiblePlan, pending, done);
         }
 
         // 只要存在隐藏任务且内容区至少还能显示一行，就优先预留一行给“还有 N 项”提示，
         // 避免 HUD 在高度刚好不够时直接吞掉隐藏计数语义。
         HudRenderPlan reservedPlan = buildVisibleRowsPlan(Math.max(0, maxRowsByHeight - 1), todoLimit, doneLimit,
-                pending.size(), done.size());
-        return new HudRenderPlan(reservedPlan.shownPending, reservedPlan.shownDone, reservedPlan.hiddenCount,
-                reservedPlan.showDoneSection, true);
+                Math.max(0, pendingTotal), Math.max(0, doneTotal));
+        return clampRenderPlanToLoadedRows(new HudRenderPlan(reservedPlan.shownPending, reservedPlan.shownDone, reservedPlan.hiddenCount,
+                reservedPlan.showDoneSection, true), pending, done);
+    }
+
+    /**
+     * 将渲染计划中的可绘制行数量限制在已经加载的任务行范围内。
+     *
+     * @param plan 原始渲染计划
+     * @param pending 未完成任务可绘制行
+     * @param done 已完成任务可绘制行
+     * @return 安全渲染计划
+     */
+    private HudRenderPlan clampRenderPlanToLoadedRows(HudRenderPlan plan, List<Task> pending, List<Task> done) {
+        int pendingRows = pending == null ? 0 : pending.size();
+        int doneRows = done == null ? 0 : done.size();
+        int shownPending = Math.min(plan.shownPending, pendingRows);
+        int shownDone = Math.min(plan.shownDone, doneRows);
+        return new HudRenderPlan(shownPending, shownDone, plan.hiddenCount, shownDone > 0 && plan.showDoneSection, plan.showMore);
     }
 
     /**
@@ -1187,11 +1365,22 @@ public class TodoHudRenderer {
      * @return 折叠态摘要文本
      */
     private Component buildCollapsedSummaryText(List<Task> pending, List<Task> done) {
-        String summaryKey = done.isEmpty() ? "hud.todolist.summary" : "hud.todolist.summary.with_completed";
-        return done.isEmpty()
-                ? Component.translatableWithFallback(summaryKey, "Todo: %s", Integer.toString(pending.size()))
+        return buildCollapsedSummaryText(pending == null ? 0 : pending.size(), done == null ? 0 : done.size());
+    }
+
+    /**
+     * 构建折叠态下使用的 HUD 摘要文本。
+     *
+     * @param pendingCount 未完成任务总数
+     * @param doneCount 已完成任务总数
+     * @return 折叠态摘要文本
+     */
+    private Component buildCollapsedSummaryText(int pendingCount, int doneCount) {
+        String summaryKey = doneCount <= 0 ? "hud.todolist.summary" : "hud.todolist.summary.with_completed";
+        return doneCount <= 0
+                ? Component.translatableWithFallback(summaryKey, "Todo: %s", Integer.toString(pendingCount))
                 : Component.translatableWithFallback(summaryKey, "Todo: %s | Done: %s",
-                Integer.toString(pending.size()), Integer.toString(done.size()));
+                Integer.toString(pendingCount), Integer.toString(doneCount));
     }
 
     /**
@@ -1214,9 +1403,23 @@ public class TodoHudRenderer {
      * @return HUD 面板高度
      */
     private int calculatePanelHeight(ModConfig config, List<Task> pending, List<Task> done) {
+        return calculatePanelHeight(config, pending, done, pending == null ? 0 : pending.size(), done == null ? 0 : done.size());
+    }
+
+    /**
+     * 根据当前任务总数计算 HUD 面板高度。
+     *
+     * @param config 当前模组配置
+     * @param pending 未完成任务可绘制行
+     * @param done 已完成任务可绘制行
+     * @param pendingTotal 未完成任务总数
+     * @param doneTotal 已完成任务总数
+     * @return HUD 面板高度
+     */
+    private int calculatePanelHeight(ModConfig config, List<Task> pending, List<Task> done, int pendingTotal, int doneTotal) {
         int rowHeight = 12;
         int headerHeight = 14;
-        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done);
+        HudRenderPlan renderPlan = buildRenderPlan(config, pending, done, pendingTotal, doneTotal);
         int rowsForSummary = expanded ? renderPlan.shownPending + (renderPlan.showDoneSection ? 1 + renderPlan.shownDone : 0) : 1;
         int totalRows = rowsForSummary + (renderPlan.showMore ? 1 : 0);
         return headerHeight + totalRows * rowHeight;
