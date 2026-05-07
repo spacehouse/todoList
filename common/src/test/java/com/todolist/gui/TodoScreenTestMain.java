@@ -120,6 +120,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow", TodoScreenTestMain::shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalAndTeamTasksWhenSavingFromTeamViewOnRemoteServer", TodoScreenTestMain::shouldSavePersonalAndTeamTasksWhenSavingFromTeamViewOnRemoteServer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalAndTeamTasksAfterRemoteReconnectWhenSavingFromPersonalView", TodoScreenTestMain::shouldKeepPersonalAndTeamTasksAfterRemoteReconnectWhenSavingFromPersonalView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldApplySyncedPersonalTasksToOpenGui", TodoScreenTestMain::shouldApplySyncedPersonalTasksToOpenGui);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldApplySyncedTeamTasksToOpenGui", TodoScreenTestMain::shouldApplySyncedTeamTasksToOpenGui);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardUnsavedPersonalChangesOnClose", TodoScreenTestMain::shouldDiscardUnsavedPersonalChangesOnClose);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRequestTeamSyncWhenClosingUnsavedTeamChanges", TodoScreenTestMain::shouldRequestTeamSyncWhenClosingUnsavedTeamChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowNotificationWhenAddingWithoutProject", TodoScreenTestMain::shouldShowNotificationWhenAddingWithoutProject);
@@ -1923,6 +1925,38 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 创建一条个人任务测试数据。
+     *
+     * @param title 任务标题
+     * @param projectId 所属个人项目 ID
+     * @param completed 是否已完成
+     * @return 个人任务
+     */
+    private static Task createPersonalTask(String title, String projectId, boolean completed) {
+        Task task = new Task(title, "");
+        task.setScope(Task.Scope.PERSONAL);
+        task.setProjectId(projectId);
+        task.setCompleted(completed);
+        return task;
+    }
+
+    /**
+     * 创建一条团队任务测试数据。
+     *
+     * @param title 任务标题
+     * @param projectId 所属团队项目 ID
+     * @param completed 是否已完成
+     * @return 团队任务
+     */
+    private static Task createTeamTask(String title, String projectId, boolean completed) {
+        Task task = new Task(title, "");
+        task.setScope(Task.Scope.TEAM);
+        task.setProjectId(projectId);
+        task.setCompleted(completed);
+        return task;
+    }
+
+    /**
      * 创建一个由外部玩家拥有的团队项目，默认不包含当前测试玩家成员身份。
      *
      * @param id 项目标识
@@ -2276,6 +2310,65 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(List.of("Remote Team Persisted Task"),
                 access(reconnectScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "重连后应能从服务端同步结果恢复团队任务");
+    }
+
+    /**
+     * 验证个人任务同步包会刷新已打开的待办界面，覆盖命令清理后的 GUI 更新。
+     */
+    private static void shouldApplySyncedPersonalTasksToOpenGui() {
+        GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project personalProject = createDefaultPersonalProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        TodoScreen.applySyncedPersonalTasks(minecraft, List.of(createPersonalTask("Before Command Clean", personalProject.getId(), false)));
+        TodoScreen.applySyncedPersonalTasks(minecraft, List.of(createPersonalTask("After Command Sync", personalProject.getId(), false)));
+
+        GuiTestSupport.assertEquals(List.of("After Command Sync"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "个人任务同步后打开中的 GUI 应替换为服务端任务列表");
+        GuiTestSupport.assertEquals(List.of("After Command Sync"),
+                access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
+                "个人任务同步后当前待办列表应立即刷新");
+
+        TodoScreen.applySyncedPersonalTasks(minecraft, List.of());
+        GuiTestSupport.assertEquals(List.of(),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "task clean 清空个人任务后打开中的 GUI 应立即清空");
+    }
+
+    /**
+     * 验证团队任务同步包会刷新已打开的团队待办界面。
+     */
+    private static void shouldApplySyncedTeamTasksToOpenGui() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-command-sync", "Team Command Sync");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        access(screen).switchProjectForTest(teamProject);
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(createTeamTask("Before Team Command Clean", teamProject.getId(), false)));
+        TodoScreen.applySyncedTeamTasks(minecraft);
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(createTeamTask("After Team Command Sync", teamProject.getId(), false)));
+
+        TodoScreen.applySyncedTeamTasks(minecraft);
+
+        GuiTestSupport.assertEquals(List.of("After Team Command Sync"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "团队任务同步后打开中的 GUI 应替换为服务端任务列表");
+        GuiTestSupport.assertEquals(List.of("After Team Command Sync"),
+                access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
+                "团队任务同步后当前待办列表应立即刷新");
     }
 
     /**

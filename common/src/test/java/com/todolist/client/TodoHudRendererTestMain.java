@@ -46,6 +46,7 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowHiddenCountSummaryWhenCollapsedOrTruncated", TodoHudRendererTestMain::shouldShowHiddenCountSummaryWhenCollapsedOrTruncated);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldReserveRowForHiddenCountWhenHeightIsTight", TodoHudRendererTestMain::shouldReserveRowForHiddenCountWhenHeightIsTight);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldClearCachesWhenForceRefreshing", TodoHudRendererTestMain::shouldClearCachesWhenForceRefreshing);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFollowGuiPersonalTaskSnapshot", TodoHudRendererTestMain::shouldFollowGuiPersonalTaskSnapshot);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldChangePanelHeightWhenTogglingExpanded", TodoHudRendererTestMain::shouldChangePanelHeightWhenTogglingExpanded);
     }
 
@@ -419,6 +420,33 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
+     * 验证个人项目 HUD 会跟随 GUI 推送的个人任务快照变化。
+     */
+    private static void shouldFollowGuiPersonalTaskSnapshot() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("PERSONAL");
+        config.setHudProjectSource("CURRENT");
+
+        Project project = createPersonalProject("hud-personal-gui", "HUD Personal GUI");
+        ops.setActiveProjectId(project.getId());
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.syncPersonalTasksFromGui(List.of(createPersonalTask("GUI Pending A", project.getId(), false)));
+        renderer.refreshHudModelForTest();
+        GuiTestSupport.assertEquals(List.of("GUI Pending A"), taskTitles(renderer.getCachedPendingTasksForTest()), "HUD 应显示 GUI 推送的个人任务");
+
+        renderer.syncPersonalTasksFromGui(List.of(createPersonalTask("GUI Pending B", project.getId(), false)));
+        renderer.refreshHudModelForTest();
+        GuiTestSupport.assertEquals(List.of("GUI Pending B"), taskTitles(renderer.getCachedPendingTasksForTest()), "HUD 应替换为 GUI 最新个人任务快照");
+
+        renderer.syncPersonalTasksFromGui(List.of());
+        renderer.refreshHudModelForTest();
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedPendingTasksForTest()), "GUI 清空个人任务后 HUD 也应立即清空");
+    }
+
+    /**
      * 验证 HUD 折叠与展开状态会影响当前面板高度计算结果。
      */
     private static void shouldChangePanelHeightWhenTogglingExpanded() {
@@ -476,6 +504,20 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
+     * 创建个人项目并注册到全局项目管理器。
+     *
+     * @param id 项目 ID
+     * @param name 项目名称
+     * @return 新建的个人项目
+     */
+    private static Project createPersonalProject(String id, String name) {
+        Project project = new Project(name, Project.Scope.PERSONAL, OWNER_ID.toString());
+        project.setId(id);
+        com.todolist.TodoListCommon.getProjectManager().addProject(project);
+        return project;
+    }
+
+    /**
      * 创建一条带项目与指派信息的团队任务。
      *
      * @param title 任务标题
@@ -498,6 +540,22 @@ public final class TodoHudRendererTestMain {
         if (assigneeName != null) {
             task.setAssigneeName(assigneeName);
         }
+        return task;
+    }
+
+    /**
+     * 创建一条个人项目任务。
+     *
+     * @param title 任务标题
+     * @param projectId 所属项目 ID
+     * @param completed 是否已完成
+     * @return 配置完成的个人任务
+     */
+    private static Task createPersonalTask(String title, String projectId, boolean completed) {
+        Task task = new Task(title, "");
+        task.setScope(Task.Scope.PERSONAL);
+        task.setProjectId(projectId);
+        task.setCompleted(completed);
         return task;
     }
 

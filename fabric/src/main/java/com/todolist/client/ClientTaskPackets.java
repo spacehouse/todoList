@@ -40,6 +40,7 @@ public class ClientTaskPackets {
                     }
                     try {
                         ClientTaskStorageHelper.savePersonalTasks(TodoListMod.getTaskStorage(), client, tasks);
+                        TodoScreen.applySyncedPersonalTasks(client, tasks);
                         TodoListMod.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
                     } catch (Exception e) {
                         TodoListMod.LOGGER.error("Failed to save synced tasks on client", e);
@@ -51,6 +52,7 @@ public class ClientTaskPackets {
                 List<Task> tasks = TaskPackets.readTaskList(buf);
                 client.execute(() -> {
                     TodoClient.updateTeamTasksFromServer(tasks);
+                    TodoScreen.applySyncedTeamTasks(client);
                     TodoListMod.LOGGER.info("Received {} team tasks from server", tasks.size());
                 });
                 return;
