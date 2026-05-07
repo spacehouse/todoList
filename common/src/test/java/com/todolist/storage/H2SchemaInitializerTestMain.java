@@ -6,6 +6,7 @@ import com.todolist.platform.DataPathProvider;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Comparator;
@@ -52,6 +53,9 @@ public final class H2SchemaInitializerTestMain {
                 assertTableExists(connection, "storage_bucket_meta");
                 assertTableExists(connection, "storage_meta");
                 assertSchemaVersion(connection);
+                assertTableComment(connection, "tasks");
+                assertColumnComment(connection, "tasks", "title");
+                assertColumnComment(connection, "storage_meta", "key");
             }
 
             GuiTestSupport.assertTrue(Files.exists(provider.getDatabaseBasePath().resolveSibling("todolist.mv.db")), "H2 数据库文件应创建在临时 game dir 的 todo/local 下");
@@ -89,6 +93,52 @@ public final class H2SchemaInitializerTestMain {
             GuiTestSupport.assertTrue(resultSet.next(), "storage_meta 应包含 schema_version");
             GuiTestSupport.assertEquals(H2SchemaInitializer.SCHEMA_VERSION, resultSet.getString(1), "schema_version 应为 v1");
         }
+    }
+
+    /**
+     * 断言指定表已经写入 schema 描述。
+     *
+     * @param connection H2 数据库连接
+     * @param tableName 表名
+     * @throws Exception 查询失败时抛出
+     */
+    private static void assertTableComment(Connection connection, String tableName) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT REMARKS FROM INFORMATION_SCHEMA.TABLES WHERE LOWER(TABLE_NAME) = LOWER(?)")) {
+            statement.setString(1, tableName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                GuiTestSupport.assertTrue(resultSet.next(), "缺少 H2 表注释记录: " + tableName);
+                GuiTestSupport.assertTrue(hasText(resultSet.getString(1)), "H2 表注释不能为空: " + tableName);
+            }
+        }
+    }
+
+    /**
+     * 断言指定字段已经写入 schema 描述。
+     *
+     * @param connection H2 数据库连接
+     * @param tableName 表名
+     * @param columnName 字段名
+     * @throws Exception 查询失败时抛出
+     */
+    private static void assertColumnComment(Connection connection, String tableName, String columnName) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT REMARKS FROM INFORMATION_SCHEMA.COLUMNS WHERE LOWER(TABLE_NAME) = LOWER(?) AND LOWER(COLUMN_NAME) = LOWER(?)")) {
+            statement.setString(1, tableName);
+            statement.setString(2, columnName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                GuiTestSupport.assertTrue(resultSet.next(), "缺少 H2 字段注释记录: " + tableName + "." + columnName);
+                GuiTestSupport.assertTrue(hasText(resultSet.getString(1)), "H2 字段注释不能为空: " + tableName + "." + columnName);
+            }
+        }
+    }
+
+    /**
+     * 判断字符串是否包含非空白内容。
+     *
+     * @param value 待检查字符串
+     * @return 包含非空白内容时返回 true
+     */
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /**

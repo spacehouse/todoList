@@ -26,7 +26,7 @@ import net.minecraft.network.chat.Component;
  * 负责在 HUD 上渲染待办任务列表。
  */
 public class TodoHudRenderer {
-    private static final long HUD_MODEL_REFRESH_INTERVAL_MS = 250L;
+    private static final long HUD_MODEL_REFRESH_INTERVAL_MS = 1000L;
 
     /**
      * HUD 视图模式，和配置项中的字符串一一对应。
@@ -44,8 +44,11 @@ public class TodoHudRenderer {
     private long lastTeamReloadMs;
     private long cachedPersonalLastSavedMs = -1L;
     private long lastHudModelRefreshMs;
+    private boolean hudModelCacheInitialized;
     private int cachedLayoutHudWidth = -1;
     private double cachedGuiScale = -1D;
+    private boolean cachedPersonalTasksInitialized;
+    private boolean cachedPersonalTasksFromGui;
     private List<Task> cachedPersonalTasks = new ArrayList<>();
     private List<Task> cachedTeamTasks = new ArrayList<>();
     private List<Task> cachedPendingTasks = new ArrayList<>();
@@ -233,15 +236,19 @@ public class TodoHudRenderer {
         String playerUuid = client.player == null ? "" : client.player.getStringUUID();
         int hudWidth = config.getHudWidth();
         double guiScale = client.getWindow().getGuiScale();
-        boolean shouldRefresh = now - lastHudModelRefreshMs >= HUD_MODEL_REFRESH_INTERVAL_MS
-                || viewMode != cachedHudViewMode
-                || scope != cachedHudScope
-                || !sourceMode.equals(cachedProjectSourceMode)
-                || !valueOrEmpty(activeProjectId).equals(cachedActiveProjectId)
-                || !playerUuid.equals(cachedPlayerUuid)
-                || hudWidth != cachedLayoutHudWidth
-                || Double.compare(guiScale, cachedGuiScale) != 0;
-        if (!shouldRefresh) {
+        boolean contextChanged = hasHudRefreshContextChanged(
+                viewMode,
+                scope,
+                sourceMode,
+                activeProjectId,
+                playerUuid,
+                hudWidth,
+                guiScale
+        );
+        boolean shouldInspectModel = !hudModelCacheInitialized
+                || contextChanged
+                || now - lastHudModelRefreshMs >= HUD_MODEL_REFRESH_INTERVAL_MS;
+        if (!shouldInspectModel) {
             return;
         }
 
@@ -284,7 +291,31 @@ public class TodoHudRenderer {
         cachedPlayerUuid = playerUuid;
         cachedLayoutHudWidth = hudWidth;
         cachedGuiScale = guiScale;
+        hudModelCacheInitialized = true;
         lastHudModelRefreshMs = now;
+    }
+
+    /**
+     * 判断 HUD 查询上下文是否变化，变化时必须立即重建任务模型。
+     *
+     * @param viewMode HUD 视图模式
+     * @param scope 当前项目空间
+     * @param sourceMode 项目来源模式
+     * @param activeProjectId 当前激活项目 ID
+     * @param playerUuid 当前玩家 UUID
+     * @param hudWidth HUD 宽度
+     * @param guiScale 当前 GUI 缩放
+     * @return 查询上下文变化时返回 true
+     */
+    private boolean hasHudRefreshContextChanged(HudViewMode viewMode, Project.Scope scope, String sourceMode,
+                                                String activeProjectId, String playerUuid, int hudWidth, double guiScale) {
+        return viewMode != cachedHudViewMode
+                || scope != cachedHudScope
+                || !sourceMode.equals(cachedProjectSourceMode)
+                || !valueOrEmpty(activeProjectId).equals(cachedActiveProjectId)
+                || !playerUuid.equals(cachedPlayerUuid)
+                || hudWidth != cachedLayoutHudWidth
+                || Double.compare(guiScale, cachedGuiScale) != 0;
     }
 
     /**
@@ -296,7 +327,7 @@ public class TodoHudRenderer {
      * @return H2 查询结果；不可用或失败时返回 null
      */
     private H2TaskQueryService.HudTaskQueryResult queryHudTasksFromH2(ModConfig config, HudViewMode viewMode, Project.Scope scope) {
-        if (!StorageBackendFactory.isH2Selected()) {
+        if (!shouldUseSynchronousH2HudQueries()) {
             return null;
         }
         try {
@@ -308,6 +339,15 @@ public class TodoHudRenderer {
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    /**
+     * 判断 HUD 是否允许在渲染路径执行同步 H2 查询。
+     *
+     * @return 当前固定返回 false，优先使用内存快照避免 HUD 周期性卡顿
+     */
+    private boolean shouldUseSynchronousH2HudQueries() {
+        return false;
     }
 
     /**
@@ -430,12 +470,24 @@ public class TodoHudRenderer {
         long now = System.currentTimeMillis();
         long reloadIntervalMs = 1000L;
         if (scope == Project.Scope.PERSONAL) {
+            if (cachedPersonalTasksFromGui) {
+                return new ArrayList<>(cachedPersonalTasks);
+            }
+            if (StorageBackendFactory.isH2Selected()) {
+                if (!cachedPersonalTasksInitialized) {
+                    cachedPersonalTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), client);
+                    cachedPersonalTasksInitialized = true;
+                    lastPersonalReloadMs = now;
+                }
+                return new ArrayList<>(cachedPersonalTasks);
+            }
             long localLastSaved = ClientTaskStorageHelper.getPersonalTasksLastSaved(TodoListCommon.getTaskStorage(), client);
             boolean shouldReload = cachedPersonalTasks.isEmpty()
                     || localLastSaved != cachedPersonalLastSavedMs
                     || (now - lastPersonalReloadMs >= reloadIntervalMs && localLastSaved == 0L && cachedPersonalLastSavedMs == 0L);
             if (shouldReload) {
                 cachedPersonalTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), client);
+                cachedPersonalTasksInitialized = true;
                 cachedPersonalLastSavedMs = localLastSaved;
                 lastPersonalReloadMs = now;
             }
@@ -1060,6 +1112,39 @@ public class TodoHudRenderer {
         lastTeamReloadMs = 0L;
         cachedPersonalLastSavedMs = -1L;
         lastHudModelRefreshMs = 0L;
+        hudModelCacheInitialized = false;
+        cachedPersonalTasksInitialized = false;
+        cachedPersonalTasksFromGui = false;
+        cachedLayoutHudWidth = -1;
+        cachedGuiScale = -1D;
+        cachedPersonalTasks = new ArrayList<>();
+        cachedTeamTasks = new ArrayList<>();
+        cachedPendingTasks = new ArrayList<>();
+        cachedDoneTasks = new ArrayList<>();
+        cachedPendingTotalCount = 0;
+        cachedDoneTotalCount = 0;
+        rowRenderCacheByTaskId.clear();
+    }
+
+    /**
+     * 用 GUI 中最新的个人任务快照更新 HUD 原始任务缓存。
+     *
+     * @param tasks GUI 当前个人任务列表
+     */
+    public void syncPersonalTasksFromGui(List<Task> tasks) {
+        cachedPersonalTasks = copyTaskList(tasks);
+        cachedPersonalTasksInitialized = true;
+        cachedPersonalTasksFromGui = true;
+        lastPersonalReloadMs = System.currentTimeMillis();
+        invalidateHudModelCache();
+    }
+
+    /**
+     * 清空 HUD 派生模型缓存，使下一帧基于原始任务缓存重建分组和行布局。
+     */
+    private void invalidateHudModelCache() {
+        lastHudModelRefreshMs = 0L;
+        hudModelCacheInitialized = false;
         cachedLayoutHudWidth = -1;
         cachedGuiScale = -1D;
         cachedPendingTasks = new ArrayList<>();
@@ -1067,6 +1152,25 @@ public class TodoHudRenderer {
         cachedPendingTotalCount = 0;
         cachedDoneTotalCount = 0;
         rowRenderCacheByTaskId.clear();
+    }
+
+    /**
+     * 深拷贝任务列表，避免 HUD 缓存和 GUI 编辑对象互相污染。
+     *
+     * @param tasks 原始任务列表
+     * @return 拷贝后的任务列表
+     */
+    private List<Task> copyTaskList(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Task> copies = new ArrayList<>();
+        for (Task task : tasks) {
+            if (task != null) {
+                copies.add(Task.fromNbt(task.toNbt()));
+            }
+        }
+        return copies;
     }
 
     /**

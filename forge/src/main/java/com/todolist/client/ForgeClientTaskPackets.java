@@ -46,6 +46,7 @@ public final class ForgeClientTaskPackets {
                 }
                 try {
                     ClientTaskStorageHelper.savePersonalTasks(TodoListForge.getTaskStorage(), client, tasks);
+                    TodoScreen.applySyncedPersonalTasks(client, tasks);
                     TodoListForge.LOGGER.info("Received {} tasks from server, saved to local storage", tasks.size());
                 } catch (Exception e) {
                     TodoListForge.LOGGER.error("Failed to save synced tasks on Forge client", e);
@@ -57,6 +58,7 @@ public final class ForgeClientTaskPackets {
             List<Task> tasks = TaskPackets.readTaskList(buf);
             client.execute(() -> {
                 ForgeTodoClient.updateTeamTasksFromServer(tasks);
+                TodoScreen.applySyncedTeamTasks(client);
                 TodoListForge.LOGGER.info("Received {} team tasks from server", tasks.size());
             });
         });

@@ -36,6 +36,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -51,6 +54,13 @@ import net.minecraft.sounds.SoundEvents;
  */
 public class TodoScreen extends Screen implements ProjectManager.ProjectChangeListener {
     private static final Component TITLE = Component.translatable("gui.todolist.title");
+    private static final ExecutorService GUI_STORAGE_LOADER = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "TodoList GUI Storage Loader");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private static String cachedPersonalTasksNamespace = "";
+    private static List<Task> cachedPersonalTasksSnapshot = List.of();
 
 
     private final Screen parent;
@@ -138,6 +148,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private MainLayoutMetrics layoutMetrics;
     private TaskDetailDraft detailDraft;
     private boolean syncingDetailWidgets;
+    private boolean personalTasksLoading;
 
 
     /**
@@ -158,14 +169,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         // Initialize the personal task manager from local storage.
         if (personalTaskManager == null) {
             personalTaskManager = new TaskManager();
-            try {
-                List<Task> loadedTasks = ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft);
-                for (Task task : loadedTasks) {
-                    personalTaskManager.addTask(task);
+            if (StorageBackendFactory.isH2Selected()) {
+                loadCachedPersonalTasksIntoManager();
+                schedulePersonalTasksLoadFromStorage();
+            } else {
+                try {
+                    List<Task> loadedTasks = ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft);
+                    replacePersonalTasks(loadedTasks);
+                    updateCachedPersonalTasksSnapshot(openedStorageNamespace, loadedTasks);
+                    TodoConstants.LOGGER.info("Loaded {} tasks from storage", loadedTasks.size());
+                } catch (Exception e) {
+                    TodoConstants.LOGGER.error("Failed to load tasks from storage", e);
                 }
-                TodoConstants.LOGGER.info("Loaded {} tasks from storage", loadedTasks.size());
-            } catch (Exception e) {
-                TodoConstants.LOGGER.error("Failed to load tasks from storage", e);
             }
         }
 
@@ -234,6 +249,139 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         rebuildUI();
     }
 
+    /**
+     * 将同命名空间的个人任务快照快速装入当前界面，避免 H2 后端打开 GUI 时等待数据库读取。
+     */
+    private void loadCachedPersonalTasksIntoManager() {
+        if (openedStorageNamespace.equals(cachedPersonalTasksNamespace)) {
+            replacePersonalTasks(copyTasks(cachedPersonalTasksSnapshot));
+        }
+    }
+
+    /**
+     * 后台加载 H2 个人任务，加载完成后回到主线程刷新当前 GUI。
+     */
+    private void schedulePersonalTasksLoadFromStorage() {
+        if (personalTasksLoading) {
+            return;
+        }
+        personalTasksLoading = true;
+        String namespace = openedStorageNamespace;
+        Minecraft currentMinecraft = this.minecraft;
+        CompletableFuture
+                .supplyAsync(() -> loadPersonalTasksForGui(currentMinecraft), GUI_STORAGE_LOADER)
+                .whenComplete((loadedTasks, failure) -> {
+                    if (currentMinecraft == null) {
+                        return;
+                    }
+                    currentMinecraft.execute(() -> applyAsyncPersonalTasks(namespace, loadedTasks, failure));
+                });
+    }
+
+    /**
+     * 在后台线程读取当前个人任务列表。
+     *
+     * @param currentMinecraft 当前 Minecraft 客户端实例
+     * @return 已加载的个人任务
+     */
+    private List<Task> loadPersonalTasksForGui(Minecraft currentMinecraft) {
+        try {
+            return ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft);
+        } catch (Exception exception) {
+            throw new GuiTaskLoadException(exception);
+        }
+    }
+
+    /**
+     * 应用后台加载出的个人任务，并在当前界面仍打开时刷新任务列表。
+     *
+     * @param namespace 加载任务时的存储命名空间
+     * @param loadedTasks 已加载任务
+     * @param failure 加载失败异常
+     */
+    private void applyAsyncPersonalTasks(String namespace, List<Task> loadedTasks, Throwable failure) {
+        personalTasksLoading = false;
+        if (failure != null) {
+            TodoConstants.LOGGER.error("Failed to load tasks from storage", failure);
+            return;
+        }
+        if (!Objects.equals(namespace, openedStorageNamespace) || loadedTasks == null) {
+            return;
+        }
+        updateCachedPersonalTasksSnapshot(namespace, loadedTasks);
+        if (this.minecraft == null || this.minecraft.screen != this || personalHasUnsavedChanges) {
+            return;
+        }
+        replacePersonalTasks(loadedTasks);
+        if (currentSpaceMode == SpaceMode.PERSONAL) {
+            taskManager = personalTaskManager;
+            updateProjectList();
+            filterTasks();
+            updateButtonStates();
+            updateProjectActionButtons();
+        }
+        TodoConstants.LOGGER.info("Loaded {} tasks from storage", loadedTasks.size());
+    }
+
+    /**
+     * 替换当前个人任务管理器内容。
+     *
+     * @param tasks 新的个人任务列表
+     */
+    private void replacePersonalTasks(List<Task> tasks) {
+        if (personalTaskManager == null) {
+            personalTaskManager = new TaskManager();
+        }
+        personalTaskManager.clearAll();
+        for (Task task : tasks == null ? List.<Task>of() : tasks) {
+            personalTaskManager.addTask(task);
+        }
+    }
+
+    /**
+     * 更新 GUI 个人任务快照缓存，供下一次打开界面时快速显示。
+     *
+     * @param namespace 存储命名空间
+     * @param tasks 最新个人任务列表
+     */
+    static void updateCachedPersonalTasksSnapshot(String namespace, List<Task> tasks) {
+        cachedPersonalTasksNamespace = namespace == null ? "" : namespace;
+        cachedPersonalTasksSnapshot = copyTasks(tasks);
+    }
+
+    /**
+     * 深拷贝任务列表，避免缓存和界面编辑对象互相污染。
+     *
+     * @param tasks 原始任务列表
+     * @return 拷贝后的任务列表
+     */
+    private static List<Task> copyTasks(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return List.of();
+        }
+        List<Task> copies = new ArrayList<>();
+        for (Task task : tasks) {
+            if (task != null) {
+                copies.add(Task.fromNbt(task.toNbt()));
+            }
+        }
+        return copies;
+    }
+
+    /**
+     * GUI 后台任务加载异常包装，避免 CompletableFuture 丢失真实原因。
+     */
+    private static final class GuiTaskLoadException extends RuntimeException {
+        /**
+         * 创建 GUI 任务加载异常。
+         *
+         * @param cause 原始失败原因
+         */
+        private GuiTaskLoadException(Throwable cause) {
+            super(cause);
+        }
+    }
+
     @Override
     public void removed() {
         super.removed();
@@ -241,6 +389,77 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (projectManager != null) {
             projectManager.removeListener(this);
         }
+    }
+
+    /**
+     * 应用服务端下发的个人任务同步结果，并刷新已打开的 GUI 与 HUD。
+     *
+     * @param minecraft 当前客户端实例
+     * @param tasks 服务端下发的个人任务列表
+     */
+    public static void applySyncedPersonalTasks(Minecraft minecraft, List<Task> tasks) {
+        List<Task> safeTasks = copyTasks(tasks);
+        updateCachedPersonalTasksSnapshot(DataPathProvider.getStorageNamespace(), safeTasks);
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            renderer.syncPersonalTasksFromGui(safeTasks);
+        }
+        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+            screen.applySyncedPersonalTasksToOpenScreen(safeTasks);
+        }
+    }
+
+    /**
+     * 应用服务端下发的团队任务同步结果，并刷新已打开的 GUI 与 HUD。
+     *
+     * @param minecraft 当前客户端实例
+     */
+    public static void applySyncedTeamTasks(Minecraft minecraft) {
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            renderer.forceRefreshTasks();
+        }
+        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+            screen.refreshAfterExternalTaskSync(Project.Scope.TEAM);
+        }
+    }
+
+    /**
+     * 将个人任务同步结果应用到当前打开的待办界面。
+     *
+     * @param tasks 服务端下发的个人任务列表
+     */
+    private void applySyncedPersonalTasksToOpenScreen(List<Task> tasks) {
+        if (personalHasUnsavedChanges) {
+            return;
+        }
+        replacePersonalTasks(tasks);
+        personalHasUnsavedChanges = false;
+        refreshAfterExternalTaskSync(Project.Scope.PERSONAL);
+    }
+
+    /**
+     * 外部任务同步后刷新当前任务列表、项目计数和按钮状态。
+     *
+     * @param changedScope 发生变化的任务范围
+     */
+    private void refreshAfterExternalTaskSync(Project.Scope changedScope) {
+        if (changedScope == Project.Scope.TEAM && teamHasUnsavedChanges) {
+            return;
+        }
+        if (changedScope == Project.Scope.PERSONAL && currentSpaceMode == SpaceMode.PERSONAL) {
+            taskManager = personalTaskManager;
+        } else if (changedScope == Project.Scope.TEAM && currentSpaceMode == SpaceMode.TEAM) {
+            taskManager = teamTaskManager;
+        }
+        if (selectedTask != null && !isSelectedTaskValid()) {
+            clearSelectedTask();
+        }
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+        updateProjectList();
+        filterTasks();
+        updateButtonStates();
+        updateProjectActionButtons();
     }
 
     /**
@@ -873,8 +1092,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskManager.toggleTaskCompletion(task.getId());
         markUnsaved();
         String operationName = task.isCompleted() ? "complete" : "uncomplete";
-        persistCurrentViewTasksImmediately(operationName);
         filterTasks();
+        persistCurrentViewTasksImmediately(operationName);
     }
 
     @Override
@@ -1268,6 +1487,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (viewMode == ViewMode.PERSONAL) {
                 hasUnsavedChanges = false;
             }
+            publishPersonalTasksToHud();
         }
     }
 
@@ -1706,10 +1926,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskId)) {
             clearSelectedTask();
         }
+        applySearchFilter();
         if (!persistCurrentViewTasksImmediately("deletion")) {
             markUnsaved();
         }
-        applySearchFilter();
     }
 
     /**
@@ -1847,8 +2067,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         hasUnsavedChanges = true;
         if (viewMode == ViewMode.PERSONAL) {
             personalHasUnsavedChanges = true;
+            publishPersonalTasksToHud();
         } else {
             teamHasUnsavedChanges = true;
+        }
+    }
+
+    /**
+     * 将 GUI 当前个人任务快照发布给 HUD，保证 HUD 跟随个人项目列表的即时变更。
+     */
+    private void publishPersonalTasksToHud() {
+        if (personalTaskManager == null) {
+            return;
+        }
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        if (renderer != null) {
+            renderer.syncPersonalTasksFromGui(personalTaskManager.getAllTasks());
         }
     }
 
@@ -2298,7 +2532,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @return 任务列表；非 H2 后端或查询失败时返回 null
      */
     private List<Task> queryH2GuiTasks(boolean completed, String rawSearchQuery) {
-        if (!StorageBackendFactory.isH2Selected() || taskManager == null || currentProject == null || currentProject.getId() == null) {
+        if (!shouldUseSynchronousH2GuiQueries()
+                || !StorageBackendFactory.isH2Selected()
+                || taskManager == null
+                || currentProject == null
+                || currentProject.getId() == null) {
             return null;
         }
         try {
@@ -2328,7 +2566,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @return 匹配总数；非 H2 后端或查询失败时返回 null
      */
     private Integer queryH2GuiTaskCount(boolean completed, String rawSearchQuery) {
-        if (!StorageBackendFactory.isH2Selected() || taskManager == null || currentProject == null || currentProject.getId() == null) {
+        if (!shouldUseSynchronousH2GuiQueries()
+                || !StorageBackendFactory.isH2Selected()
+                || taskManager == null
+                || currentProject == null
+                || currentProject.getId() == null) {
             return null;
         }
         try {
@@ -2347,6 +2589,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             TodoConstants.LOGGER.warn("Failed to count H2 GUI task list, falling back to memory filtering", exception);
             return null;
         }
+    }
+
+    /**
+     * 判断 GUI 是否允许在界面交互路径执行同步 H2 查询。
+     *
+     * @return 当前固定返回 false，优先使用内存任务管理器避免打开 GUI 和筛选时卡顿
+     */
+    private boolean shouldUseSynchronousH2GuiQueries() {
+        return false;
     }
 
     /**
