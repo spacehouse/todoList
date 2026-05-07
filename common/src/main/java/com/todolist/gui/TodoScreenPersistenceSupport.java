@@ -6,6 +6,7 @@ import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.TodoHudRenderer;
+import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
@@ -162,12 +163,13 @@ final class TodoScreenPersistenceSupport {
         }
         List<Task> personalTasks = personalTaskManager.getAllTasks();
         ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), minecraft, personalTasks);
+        TodoScreen.updateCachedPersonalTasksSnapshot(DataPathProvider.getStorageNamespace(), personalTasks);
         if (ClientBridge.ops() != null) {
             ClientBridge.ops().sendReplaceAllTasks(personalTasks);
         }
         TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
         if (renderer != null) {
-            renderer.forceRefreshTasks();
+            renderer.syncPersonalTasksFromGui(personalTasks);
         }
         TodoConstants.LOGGER.info("Personal tasks saved");
     }

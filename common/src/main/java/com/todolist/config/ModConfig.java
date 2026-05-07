@@ -386,7 +386,7 @@ public class ModConfig {
                     addCommandAccessModeComment(json).getBytes(StandardCharsets.UTF_8),
                     "mod config"
             );
-            TodoConstants.LOGGER.info("Saved configuration to {}", CONFIG_PATH);
+            TodoConstants.LOGGER.debug("Saved configuration to {}", CONFIG_PATH);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save configuration", e);
         }
@@ -624,7 +624,11 @@ public class ModConfig {
      * @param storageBackend 新的存储后端；传入 null 时回退 NBT
      */
     public void setStorageBackend(StorageBackend storageBackend) {
-        this.storageBackend = storageBackend == null ? StorageBackend.NBT : storageBackend;
+        StorageBackend normalizedStorageBackend = storageBackend == null ? StorageBackend.NBT : storageBackend;
+        if (getStorageBackend() == normalizedStorageBackend) {
+            return;
+        }
+        this.storageBackend = normalizedStorageBackend;
         save();
     }
 
@@ -1017,10 +1021,14 @@ public class ModConfig {
     }
 
     public void setHudDefaultView(String view) {
-        if (view == null || view.isEmpty()) {
+        if (view == null || view.trim().isEmpty()) {
             return;
         }
-        gui.hudDefaultView = view;
+        String normalizedView = view.trim();
+        if (normalizedView.equals(getHudDefaultView())) {
+            return;
+        }
+        gui.hudDefaultView = normalizedView;
         save();
     }
 
@@ -1032,10 +1040,14 @@ public class ModConfig {
     }
 
     public void setHudProjectSource(String source) {
-        if (source == null || source.isEmpty()) {
+        if (source == null || source.trim().isEmpty()) {
             return;
         }
-        gui.hudProjectSource = source;
+        String normalizedSource = source.trim();
+        if (normalizedSource.equals(getHudProjectSource())) {
+            return;
+        }
+        gui.hudProjectSource = normalizedSource;
         save();
     }
 
@@ -1111,14 +1123,25 @@ public class ModConfig {
     }
 
     public void setLastActiveProjectId(String namespace, String projectId) {
-        if (gui.lastActiveProjectIdsByNamespace == null) {
-            gui.lastActiveProjectIdsByNamespace = new HashMap<>();
-        }
         String key = normalizeNamespaceKey(namespace);
-        if (projectId == null || projectId.trim().isEmpty()) {
+        String normalizedProjectId = projectId == null ? null : projectId.trim();
+        if (normalizedProjectId != null && normalizedProjectId.isEmpty()) {
+            normalizedProjectId = null;
+        }
+        String currentProjectId = gui.lastActiveProjectIdsByNamespace == null ? null : gui.lastActiveProjectIdsByNamespace.get(key);
+        if (normalizedProjectId == null) {
+            if (currentProjectId == null) {
+                return;
+            }
             gui.lastActiveProjectIdsByNamespace.remove(key);
         } else {
-            gui.lastActiveProjectIdsByNamespace.put(key, projectId.trim());
+            if (normalizedProjectId.equals(currentProjectId)) {
+                return;
+            }
+            if (gui.lastActiveProjectIdsByNamespace == null) {
+                gui.lastActiveProjectIdsByNamespace = new HashMap<>();
+            }
+            gui.lastActiveProjectIdsByNamespace.put(key, normalizedProjectId);
         }
         save();
     }

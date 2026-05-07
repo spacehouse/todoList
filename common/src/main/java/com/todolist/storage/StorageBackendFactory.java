@@ -1,6 +1,5 @@
 package com.todolist.storage;
 
-import com.todolist.TodoConstants;
 import com.todolist.config.ModConfig;
 
 /**
@@ -17,12 +16,7 @@ public final class StorageBackendFactory {
      */
     public static ModConfig.StorageBackend getConfiguredBackend() {
         ModConfig.StorageBackend backend = ModConfig.getInstance().getStorageBackend();
-        if (backend == ModConfig.StorageBackend.H2) {
-            TodoConstants.LOGGER.info("TodoList storage backend selected: H2");
-            return backend;
-        }
-        TodoConstants.LOGGER.debug("TodoList storage backend selected: NBT");
-        return ModConfig.StorageBackend.NBT;
+        return backend == ModConfig.StorageBackend.H2 ? ModConfig.StorageBackend.H2 : ModConfig.StorageBackend.NBT;
     }
 
     /**
