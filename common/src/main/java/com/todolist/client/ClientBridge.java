@@ -61,6 +61,13 @@ public final class ClientBridge {
         void sendReplaceTeamTasks(List<Task> tasks);
 
         /**
+         * 发送带基线快照的团队任务合并请求，旧平台实现默认退回整表替换。
+         */
+        default void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+            sendReplaceTeamTasks(tasks);
+        }
+
+        /**
          * 主动请求服务端同步团队任务列表（服务端到客户端）。
          */
         void requestTeamSync();

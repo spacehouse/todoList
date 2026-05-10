@@ -57,8 +57,7 @@ public final class ForgeClientTaskPackets {
         ForgeNetworkBridge.registerClientReceiver(TaskPackets.TEAM_SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
             List<Task> tasks = TaskPackets.readTaskList(buf);
             client.execute(() -> {
-                ForgeTodoClient.updateTeamTasksFromServer(tasks);
-                TodoScreen.applySyncedTeamTasks(client);
+                TodoScreen.applySyncedTeamTasks(client, tasks);
                 TodoListForge.LOGGER.info("Received {} team tasks from server", tasks.size());
             });
         });
@@ -100,6 +99,26 @@ public final class ForgeClientTaskPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
+        ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
+    }
+
+    /**
+     * 发送带基线快照的团队任务合并请求。
+     *
+     * @param baseTasks 保存发起时客户端已同步的团队任务基线
+     * @param tasks 当前提交的团队任务列表
+     */
+    public static void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
+            return;
+        }
+        if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, tasks);
+        TaskPackets.writeTaskList(buf, baseTasks);
         ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
     }
 

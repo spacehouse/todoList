@@ -104,6 +104,17 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
     }
 
     /**
+     * 发送带基线快照的团队任务合并请求。
+     *
+     * @param baseTasks 保存发起时的团队任务基线
+     * @param tasks 当前提交的团队任务列表
+     */
+    @Override
+    public void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+        ClientTaskPackets.sendMergeTeamTasks(baseTasks, tasks);
+    }
+
+    /**
      * 请求服务端同步团队任务。
      */
     @Override
