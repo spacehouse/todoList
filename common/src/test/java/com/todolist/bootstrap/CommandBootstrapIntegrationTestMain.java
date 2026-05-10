@@ -5,10 +5,12 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.network.ProjectPackets;
+import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectSaveDebouncer;
+import com.todolist.project.ProjectStorage;
 import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.storage.H2TcpServerManager;
 import com.todolist.task.Task;
@@ -16,6 +18,7 @@ import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.DetectedVersion;
 import net.minecraft.SharedConstants;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
@@ -24,8 +27,10 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.util.debugchart.SampleLogger;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
+import io.netty.buffer.Unpooled;
 import sun.misc.Unsafe;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.net.Proxy;
@@ -36,6 +41,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -73,10 +80,16 @@ public final class CommandBootstrapIntegrationTestMain {
             runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
             runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
-        runCase("CommandBootstrapIntegrationTestMain.shouldPreserveCommandAccessModeAfterExternalConfigEdit", CommandBootstrapIntegrationTestMain::shouldPreserveCommandAccessModeAfterExternalConfigEdit);
+            runCase("CommandBootstrapIntegrationTestMain.shouldNotEchoTeamReplacePacketToSender", CommandBootstrapIntegrationTestMain::shouldNotEchoTeamReplacePacketToSender);
+            runCase("CommandBootstrapIntegrationTestMain.shouldMergeTeamReplacePacketWithServerChanges", CommandBootstrapIntegrationTestMain::shouldMergeTeamReplacePacketWithServerChanges);
+            runCase("CommandBootstrapIntegrationTestMain.shouldPreserveServerEditedTaskWhenClientDeletesStaleBase", CommandBootstrapIntegrationTestMain::shouldPreserveServerEditedTaskWhenClientDeletesStaleBase);
+            runCase("CommandBootstrapIntegrationTestMain.shouldSendMergedTeamReplaceResultBackToSender", CommandBootstrapIntegrationTestMain::shouldSendMergedTeamReplaceResultBackToSender);
+            runCase("CommandBootstrapIntegrationTestMain.shouldFlushProjectSaveAfterBackgroundFailure", CommandBootstrapIntegrationTestMain::shouldFlushProjectSaveAfterBackgroundFailure);
+            runCase("CommandBootstrapIntegrationTestMain.shouldPreserveCommandAccessModeAfterExternalConfigEdit", CommandBootstrapIntegrationTestMain::shouldPreserveCommandAccessModeAfterExternalConfigEdit);
         } finally {
             H2TcpServerManager.stop();
             H2StorageBootstrap.resetAllForTests();
+            TaskPackets.setServerPacketSender(null);
         }
     }
 
@@ -91,6 +104,8 @@ public final class CommandBootstrapIntegrationTestMain {
         TodoListCommon.init();
         ModConfig.getInstance().setCommandAccessMode(ModConfig.CommandAccessMode.FULL);
         ProjectPackets.setServerPacketSender((player, channelId, buf) -> {
+        });
+        TaskPackets.setServerPacketSender((player, channelId, buf) -> {
         });
     }
 
@@ -310,6 +325,168 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
+     * 验证团队整表替换保存后不会把同一份快照回显给发起者，避免客户端连续操作时旧回包覆盖本地新状态。
+     *
+     * @throws Exception 读取服务端存储失败时抛出
+     */
+    private static void shouldNotEchoTeamReplacePacketToSender() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer sender = createPlayer("00000000-0000-0000-0000-000000000501", "team-replace-sender", false);
+        TestServerPlayer peer = createPlayer("00000000-0000-0000-0000-000000000502", "team-replace-peer", false);
+        TestMinecraftServer server = createServer(sender, peer);
+        List<String> targetPlayerNames = new ArrayList<>();
+        TaskPackets.setServerPacketSender((target, channelId, buf) -> {
+            if (TaskPackets.TEAM_SYNC_TASKS_ID.equals(channelId) && target != null) {
+                targetPlayerNames.add(target.getName().getString());
+            }
+        });
+
+        Task task = new Task("No Echo Team Task", "");
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, List.of(task));
+
+        TaskPackets.onTeamReplaceTasksPacket(server, sender, buf);
+
+        assertListEquals(List.of("team-replace-peer"), targetPlayerNames, "团队整表替换不应回显给发起者");
+        assertEquals("No Echo Team Task", TodoListCommon.getTaskStorage().loadTeamTasks().get(0).getTitle(), "团队整表替换仍应保存到服务端存储");
+        TaskPackets.setServerPacketSender(null);
+    }
+
+    /**
+     * 验证新团队替换包会按客户端基线与服务端当前内容合并，避免旧快照覆盖其他玩家改动。
+     *
+     * @throws Exception 读写服务端存储失败时抛出
+     */
+    private static void shouldMergeTeamReplacePacketWithServerChanges() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer sender = createPlayer("00000000-0000-0000-0000-000000000511", "team-merge-sender", false);
+        TestServerPlayer peer = createPlayer("00000000-0000-0000-0000-000000000512", "team-merge-peer", false);
+        TestMinecraftServer server = createServer(sender, peer);
+
+        Task locallyEditedBase = new Task("Client Edited Base", "");
+        Task remotelyEditedBase = new Task("Remote Edited Base", "");
+        Task deletedByClient = new Task("Deleted By Client", "");
+        List<Task> clientBase = List.of(copyTask(locallyEditedBase), copyTask(remotelyEditedBase), copyTask(deletedByClient));
+
+        Task remoteCurrent = copyTask(remotelyEditedBase);
+        remoteCurrent.setCompleted(true);
+        Task remoteCreated = new Task("Remote Created", "");
+        TodoListCommon.getTaskStorage().saveTeamTasks(List.of(locallyEditedBase, remoteCurrent, deletedByClient, remoteCreated));
+
+        Task localEdited = copyTask(locallyEditedBase);
+        localEdited.setCompleted(true);
+        Task unchangedRemoteFromBase = copyTask(remotelyEditedBase);
+        Task localCreated = new Task("Client Created", "");
+        List<Task> submitted = List.of(localEdited, unchangedRemoteFromBase, localCreated);
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, submitted);
+        TaskPackets.writeTaskList(buf, clientBase);
+
+        TaskPackets.onTeamReplaceTasksPacket(server, sender, buf);
+
+        assertEquals(Boolean.TRUE, loadTeamTaskByTitle("Client Edited Base").isCompleted(), "客户端改动任务应保存");
+        assertEquals(Boolean.TRUE, loadTeamTaskByTitle("Remote Edited Base").isCompleted(), "服务端期间改动不应被旧客户端快照覆盖");
+        assertNotNull(findTeamTaskByTitleOrNull("Remote Created"), "服务端期间新增任务不应丢失");
+        assertNotNull(findTeamTaskByTitleOrNull("Client Created"), "客户端新增任务应保存");
+        assertNull(findTeamTaskByTitleOrNull("Deleted By Client"), "客户端删除的基线任务应被删除");
+    }
+
+    /**
+     * 验证客户端删除旧基线任务时，如果服务端已并发编辑同一任务，则应保留服务端版本。
+     *
+     * @throws Exception 读写服务端存储失败时抛出
+     */
+    private static void shouldPreserveServerEditedTaskWhenClientDeletesStaleBase() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer sender = createPlayer("00000000-0000-0000-0000-000000000513", "team-delete-conflict-sender", false);
+        TestServerPlayer peer = createPlayer("00000000-0000-0000-0000-000000000514", "team-delete-conflict-peer", false);
+        TestMinecraftServer server = createServer(sender, peer);
+
+        Task baseTask = new Task("Delete Conflict Base", "");
+        Task serverEditedTask = copyTask(baseTask);
+        serverEditedTask.setCompleted(true);
+        TodoListCommon.getTaskStorage().saveTeamTasks(List.of(serverEditedTask));
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, List.of());
+        TaskPackets.writeTaskList(buf, List.of(copyTask(baseTask)));
+
+        TaskPackets.onTeamReplaceTasksPacket(server, sender, buf);
+
+        Task preservedTask = findTeamTaskByTitleOrNull("Delete Conflict Base");
+        assertNotNull(preservedTask, "客户端删除旧基线不应删除已被服务端并发编辑的任务");
+        assertEquals(Boolean.TRUE, preservedTask.isCompleted(), "保留下来的任务应保持服务端并发编辑后的状态");
+    }
+
+    /**
+     * 验证服务端合并团队保存后，会把合并后的权威任务列表同步回发起者。
+     *
+     * @throws Exception 读写服务端存储失败时抛出
+     */
+    private static void shouldSendMergedTeamReplaceResultBackToSender() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer sender = createPlayer("00000000-0000-0000-0000-000000000521", "team-merge-authoritative-sender", false);
+        TestServerPlayer peer = createPlayer("00000000-0000-0000-0000-000000000522", "team-merge-authoritative-peer", false);
+        TestMinecraftServer server = createServer(sender, peer);
+        Map<String, List<String>> syncedTitlesByPlayer = new LinkedHashMap<>();
+        TaskPackets.setServerPacketSender((target, channelId, buf) -> {
+            if (TaskPackets.TEAM_SYNC_TASKS_ID.equals(channelId) && target != null) {
+                syncedTitlesByPlayer.put(target.getName().getString(), TaskPackets.readTaskList(buf).stream().map(Task::getTitle).toList());
+            }
+        });
+
+        Task baseTask = new Task("Authoritative Base", "");
+        Task remoteCreated = new Task("Authoritative Remote", "");
+        TodoListCommon.getTaskStorage().saveTeamTasks(List.of(baseTask, remoteCreated));
+        Task editedByClient = copyTask(baseTask);
+        editedByClient.setCompleted(true);
+        Task clientCreated = new Task("Authoritative Client", "");
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, List.of(editedByClient, clientCreated));
+        TaskPackets.writeTaskList(buf, List.of(copyTask(baseTask)));
+
+        TaskPackets.onTeamReplaceTasksPacket(server, sender, buf);
+
+        List<String> expectedTitles = List.of("Authoritative Base", "Authoritative Remote", "Authoritative Client");
+        assertListEquals(expectedTitles, syncedTitlesByPlayer.get("team-merge-authoritative-sender"), "发起者应收到合并后的权威团队任务列表");
+        assertListEquals(expectedTitles, syncedTitlesByPlayer.get("team-merge-authoritative-peer"), "其他玩家也应收到合并后的权威团队任务列表");
+        TaskPackets.setServerPacketSender(null);
+    }
+
+    /**
+     * 验证后台项目保存失败并恢复 dirty 后，同一次 flushNow 会继续补救保存。
+     *
+     * @throws Exception 测试存储替换或等待失败时抛出
+     */
+    private static void shouldFlushProjectSaveAfterBackgroundFailure() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestMinecraftServer server = createServer();
+        Project project = new Project("Debounce Retry Project", Project.Scope.PERSONAL, null);
+        project.setId("debounce-retry-project");
+        TodoListCommon.getProjectManager().addProject(project);
+        FailingOnceProjectStorage storage = new FailingOnceProjectStorage();
+        replaceProjectStorageForTest(storage);
+
+        ProjectSaveDebouncer.requestSave(server, Project.Scope.PERSONAL);
+        if (!storage.awaitFirstSaveStarted()) {
+            throw new AssertionError("后台项目保存应在超时前启动");
+        }
+        Thread flushThread = new Thread(() -> ProjectSaveDebouncer.flushNow(server), "project-save-flush-test");
+        flushThread.start();
+        Thread.sleep(100L);
+
+        storage.releaseFirstSave();
+        flushThread.join(5_000L);
+
+        if (flushThread.isAlive()) {
+            throw new AssertionError("flushNow 应在后台保存失败后完成补救保存");
+        }
+        assertEquals(2, storage.getPersonalSaveAttempts(), "flushNow 应在后台失败后立即重试一次个人项目保存");
+        assertListEquals(List.of("debounce-retry-project"), storage.getLastPersonalProjectIds(), "重试保存应写入当前个人项目快照");
+    }
+
+    /**
      * 重置测试用的全局状态，避免不同场景之间相互污染。
      *
      * @param accessMode 当前场景要使用的命令权限模式
@@ -524,6 +701,28 @@ public final class CommandBootstrapIntegrationTestMain {
             }
         }
         throw new AssertionError("未找到预期的团队任务，title=" + title);
+    }
+
+    /**
+     * 深拷贝任务对象，避免测试基线和提交快照共享同一个可变实例。
+     *
+     * @param task 原始任务
+     * @return 拷贝后的任务
+     */
+    static Task copyTask(Task task) {
+        return Task.fromNbt(task.toNbt());
+    }
+
+    /**
+     * 将 TodoListCommon 的项目存储替换为测试桩。
+     *
+     * @param storage 测试项目存储
+     * @throws Exception 反射替换失败时抛出
+     */
+    private static void replaceProjectStorageForTest(ProjectStorage storage) throws Exception {
+        Field field = TodoListCommon.class.getDeclaredField("projectStorage");
+        field.setAccessible(true);
+        field.set(null, storage);
     }
 
     /**
@@ -1335,6 +1534,75 @@ public final class CommandBootstrapIntegrationTestMain {
         @Override
         public ServerPlayer getPlayerByName(String name) {
             return playersByName == null ? null : playersByName.get(name);
+        }
+    }
+
+    /**
+     * 第一次个人项目保存阻塞后失败，后续保存成功，用于验证防抖保存补救逻辑。
+     */
+    static final class FailingOnceProjectStorage extends ProjectStorage {
+        private final CountDownLatch firstSaveStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseFirstSave = new CountDownLatch(1);
+        private int personalSaveAttempts;
+        private List<String> lastPersonalProjectIds = List.of();
+
+        /**
+         * 保存个人项目，第一次调用模拟后台写盘失败。
+         *
+         * @param projects 待保存的个人项目列表
+         * @throws IOException 第一次保存时模拟写盘失败
+         */
+        @Override
+        public void saveProjects(List<Project> projects) throws IOException {
+            personalSaveAttempts++;
+            if (personalSaveAttempts == 1) {
+                firstSaveStarted.countDown();
+                try {
+                    if (!releaseFirstSave.await(5, TimeUnit.SECONDS)) {
+                        throw new IOException("等待释放第一次项目保存超时");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("等待释放第一次项目保存时被中断", exception);
+                }
+                throw new IOException("模拟第一次项目保存失败");
+            }
+            lastPersonalProjectIds = projects.stream().map(Project::getId).toList();
+        }
+
+        /**
+         * 等待第一次保存开始。
+         *
+         * @return 超时前开始返回 true
+         * @throws InterruptedException 等待被中断时抛出
+         */
+        boolean awaitFirstSaveStarted() throws InterruptedException {
+            return firstSaveStarted.await(5, TimeUnit.SECONDS);
+        }
+
+        /**
+         * 释放第一次阻塞的保存。
+         */
+        void releaseFirstSave() {
+            releaseFirstSave.countDown();
+        }
+
+        /**
+         * 返回个人项目保存尝试次数。
+         *
+         * @return 保存尝试次数
+         */
+        int getPersonalSaveAttempts() {
+            return personalSaveAttempts;
+        }
+
+        /**
+         * 返回最后一次成功保存的个人项目 ID。
+         *
+         * @return 项目 ID 列表
+         */
+        List<String> getLastPersonalProjectIds() {
+            return lastPersonalProjectIds;
         }
     }
 }

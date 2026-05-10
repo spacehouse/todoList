@@ -51,8 +51,7 @@ public class ClientTaskPackets {
             if (channelId.equals(TaskPackets.TEAM_SYNC_TASKS_ID)) {
                 List<Task> tasks = TaskPackets.readTaskList(buf);
                 client.execute(() -> {
-                    TodoClient.updateTeamTasksFromServer(tasks);
-                    TodoScreen.applySyncedTeamTasks(client);
+                    TodoScreen.applySyncedTeamTasks(client, tasks);
                     TodoListMod.LOGGER.info("Received {} team tasks from server", tasks.size());
                 });
                 return;
@@ -100,6 +99,26 @@ public class ClientTaskPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         TaskPackets.writeTaskList(buf, tasks);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_REPLACE_TASKS_ID, buf));
+    }
+
+    /**
+     * 向服务端发送“按基线合并团队任务”的请求。
+     *
+     * @param baseTasks 保存发起时客户端已同步的团队任务基线
+     * @param tasks 当前提交的团队任务列表
+     */
+    public static void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null) {
+            return;
+        }
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        TaskPackets.writeTaskList(buf, tasks);
+        TaskPackets.writeTaskList(buf, baseTasks);
         ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.TEAM_REPLACE_TASKS_ID, buf));
     }
 

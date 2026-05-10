@@ -14,6 +14,11 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * H2StorageBackendIntegrationTestMain 覆盖 M1-D 的 H2 后端门面接入行为。
@@ -31,6 +36,7 @@ public final class H2StorageBackendIntegrationTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteTaskStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteTaskStorageToH2);
+        GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldSerializeConcurrentPlayerTaskSavesWithTags", H2StorageBackendIntegrationTestMain::shouldSerializeConcurrentPlayerTaskSavesWithTags);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectPlayerStateToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectPlayerStateToH2);
     }
@@ -141,6 +147,60 @@ public final class H2StorageBackendIntegrationTestMain {
         } finally {
             selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证同一玩家任务桶并发保存带标签任务时不会触发 task_tags 唯一索引冲突。
+     */
+    private static void shouldSerializeConcurrentPlayerTaskSavesWithTags() {
+        Path tempGameDir = null;
+        ExecutorService executor = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-concurrent-task-tags-");
+            selectH2Backend();
+            TaskStorage storage = new TaskStorage();
+            CountDownLatch startSignal = new CountDownLatch(1);
+            executor = Executors.newFixedThreadPool(2);
+
+            Future<?> firstSave = executor.submit(() -> saveTaggedPlayerTaskAfterLatch(storage, startSignal, "tagged-task-a", "tagged-a"));
+            Future<?> secondSave = executor.submit(() -> saveTaggedPlayerTaskAfterLatch(storage, startSignal, "tagged-task-b", "tagged-b"));
+            startSignal.countDown();
+
+            firstSave.get(10, TimeUnit.SECONDS);
+            secondSave.get(10, TimeUnit.SECONDS);
+
+            List<Task> loadedTasks = storage.loadPlayerTasks(TEST_PLAYER);
+            GuiTestSupport.assertEquals(1, loadedTasks.size(), "并发替换保存后玩家任务桶应保持最后一次写入的一致快照");
+            GuiTestSupport.assertTrue(loadedTasks.get(0).getTags().contains("tag1"), "并发保存后的任务标签应可读回");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 并发标签保存时发生异常", exception);
+        } finally {
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+            selectNbtBackendQuietly();
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
+     * 等待开始信号后保存一条带标签的玩家任务。
+     *
+     * @param storage 任务存储
+     * @param startSignal 开始信号
+     * @param taskId 任务 ID
+     * @param title 任务标题
+     */
+    private static void saveTaggedPlayerTaskAfterLatch(TaskStorage storage, CountDownLatch startSignal, String taskId, String title) {
+        try {
+            startSignal.await(10, TimeUnit.SECONDS);
+            Task task = createTask(title);
+            task.setId(taskId);
+            task.addTag("tag1");
+            storage.savePlayerTasks(TEST_PLAYER, List.of(task));
+        } catch (Exception exception) {
+            throw new IllegalStateException("并发保存带标签玩家任务失败", exception);
         }
     }
 
