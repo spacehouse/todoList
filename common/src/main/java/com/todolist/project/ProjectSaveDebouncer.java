@@ -5,7 +5,10 @@ import com.todolist.TodoListCommon;
 import com.todolist.storage.H2MaintenanceGuard;
 import net.minecraft.server.MinecraftServer;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +30,7 @@ public final class ProjectSaveDebouncer {
     private static boolean dirtyPersonal = false;
     private static boolean dirtyTeam = false;
     private static ScheduledFuture<?> pending = null;
+    private static Future<?> inFlightSave = null;
     private static MinecraftServer lastServer = null;
 
     /**
@@ -62,7 +66,7 @@ public final class ProjectSaveDebouncer {
                     s = lastServer;
                 }
                 if (s != null) {
-                    s.execute(() -> flushNow(s));
+                    s.execute(() -> flushAsync(s));
                 }
             }, DEBOUNCE_MS, TimeUnit.MILLISECONDS);
         }
@@ -79,29 +83,151 @@ public final class ProjectSaveDebouncer {
             return;
         }
 
+        while (true) {
+            boolean doPersonal;
+            boolean doTeam;
+            Future<?> saveToWait;
+            synchronized (LOCK) {
+                if (pending != null) {
+                    pending.cancel(false);
+                    pending = null;
+                }
+                saveToWait = inFlightSave;
+                if (saveToWait == null) {
+                    doPersonal = dirtyPersonal;
+                    doTeam = dirtyTeam;
+                    dirtyPersonal = false;
+                    dirtyTeam = false;
+                } else {
+                    doPersonal = false;
+                    doTeam = false;
+                }
+            }
+
+            if (saveToWait != null) {
+                try {
+                    waitForInFlightSave(saveToWait);
+                } catch (Exception e) {
+                    TodoConstants.LOGGER.error("Failed to wait for in-flight project save", e);
+                }
+                continue;
+            }
+            if (!doPersonal && !doTeam) {
+                return;
+            }
+
+            try {
+                saveCurrentProjects(doPersonal, doTeam);
+                return;
+            } catch (Exception e) {
+                restoreDirtyFlags(doPersonal, doTeam);
+                TodoConstants.LOGGER.error("Failed to save projects (debounced)", e);
+                return;
+            }
+        }
+    }
+
+    /**
+     * 将防抖触发的项目保存从服务端线程转移到后台线程。
+     *
+     * @param server 当前服务端实例
+     */
+    private static void flushAsync(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
         boolean doPersonal;
         boolean doTeam;
+        CompletableFuture<Void> saveFuture;
         synchronized (LOCK) {
             doPersonal = dirtyPersonal;
             doTeam = dirtyTeam;
             dirtyPersonal = false;
             dirtyTeam = false;
             pending = null;
+            if (!doPersonal && !doTeam) {
+                return;
+            }
+            saveFuture = new CompletableFuture<>();
+            inFlightSave = saveFuture;
         }
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        var personalProjects = doPersonal ? manager.getProjectsByScope(Project.Scope.PERSONAL) : java.util.List.<Project>of();
+        var teamProjects = doTeam ? manager.getProjectsByScope(Project.Scope.TEAM) : java.util.List.<Project>of();
+        SCHEDULER.execute(() -> {
+            try {
+                saveProjectSnapshots(doPersonal, personalProjects, doTeam, teamProjects);
+                saveFuture.complete(null);
+            } catch (Throwable throwable) {
+                saveFuture.completeExceptionally(throwable);
+            } finally {
+                synchronized (LOCK) {
+                    if (inFlightSave == saveFuture) {
+                        inFlightSave = null;
+                    }
+                }
+            }
+        });
+    }
 
+    /**
+     * 等待已经提交到后台线程的项目保存完成，保证强制刷新不会早于实际落盘返回。
+     *
+     * @param saveToWait 需要等待的后台保存任务
+     * @throws ExecutionException 后台保存失败时抛出
+     * @throws InterruptedException 当前线程等待时被中断
+     */
+    private static void waitForInFlightSave(Future<?> saveToWait) throws ExecutionException, InterruptedException {
+        if (saveToWait != null) {
+            saveToWait.get();
+        }
+    }
+
+    /**
+     * 在当前线程保存项目管理器中的最新项目数据。
+     *
+     * @param doPersonal 是否保存个人项目
+     * @param doTeam 是否保存团队项目
+     * @throws Exception 保存失败或 H2 写入保护检查失败时抛出
+     */
+    private static void saveCurrentProjects(boolean doPersonal, boolean doTeam) throws Exception {
+        H2MaintenanceGuard.ensureWritableIfH2();
+        ProjectManager manager = TodoListCommon.getProjectManager();
+        ProjectStorage storage = TodoListCommon.getProjectStorage();
+        if (doPersonal) {
+            storage.saveProjects(manager.getProjectsByScope(Project.Scope.PERSONAL));
+        }
+        if (doTeam) {
+            storage.saveTeamProjects(manager.getProjectsByScope(Project.Scope.TEAM));
+        }
+    }
+
+    /**
+     * 在后台线程保存项目快照，避免 H2 或文件写入阻塞服务端线程。
+     *
+     * @param doPersonal 是否保存个人项目
+     * @param personalProjects 个人项目快照
+     * @param doTeam 是否保存团队项目
+     * @param teamProjects 团队项目快照
+     * @throws Exception 保存失败或 H2 写入保护检查失败时抛出
+     */
+    private static void saveProjectSnapshots(boolean doPersonal,
+                                             java.util.List<Project> personalProjects,
+                                             boolean doTeam,
+                                             java.util.List<Project> teamProjects) throws Exception {
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
-            ProjectManager manager = TodoListCommon.getProjectManager();
             ProjectStorage storage = TodoListCommon.getProjectStorage();
             if (doPersonal) {
-                storage.saveProjects(manager.getProjectsByScope(Project.Scope.PERSONAL));
+                storage.saveProjects(personalProjects);
             }
             if (doTeam) {
-                storage.saveTeamProjects(manager.getProjectsByScope(Project.Scope.TEAM));
+                storage.saveTeamProjects(teamProjects);
             }
         } catch (Exception e) {
             restoreDirtyFlags(doPersonal, doTeam);
-            TodoConstants.LOGGER.error("Failed to save projects (debounced)", e);
+            TodoConstants.LOGGER.error("Failed to save projects (debounced background)", e);
+            throw e;
         }
     }
 

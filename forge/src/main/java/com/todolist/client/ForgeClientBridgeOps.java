@@ -63,6 +63,17 @@ public final class ForgeClientBridgeOps implements ClientBridge.ClientOps {
         ForgeClientTaskPackets.sendReplaceTeamTasks(tasks);
     }
 
+    /**
+     * 发送带基线快照的团队任务合并请求。
+     *
+     * @param baseTasks 保存发起时的团队任务基线
+     * @param tasks 当前提交的团队任务列表
+     */
+    @Override
+    public void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+        ForgeClientTaskPackets.sendMergeTeamTasks(baseTasks, tasks);
+    }
+
     @Override
     public void requestTeamSync() {
         ForgeClientTaskPackets.requestTeamSync();

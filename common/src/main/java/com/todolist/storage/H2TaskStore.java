@@ -13,6 +13,8 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * H2TaskStore 负责在 H2 后端读写任务桶与任务元数据。
@@ -23,6 +25,7 @@ public final class H2TaskStore {
     public static final String PLAYER_PERSONAL_BUCKET = "PLAYER_PERSONAL";
     public static final String TEAM_BUCKET = "TEAM";
     public static final String TEAM_OWNER = "TEAM";
+    private static final ConcurrentMap<String, Object> BUCKET_SAVE_LOCKS = new ConcurrentHashMap<>();
 
     private final H2ConnectionProvider connectionProvider;
     private final H2StorageBootstrap bootstrap;
@@ -183,6 +186,21 @@ public final class H2TaskStore {
      * @throws IOException 保存失败时抛出
      */
     private void saveBucket(String bucketType, String ownerUuid, List<Task> tasks) throws IOException {
+        Object saveLock = BUCKET_SAVE_LOCKS.computeIfAbsent(bucketType + '\u0000' + ownerUuid, ignored -> new Object());
+        synchronized (saveLock) {
+            saveBucketLocked(bucketType, ownerUuid, tasks);
+        }
+    }
+
+    /**
+     * 在同桶保存锁内执行 H2 替换式任务保存。
+     *
+     * @param bucketType 桶类型
+     * @param ownerUuid 桶拥有者
+     * @param tasks 待保存任务
+     * @throws IOException 保存失败时抛出
+     */
+    private void saveBucketLocked(String bucketType, String ownerUuid, List<Task> tasks) throws IOException {
         H2MaintenanceLock.ensureWritable();
         bootstrap.ensureReady();
         List<Task> safeTasks = tasks == null ? List.of() : tasks;
@@ -280,7 +298,7 @@ public final class H2TaskStore {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """);
              PreparedStatement tagStatement = connection.prepareStatement("""
-                INSERT INTO task_tags(bucket_type, owner_uuid, task_id, tag, sort_order)
+                MERGE INTO task_tags KEY(bucket_type, owner_uuid, task_id, tag)
                 VALUES (?, ?, ?, ?, ?)
                 """)) {
             for (int index = 0; index < tasks.size(); index++) {

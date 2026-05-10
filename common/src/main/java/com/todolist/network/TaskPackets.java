@@ -13,7 +13,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -45,7 +48,8 @@ public class TaskPackets {
 
     public static void onTeamReplaceTasksPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         List<Task> tasks = readTaskList(buf);
-        server.execute(() -> handleTeamReplaceTasks(server, player, tasks));
+        List<Task> baseTasks = buf.readableBytes() > 0 ? readTaskList(buf) : null;
+        server.execute(() -> handleTeamReplaceTasks(server, player, tasks, baseTasks));
     }
 
     public static void onTeamRequestSyncPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
@@ -154,16 +158,107 @@ public class TaskPackets {
         }
     }
 
-    private static void handleTeamReplaceTasks(MinecraftServer server, ServerPlayer player, List<Task> tasks) {
+    private static void handleTeamReplaceTasks(MinecraftServer server, ServerPlayer player, List<Task> tasks, List<Task> baseTasks) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
-            storage.saveTeamTasks(tasks);
-            broadcastTeamTasks(server);
+            List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storage.loadTeamTasks(), baseTasks, tasks);
+            storage.saveTeamTasks(tasksToSave);
+            if (baseTasks == null) {
+                broadcastTeamTasksExcept(server, player);
+            } else {
+                broadcastTeamTasks(server);
+            }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save team tasks", e);
             StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
         }
+    }
+
+    /**
+     * 基于客户端基线合并团队任务，避免旧整表快照覆盖其他玩家期间提交的改动。
+     *
+     * @param currentTasks 服务端当前任务列表
+     * @param baseTasks 客户端保存发起时的同步基线
+     * @param submittedTasks 客户端提交的最新任务列表
+     * @return 合并后的任务列表
+     */
+    private static List<Task> mergeTeamTasks(List<Task> currentTasks, List<Task> baseTasks, List<Task> submittedTasks) {
+        Map<String, Task> baseById = mapTasksById(baseTasks);
+        Map<String, Task> submittedById = mapTasksById(submittedTasks);
+        Map<String, Task> currentById = mapTasksById(currentTasks);
+        List<Task> merged = new ArrayList<>();
+
+        for (Task currentTask : currentTasks) {
+            Task baseTask = baseById.get(currentTask.getId());
+            Task submittedTask = submittedById.get(currentTask.getId());
+            if (baseTask != null && submittedTask == null) {
+                if (!tasksEquivalent(baseTask, currentTask)) {
+                    merged.add(copyTask(currentTask));
+                }
+                continue;
+            }
+            if (submittedTask != null && !tasksEquivalent(baseTask, submittedTask)) {
+                merged.add(copyTask(submittedTask));
+            } else {
+                merged.add(copyTask(currentTask));
+            }
+        }
+
+        for (Task submittedTask : submittedTasks) {
+            if (currentById.containsKey(submittedTask.getId())) {
+                continue;
+            }
+            Task baseTask = baseById.get(submittedTask.getId());
+            if (baseTask == null || !tasksEquivalent(baseTask, submittedTask)) {
+                merged.add(copyTask(submittedTask));
+            }
+        }
+
+        return merged;
+    }
+
+    /**
+     * 按任务 ID 构建任务映射，并忽略空任务。
+     *
+     * @param tasks 原始任务列表
+     * @return 任务 ID 到任务对象的映射
+     */
+    private static Map<String, Task> mapTasksById(List<Task> tasks) {
+        Map<String, Task> byId = new LinkedHashMap<>();
+        for (Task task : tasks == null ? List.<Task>of() : tasks) {
+            if (task != null && task.getId() != null) {
+                byId.put(task.getId(), task);
+            }
+        }
+        return byId;
+    }
+
+    /**
+     * 判断两个任务的可持久化内容是否一致。
+     *
+     * @param left 左侧任务
+     * @param right 右侧任务
+     * @return 内容一致时返回 true
+     */
+    private static boolean tasksEquivalent(Task left, Task right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return Objects.equals(left.toNbt(), right.toNbt());
+    }
+
+    /**
+     * 深拷贝任务对象，避免合并结果与调用方列表共享可变实例。
+     *
+     * @param task 原始任务
+     * @return 拷贝后的任务
+     */
+    private static Task copyTask(Task task) {
+        return Task.fromNbt(task.toNbt());
     }
 
     private static void handleAddTask(ServerPlayer player, Task task) {
@@ -190,10 +285,23 @@ public class TaskPackets {
      * 将服务端当前团队任务列表广播给所有在线玩家。
      */
     public static void broadcastTeamTasks(MinecraftServer server) {
+        broadcastTeamTasksExcept(server, null);
+    }
+
+    /**
+     * 将服务端当前团队任务列表广播给除指定玩家以外的在线玩家。
+     *
+     * @param server 当前服务端
+     * @param excludedPlayer 不需要接收本次广播的玩家；为 null 时广播给所有人
+     */
+    private static void broadcastTeamTasksExcept(MinecraftServer server, ServerPlayer excludedPlayer) {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadTeamTasks();
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                if (excludedPlayer != null && player != null && player.getUUID().equals(excludedPlayer.getUUID())) {
+                    continue;
+                }
                 FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
                 writeTaskList(buf, tasks);
                 serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);

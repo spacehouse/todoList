@@ -19,6 +19,8 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TodoScreen GUI 离线自测入口。
@@ -82,6 +84,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowCompletionFeedbackForEachSequentialTeamToggle", TodoScreenTestMain::shouldShowCompletionFeedbackForEachSequentialTeamToggle);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistPersonalTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistPersonalTaskCompletionToggleImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTeamTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistTeamTaskCompletionToggleImmediately);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreStalePersonalTaskSaveCallback", TodoScreenTestMain::shouldIgnoreStalePersonalTaskSaveCallback);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreStaleTeamTaskSaveCallback", TodoScreenTestMain::shouldIgnoreStaleTeamTaskSaveCallback);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
@@ -122,8 +126,14 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalAndTeamTasksAfterRemoteReconnectWhenSavingFromPersonalView", TodoScreenTestMain::shouldKeepPersonalAndTeamTasksAfterRemoteReconnectWhenSavingFromPersonalView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldApplySyncedPersonalTasksToOpenGui", TodoScreenTestMain::shouldApplySyncedPersonalTasksToOpenGui);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldApplySyncedTeamTasksToOpenGui", TodoScreenTestMain::shouldApplySyncedTeamTasksToOpenGui);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreTeamSyncWhileTeamChangesAreDirty", TodoScreenTestMain::shouldIgnoreTeamSyncWhileTeamChangesAreDirty);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldWaitForAuthoritativeTeamSyncAfterDirtySaveCompletes", TodoScreenTestMain::shouldWaitForAuthoritativeTeamSyncAfterDirtySaveCompletes);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardUnsavedPersonalChangesOnClose", TodoScreenTestMain::shouldDiscardUnsavedPersonalChangesOnClose);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRequestTeamSyncWhenClosingUnsavedTeamChanges", TodoScreenTestMain::shouldRequestTeamSyncWhenClosingUnsavedTeamChanges);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepInFlightTeamSaveWhenClosingScreen", TodoScreenTestMain::shouldKeepInFlightTeamSaveWhenClosingScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardPersonalChangesWhenClosingDuringTeamSave", TodoScreenTestMain::shouldDiscardPersonalChangesWhenClosingDuringTeamSave);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDropDeferredTeamSyncWhenClosingDirtyTeamScreen", TodoScreenTestMain::shouldDropDeferredTeamSyncWhenClosingDirtyTeamScreen);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClearTaskSaveInFlightWhenMinecraftMissing", TodoScreenTestMain::shouldClearTaskSaveInFlightWhenMinecraftMissing);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowNotificationWhenAddingWithoutProject", TodoScreenTestMain::shouldShowNotificationWhenAddingWithoutProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOpenContextMenuAndApplyPriorityAction", TodoScreenTestMain::shouldOpenContextMenuAndApplyPriorityAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSearchAndAssignPlayerFromAssignScreen", TodoScreenTestMain::shouldSearchAndAssignPlayerFromAssignScreen);
@@ -521,6 +531,7 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "确认删除后应返回待办主界面");
         GuiTestSupport.assertEquals(0, access(screen).getCurrentManagerTasksForTest().size(), "确认删除后任务应立即从当前列表移除");
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "确认删除后不应再残留未保存标记");
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "确认删除后应立即同步个人任务整表");
         GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().get(0).size(), "删除后同步的个人任务列表应为空");
@@ -548,16 +559,18 @@ public final class TodoScreenTestMain {
         int syncCallsBeforeClaim = ops.getReplaceTeamTaskCalls().size();
         access(screen).triggerClaimTaskForTest();
         Task claimedTask = requireTaskByTitle(screen, "Claim Persist Team Task");
-        GuiTestSupport.assertEquals(syncCallsBeforeClaim + 1, ops.getReplaceTeamTaskCalls().size(), "领取后应立即同步团队任务整表");
         GuiTestSupport.assertEquals(OWNER_ID.toString(), claimedTask.getAssigneeUuid(), "领取后 assigneeUuid 应立即写入当前玩家");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeClaim + 1, ops.getReplaceTeamTaskCalls().size(), "领取后应后台同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "领取成功后不应残留未保存标记");
 
         int syncCallsBeforeAbandon = ops.getReplaceTeamTaskCalls().size();
         access(screen).selectTaskForTest(claimedTask);
         access(screen).triggerAbandonTaskForTest();
         Task abandonedTask = requireTaskByTitle(screen, "Claim Persist Team Task");
-        GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应立即同步团队任务整表");
         GuiTestSupport.assertNull(abandonedTask.getAssigneeUuid(), "放弃后 assigneeUuid 应立即清空");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应后台同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "放弃成功后不应残留未保存标记");
     }
 
@@ -581,7 +594,8 @@ public final class TodoScreenTestMain {
 
         Task completedTask = requireTaskByTitle(screen, "Complete Toggle Personal Task");
         GuiTestSupport.assertTrue(completedTask.isCompleted(), "个人任务勾选完成后应立即写入已完成状态");
-        GuiTestSupport.assertEquals(syncCallsBeforeComplete + 1, ops.getReplaceAllTaskCalls().size(), "个人任务勾选完成后应立即同步个人任务整表");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeComplete + 1, ops.getReplaceAllTaskCalls().size(), "个人任务勾选完成后应后台同步个人任务整表");
         GuiTestSupport.assertEquals(0, ops.getReplaceTeamTaskCalls().size(), "个人任务勾选完成不应触发团队任务同步");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "个人任务勾选完成后不应残留未保存标记");
 
@@ -592,7 +606,8 @@ public final class TodoScreenTestMain {
 
         Task reopenedTask = requireTaskByTitle(screen, "Complete Toggle Personal Task");
         GuiTestSupport.assertFalse(reopenedTask.isCompleted(), "个人任务取消完成后应立即恢复为未完成");
-        GuiTestSupport.assertEquals(syncCallsBeforeUncomplete + 1, ops.getReplaceAllTaskCalls().size(), "个人任务取消完成后应立即同步个人任务整表");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeUncomplete + 1, ops.getReplaceAllTaskCalls().size(), "个人任务取消完成后应后台同步个人任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "个人任务取消完成后不应残留未保存标记");
 
         List<Task> latestSyncedTasks = ops.getReplaceAllTaskCalls().get(ops.getReplaceAllTaskCalls().size() - 1);
@@ -667,7 +682,8 @@ public final class TodoScreenTestMain {
 
         Task completedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
         GuiTestSupport.assertTrue(completedTask.isCompleted(), "团队任务勾选完成后应立即写入已完成状态");
-        GuiTestSupport.assertEquals(syncCallsBeforeComplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务勾选完成后应立即同步团队任务整表");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeComplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务勾选完成后应后台同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务勾选完成后不应残留未保存标记");
 
         access(screen).toggleCompletedSectionForTest();
@@ -677,7 +693,8 @@ public final class TodoScreenTestMain {
 
         Task reopenedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
         GuiTestSupport.assertFalse(reopenedTask.isCompleted(), "团队任务取消完成后应立即恢复为未完成");
-        GuiTestSupport.assertEquals(syncCallsBeforeUncomplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务取消完成后应立即同步团队任务整表");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(syncCallsBeforeUncomplete + 1, ops.getReplaceTeamTaskCalls().size(), "团队任务取消完成后应后台同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务取消完成后不应残留未保存标记");
 
         List<Task> latestSyncedTasks = ops.getReplaceTeamTaskCalls().get(ops.getReplaceTeamTaskCalls().size() - 1);
@@ -686,6 +703,71 @@ public final class TodoScreenTestMain {
 
         Task restoredTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
         GuiTestSupport.assertFalse(restoredTask.isCompleted(), "后续实时操作触发的任务回推不应把旧完成态重新带回团队任务");
+    }
+
+    /**
+     * 验证个人任务旧版本后台保存完成时，不会把过期快照重新广播导致界面闪回。
+     */
+    private static void shouldIgnoreStalePersonalTaskSaveCallback() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Stale Personal Save Task");
+        Task task = requireTaskByTitle(screen, "Stale Personal Save Task");
+        Task staleSnapshotTask = copyTask(task);
+        staleSnapshotTask.setCompleted(true);
+        Task latestSnapshotTask = copyTask(task);
+        latestSnapshotTask.setCompleted(false);
+        TodoScreenTestAccess.setPersonalSaveVersionForTest(2L);
+
+        access(screen).finishPersonalTaskSaveForTest(List.of(staleSnapshotTask), 1L);
+
+        GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().size(), "个人任务旧保存回调不应广播过期快照");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "个人任务旧保存回调不应清理新的未保存状态");
+
+        access(screen).finishPersonalTaskSaveForTest(List.of(latestSnapshotTask), 2L);
+
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "个人任务当前保存回调应广播最新快照");
+        GuiTestSupport.assertFalse(ops.getReplaceAllTaskCalls().get(0).get(0).isCompleted(), "个人任务最终广播应保留最新完成状态");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "个人任务当前保存回调应清理未保存状态");
+    }
+
+    /**
+     * 验证团队任务旧版本后台保存完成时，不会把过期快照重新广播导致界面闪回。
+     */
+    private static void shouldIgnoreStaleTeamTaskSaveCallback() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-stale-save", "Team Stale Save");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Stale Team Save Task");
+        Task task = requireTaskByTitle(screen, "Stale Team Save Task");
+        Task staleSnapshotTask = copyTask(task);
+        staleSnapshotTask.setAssigneeUuid(OWNER_ID.toString());
+        Task latestSnapshotTask = copyTask(task);
+        latestSnapshotTask.setAssigneeUuid(null);
+        TodoScreenTestAccess.setTeamSaveVersionForTest(2L);
+
+        access(screen).finishTeamTaskSaveForTest(List.of(staleSnapshotTask), 1L);
+
+        GuiTestSupport.assertEquals(0, ops.getReplaceTeamTaskCalls().size(), "团队任务旧保存回调不应广播过期快照");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "团队任务旧保存回调不应清理新的未保存状态");
+
+        access(screen).finishTeamTaskSaveForTest(List.of(latestSnapshotTask), 2L);
+
+        GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "团队任务当前保存回调应广播最新快照");
+        GuiTestSupport.assertNull(ops.getReplaceTeamTaskCalls().get(0).get(0).getAssigneeUuid(), "团队任务最终广播应保留最新归属状态");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务当前保存回调应清理未保存状态");
     }
 
     /**
@@ -747,6 +829,7 @@ public final class TodoScreenTestMain {
         access(screen).triggerClaimTaskForTest();
         Task claimedTask = requireTaskByTitle(screen, "Assign Followup Task");
         GuiTestSupport.assertEquals(OWNER_ID.toString(), claimedTask.getAssigneeUuid(), "领取后任务应先归当前玩家");
+        waitForTaskSaveToFinish(screen);
 
         restoreTasksToManager(ops.getTeamTaskManager(), ops.getTeamTaskManager().getAllTasks());
         Screen assignScreen = access(screen).createAssignPlayerScreenForTest(staleTaskRef);
@@ -756,6 +839,7 @@ public final class TodoScreenTestMain {
         access(screen).clickAssignPlayerRowForTest(assignScreen, 0);
         Task assignedTask = requireTaskByTitle(screen, "Assign Followup Task");
         GuiTestSupport.assertEquals(ALICE_ID.toString(), assignedTask.getAssigneeUuid(), "指派后任务应归属被指派成员");
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "指派后应触发一次团队整表同步");
 
         restoreTasksToManager(ops.getTeamTaskManager(), ops.getTeamTaskManager().getAllTasks());
@@ -764,6 +848,7 @@ public final class TodoScreenTestMain {
         access(screen).triggerAbandonTaskForTest();
         Task abandonedTask = requireTaskByTitle(screen, "Assign Followup Task");
         GuiTestSupport.assertNull(abandonedTask.getAssigneeUuid(), "服务端回推后再次放弃应真正清空任务归属");
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertEquals(syncCallsBeforeAbandon + 1, ops.getReplaceTeamTaskCalls().size(), "放弃后应继续触发团队整表同步");
     }
 
@@ -1242,6 +1327,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Beta");
         addTaskViaInput(screen, "Gamma");
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "保存后应先清除未保存状态");
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
@@ -1285,6 +1371,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Beta");
         addTaskViaInput(screen, "Gamma");
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
 
         Task gamma = requireTaskByTitle(screen, "Gamma");
         Task alpha = requireTaskByTitle(screen, "Alpha");
@@ -1315,6 +1402,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Beta");
         addTaskViaInput(screen, "Gamma");
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
 
         Task gamma = requireTaskByTitle(screen, "Gamma");
         Task alpha = requireTaskByTitle(screen, "Alpha");
@@ -1532,6 +1620,7 @@ public final class TodoScreenTestMain {
                 .toList();
         completedTasks.forEach(task -> task.setCompleted(true));
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
         List<String> collapsedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
@@ -1570,6 +1659,7 @@ public final class TodoScreenTestMain {
         screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
 
         GuiTestSupport.assertFalse(access(screen).getCurrentManagerTasksForTest().get(0).isCompleted(), "个人视图下点击已完成任务的复选框后应恢复为未完成");
+        waitForTaskSaveToFinish(screen);
     }
 
     /**
@@ -1596,6 +1686,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "取消已完成后应立即重新进入未完成任务列表");
         GuiTestSupport.assertEquals("TASK:" + task.getId(), rows.get(1), "取消已完成后任务应立即显示在未完成分组中");
         GuiTestSupport.assertEquals(3, rows.size(), "取消已完成后已完成分组应只保留标题行");
+        waitForTaskSaveToFinish(screen);
     }
 
     /**
@@ -1631,6 +1722,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(minecraft, screen);
         addTaskViaInput(screen, "Alpha");
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "保存个人任务后应向桥接层发送整表替换");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "保存后应清除未保存状态");
@@ -1678,6 +1770,105 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertEquals(1, ops.getRequestTeamSyncCallCount(), "关闭未保存的团队视图时应请求团队同步");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "关闭后应清除团队视图的未保存状态");
+    }
+
+    /**
+     * 验证团队任务后台保存未完成时关闭界面，不会请求旧数据同步覆盖本地最新操作。
+     */
+    private static void shouldKeepInFlightTeamSaveWhenClosingScreen() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-close-inflight", "Close Inflight Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Close Inflight Team Task");
+        Task task = requireTaskByTitle(screen, "Close Inflight Team Task");
+        access(screen).selectTaskForTest(task);
+
+        access(screen).triggerClaimTaskForTest();
+        GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "领取后应存在后台团队保存");
+
+        screen.onClose();
+
+        GuiTestSupport.assertEquals(0, ops.getRequestTeamSyncCallCount(), "关闭时已有后台保存则不应请求团队旧同步");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "后台保存完成后仍应提交团队整表替换");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "后台保存完成后应清理未保存状态");
+    }
+
+    /**
+     * 验证关闭界面时即使团队保存仍在进行，也会丢弃未保存的个人任务临时改动。
+     */
+    private static void shouldDiscardPersonalChangesWhenClosingDuringTeamSave() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project personalProject = createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-close-mixed-inflight", "Close Mixed Inflight Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Unsaved Personal During Team Save");
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Team Save During Personal Dirty");
+        Task task = requireTaskByTitle(screen, "Team Save During Personal Dirty");
+        access(screen).selectTaskForTest(task);
+        access(screen).triggerClaimTaskForTest();
+        GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "团队领取后应存在后台保存");
+
+        screen.onClose();
+
+        GuiTestSupport.assertFalse(TodoScreen.hasPersonalUnsavedChanges(), "关闭时应丢弃不在保存中的个人未保存状态");
+        waitForTaskSaveToFinish(screen);
+        TodoScreen reopenedScreen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, reopenedScreen);
+        access(reopenedScreen).switchProjectForTest(personalProject);
+        GuiTestSupport.assertEquals(List.of(),
+                access(reopenedScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "重新打开个人项目时不应看到关闭前未保存的个人任务");
+        GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "团队后台保存仍应正常提交");
+    }
+
+    /**
+     * 验证关闭脏团队界面时，会丢弃期间暂存的团队同步快照，避免串到下一次会话。
+     */
+    private static void shouldDropDeferredTeamSyncWhenClosingDirtyTeamScreen() {
+        GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-close-deferred-sync", "Close Deferred Sync Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Local Dirty Before Close");
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(createTeamTask("Stale Deferred Team Sync", teamProject.getId(), false)));
+
+        screen.onClose();
+
+        TodoScreen reopenedScreen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+        ScreenDriver.init(minecraft, reopenedScreen);
+        minecraft.setScreen(reopenedScreen);
+        access(reopenedScreen).switchProjectForTest(teamProject);
+        access(reopenedScreen).switchToTeamAllViewForTest();
+        addTaskViaInput(reopenedScreen, "Fresh Team Save After Close");
+        access(reopenedScreen).saveTasksForTest();
+        waitForTaskSaveToFinish(reopenedScreen);
+
+        GuiTestSupport.assertEquals(List.of("Fresh Team Save After Close"),
+                access(reopenedScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "关闭前暂存的团队同步不应在下一次保存后应用");
     }
 
     /**
@@ -1761,6 +1952,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "点击玩家后应把任务分配给对应成员");
         GuiTestSupport.assertEquals("20000000-0000-0000-0000-000000000003", task.getAssigneeUuid(), "分配后应写入对应玩家 UUID");
         GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "分配任务后应显示成功提示");
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "分配任务后应立即同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "分配任务后不应残留未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "完成分配后应返回主界面");
@@ -1800,6 +1992,7 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertEquals("bob", task.getAssigneeName(), "离线成员被选中后应写入缓存名称");
         GuiTestSupport.assertEquals(BOB_ID.toString(), task.getAssigneeUuid(), "离线成员被选中后应写入对应 UUID");
+        waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertEquals(syncCallsBeforeAssign + 1, ops.getReplaceTeamTaskCalls().size(), "指派离线成员后应立即同步团队任务整表");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "指派离线成员后不应残留未保存状态");
         GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "指派离线成员后应返回主界面");
@@ -1954,6 +2147,24 @@ public final class TodoScreenTestMain {
         task.setProjectId(projectId);
         task.setCompleted(completed);
         return task;
+    }
+
+    /**
+     * 等待待办界面的后台任务保存完成，供异步持久化断言使用。
+     *
+     * @param screen 待办界面
+     */
+    private static void waitForTaskSaveToFinish(TodoScreen screen) {
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (access(screen).isTaskSaveInFlightForTest() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(10L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("等待后台任务保存时被中断", exception);
+            }
+        }
+        GuiTestSupport.assertFalse(access(screen).isTaskSaveInFlightForTest(), "后台任务保存应在超时前完成");
     }
 
     /**
@@ -2157,6 +2368,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(publishedMinecraft, publishedScreen);
         addTaskViaInput(publishedScreen, "Published Personal Task");
         access(publishedScreen).saveTasksForTest();
+        waitForTaskSaveToFinish(publishedScreen);
 
         GuiTestSupport.assertEquals(List.of("Published Personal Task"),
                 TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
@@ -2194,6 +2406,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertTrue(access(lanHostScreen).hasUnsavedChangesForTest(), "发布局域网后新增个人任务应先标记为未保存");
 
         access(lanHostScreen).saveTasksForTest();
+        waitForTaskSaveToFinish(lanHostScreen);
 
         GuiTestSupport.assertNotNull(lanHostMinecraft.getLastScreen(), "保存个人任务后应关闭当前界面并返回父界面");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
@@ -2238,6 +2451,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Remote Team Task");
 
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "从团队视图保存时也应提交个人任务整表");
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "从团队视图保存时应提交团队任务整表");
@@ -2281,6 +2495,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Remote Personal Persisted Task");
 
         access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "从个人视图保存时应提交个人任务整表");
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "从个人视图保存时也应提交团队任务整表");
@@ -2371,6 +2586,105 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(List.of("After Team Command Sync"),
                 access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
                 "团队任务同步后当前待办列表应立即刷新");
+    }
+
+    /**
+     * 验证团队任务存在本地未保存改动时，外部同步不会覆盖当前团队任务管理器。
+     */
+    private static void shouldIgnoreTeamSyncWhileTeamChangesAreDirty() {
+        GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-dirty-sync", "Dirty Sync Team");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        addTaskViaInput(screen, "Local Dirty Team Task");
+
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(createTeamTask("External Team Sync Task", teamProject.getId(), false)));
+
+        GuiTestSupport.assertEquals(List.of("Local Dirty Team Task"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "团队本地脏改动存在时不应被外部同步覆盖");
+    }
+
+    /**
+     * 验证团队同步包若在本地脏保存期间到达，保存完成后应等待服务端合并回包，避免先回放旧快照造成闪回。
+     */
+    private static void shouldWaitForAuthoritativeTeamSyncAfterDirtySaveCompletes() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-deferred-sync", "Deferred Sync Team");
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(createTeamTask("Deferred Local Base", teamProject.getId(), false)));
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        Task task = requireTaskByTitle(screen, "Deferred Local Base");
+        Task staleSyncedTask = copyTask(task);
+        access(screen).selectTaskForTest(task);
+        CountDownLatch saveExecutorStarted = new CountDownLatch(1);
+        CountDownLatch releaseSaveExecutor = new CountDownLatch(1);
+        TodoScreenTestAccess.occupyTaskSaveExecutorForTest(saveExecutorStarted, releaseSaveExecutor);
+        try {
+            if (!saveExecutorStarted.await(1, TimeUnit.SECONDS)) {
+                throw new AssertionError("后台保存线程应在超时前被测试占用");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("等待测试占用后台保存线程时被中断", exception);
+        }
+        access(screen).triggerClaimTaskForTest();
+        GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "领取后应存在待完成的团队保存");
+
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(
+                staleSyncedTask,
+                createTeamTask("Deferred Remote During Save", teamProject.getId(), false)
+        ));
+        GuiTestSupport.assertEquals(List.of("Deferred Local Base"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "保存期间收到的团队同步不应立即覆盖本地脏改动");
+
+        releaseSaveExecutor.countDown();
+        waitForTaskSaveToFinish(screen);
+
+        Task locallySavedTask = requireTaskByTitle(screen, "Deferred Local Base");
+        GuiTestSupport.assertEquals(OWNER_ID.toString(), locallySavedTask.getAssigneeUuid(), "保存完成后不应先回放旧同步导致领取状态闪回");
+        GuiTestSupport.assertEquals(List.of("Deferred Local Base"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "保存完成后应等待服务端合并后的权威同步，而不是立即应用旧同步");
+
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(
+                copyTask(locallySavedTask),
+                createTeamTask("Deferred Remote During Save", teamProject.getId(), false)
+        ));
+
+        GuiTestSupport.assertEquals(List.of("Deferred Local Base", "Deferred Remote During Save"),
+                access(screen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
+                "收到服务端合并回包后应再应用包含双方改动的权威结果");
+    }
+
+    /**
+     * 验证后台保存回调缺少 Minecraft 实例时，也会释放保存中状态，避免界面状态永久卡住。
+     */
+    private static void shouldClearTaskSaveInFlightWhenMinecraftMissing() {
+        GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("missing-minecraft"));
+
+        access(screen).startNoopBackgroundTaskSaveWithoutMinecraftForTest();
+
+        waitForTaskSaveToFinish(screen);
     }
 
     /**

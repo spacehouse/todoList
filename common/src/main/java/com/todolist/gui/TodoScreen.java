@@ -16,6 +16,7 @@ import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchRoleFilter;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
+import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.storage.StorageBackendFactory;
 import com.todolist.project.Project;
@@ -59,8 +60,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         thread.setDaemon(true);
         return thread;
     });
+    private static final ExecutorService TASK_SAVE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "TodoList GUI Task Save");
+        thread.setDaemon(true);
+        return thread;
+    });
     private static String cachedPersonalTasksNamespace = "";
     private static List<Task> cachedPersonalTasksSnapshot = List.of();
+    private static List<Task> cachedTeamTasksSnapshot = List.of();
+    private static List<Task> deferredTeamTasksSnapshot = null;
+    private static String deferredTeamTasksNamespace = "";
 
 
     private final Screen parent;
@@ -134,6 +143,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private boolean hasUnsavedChanges = false;
     private static boolean personalHasUnsavedChanges = false;
     private static boolean teamHasUnsavedChanges = false;
+    private static long personalSaveVersion;
+    private static long teamSaveVersion;
     private static LastGuiState lastGuiState;
     private String openedStorageNamespace = DataPathProvider.getStorageNamespace();
     private Task contextMenuTask;
@@ -149,6 +160,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private TaskDetailDraft detailDraft;
     private boolean syncingDetailWidgets;
     private boolean personalTasksLoading;
+    private boolean taskSaveInFlight;
+    private boolean personalTaskSaveInFlight;
+    private boolean teamTaskSaveInFlight;
+    private int pendingTaskSaveCount;
+    private int pendingPersonalTaskSaveCount;
+    private int pendingTeamTaskSaveCount;
 
 
     /**
@@ -185,6 +202,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
 
         teamTaskManager = ClientBridge.ops().getTeamTaskManager();
+        if (!teamHasUnsavedChanges && teamTaskManager != null) {
+            updateCachedTeamTasksSnapshot(teamTaskManager.getAllTasks());
+        }
         
         // Initialize project manager state and team project availability.
         projectManager = TodoListCommon.getProjectManager();
@@ -350,6 +370,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 更新 GUI 团队任务快照缓存，作为多人编辑合并时的客户端基线。
+     *
+     * @param tasks 最新团队任务列表
+     */
+    static void updateCachedTeamTasksSnapshot(List<Task> tasks) {
+        cachedTeamTasksSnapshot = copyTasks(tasks);
+    }
+
+    /**
      * 深拷贝任务列表，避免缓存和界面编辑对象互相污染。
      *
      * @param tasks 原始任务列表
@@ -366,6 +395,32 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
         return copies;
+    }
+
+    /**
+     * 判断两个任务快照的持久化内容是否一致。
+     *
+     * @param left 左侧任务列表
+     * @param right 右侧任务列表
+     * @return 内容一致时返回 true
+     */
+    private static boolean taskSnapshotsEquivalent(List<Task> left, List<Task> right) {
+        List<Task> leftTasks = left == null ? List.of() : left;
+        List<Task> rightTasks = right == null ? List.of() : right;
+        if (leftTasks.size() != rightTasks.size()) {
+            return false;
+        }
+        for (int index = 0; index < leftTasks.size(); index++) {
+            Task leftTask = leftTasks.get(index);
+            Task rightTask = rightTasks.get(index);
+            if (leftTask == rightTask) {
+                continue;
+            }
+            if (leftTask == null || rightTask == null || !Objects.equals(leftTask.toNbt(), rightTask.toNbt())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -415,6 +470,64 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param minecraft 当前客户端实例
      */
     public static void applySyncedTeamTasks(Minecraft minecraft) {
+        if (ClientBridge.ops() != null && !teamHasUnsavedChanges) {
+            TaskManager manager = ClientBridge.ops().getTeamTaskManager();
+            updateCachedTeamTasksSnapshot(manager == null ? List.of() : manager.getAllTasks());
+        }
+        refreshAppliedTeamTasks(minecraft);
+    }
+
+    /**
+     * 应用服务端下发的团队任务快照，并避免覆盖当前 GUI 中尚未落盘的团队改动。
+     *
+     * @param minecraft 当前客户端实例
+     * @param tasks 服务端下发的团队任务列表
+     */
+    public static void applySyncedTeamTasks(Minecraft minecraft, List<Task> tasks) {
+        List<Task> safeTasks = copyTasks(tasks);
+        if (minecraft != null
+                && minecraft.screen instanceof TodoScreen screen
+                && (teamHasUnsavedChanges || screen.teamTaskSaveInFlight)) {
+            deferredTeamTasksSnapshot = safeTasks;
+            deferredTeamTasksNamespace = DataPathProvider.getStorageNamespace();
+            return;
+        }
+        applyTeamTasksSnapshot(minecraft, safeTasks);
+    }
+
+    /**
+     * 将团队任务快照写入桥接任务管理器，并刷新 GUI、HUD 与合并基线。
+     *
+     * @param minecraft 当前客户端实例
+     * @param tasks 服务端下发的团队任务快照
+     */
+    private static void applyTeamTasksSnapshot(Minecraft minecraft, List<Task> tasks) {
+        TaskManager manager = ClientBridge.ops() == null ? null : ClientBridge.ops().getTeamTaskManager();
+        if (manager != null) {
+            manager.clearAll();
+            for (Task task : copyTasks(tasks)) {
+                manager.addTask(task);
+            }
+        }
+        clearDeferredTeamTasksSnapshot();
+        updateCachedTeamTasksSnapshot(tasks);
+        refreshAppliedTeamTasks(minecraft);
+    }
+
+    /**
+     * 清空暂存的团队任务同步快照，避免关闭界面或切换数据目录后误应用旧数据。
+     */
+    private static void clearDeferredTeamTasksSnapshot() {
+        deferredTeamTasksSnapshot = null;
+        deferredTeamTasksNamespace = "";
+    }
+
+    /**
+     * 刷新已应用团队任务后的 HUD 与当前打开界面。
+     *
+     * @param minecraft 当前客户端实例
+     */
+    private static void refreshAppliedTeamTasks(Minecraft minecraft) {
         TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
         if (renderer != null) {
             renderer.forceRefreshTasks();
@@ -1093,7 +1206,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         markUnsaved();
         String operationName = task.isCompleted() ? "complete" : "uncomplete";
         filterTasks();
-        persistCurrentViewTasksImmediately(operationName);
+        persistCurrentViewTasksInBackground(operationName);
     }
 
     @Override
@@ -1169,27 +1282,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * Save personal and team task data from the current screen.
      */
     private void onSaveTasks() {
-        TodoScreenPersistenceSupport.SaveOutcome outcome = TodoScreenPersistenceSupport.saveAll(
-                personalTaskManager,
-                teamTaskManager,
-                this.minecraft,
-                personalHasUnsavedChanges,
-                teamHasUnsavedChanges
-        );
-        personalHasUnsavedChanges = outcome.personalHasUnsavedChanges;
-        teamHasUnsavedChanges = outcome.teamHasUnsavedChanges;
-        hasUnsavedChanges = outcome.hasUnsavedChanges();
-        if (outcome.allSaved()) {
-            if (this.minecraft != null && this.minecraft.player != null) {
-                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
-            }
+        if (!personalHasUnsavedChanges && !teamHasUnsavedChanges) {
             onClose();
             return;
         }
-
-        if (this.minecraft != null && this.minecraft.player != null) {
-            this.minecraft.player.displayClientMessage(resolveSaveFailureMessage(outcome.failure()), false);
-        }
+        persistDirtyTasksInBackground("manual_save", true, personalHasUnsavedChanges, teamHasUnsavedChanges);
     }
 
     @Override
@@ -1465,12 +1562,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public void onClose() {
-        discardPersonalTasksOnCloseIfNeeded();
-        if (viewMode != ViewMode.PERSONAL && teamHasUnsavedChanges) {
+        if (!personalTaskSaveInFlight) {
+            discardPersonalTasksOnCloseIfNeeded();
+        }
+        if (!teamTaskSaveInFlight && viewMode != ViewMode.PERSONAL && teamHasUnsavedChanges) {
             ClientBridge.ops().requestTeamSync();
-            hasUnsavedChanges = false;
+            clearDeferredTeamTasksSnapshot();
+            restoreTeamTasksFromCachedSnapshot();
             teamHasUnsavedChanges = false;
         }
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
         this.minecraft.setScreen(parent);
     }
 
@@ -1488,6 +1589,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 hasUnsavedChanges = false;
             }
             publishPersonalTasksToHud();
+        }
+    }
+
+    /**
+     * 关闭未保存的团队视图时恢复到最近一次已同步团队任务基线。
+     */
+    private void restoreTeamTasksFromCachedSnapshot() {
+        if (teamTaskManager == null) {
+            return;
+        }
+        teamTaskManager.clearAll();
+        for (Task task : copyTasks(cachedTeamTasksSnapshot)) {
+            teamTaskManager.addTask(task);
+        }
+        if (currentSpaceMode == SpaceMode.TEAM) {
+            taskManager = teamTaskManager;
         }
     }
 
@@ -1780,6 +1897,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             boolean canAssignOthers = detailVisible && showAssignOthers && hasSelection;
             assignOthersButton.active = canAssignOthers;
         }
+        if (saveButton != null) {
+            saveButton.active = !taskSaveInFlight;
+        }
         rebuildContextMenuIfNeeded();
         applyResponsiveWidgetVisibility();
     }
@@ -1927,37 +2047,225 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             clearSelectedTask();
         }
         applySearchFilter();
-        if (!persistCurrentViewTasksImmediately("deletion")) {
-            markUnsaved();
+        markUnsaved();
+        persistCurrentViewTasksInBackground("deletion");
+    }
+
+    /**
+     * 在关键任务操作后后台持久化当前视图任务，避免渲染线程等待 H2 或文件 IO。
+     *
+     * @param operationName 操作名称，用于日志定位
+     */
+    private void persistCurrentViewTasksInBackground(String operationName) {
+        persistDirtyTasksInBackground(
+                operationName,
+                false,
+                viewMode == ViewMode.PERSONAL,
+                viewMode != ViewMode.PERSONAL
+        );
+    }
+
+    /**
+     * 将脏任务快照提交到后台保存队列，并在完成后回到主线程同步网络、HUD 和保存状态。
+     *
+     * @param operationName 操作名称，用于日志定位
+     * @param closeAfterSave 保存成功后是否关闭当前界面
+     * @param savePersonal 是否保存个人任务
+     * @param saveTeam 是否保存团队任务
+     */
+    private void persistDirtyTasksInBackground(String operationName, boolean closeAfterSave, boolean savePersonal, boolean saveTeam) {
+        Minecraft currentMinecraft = this.minecraft;
+        List<Task> personalSnapshot = savePersonal ? copyTasks(personalTaskManager == null ? List.of() : personalTaskManager.getAllTasks()) : List.of();
+        List<Task> teamSnapshot = saveTeam ? copyTasks(teamTaskManager == null ? List.of() : teamTaskManager.getAllTasks()) : List.of();
+        List<Task> teamBaseSnapshot = saveTeam ? copyTasks(cachedTeamTasksSnapshot) : List.of();
+        long personalVersion = personalSaveVersion;
+        long teamVersion = teamSaveVersion;
+        pendingTaskSaveCount++;
+        if (savePersonal) {
+            pendingPersonalTaskSaveCount++;
+        }
+        if (saveTeam) {
+            pendingTeamTaskSaveCount++;
+        }
+        refreshTaskSaveInFlightFlags();
+        updateButtonStates();
+        CompletableFuture
+                .runAsync(() -> saveTaskSnapshotsToStorage(currentMinecraft, savePersonal, personalSnapshot, saveTeam, teamSnapshot), TASK_SAVE_EXECUTOR)
+                .whenComplete((ignored, failure) -> {
+                    if (currentMinecraft == null) {
+                        finishTaskSaveInFlight(savePersonal, saveTeam);
+                        updateButtonStates();
+                        return;
+                    }
+                    currentMinecraft.execute(() -> finishBackgroundTaskPersistence(
+                            operationName,
+                            closeAfterSave,
+                            savePersonal,
+                            personalSnapshot,
+                            personalVersion,
+                            saveTeam,
+                            teamBaseSnapshot,
+                            teamSnapshot,
+                            teamVersion,
+                            failure
+                    ));
+                });
+    }
+
+    /**
+     * 在后台线程保存个人和团队任务快照。
+     *
+     * @param currentMinecraft 当前客户端实例
+     * @param savePersonal 是否保存个人任务
+     * @param personalSnapshot 个人任务快照
+     * @param saveTeam 是否保存团队任务
+     * @param teamSnapshot 团队任务快照
+     */
+    private void saveTaskSnapshotsToStorage(Minecraft currentMinecraft,
+                                            boolean savePersonal,
+                                            List<Task> personalSnapshot,
+                                            boolean saveTeam,
+                                            List<Task> teamSnapshot) {
+        try {
+            H2MaintenanceGuard.ensureWritableIfH2();
+            if (savePersonal) {
+                ClientTaskStorageHelper.savePersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft, personalSnapshot);
+            }
+            if (saveTeam && ClientTaskStorageHelper.shouldUsePublishedLocalPlayerStorage(currentMinecraft)) {
+                TodoListCommon.getTaskStorage().saveTeamTasks(teamSnapshot);
+            }
+        } catch (Exception exception) {
+            throw new BackgroundTaskSaveException(exception);
         }
     }
 
     /**
-     * 在关键任务操作后立即持久化当前视图任务，避免额外点击保存按钮。
+     * 处理后台任务保存完成状态，并只清理未被后续编辑覆盖的脏标记。
      *
-     * @param operationName 操作名称，用于日志定位
-     * @return 持久化成功返回 {@code true}，失败返回 {@code false}
+     * @param operationName 操作名称
+     * @param closeAfterSave 保存成功后是否关闭
+     * @param savedPersonal 是否保存过个人任务
+     * @param personalSnapshot 个人任务快照
+     * @param personalVersion 保存发起时的个人版本
+     * @param savedTeam 是否保存过团队任务
+     * @param teamBaseSnapshot 团队任务保存发起时的同步基线
+     * @param teamSnapshot 团队任务快照
+     * @param teamVersion 保存发起时的团队版本
+     * @param failure 保存失败异常
      */
-    private boolean persistCurrentViewTasksImmediately(String operationName) {
-        try {
-            if (viewMode == ViewMode.PERSONAL) {
-                TodoScreenPersistenceSupport.savePersonalTasks(personalTaskManager, this.minecraft);
-                personalHasUnsavedChanges = false;
-            } else {
-                TodoScreenPersistenceSupport.saveTeamTasks(teamTaskManager, this.minecraft);
-                teamHasUnsavedChanges = false;
-            }
-            hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
-            return true;
-        } catch (Exception exception) {
-            TodoConstants.LOGGER.error("Failed to persist task {} immediately", operationName, exception);
-            Component failureMessage = resolveSaveFailureMessage(exception);
+    private void finishBackgroundTaskPersistence(String operationName,
+                                                 boolean closeAfterSave,
+                                                 boolean savedPersonal,
+                                                 List<Task> personalSnapshot,
+                                                 long personalVersion,
+                                                 boolean savedTeam,
+                                                 List<Task> teamBaseSnapshot,
+                                                 List<Task> teamSnapshot,
+                                                 long teamVersion,
+                                                 Throwable failure) {
+        if (failure != null) {
+            TodoConstants.LOGGER.error("Failed to persist task {} in background", operationName, failure);
+            Component failureMessage = resolveSaveFailureMessage(failure);
             if (this.minecraft != null && this.minecraft.player != null) {
                 this.minecraft.player.displayClientMessage(failureMessage, false);
             } else {
                 addNotification(failureMessage.getString());
             }
-            return false;
+            finishTaskSaveInFlight(savedPersonal, savedTeam);
+            updateButtonStates();
+            return;
+        }
+        boolean personalSaveIsCurrent = savedPersonal && personalVersion == personalSaveVersion;
+        boolean teamSnapshotStillCurrent = savedTeam && taskSnapshotsEquivalent(
+                teamSnapshot,
+                teamTaskManager == null ? List.of() : teamTaskManager.getAllTasks()
+        );
+        boolean teamSaveIsCurrent = savedTeam && (teamVersion == teamSaveVersion || teamSnapshotStillCurrent);
+        if (personalSaveIsCurrent) {
+            TodoScreen.updateCachedPersonalTasksSnapshot(DataPathProvider.getStorageNamespace(), personalSnapshot);
+            if (ClientBridge.ops() != null) {
+                ClientBridge.ops().sendReplaceAllTasks(personalSnapshot);
+            }
+            TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+            if (renderer != null) {
+                renderer.syncPersonalTasksFromGui(personalSnapshot);
+            }
+            personalHasUnsavedChanges = false;
+        }
+        if (teamSaveIsCurrent) {
+            if (ClientBridge.ops() != null) {
+                ClientBridge.ops().sendMergeTeamTasks(teamBaseSnapshot, teamSnapshot);
+            }
+            updateCachedTeamTasksSnapshot(teamSnapshot);
+            teamHasUnsavedChanges = false;
+            clearDeferredTeamTasksSnapshot();
+        }
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+        applyDeferredTeamSyncIfReady();
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+        finishTaskSaveInFlight(savedPersonal, savedTeam);
+        updateButtonStates();
+        if (closeAfterSave && !hasUnsavedChanges && !taskSaveInFlight) {
+            if (this.minecraft != null && this.minecraft.player != null) {
+                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
+            }
+            onClose();
+        }
+    }
+
+    /**
+     * 在本地团队保存完成后应用保存期间暂存的服务端同步，避免权威结果被永久丢弃。
+     */
+    private void applyDeferredTeamSyncIfReady() {
+        if (teamHasUnsavedChanges || pendingTaskSaveCount > 1 || deferredTeamTasksSnapshot == null) {
+            return;
+        }
+        if (!Objects.equals(deferredTeamTasksNamespace, DataPathProvider.getStorageNamespace())) {
+            clearDeferredTeamTasksSnapshot();
+            return;
+        }
+        List<Task> deferredTasks = deferredTeamTasksSnapshot;
+        clearDeferredTeamTasksSnapshot();
+        applyTeamTasksSnapshot(this.minecraft, deferredTasks);
+    }
+
+    /**
+     * 根据待完成的后台保存数量刷新个人、团队和总体保存中状态。
+     */
+    private void refreshTaskSaveInFlightFlags() {
+        personalTaskSaveInFlight = pendingPersonalTaskSaveCount > 0;
+        teamTaskSaveInFlight = pendingTeamTaskSaveCount > 0;
+        taskSaveInFlight = pendingTaskSaveCount > 0;
+    }
+
+    /**
+     * 标记一次后台任务保存完成，并在所有同步副作用结束后刷新保存中状态。
+     *
+     * @param savedPersonal 本次是否保存个人任务
+     * @param savedTeam 本次是否保存团队任务
+     */
+    private void finishTaskSaveInFlight(boolean savedPersonal, boolean savedTeam) {
+        pendingTaskSaveCount = Math.max(0, pendingTaskSaveCount - 1);
+        if (savedPersonal) {
+            pendingPersonalTaskSaveCount = Math.max(0, pendingPersonalTaskSaveCount - 1);
+        }
+        if (savedTeam) {
+            pendingTeamTaskSaveCount = Math.max(0, pendingTeamTaskSaveCount - 1);
+        }
+        refreshTaskSaveInFlightFlags();
+    }
+
+    /**
+     * 后台任务保存异常包装，避免 CompletableFuture 丢失真实原因。
+     */
+    private static final class BackgroundTaskSaveException extends RuntimeException {
+        /**
+         * 创建后台任务保存异常。
+         *
+         * @param cause 原始失败原因
+         */
+        private BackgroundTaskSaveException(Throwable cause) {
+            super(cause);
         }
     }
 
@@ -2067,9 +2375,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         hasUnsavedChanges = true;
         if (viewMode == ViewMode.PERSONAL) {
             personalHasUnsavedChanges = true;
+            personalSaveVersion++;
             publishPersonalTasksToHud();
         } else {
             teamHasUnsavedChanges = true;
+            teamSaveVersion++;
         }
     }
 
@@ -2168,6 +2478,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         ));
     }
 
+    /**
+     * 返回个人任务是否存在尚未保存的界面改动。
+     *
+     * @return 个人任务存在未保存改动时返回 true
+     */
     public static boolean hasPersonalUnsavedChanges() {
         return personalHasUnsavedChanges;
     }
@@ -2235,8 +2550,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskToClaim.setAssigneeName(this.minecraft.player.getName().getString());
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
-        persistCurrentViewTasksImmediately("claim");
         filterTasks();
+        persistCurrentViewTasksInBackground("claim");
     }
 
     /**
@@ -2322,8 +2637,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskToAbandon.setAssigneeName(null);
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
-        persistCurrentViewTasksImmediately("abandon");
         filterTasks();
+        persistCurrentViewTasksInBackground("abandon");
     }
 
     private void onAssignOthers() {
@@ -2387,8 +2702,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         addNotification(Component.translatable("message.todolist.assigned_to_player", memberName).getString());
         markUnsaved();
-        persistCurrentViewTasksImmediately("assign_others");
         filterTasks();
+        persistDirtyTasksInBackground("assign_others", false, false, true);
     }
 
     private void filterTasks() {

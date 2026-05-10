@@ -15,6 +15,8 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 
 /**
  * TodoScreen 的测试访问器，集中承载界面自测所需的读取与操作入口。
@@ -47,7 +49,30 @@ final class TodoScreenTestAccess {
     static void resetGuiStateForTest() {
         writeStaticScreenField("personalHasUnsavedChanges", false);
         writeStaticScreenField("teamHasUnsavedChanges", false);
+        writeStaticScreenField("personalSaveVersion", 0L);
+        writeStaticScreenField("teamSaveVersion", 0L);
+        writeStaticScreenField("cachedTeamTasksSnapshot", List.of());
+        writeStaticScreenField("deferredTeamTasksSnapshot", null);
+        writeStaticScreenField("deferredTeamTasksNamespace", "");
         writeStaticScreenField("lastGuiState", null);
+    }
+
+    /**
+     * 占用后台任务保存线程，便于测试稳定模拟保存未完成期间的同步回包。
+     *
+     * @param started 任务已开始信号
+     * @param release 释放后台线程信号
+     */
+    static void occupyTaskSaveExecutorForTest(CountDownLatch started, CountDownLatch release) {
+        ExecutorService executor = readStaticScreenField("TASK_SAVE_EXECUTOR", ExecutorService.class);
+        executor.execute(() -> {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     /**
@@ -592,6 +617,120 @@ final class TodoScreenTestAccess {
      */
     void saveTasksForTest() {
         invokeScreenVoid("onSaveTasks");
+    }
+
+    /**
+     * 触发一次不依赖实际任务内容的后台保存，用于覆盖缺失 Minecraft 实例时的回调清理路径。
+     */
+    void startNoopBackgroundTaskSaveWithoutMinecraftForTest() {
+        invokeScreenVoid(
+                "persistDirtyTasksInBackground",
+                new Class<?>[] {
+                        String.class,
+                        boolean.class,
+                        boolean.class,
+                        boolean.class
+                },
+                "test_noop",
+                false,
+                false,
+                false
+        );
+    }
+
+    /**
+     * 返回当前是否仍有后台任务保存未完成。
+     *
+     * @return true 表示后台保存仍在进行
+     */
+    boolean isTaskSaveInFlightForTest() {
+        return readScreenBoolean("taskSaveInFlight");
+    }
+
+    /**
+     * 设置个人任务保存版本，用于模拟后台保存回调乱序到达。
+     *
+     * @param version 个人任务保存版本
+     */
+    static void setPersonalSaveVersionForTest(long version) {
+        writeStaticScreenField("personalSaveVersion", version);
+    }
+
+    /**
+     * 设置团队任务保存版本，用于模拟后台保存回调乱序到达。
+     *
+     * @param version 团队任务保存版本
+     */
+    static void setTeamSaveVersionForTest(long version) {
+        writeStaticScreenField("teamSaveVersion", version);
+    }
+
+    /**
+     * 模拟个人任务后台保存完成回调。
+     *
+     * @param snapshot 保存快照
+     * @param version 保存发起时版本
+     */
+    void finishPersonalTaskSaveForTest(List<Task> snapshot, long version) {
+        invokeScreenVoid(
+                "finishBackgroundTaskPersistence",
+                new Class<?>[] {
+                        String.class,
+                        boolean.class,
+                        boolean.class,
+                        List.class,
+                        long.class,
+                        boolean.class,
+                        List.class,
+                        List.class,
+                        long.class,
+                        Throwable.class
+                },
+                "test_personal",
+                false,
+                true,
+                snapshot,
+                version,
+                false,
+                List.of(),
+                List.of(),
+                0L,
+                null
+        );
+    }
+
+    /**
+     * 模拟团队任务后台保存完成回调。
+     *
+     * @param snapshot 保存快照
+     * @param version 保存发起时版本
+     */
+    void finishTeamTaskSaveForTest(List<Task> snapshot, long version) {
+        invokeScreenVoid(
+                "finishBackgroundTaskPersistence",
+                new Class<?>[] {
+                        String.class,
+                        boolean.class,
+                        boolean.class,
+                        List.class,
+                        long.class,
+                        boolean.class,
+                        List.class,
+                        List.class,
+                        long.class,
+                        Throwable.class
+                },
+                "test_team",
+                false,
+                false,
+                List.of(),
+                0L,
+                true,
+                List.of(),
+                snapshot,
+                version,
+                null
+        );
     }
 
     /**
@@ -1177,6 +1316,24 @@ final class TodoScreenTestAccess {
         try {
             Field field = resolveField(TodoScreen.class, fieldName);
             field.set(null, value);
+        } catch (ReflectiveOperationException exception) {
+            throw reflectionFailure(fieldName, exception);
+        }
+    }
+
+    /**
+     * 读取 TodoScreen 的静态字段并按指定类型转换。
+     *
+     * @param fieldName 字段名
+     * @param type 目标类型
+     * @param <T> 目标类型参数
+     * @return 字段值
+     */
+    private static <T> T readStaticScreenField(String fieldName, Class<T> type) {
+        try {
+            Field field = resolveField(TodoScreen.class, fieldName);
+            Object value = field.get(null);
+            return value == null ? null : type.cast(value);
         } catch (ReflectiveOperationException exception) {
             throw reflectionFailure(fieldName, exception);
         }

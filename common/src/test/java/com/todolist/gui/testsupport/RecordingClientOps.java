@@ -143,6 +143,17 @@ public final class RecordingClientOps implements ClientBridge.ClientOps {
     }
 
     /**
+     * 记录团队任务合并请求，测试里沿用整表替换记录便于断言最终快照。
+     *
+     * @param baseTasks 保存发起时的团队任务基线
+     * @param tasks 替换后的任务列表
+     */
+    @Override
+    public void sendMergeTeamTasks(List<Task> baseTasks, List<Task> tasks) {
+        sendReplaceTeamTasks(tasks);
+    }
+
+    /**
      * 记录团队任务重同步请求次数。
      */
     @Override
