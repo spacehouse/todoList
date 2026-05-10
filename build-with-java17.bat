@@ -1,5 +1,4 @@
 @echo off
-set "JAVA_HOME=D:\JAVA\JDK\jdk-17.0.4"
 if "%JAVA_HOME%"=="" (
     set "JAVA_HOME=D:\JAVA\JDK\jdk-17.0.4"
 )
