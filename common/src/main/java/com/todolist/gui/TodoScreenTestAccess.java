@@ -51,6 +51,9 @@ final class TodoScreenTestAccess {
         writeStaticScreenField("cachedTeamTasksSnapshot", List.of());
         writeStaticScreenField("deferredTeamTasksSnapshot", null);
         writeStaticScreenField("deferredTeamTasksNamespace", "");
+        writeStaticScreenField("pendingTeamAuthoritativeBaseSnapshot", null);
+        writeStaticScreenField("pendingTeamAuthoritativeSubmittedSnapshot", null);
+        writeStaticScreenField("pendingTeamAuthoritativeNamespace", "");
         writeStaticScreenField("lastGuiState", null);
     }
 

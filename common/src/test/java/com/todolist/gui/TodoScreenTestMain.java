@@ -86,6 +86,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTeamTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistTeamTaskCompletionToggleImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreStalePersonalTaskSaveCallback", TodoScreenTestMain::shouldIgnoreStalePersonalTaskSaveCallback);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreStaleTeamTaskSaveCallback", TodoScreenTestMain::shouldIgnoreStaleTeamTaskSaveCallback);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreOlderTeamSyncAfterNewerTeamSaveCompletes", TodoScreenTestMain::shouldIgnoreOlderTeamSyncAfterNewerTeamSaveCompletes);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
@@ -768,6 +769,45 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "团队任务当前保存回调应广播最新快照");
         GuiTestSupport.assertNull(ops.getReplaceTeamTaskCalls().get(0).get(0).getAssigneeUuid(), "团队任务最终广播应保留最新归属状态");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "团队任务当前保存回调应清理未保存状态");
+    }
+
+    /**
+     * 验证较新的团队保存完成后，如果较旧服务端同步稍后到达，不会把界面闪回到旧状态。
+     */
+    private static void shouldIgnoreOlderTeamSyncAfterNewerTeamSaveCompletes() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        TodoScreenTestAccess.resetGuiStateForTest();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-late-old-sync", "Team Late Old Sync");
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(createTeamTask("Late Old Sync Task", teamProject.getId(), false)));
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        minecraft.setScreen(screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAllViewForTest();
+        Task task = requireTaskByTitle(screen, "Late Old Sync Task");
+        access(screen).selectTaskForTest(task);
+
+        access(screen).triggerClaimTaskForTest();
+        waitForTaskSaveToFinish(screen);
+        Task claimedSnapshot = copyTask(requireTaskByTitle(screen, "Late Old Sync Task"));
+        GuiTestSupport.assertEquals(OWNER_ID.toString(), claimedSnapshot.getAssigneeUuid(), "领取后任务应归属当前玩家");
+
+        access(screen).triggerAbandonTaskForTest();
+        waitForTaskSaveToFinish(screen);
+        Task abandonedSnapshot = requireTaskByTitle(screen, "Late Old Sync Task");
+        GuiTestSupport.assertNull(abandonedSnapshot.getAssigneeUuid(), "放弃后任务应保持未领取状态");
+
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(claimedSnapshot));
+
+        Task afterOlderSync = requireTaskByTitle(screen, "Late Old Sync Task");
+        GuiTestSupport.assertNull(afterOlderSync.getAssigneeUuid(), "较旧团队同步晚到时不应把放弃结果闪回为已领取");
+
+        TodoScreen.applySyncedTeamTasks(minecraft, List.of(copyTask(abandonedSnapshot)));
+        GuiTestSupport.assertNull(requireTaskByTitle(screen, "Late Old Sync Task").getAssigneeUuid(), "较新团队同步到达后仍应保持放弃结果");
     }
 
     /**
@@ -1790,12 +1830,21 @@ public final class TodoScreenTestMain {
         Task task = requireTaskByTitle(screen, "Close Inflight Team Task");
         access(screen).selectTaskForTest(task);
 
-        access(screen).triggerClaimTaskForTest();
-        GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "领取后应存在后台团队保存");
+        CountDownLatch saveExecutorStarted = new CountDownLatch(1);
+        CountDownLatch releaseSaveExecutor = new CountDownLatch(1);
+        TodoScreenTestAccess.occupyTaskSaveExecutorForTest(saveExecutorStarted, releaseSaveExecutor);
+        awaitLatch(saveExecutorStarted, "后台保存线程应在关闭界面测试前被占用");
 
-        screen.onClose();
+        try {
+            access(screen).triggerClaimTaskForTest();
+            GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "领取后应存在后台团队保存");
 
-        GuiTestSupport.assertEquals(0, ops.getRequestTeamSyncCallCount(), "关闭时已有后台保存则不应请求团队旧同步");
+            screen.onClose();
+
+            GuiTestSupport.assertEquals(0, ops.getRequestTeamSyncCallCount(), "关闭时已有后台保存则不应请求团队旧同步");
+        } finally {
+            releaseSaveExecutor.countDown();
+        }
         waitForTaskSaveToFinish(screen);
         GuiTestSupport.assertEquals(1, ops.getReplaceTeamTaskCalls().size(), "后台保存完成后仍应提交团队整表替换");
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "后台保存完成后应清理未保存状态");
@@ -1820,12 +1869,21 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Team Save During Personal Dirty");
         Task task = requireTaskByTitle(screen, "Team Save During Personal Dirty");
         access(screen).selectTaskForTest(task);
-        access(screen).triggerClaimTaskForTest();
-        GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "团队领取后应存在后台保存");
+        CountDownLatch saveExecutorStarted = new CountDownLatch(1);
+        CountDownLatch releaseSaveExecutor = new CountDownLatch(1);
+        TodoScreenTestAccess.occupyTaskSaveExecutorForTest(saveExecutorStarted, releaseSaveExecutor);
+        awaitLatch(saveExecutorStarted, "后台保存线程应在混合关闭测试前被占用");
 
-        screen.onClose();
+        try {
+            access(screen).triggerClaimTaskForTest();
+            GuiTestSupport.assertTrue(access(screen).isTaskSaveInFlightForTest(), "团队领取后应存在后台保存");
 
-        GuiTestSupport.assertFalse(TodoScreen.hasPersonalUnsavedChanges(), "关闭时应丢弃不在保存中的个人未保存状态");
+            screen.onClose();
+
+            GuiTestSupport.assertFalse(TodoScreen.hasPersonalUnsavedChanges(), "关闭时应丢弃不在保存中的个人未保存状态");
+        } finally {
+            releaseSaveExecutor.countDown();
+        }
         waitForTaskSaveToFinish(screen);
         TodoScreen reopenedScreen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
         ScreenDriver.init(minecraft, reopenedScreen);
@@ -2165,6 +2223,23 @@ public final class TodoScreenTestMain {
             }
         }
         GuiTestSupport.assertFalse(access(screen).isTaskSaveInFlightForTest(), "后台任务保存应在超时前完成");
+    }
+
+    /**
+     * 等待测试同步信号到达，避免异步保存用例依赖线程调度时序。
+     *
+     * @param latch 等待的同步信号
+     * @param failureMessage 超时或中断时的失败提示
+     */
+    private static void awaitLatch(CountDownLatch latch, String failureMessage) {
+        try {
+            if (!latch.await(1, TimeUnit.SECONDS)) {
+                throw new AssertionError(failureMessage);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(failureMessage, exception);
+        }
     }
 
     /**
