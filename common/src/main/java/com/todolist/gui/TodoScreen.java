@@ -70,6 +70,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private static List<Task> cachedTeamTasksSnapshot = List.of();
     private static List<Task> deferredTeamTasksSnapshot = null;
     private static String deferredTeamTasksNamespace = "";
+    private static List<Task> pendingTeamAuthoritativeBaseSnapshot = null;
+    private static List<Task> pendingTeamAuthoritativeSubmittedSnapshot = null;
+    private static String pendingTeamAuthoritativeNamespace = "";
 
 
     private final Screen parent;
@@ -485,6 +488,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     public static void applySyncedTeamTasks(Minecraft minecraft, List<Task> tasks) {
         List<Task> safeTasks = copyTasks(tasks);
+        if (shouldIgnoreStaleTeamSyncForPendingSave(safeTasks)) {
+            return;
+        }
         if (minecraft != null
                 && minecraft.screen instanceof TodoScreen screen
                 && (teamHasUnsavedChanges || screen.teamTaskSaveInFlight)) {
@@ -520,6 +526,107 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private static void clearDeferredTeamTasksSnapshot() {
         deferredTeamTasksSnapshot = null;
         deferredTeamTasksNamespace = "";
+    }
+
+    /**
+     * 记录刚提交给服务端的团队任务保存快照，用于过滤乱序晚到的旧同步。
+     *
+     * @param baseTasks 保存发起时的服务端同步基线
+     * @param submittedTasks 本次提交给服务端的团队任务快照
+     */
+    private static void rememberPendingTeamAuthoritativeSync(List<Task> baseTasks, List<Task> submittedTasks) {
+        pendingTeamAuthoritativeBaseSnapshot = copyTasks(baseTasks);
+        pendingTeamAuthoritativeSubmittedSnapshot = copyTasks(submittedTasks);
+        pendingTeamAuthoritativeNamespace = DataPathProvider.getStorageNamespace();
+    }
+
+    /**
+     * 清空等待服务端确认的团队任务提交快照。
+     */
+    private static void clearPendingTeamAuthoritativeSync() {
+        pendingTeamAuthoritativeBaseSnapshot = null;
+        pendingTeamAuthoritativeSubmittedSnapshot = null;
+        pendingTeamAuthoritativeNamespace = "";
+    }
+
+    /**
+     * 判断团队同步是否是旧提交的晚到回包，避免覆盖更新的本地提交造成闪回。
+     *
+     * @param syncedTasks 服务端下发的团队任务快照
+     * @return true 表示应忽略该同步
+     */
+    private static boolean shouldIgnoreStaleTeamSyncForPendingSave(List<Task> syncedTasks) {
+        if (pendingTeamAuthoritativeSubmittedSnapshot == null) {
+            return false;
+        }
+        if (!Objects.equals(pendingTeamAuthoritativeNamespace, DataPathProvider.getStorageNamespace())) {
+            clearPendingTeamAuthoritativeSync();
+            return false;
+        }
+        if (teamSyncCoversPendingSave(syncedTasks)) {
+            clearPendingTeamAuthoritativeSync();
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 判断服务端同步是否已经包含最近一次本地团队提交中的增删改结果。
+     *
+     * @param syncedTasks 服务端下发的团队任务快照
+     * @return true 表示同步已覆盖本地提交
+     */
+    private static boolean teamSyncCoversPendingSave(List<Task> syncedTasks) {
+        Map<String, Task> baseById = mapTasksById(pendingTeamAuthoritativeBaseSnapshot);
+        Map<String, Task> submittedById = mapTasksById(pendingTeamAuthoritativeSubmittedSnapshot);
+        Map<String, Task> syncedById = mapTasksById(syncedTasks);
+        for (Task submittedTask : pendingTeamAuthoritativeSubmittedSnapshot) {
+            Task baseTask = baseById.get(submittedTask.getId());
+            if ((baseTask == null || !tasksEquivalent(baseTask, submittedTask))
+                    && !tasksEquivalent(submittedTask, syncedById.get(submittedTask.getId()))) {
+                return false;
+            }
+        }
+        for (Task baseTask : pendingTeamAuthoritativeBaseSnapshot) {
+            if (!submittedById.containsKey(baseTask.getId())
+                    && tasksEquivalent(baseTask, syncedById.get(baseTask.getId()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 按任务 ID 构建任务映射，并忽略空任务和空 ID。
+     *
+     * @param tasks 原始任务列表
+     * @return 任务 ID 到任务对象的映射
+     */
+    private static Map<String, Task> mapTasksById(List<Task> tasks) {
+        Map<String, Task> tasksById = new HashMap<>();
+        for (Task task : tasks == null ? List.<Task>of() : tasks) {
+            if (task != null && task.getId() != null) {
+                tasksById.put(task.getId(), task);
+            }
+        }
+        return tasksById;
+    }
+
+    /**
+     * 判断两个任务的持久化内容是否一致。
+     *
+     * @param left 左侧任务
+     * @param right 右侧任务
+     * @return 内容一致时返回 true
+     */
+    private static boolean tasksEquivalent(Task left, Task right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return Objects.equals(left.toNbt(), right.toNbt());
     }
 
     /**
@@ -2195,6 +2302,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (teamSaveIsCurrent) {
             if (ClientBridge.ops() != null) {
                 ClientBridge.ops().sendMergeTeamTasks(teamBaseSnapshot, teamSnapshot);
+                rememberPendingTeamAuthoritativeSync(teamBaseSnapshot, teamSnapshot);
             }
             updateCachedTeamTasksSnapshot(teamSnapshot);
             teamHasUnsavedChanges = false;
