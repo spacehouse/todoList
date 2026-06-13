@@ -707,7 +707,9 @@ public final class H2TaskQueryService {
      * @return 存储不可用异常
      */
     private StorageUnavailableException markUnavailable(String message, Throwable cause) {
-        H2StorageAvailability.markUnavailable(connectionProvider.getDatabaseBasePath(), H2StorageAvailability.Reason.QUERY_FAILED, cause == null ? message : cause.getMessage());
+        if (!H2StorageAvailability.isTransientLockFailure(cause)) {
+            H2StorageAvailability.markUnavailable(connectionProvider.getDatabaseBasePath(), H2StorageAvailability.Reason.QUERY_FAILED, cause == null ? message : cause.getMessage());
+        }
         return new StorageUnavailableException(H2StorageAvailability.Reason.QUERY_FAILED, message, cause);
     }
 
