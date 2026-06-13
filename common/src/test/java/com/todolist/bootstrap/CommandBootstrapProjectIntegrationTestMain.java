@@ -588,42 +588,59 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         resetState(ModConfig.CommandAccessMode.FULL);
         TestServerPlayer player = createPlayer("00000000-0000-0000-0000-000000000011", "hud-user", false);
         CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        List<Boolean> syncedStates = new ArrayList<>();
+        try {
+            ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
+                if (!ProjectPackets.SYNC_HUD_VISIBILITY_ID.equals(channelId)) {
+                    return;
+                }
+                net.minecraft.network.FriendlyByteBuf copy = new net.minecraft.network.FriendlyByteBuf(buf.copy());
+                syncedStates.add(copy.readBoolean());
+            });
 
-        int offResult = dispatcher.execute("todo hud set off", createSource(0, player));
-        assertEquals(1, offResult, "hud set off 应返回成功");
-        assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(player), "hud set off 未关闭 HUD");
+            int offResult = dispatcher.execute("todo hud set off", createSource(0, player));
+            assertEquals(1, offResult, "hud set off 应返回成功");
+            assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(player), "hud set off 未关闭 HUD");
 
-        int onResult = dispatcher.execute("todo hud set on", createSource(0, player));
-        assertEquals(1, onResult, "hud set on 应返回成功");
-        assertEquals(Boolean.TRUE, ProjectPackets.isHudVisible(player), "hud set on 未开启 HUD");
+            int onResult = dispatcher.execute("todo hud set on", createSource(0, player));
+            assertEquals(1, onResult, "hud set on 应返回成功");
+            assertEquals(Boolean.TRUE, ProjectPackets.isHudVisible(player), "hud set on 未开启 HUD");
+            assertEquals(List.of(false, true), syncedStates, "命令切换 HUD 后应向客户端同步最新显隐状态");
+        } finally {
+            ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
+            });
+        }
     }
 
     /**
-     * 校验客户端上报 HUD 显隐状态后，服务端会持久化并同步相同状态。
+     * 校验客户端上报 HUD 显隐状态后，服务端会持久化状态，但不会回推旧状态造成客户端闪烁。
      */
     private static void shouldSyncHudVisibilityFromClientPacketSuccessfully() throws Exception {
         resetState(ModConfig.CommandAccessMode.FULL);
         TestServerPlayer player = createPlayer("00000000-0000-0000-0000-000000000307", "hud-packet-user", false);
         TestMinecraftServer server = createServer(player);
         List<Boolean> syncedStates = new ArrayList<>();
-        ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
-            if (!ProjectPackets.SYNC_HUD_VISIBILITY_ID.equals(channelId)) {
-                return;
-            }
-            net.minecraft.network.FriendlyByteBuf copy = new net.minecraft.network.FriendlyByteBuf(buf.copy());
-            syncedStates.add(copy.readBoolean());
-        });
+        try {
+            ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
+                if (!ProjectPackets.SYNC_HUD_VISIBILITY_ID.equals(channelId)) {
+                    return;
+                }
+                net.minecraft.network.FriendlyByteBuf copy = new net.minecraft.network.FriendlyByteBuf(buf.copy());
+                syncedStates.add(copy.readBoolean());
+            });
 
-        net.minecraft.network.FriendlyByteBuf packet = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        packet.writeBoolean(false);
-        ProjectPackets.onSetHudVisibilityPacket(server, player, packet);
+            net.minecraft.network.FriendlyByteBuf packet = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            packet.writeBoolean(false);
+            ProjectPackets.onSetHudVisibilityPacket(server, player, packet);
 
-        assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(player), "客户端上报 HUD 隐藏后服务端状态未更新");
-        ProjectPlayerStateStorage.ProjectPlayerState storedState = new ProjectPlayerStateStorage().loadPlayerState(player.getUUID());
-        assertEquals(Boolean.FALSE, storedState.isHudVisible(), "客户端上报 HUD 隐藏后持久化状态未更新");
-        assertEquals(Boolean.TRUE, syncedStates.contains(Boolean.FALSE), "客户端上报 HUD 隐藏后未向客户端回推同步结果");
-        ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
-        });
+            assertEquals(Boolean.FALSE, ProjectPackets.isHudVisible(player), "客户端上报 HUD 隐藏后服务端状态未更新");
+            ProjectPlayerStateStorage.ProjectPlayerState storedState = new ProjectPlayerStateStorage().loadPlayerState(player.getUUID());
+            assertEquals(Boolean.FALSE, storedState.isHudVisible(), "客户端上报 HUD 隐藏后持久化状态未更新");
+            assertEquals(List.of(), syncedStates, "客户端主动切换 HUD 后不应再向同一客户端回推显隐状态");
+        } finally {
+            ProjectPackets.setServerPacketSender((target, channelId, buf) -> {
+            });
+        }
     }
 
     /**
