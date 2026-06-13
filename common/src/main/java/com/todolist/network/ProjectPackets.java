@@ -214,7 +214,16 @@ public class ProjectPackets {
             PacketGuards.logDrop(SET_HUD_VISIBILITY_ID.toString(), ex);
             return;
         }
-        server.execute(() -> setHudVisible(player, visible));
+        server.execute(() -> {
+            if (player == null) {
+                return;
+            }
+            if (!ensureWritableBeforeMutation(player)) {
+                syncHudVisibilityToPlayer(player, isHudVisible(player));
+                return;
+            }
+            applyHudVisibleState(player, visible, false);
+        });
     }
 
     /**
@@ -334,13 +343,26 @@ public class ProjectPackets {
         if (!ensureWritableBeforeMutation(player)) {
             return;
         }
+        applyHudVisibleState(player, visible, true);
+    }
+
+    /**
+     * 应用服务端记录的玩家 HUD 可见状态，并按需同步回客户端。
+     *
+     * @param player 当前玩家
+     * @param visible HUD 是否可见
+     * @param syncToClient 是否回推到客户端
+     */
+    private static void applyHudVisibleState(ServerPlayer player, boolean visible, boolean syncToClient) {
         if (visible) {
             playerHudVisibilityMap.remove(player.getStringUUID());
         } else {
             playerHudVisibilityMap.put(player.getStringUUID(), false);
         }
         persistPlayerProjectState(player);
-        syncHudVisibilityToPlayer(player, visible);
+        if (syncToClient) {
+            syncHudVisibilityToPlayer(player, visible);
+        }
     }
 
     public static void onPlayerJoin(MinecraftServer server, ServerPlayer player) {
