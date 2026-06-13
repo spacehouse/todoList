@@ -24,6 +24,8 @@ public final class StorageBackendSelectionTestMain {
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldDefaultToNbt", StorageBackendSelectionTestMain::shouldDefaultToNbt);
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldLoadH2Backend", StorageBackendSelectionTestMain::shouldLoadH2Backend);
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldNormalizeInvalidBackendToNbt", StorageBackendSelectionTestMain::shouldNormalizeInvalidBackendToNbt);
+        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldWriteStorageBackendCommentsToConfig", StorageBackendSelectionTestMain::shouldWriteStorageBackendCommentsToConfig);
+        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldWriteH2BackupOnStartCommentsToConfig", StorageBackendSelectionTestMain::shouldWriteH2BackupOnStartCommentsToConfig);
     }
 
     /**
@@ -63,5 +65,64 @@ public final class StorageBackendSelectionTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证非法 storageBackend 规范化时发生异常", exception);
         }
+    }
+
+    /**
+     * 验证配置文件会写入 storageBackend 多语言说明注释。
+     */
+    private static void shouldWriteStorageBackendCommentsToConfig() {
+        GuiTestSupport.resetState();
+        try {
+            Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            String savedConfig = Files.readString(configFile, StandardCharsets.UTF_8);
+            assertContainsEither(savedConfig, "// storageBackend notes:", "// storageBackend 说明：", "配置文件应写入 storageBackend 标题注释");
+            assertContainsEither(
+                    savedConfig,
+                    "// h2: H2 database storage, suitable when you need relational queries, backups, or external tools",
+                    "// h2：H2 数据库存储，适合需要关系查询、备份或外部工具连接的场景",
+                    "配置文件应写入 storageBackend 的 h2 说明注释"
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 storageBackend 注释写入时发生异常", exception);
+        }
+    }
+
+    /**
+     * 验证配置文件会写入 h2BackupOnStart 多语言说明注释。
+     */
+    private static void shouldWriteH2BackupOnStartCommentsToConfig() {
+        GuiTestSupport.resetState();
+        try {
+            Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
+            ModConfig.getInstance().setH2BackupOnStart(true);
+
+            String savedConfig = Files.readString(configFile, StandardCharsets.UTF_8);
+            assertContainsEither(savedConfig, "// h2BackupOnStart notes:", "// h2BackupOnStart 说明：", "配置文件应写入 h2BackupOnStart 标题注释");
+            assertContainsEither(
+                    savedConfig,
+                    "// true: create one H2 backup after H2 initializes on startup (only effective when storageBackend is h2)",
+                    "// true：启动初始化 H2 后自动创建一次备份（仅在 storageBackend 为 h2 时生效）",
+                    "配置文件应写入 h2BackupOnStart 的启用说明注释"
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 h2BackupOnStart 注释写入时发生异常", exception);
+        }
+    }
+
+    /**
+     * 断言文本至少包含两种候选值中的一个，适配不同系统语言的配置注释输出。
+     *
+     * @param text 待检查文本
+     * @param first 第一种候选值
+     * @param second 第二种候选值
+     * @param message 失败提示
+     */
+    private static void assertContainsEither(String text, String first, String second, String message) {
+        GuiTestSupport.assertTrue(
+                text.contains(first) || text.contains(second),
+                message + " first=" + first + " second=" + second
+        );
     }
 }

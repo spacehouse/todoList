@@ -33,6 +33,8 @@ public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
     private static final String COMMAND_ACCESS_MODE_KEY = "\"commandAccessMode\"";
+    private static final String STORAGE_BACKEND_KEY = "\"storageBackend\"";
+    private static final String H2_BACKUP_ON_START_KEY = "\"h2BackupOnStart\"";
     private static final String LANG_ASSET_DIR = "assets/todolist/lang/";
     private static final String LANG_ZH_CN = "zh_cn";
     private static final String LANG_EN_US = "en_us";
@@ -47,6 +49,31 @@ public class ModConfig {
             "OP_ONLY: only OP can use all commands",
             "VIEW_ONLY: non-OP can use view commands, edit still requires OP",
             "FULL: non-OP can use view/edit commands (not recommended for public servers)"
+    };
+    private static final String[] STORAGE_BACKEND_COMMENT_KEYS = new String[] {
+            "config.todolist.storage_backend.comment.title",
+            "config.todolist.storage_backend.comment.nbt",
+            "config.todolist.storage_backend.comment.h2"
+    };
+    private static final String[] STORAGE_BACKEND_COMMENT_FALLBACK_EN = new String[] {
+            "storageBackend notes:",
+            "nbt: default local file storage, suitable for simple singleplayer use",
+            "h2: H2 database storage, suitable when you need relational queries, backups, or external tools"
+    };
+    private static final String[] H2_BACKUP_ON_START_COMMENT_KEYS = new String[] {
+            "config.todolist.h2_backup_on_start.comment.title",
+            "config.todolist.h2_backup_on_start.comment.disabled",
+            "config.todolist.h2_backup_on_start.comment.enabled"
+    };
+    private static final String[] H2_BACKUP_ON_START_COMMENT_FALLBACK_EN = new String[] {
+            "h2BackupOnStart notes:",
+            "false: do not create a startup backup",
+            "true: create one H2 backup after H2 initializes on startup (only effective when storageBackend is h2)"
+    };
+    private static final ConfigCommentBlock[] CONFIG_COMMENT_BLOCKS = new ConfigCommentBlock[] {
+            new ConfigCommentBlock(COMMAND_ACCESS_MODE_KEY, COMMAND_ACCESS_MODE_COMMENT_KEYS, COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN),
+            new ConfigCommentBlock(STORAGE_BACKEND_KEY, STORAGE_BACKEND_COMMENT_KEYS, STORAGE_BACKEND_COMMENT_FALLBACK_EN),
+            new ConfigCommentBlock(H2_BACKUP_ON_START_KEY, H2_BACKUP_ON_START_COMMENT_KEYS, H2_BACKUP_ON_START_COMMENT_FALLBACK_EN)
     };
     private static final int GUI_WIDTH_MIN = 300;
     private static final int GUI_WIDTH_MAX = 1600;
@@ -383,7 +410,7 @@ public class ModConfig {
             String json = GSON.toJson(instance);
             SafePersistenceHelper.writeBytes(
                     CONFIG_PATH,
-                    addCommandAccessModeComment(json).getBytes(StandardCharsets.UTF_8),
+                    addConfigComments(json).getBytes(StandardCharsets.UTF_8),
                     "mod config"
             );
             TodoConstants.LOGGER.debug("Saved configuration to {}", CONFIG_PATH);
@@ -447,23 +474,36 @@ public class ModConfig {
         }
     }
 
-    private static String addCommandAccessModeComment(String json) {
+    /**
+     * 为配置 JSON 中的关键字段插入多语言注释块。
+     *
+     * @param json 原始配置 JSON
+     * @return 带注释的配置文本
+     */
+    private static String addConfigComments(String json) {
         if (json == null || json.isEmpty()) {
             return json;
         }
-        String[] comments = buildCommandAccessModeComments();
+        String langCode = resolveLangCode();
+        Map<String, String> primary = loadLangMap(langCode);
+        Map<String, String> fallback = LANG_EN_US.equals(langCode) ? primary : loadLangMap(LANG_EN_US);
         String[] lines = json.split("\n", -1);
-        StringBuilder builder = new StringBuilder(json.length() + 256);
-        boolean inserted = false;
+        StringBuilder builder = new StringBuilder(json.length() + 512);
+        boolean[] inserted = new boolean[CONFIG_COMMENT_BLOCKS.length];
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
-            if (!inserted && line.contains(COMMAND_ACCESS_MODE_KEY)) {
-                int keyIndex = line.indexOf(COMMAND_ACCESS_MODE_KEY);
+            for (int blockIndex = 0; blockIndex < CONFIG_COMMENT_BLOCKS.length; blockIndex++) {
+                ConfigCommentBlock block = CONFIG_COMMENT_BLOCKS[blockIndex];
+                if (inserted[blockIndex] || !line.contains(block.targetKey)) {
+                    continue;
+                }
+                int keyIndex = line.indexOf(block.targetKey);
                 String indent = keyIndex <= 0 ? "" : line.substring(0, keyIndex);
+                String[] comments = buildComments(block, primary, fallback);
                 for (String comment : comments) {
                     builder.append(indent).append("// ").append(comment).append("\n");
                 }
-                inserted = true;
+                inserted[blockIndex] = true;
             }
             builder.append(line);
             if (i < lines.length - 1) {
@@ -473,19 +513,46 @@ public class ModConfig {
         return builder.toString();
     }
 
-    private static String[] buildCommandAccessModeComments() {
-        String langCode = resolveLangCode();
-        Map<String, String> primary = loadLangMap(langCode);
-        Map<String, String> fallback = LANG_EN_US.equals(langCode) ? primary : loadLangMap(LANG_EN_US);
-        String[] comments = new String[COMMAND_ACCESS_MODE_COMMENT_KEYS.length];
-        for (int i = 0; i < COMMAND_ACCESS_MODE_COMMENT_KEYS.length; i++) {
-            String key = COMMAND_ACCESS_MODE_COMMENT_KEYS[i];
-            String fallbackText = i < COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN.length
-                    ? COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN[i]
+    /**
+     * 按注释块定义构建最终注释文本。
+     *
+     * @param block 注释块定义
+     * @param primary 当前语言映射
+     * @param fallback 英文兜底映射
+     * @return 注释文本数组
+     */
+    private static String[] buildComments(ConfigCommentBlock block, Map<String, String> primary, Map<String, String> fallback) {
+        String[] comments = new String[block.commentKeys.length];
+        for (int i = 0; i < block.commentKeys.length; i++) {
+            String key = block.commentKeys[i];
+            String fallbackText = i < block.fallbackComments.length
+                    ? block.fallbackComments[i]
                     : key;
             comments[i] = translateWithFallback(primary, fallback, key, fallbackText);
         }
         return comments;
+    }
+
+    /**
+     * 配置注释块定义，描述目标字段及其多语言注释键。
+     */
+    private static final class ConfigCommentBlock {
+        private final String targetKey;
+        private final String[] commentKeys;
+        private final String[] fallbackComments;
+
+        /**
+         * 创建配置注释块定义。
+         *
+         * @param targetKey 配置字段键
+         * @param commentKeys 多语言注释键列表
+         * @param fallbackComments 英文兜底注释
+         */
+        private ConfigCommentBlock(String targetKey, String[] commentKeys, String[] fallbackComments) {
+            this.targetKey = targetKey;
+            this.commentKeys = commentKeys;
+            this.fallbackComments = fallbackComments;
+        }
     }
 
     private static String resolveLangCode() {
