@@ -3,6 +3,8 @@ package com.todolist.storage;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.project.ProjectPlayerStateStorage.ProjectPlayerState;
+import com.todolist.task.Task;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -13,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Comparator;
+import java.util.List;
 
 /**
  * H2TcpAccessTestMain 覆盖 M2 的 H2 TCP 配置、启动回退和基础权限行为。
@@ -34,6 +37,9 @@ public final class H2TcpAccessTestMain {
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldFallbackWhenAllPortsBusy", H2TcpAccessTestMain::shouldFallbackWhenAllPortsBusy);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldDisableRemoteWeakPasswordConfig", H2TcpAccessTestMain::shouldDisableRemoteWeakPasswordConfig);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldApplyPasswordResetToDatabaseUser", H2TcpAccessTestMain::shouldApplyPasswordResetToDatabaseUser);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepGameWritesAvailableWithExternalTcpSession", H2TcpAccessTestMain::shouldKeepGameWritesAvailableWithExternalTcpSession);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldRecoverAfterExternalTcpWriteLockIsReleased", H2TcpAccessTestMain::shouldRecoverAfterExternalTcpWriteLockIsReleased);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepPlayerStateWritableAfterUppercaseTcpSession", H2TcpAccessTestMain::shouldKeepPlayerStateWritableAfterUppercaseTcpSession);
     }
 
     /**
@@ -221,6 +227,120 @@ public final class H2TcpAccessTestMain {
             }
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 TCP 密码重置同步时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证外部 TCP 会话保持连接时，游戏内 H2 重建上下文后仍可继续写入。
+     */
+    private static void shouldKeepGameWritesAvailableWithExternalTcpSession() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-session-");
+            Path databasePath = tempGameDir.resolve("todo").resolve("todolist");
+            writeTcpEnabledConfig(databasePath, 19152, 4);
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            H2StorageBootstrap bootstrap = new H2StorageBootstrap();
+            bootstrap.ensureReady();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            H2TcpConfig config = H2TcpConfig.load();
+            try (Connection readonly = DriverManager.getConnection(provider.getJdbcUrl(), config.getReadonlyUser(), config.getReadonlyPassword())) {
+                H2StorageBootstrap.resetDatabaseState(provider.getDatabaseBasePath());
+
+                Task task = new Task("TCP Session Write Task", "");
+                new H2TaskStore().saveLocalTasks(List.of(task));
+
+                GuiTestSupport.assertEquals(1, new H2TaskStore().loadLocalTasks().size(), "外部 TCP 会话存在时游戏内写入仍应可用");
+                GuiTestSupport.assertFalse(readonly.isClosed(), "外部 TCP 会话不应被游戏内写入关闭");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 TCP 外部会话期间游戏内写入时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证外部 TCP 写事务短暂锁表导致写入失败后，释放锁即可恢复游戏内写入。
+     */
+    private static void shouldRecoverAfterExternalTcpWriteLockIsReleased() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-lock-");
+            Path databasePath = tempGameDir.resolve("todo").resolve("todolist");
+            writeTcpEnabledConfig(databasePath, 19162, 4);
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            H2TaskStore store = new H2TaskStore();
+            Task lockedTask = new Task("Locked Task", "");
+            store.saveLocalTasks(List.of(lockedTask));
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            H2TcpConfig config = H2TcpConfig.load();
+            try (Connection admin = DriverManager.getConnection(provider.getJdbcUrl(), config.getAdminUser(), config.getAdminPassword());
+                 Statement statement = admin.createStatement()) {
+                statement.execute("SET DEFAULT_LOCK_TIMEOUT 100");
+            }
+
+            boolean failedDuringExternalLock = false;
+            try (Connection readwrite = DriverManager.getConnection(provider.getJdbcUrl(), config.getReadwriteUser(), config.getReadwritePassword());
+                 Statement statement = readwrite.createStatement()) {
+                readwrite.setAutoCommit(false);
+                statement.executeUpdate("UPDATE tasks SET title = title WHERE id = '" + lockedTask.getId() + "'");
+                try {
+                    store.saveLocalTasks(List.of(new Task("Blocked During External Lock", "")));
+                } catch (Exception expected) {
+                    failedDuringExternalLock = true;
+                } finally {
+                    readwrite.rollback();
+                }
+            }
+            GuiTestSupport.assertTrue(failedDuringExternalLock, "外部写事务持锁时游戏内写入应先失败");
+
+            store.saveLocalTasks(List.of(new Task("Recovered After External Lock", "")));
+            GuiTestSupport.assertEquals("Recovered After External Lock", store.loadLocalTasks().get(0).getTitle(), "外部写锁释放后游戏内写入应自动恢复");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 TCP 外部写锁释放后的恢复能力时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证外部工具使用缺少大小写参数的 TCP URL 连接后，游戏内玩家项目状态仍可写入。
+     */
+    private static void shouldKeepPlayerStateWritableAfterUppercaseTcpSession() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-uppercase-session-");
+            Path databasePath = tempGameDir.resolve("todo").resolve("todolist");
+            writeTcpEnabledConfig(databasePath, 19172, 4);
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            H2StorageBootstrap bootstrap = new H2StorageBootstrap();
+            bootstrap.ensureReady();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            H2TcpConfig config = H2TcpConfig.load();
+            String uppercaseModeUrl = provider.getJdbcUrl().replace(";DATABASE_TO_UPPER=FALSE", "");
+            try (Connection external = DriverManager.getConnection(uppercaseModeUrl, config.getReadonlyUser(), config.getReadonlyPassword());
+                 Statement statement = external.createStatement()) {
+                GuiTestSupport.assertTrue(failsSql(statement, "SELECT COUNT(*) FROM player_project_state"), "缺少大小写参数的外部会话应复现大写表名查找失败");
+            }
+
+            H2ProjectPlayerStateStore store = new H2ProjectPlayerStateStore();
+            store.savePlayerState(java.util.UUID.fromString("9b17065a-10e8-4e55-a5ce-dcb2a4d9a8ba"),
+                    new ProjectPlayerState("active-project", List.of("active-project"), true));
+
+            GuiTestSupport.assertEquals("active-project",
+                    store.loadPlayerState(java.util.UUID.fromString("9b17065a-10e8-4e55-a5ce-dcb2a4d9a8ba")).getActiveProjectId(),
+                    "外部大写模式会话后游戏内玩家项目状态仍应可写");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 TCP 大写模式外部会话后的玩家状态写入时发生异常", exception);
         } finally {
             cleanup(tempGameDir);
         }

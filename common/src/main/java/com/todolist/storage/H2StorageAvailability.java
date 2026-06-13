@@ -1,6 +1,7 @@
 package com.todolist.storage;
 
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,6 +9,7 @@ import java.util.Map;
  * H2StorageAvailability 记录每个 H2 数据库路径的可用状态和最近失败原因。
  */
 public final class H2StorageAvailability {
+    private static final int H2_LOCK_TIMEOUT_ERROR_CODE = 50200;
     private static final Map<Path, Status> STATUS_BY_DATABASE = new HashMap<>();
 
     /**
@@ -66,6 +68,40 @@ public final class H2StorageAvailability {
         synchronized (STATUS_BY_DATABASE) {
             STATUS_BY_DATABASE.put(normalize(databasePath), new Status(reason, message));
         }
+    }
+
+    /**
+     * 判断失败是否只是可恢复的瞬时 H2 锁等待超时。
+     *
+     * @param failure 原始失败
+     * @return 是锁等待超时时返回 true
+     */
+    public static boolean isTransientLockFailure(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof SQLException sqlException && isLockTimeout(sqlException)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    /**
+     * 判断 SQL 异常是否为 H2 锁等待超时。
+     *
+     * @param exception SQL 异常
+     * @return 是锁等待超时时返回 true
+     */
+    private static boolean isLockTimeout(SQLException exception) {
+        SQLException current = exception;
+        while (current != null) {
+            if (current.getErrorCode() == H2_LOCK_TIMEOUT_ERROR_CODE) {
+                return true;
+            }
+            current = current.getNextException();
+        }
+        return false;
     }
 
     /**
