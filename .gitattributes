@@ -1,0 +1,9 @@
+# Normalize line endings across Windows editors and Git checkouts.
+* text=auto
+
+# Java source files should stay LF in the repository.
+*.java text eol=lf
+
+# Windows batch scripts should stay CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
