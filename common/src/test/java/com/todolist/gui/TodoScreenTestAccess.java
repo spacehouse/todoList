@@ -384,6 +384,15 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 返回快速新增输入框提示文本。
+     *
+     * @return 提示文本
+     */
+    String getQuickAddHintTextForTest() {
+        return readHintText(getQuickAddFieldForTest());
+    }
+
+    /**
      * 返回快速新增输入框边界。
      *
      * @return 输入框边界数组
@@ -426,6 +435,24 @@ final class TodoScreenTestAccess {
      */
     EditBox getTagFieldForTest() {
         return readScreenField("tagField", EditBox.class);
+    }
+
+    /**
+     * 返回详情标题输入框提示文本。
+     *
+     * @return 提示文本
+     */
+    String getTitleHintTextForTest() {
+        return readHintText(getTitleFieldForTest());
+    }
+
+    /**
+     * 返回标签输入框提示文本。
+     *
+     * @return 提示文本
+     */
+    String getTagHintTextForTest() {
+        return readHintText(getTagFieldForTest());
     }
 
     /**
@@ -1261,6 +1288,17 @@ final class TodoScreenTestAccess {
      */
     private static String toEnumName(Object value) {
         return value instanceof Enum<?> enumValue ? enumValue.name() : "";
+    }
+
+    /**
+     * 读取输入框提示文本。
+     *
+     * @param field 输入框
+     * @return 提示文本
+     */
+    private static String readHintText(EditBox field) {
+        Component hint = field == null ? null : readField(field, "hint", Component.class);
+        return hint == null ? "" : hint.getString();
     }
 
     /**

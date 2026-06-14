@@ -120,6 +120,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowUncompleteCompletedTaskInPersonalView", TodoScreenTestMain::shouldAllowUncompleteCompletedTaskInPersonalView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUncompletedTaskInActiveSectionImmediately", TodoScreenTestMain::shouldShowUncompletedTaskInActiveSectionImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowEnterAddWhileTaskSelected", TodoScreenTestMain::shouldAllowEnterAddWhileTaskSelected);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseClearInputHintsForQuickAddAndDetailFields", TodoScreenTestMain::shouldUseClearInputHintsForQuickAddAndDetailFields);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksAndClearUnsavedState", TodoScreenTestMain::shouldSavePersonalTasksAndClearUnsavedState);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld", TodoScreenTestMain::shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow", TodoScreenTestMain::shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow);
@@ -1750,6 +1751,38 @@ public final class TodoScreenTestMain {
         List<Task> tasks = access(screen).getCurrentManagerTasksForTest();
         GuiTestSupport.assertEquals(2, tasks.size(), "选中任务时在快速新增框按回车仍应新增任务");
         GuiTestSupport.assertEquals("Beta", tasks.get(1).getTitle(), "新增任务标题应来自快速新增输入框");
+    }
+
+    /**
+     * 验证快速新增、详情标题和标签输入框会显示更明确的提示文案。
+     */
+    private static void shouldUseClearInputHintsForQuickAddAndDetailFields() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Hint Task");
+        Task task = access(screen).getCurrentManagerTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+
+        GuiTestSupport.assertEquals(
+                "gui.todolist.input.quick_add.placeholder",
+                access(screen).getQuickAddHintTextForTest(),
+                "快速新增输入框应提示可直接输入标题并回车创建"
+        );
+        GuiTestSupport.assertEquals(
+                "gui.todolist.input.title.edit.placeholder",
+                access(screen).getTitleHintTextForTest(),
+                "详情标题输入框应提示当前用于编辑任务标题"
+        );
+        GuiTestSupport.assertEquals(
+                "gui.todolist.input.tags.placeholder",
+                access(screen).getTagHintTextForTest(),
+                "标签输入框应显示标签格式提示"
+        );
     }
 
     private static void shouldSavePersonalTasksAndClearUnsavedState() {

@@ -330,7 +330,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 验证折叠态摘要和截断态隐藏计数文本语义稳定。
+     * 验证展开态底部统计和折叠态摘要文本语义稳定。
      */
     private static void shouldShowHiddenCountSummaryWhenCollapsedOrTruncated() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -352,15 +352,17 @@ public final class TodoHudRendererTestMain {
         TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
         renderer.refreshHudModelForTest();
 
-        GuiTestSupport.assertTrue(renderer.getHiddenCountTextForTest().contains("2"), "展开态被截断时应显示隐藏任务计数");
+        String expandedExpected = Component.translatableWithFallback("hud.todolist.summary.fixed", "Todo %s | Done %s", "2", "2").getString();
+        GuiTestSupport.assertEquals(expandedExpected, renderer.getHiddenCountTextForTest(), "展开态底部应固定显示待办与已办总数");
 
         renderer.toggleExpanded();
 
-        GuiTestSupport.assertTrue(renderer.getCollapsedSummaryTextForTest().contains("2"), "折叠态应显示待办与已办摘要");
+        String collapsedExpected = Component.translatableWithFallback("hud.todolist.summary.with_completed", "Todo: %s | Done: %s", "2", "2").getString();
+        GuiTestSupport.assertEquals(collapsedExpected, renderer.getCollapsedSummaryTextForTest(), "折叠态应保持原有摘要语义");
     }
 
     /**
-     * 验证内容区高度紧张时，HUD 仍会预留一行显示隐藏任务计数。
+     * 验证内容区高度紧张时，HUD 仍会预留一行显示底部固定统计。
      */
     private static void shouldReserveRowForHiddenCountWhenHeightIsTight() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -389,7 +391,8 @@ public final class TodoHudRendererTestMain {
 
         GuiTestSupport.assertEquals(7, renderer.getShownPendingCountForTest(), "最小 HUD 高度下应预留一行给隐藏计数，而不是把全部可用行都挤给任务");
         GuiTestSupport.assertEquals(2, renderer.getHiddenCountForTest(), "被预留行挤出的任务也应计入隐藏数量");
-        GuiTestSupport.assertTrue(renderer.getHiddenCountTextForTest().contains("2"), "高度不足时仍应显示隐藏任务计数");
+        String expected = Component.translatableWithFallback("hud.todolist.summary.fixed", "Todo %s | Done %s", "9", "0").getString();
+        GuiTestSupport.assertEquals(expected, renderer.getHiddenCountTextForTest(), "高度不足时仍应显示底部固定统计");
     }
 
     /**
