@@ -3,6 +3,7 @@ package com.todolist.storage;
 import com.todolist.platform.DataPathProvider;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -14,11 +15,30 @@ import java.sql.SQLException;
  */
 public final class H2ConnectionProvider {
     private static final String DATABASE_BASENAME = "todolist";
+    private static final String EMBEDDED_JDBC_OPTIONS = ";AUTO_SERVER=FALSE;DATABASE_TO_UPPER=FALSE;TRACE_LEVEL_FILE=0;DB_CLOSE_DELAY=-1";
+    private static final ThreadLocal<Boolean> REUSE_BACKGROUND_CONNECTION = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<CachedConnection> CACHED_BACKGROUND_CONNECTION = new ThreadLocal<>();
 
     /**
      * 创建 H2 连接提供器。
      */
     public H2ConnectionProvider() {
+    }
+
+    /**
+     * 为当前线程启用 H2 后台连接复用。
+     * 主要用于 GUI 后台读取线程，避免频繁创建短连接导致切回个人项目卡顿。
+     */
+    public static void enableEmbeddedConnectionReuseForCurrentThread() {
+        REUSE_BACKGROUND_CONNECTION.set(Boolean.TRUE);
+    }
+
+    /**
+     * 为当前线程关闭 H2 后台连接复用标记。
+     * 已建立的线程缓存连接会保留，供同线程后续继续复用。
+     */
+    public static void disableEmbeddedConnectionReuseForCurrentThread() {
+        REUSE_BACKGROUND_CONNECTION.remove();
     }
 
     /**
@@ -46,7 +66,7 @@ public final class H2ConnectionProvider {
             return H2TcpServerManager.buildTcpJdbcUrl(getDatabaseBasePath());
         }
         String normalizedPath = getDatabaseBasePath().toString().replace("\\", "/");
-        return "jdbc:h2:file:" + normalizedPath + ";AUTO_SERVER=FALSE;DATABASE_TO_UPPER=FALSE;TRACE_LEVEL_FILE=0";
+        return "jdbc:h2:file:" + normalizedPath + EMBEDDED_JDBC_OPTIONS;
     }
 
     /**
@@ -65,10 +85,17 @@ public final class H2ConnectionProvider {
             throw new SQLException("H2 driver is not available on the runtime classpath", exception);
         }
         H2TcpConfig config = H2TcpConfig.load();
-        if (H2TcpServerManager.getStatus().isTcpActive()) {
-            return DriverManager.getConnection(getJdbcUrl(), config.getAdminUser(), config.getAdminPassword());
+        boolean tcpActive = H2TcpServerManager.getStatus().isTcpActive();
+        String jdbcUrl = getJdbcUrl();
+        if (Boolean.TRUE.equals(REUSE_BACKGROUND_CONNECTION.get())) {
+            String user = tcpActive ? config.getAdminUser() : "sa";
+            String password = tcpActive ? config.getAdminPassword() : "";
+            return openReusableConnection(jdbcUrl, user, password);
         }
-        return DriverManager.getConnection(getJdbcUrl(), "sa", "");
+        if (tcpActive) {
+            return DriverManager.getConnection(jdbcUrl, config.getAdminUser(), config.getAdminPassword());
+        }
+        return DriverManager.getConnection(jdbcUrl, "sa", "");
     }
 
     /**
@@ -107,5 +134,96 @@ public final class H2ConnectionProvider {
         String normalizedPath = databaseBasePath.toString().replace("\\", "/");
         String jdbcUrl = "jdbc:h2:file:" + normalizedPath + ";AUTO_SERVER=FALSE;DATABASE_TO_UPPER=FALSE;TRACE_LEVEL_FILE=0";
         return DriverManager.getConnection(jdbcUrl, "sa", "");
+    }
+
+    /**
+     * 为当前线程返回一个可复用的 H2 连接代理。
+     * 代理层的 close() 不会真的关闭物理连接，便于后台线程反复读取时复用同一连接。
+     *
+     * @param jdbcUrl JDBC URL
+     * @param user 用户名
+     * @param password 密码
+     * @return 可复用连接代理
+     * @throws SQLException 连接创建或重置失败时抛出
+     */
+    private Connection openReusableConnection(String jdbcUrl, String user, String password) throws SQLException {
+        CachedConnection cached = CACHED_BACKGROUND_CONNECTION.get();
+        boolean cacheClosed = cached != null && cached.connection().isClosed();
+        boolean cacheUrlMatches = cached != null && cached.jdbcUrl().equals(jdbcUrl);
+        boolean cacheUserMatches = cached != null && cached.user().equals(user);
+        if (cached == null || cacheClosed || !cacheUrlMatches || !cacheUserMatches) {
+            closeCachedConnection(cached);
+            cached = new CachedConnection(jdbcUrl, user, DriverManager.getConnection(jdbcUrl, user, password));
+            CACHED_BACKGROUND_CONNECTION.set(cached);
+        }
+        resetReusableConnectionState(cached.connection());
+        Connection physicalConnection = cached.connection();
+        return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class<?>[] {Connection.class},
+                (proxy, method, args) -> {
+                    String methodName = method.getName();
+                    if ("close".equals(methodName)) {
+                        return null;
+                    }
+                    if ("isClosed".equals(methodName)) {
+                        return physicalConnection.isClosed();
+                    }
+                    if ("unwrap".equals(methodName) && args != null && args.length == 1 && args[0] instanceof Class<?> targetType) {
+                        if (targetType.isInstance(physicalConnection)) {
+                            return physicalConnection;
+                        }
+                    }
+                    if ("isWrapperFor".equals(methodName) && args != null && args.length == 1 && args[0] instanceof Class<?> targetType) {
+                        return targetType.isInstance(physicalConnection);
+                    }
+                    return method.invoke(physicalConnection, args);
+                }
+        );
+    }
+
+    /**
+     * 在复用连接再次借出前重置状态，避免上次事务残留影响本次读取。
+     *
+     * @param connection 物理连接
+     * @throws SQLException 状态重置失败时抛出
+     */
+    private void resetReusableConnectionState(Connection connection) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            return;
+        }
+        if (!connection.getAutoCommit()) {
+            connection.rollback();
+            connection.setAutoCommit(true);
+        }
+        if (connection.isReadOnly()) {
+            connection.setReadOnly(false);
+        }
+        connection.clearWarnings();
+    }
+
+    /**
+     * 关闭旧的线程缓存连接。
+     *
+     * @param cached 旧缓存连接
+     */
+    private void closeCachedConnection(CachedConnection cached) {
+        if (cached == null || cached.connection() == null) {
+            return;
+        }
+        try {
+            cached.connection().close();
+        } catch (SQLException ignored) {
+        }
+    }
+
+    /**
+     * 当前线程缓存的连接信息。
+     *
+     * @param jdbcUrl JDBC URL
+     * @param user 用户名
+     * @param connection 物理连接
+     */
+    private record CachedConnection(String jdbcUrl, String user, Connection connection) {
     }
 }

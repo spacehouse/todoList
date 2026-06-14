@@ -91,6 +91,35 @@ public final class H2TaskStore {
     }
 
     /**
+     * 在本地集成服务端场景下，同时保存本地个人桶与玩家个人桶。
+     * 通过单事务双桶写入减少重复开连和重复提交带来的卡顿。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param tasks 待保存任务
+     * @throws IOException 保存失败时抛出
+     */
+    public void saveLocalAndPlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
+        String localLockKey = bucketLockKey(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER);
+        String playerOwner = ownerOf(playerUuid);
+        String playerLockKey = bucketLockKey(PLAYER_PERSONAL_BUCKET, playerOwner);
+        if (localLockKey.compareTo(playerLockKey) <= 0) {
+            withBucketLock(localLockKey, () -> withBucketLock(playerLockKey, () -> saveBucketsLocked(
+                    List.of(
+                            new BucketSaveRequest(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks),
+                            new BucketSaveRequest(PLAYER_PERSONAL_BUCKET, playerOwner, tasks)
+                    )
+            )));
+            return;
+        }
+        withBucketLock(playerLockKey, () -> withBucketLock(localLockKey, () -> saveBucketsLocked(
+                List.of(
+                        new BucketSaveRequest(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks),
+                        new BucketSaveRequest(PLAYER_PERSONAL_BUCKET, playerOwner, tasks)
+                )
+        )));
+    }
+
+    /**
      * 读取团队任务桶。
      *
      * @return 团队任务列表
@@ -155,23 +184,25 @@ public final class H2TaskStore {
      */
     private List<Task> loadBucket(String bucketType, String ownerUuid) throws IOException {
         bootstrap.ensureReady();
-        try (Connection connection = connectionProvider.openConnection();
-             PreparedStatement statement = connection.prepareStatement("""
+        try (Connection connection = connectionProvider.openConnection()) {
+            java.util.Map<String, ListTag> tagsByTaskId = loadTagsByTaskId(connection, bucketType, ownerUuid);
+            try (PreparedStatement statement = connection.prepareStatement("""
                      SELECT id, scope, project_id, title, description, completed, priority, created_at,
                             due_date, creator_uuid, assignee_uuid, assignee_name
                      FROM tasks
                      WHERE bucket_type = ? AND owner_uuid = ?
                      ORDER BY sort_order, created_at, id
                      """)) {
-            statement.setString(1, bucketType);
-            statement.setString(2, ownerUuid);
-            List<Task> tasks = new ArrayList<>();
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    tasks.add(readTask(connection, bucketType, ownerUuid, resultSet));
+                statement.setString(1, bucketType);
+                statement.setString(2, ownerUuid);
+                List<Task> tasks = new ArrayList<>();
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        tasks.add(readTask(resultSet, tagsByTaskId));
+                    }
                 }
+                return tasks;
             }
-            return tasks;
         } catch (SQLException exception) {
             throw markUnavailable(H2StorageAvailability.Reason.READ_FAILED, "Failed to load H2 tasks", exception);
         }
@@ -186,10 +217,7 @@ public final class H2TaskStore {
      * @throws IOException 保存失败时抛出
      */
     private void saveBucket(String bucketType, String ownerUuid, List<Task> tasks) throws IOException {
-        Object saveLock = BUCKET_SAVE_LOCKS.computeIfAbsent(bucketType + '\u0000' + ownerUuid, ignored -> new Object());
-        synchronized (saveLock) {
-            saveBucketLocked(bucketType, ownerUuid, tasks);
-        }
+        withBucketLock(bucketLockKey(bucketType, ownerUuid), () -> saveBucketLocked(bucketType, ownerUuid, tasks));
     }
 
     /**
@@ -201,17 +229,29 @@ public final class H2TaskStore {
      * @throws IOException 保存失败时抛出
      */
     private void saveBucketLocked(String bucketType, String ownerUuid, List<Task> tasks) throws IOException {
+        saveBucketsLocked(List.of(new BucketSaveRequest(bucketType, ownerUuid, tasks)));
+    }
+
+    /**
+     * 在已获取保存锁后，用单连接事务批量保存多个任务桶。
+     *
+     * @param requests 待保存桶请求列表
+     * @throws IOException 保存失败时抛出
+     */
+    private void saveBucketsLocked(List<BucketSaveRequest> requests) throws IOException {
         H2MaintenanceLock.ensureWritable();
         bootstrap.ensureReady();
-        List<Task> safeTasks = tasks == null ? List.of() : tasks;
         long now = System.currentTimeMillis();
         try (Connection connection = connectionProvider.openConnection()) {
             boolean oldAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
-                deleteBucket(connection, bucketType, ownerUuid);
-                insertTasks(connection, bucketType, ownerUuid, safeTasks, now);
-                upsertBucketMeta(connection, bucketType, ownerUuid, now);
+                for (BucketSaveRequest request : requests) {
+                    List<Task> safeTasks = request.tasks == null ? List.of() : request.tasks;
+                    deleteBucket(connection, request.bucketType, request.ownerUuid);
+                    insertTasks(connection, request.bucketType, request.ownerUuid, safeTasks, now);
+                    upsertBucketMeta(connection, request.bucketType, request.ownerUuid, now);
+                }
                 connection.commit();
             } catch (SQLException exception) {
                 connection.rollback();
@@ -306,7 +346,7 @@ public final class H2TaskStore {
             for (int index = 0; index < tasks.size(); index++) {
                 Task task = tasks.get(index);
                 bindTask(taskStatement, bucketType, ownerUuid, task, index, updatedAt);
-                taskStatement.executeUpdate();
+                taskStatement.addBatch();
                 int tagOrder = 0;
                 for (String tag : task.getTags()) {
                     tagStatement.setString(1, bucketType);
@@ -314,9 +354,40 @@ public final class H2TaskStore {
                     tagStatement.setString(3, task.getId());
                     tagStatement.setString(4, tag);
                     tagStatement.setLong(5, tagOrder++);
-                    tagStatement.executeUpdate();
+                    tagStatement.addBatch();
                 }
             }
+            if (!tasks.isEmpty()) {
+                taskStatement.executeBatch();
+            }
+            taskStatement.clearBatch();
+            tagStatement.executeBatch();
+            tagStatement.clearBatch();
+        }
+    }
+
+    /**
+     * 生成同桶保存锁键，确保多桶复合保存时使用稳定顺序。
+     *
+     * @param bucketType 桶类型
+     * @param ownerUuid 桶拥有者
+     * @return 保存锁键
+     */
+    private String bucketLockKey(String bucketType, String ownerUuid) {
+        return bucketType + '\u0000' + ownerUuid;
+    }
+
+    /**
+     * 在指定桶锁内执行保存逻辑。
+     *
+     * @param lockKey 锁键
+     * @param action 保存动作
+     * @throws IOException 保存失败时抛出
+     */
+    private void withBucketLock(String lockKey, BucketSaveAction action) throws IOException {
+        Object saveLock = BUCKET_SAVE_LOCKS.computeIfAbsent(lockKey, ignored -> new Object());
+        synchronized (saveLock) {
+            action.run();
         }
     }
 
@@ -381,7 +452,7 @@ public final class H2TaskStore {
      * @return 任务对象
      * @throws SQLException 读取失败时抛出
      */
-    private Task readTask(Connection connection, String bucketType, String ownerUuid, ResultSet resultSet) throws SQLException {
+    private Task readTask(ResultSet resultSet, java.util.Map<String, ListTag> tagsByTaskId) throws SQLException {
         CompoundTag taskTag = new CompoundTag();
         taskTag.putString("id", resultSet.getString("id"));
         taskTag.putString("scope", resultSet.getString("scope"));
@@ -398,40 +469,40 @@ public final class H2TaskStore {
         putOptionalString(taskTag, "creatorUuid", resultSet.getString("creator_uuid"));
         putOptionalString(taskTag, "assigneeUuid", resultSet.getString("assignee_uuid"));
         putOptionalString(taskTag, "assigneeName", resultSet.getString("assignee_name"));
-        taskTag.put("tags", loadTags(connection, bucketType, ownerUuid, resultSet.getString("id")));
+        taskTag.put("tags", tagsByTaskId.getOrDefault(resultSet.getString("id"), new ListTag()));
         taskTag.put("subtasks", new ListTag());
         return Task.fromNbt(taskTag);
     }
 
     /**
-     * 读取任务标签列表。
+     * 批量读取任务桶内所有标签，避免按任务逐条查询。
      *
      * @param connection H2 连接
      * @param bucketType 桶类型
      * @param ownerUuid 桶拥有者
-     * @param taskId 任务 ID
-     * @return NBT 标签列表
+     * @return 按任务 ID 分组后的标签映射
      * @throws SQLException 读取失败时抛出
      */
-    private ListTag loadTags(Connection connection, String bucketType, String ownerUuid, String taskId) throws SQLException {
-        ListTag tags = new ListTag();
+    private java.util.Map<String, ListTag> loadTagsByTaskId(Connection connection, String bucketType, String ownerUuid) throws SQLException {
+        java.util.Map<String, ListTag> tagsByTaskId = new java.util.HashMap<>();
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT tag FROM task_tags
-                WHERE bucket_type = ? AND owner_uuid = ? AND task_id = ?
-                ORDER BY sort_order, tag
+                SELECT task_id, tag FROM task_tags
+                WHERE bucket_type = ? AND owner_uuid = ?
+                ORDER BY task_id, sort_order, tag
                 """)) {
             statement.setString(1, bucketType);
             statement.setString(2, ownerUuid);
-            statement.setString(3, taskId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
+                    String taskId = resultSet.getString("task_id");
+                    ListTag tags = tagsByTaskId.computeIfAbsent(taskId, ignored -> new ListTag());
                     CompoundTag tag = new CompoundTag();
-                    tag.putString("tag", resultSet.getString(1));
+                    tag.putString("tag", resultSet.getString("tag"));
                     tags.add(tag);
                 }
             }
         }
-        return tags;
+        return tagsByTaskId;
     }
 
     /**
@@ -442,6 +513,20 @@ public final class H2TaskStore {
      */
     private String ownerOf(UUID playerUuid) {
         return playerUuid == null ? "" : playerUuid.toString();
+    }
+
+    /**
+     * 多桶保存时使用的桶请求。
+     */
+    private record BucketSaveRequest(String bucketType, String ownerUuid, List<Task> tasks) {
+    }
+
+    /**
+     * 支持抛出 IOException 的保存动作。
+     */
+    @FunctionalInterface
+    private interface BucketSaveAction {
+        void run() throws IOException;
     }
 
     /**

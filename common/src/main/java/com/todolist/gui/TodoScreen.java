@@ -14,6 +14,7 @@ import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchPrefixOption
 import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchQuery;
 import com.todolist.gui.TodoScreenProjectSearchSupport.ProjectSearchRoleFilter;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
 import com.todolist.storage.H2MaintenanceGuard;
@@ -309,7 +310,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private List<Task> loadPersonalTasksForGui(Minecraft currentMinecraft) {
         try {
-            return ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft);
+            H2ConnectionProvider.enableEmbeddedConnectionReuseForCurrentThread();
+            try {
+                return ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft);
+            } finally {
+                H2ConnectionProvider.disableEmbeddedConnectionReuseForCurrentThread();
+            }
         } catch (Exception exception) {
             throw new GuiTaskLoadException(exception);
         }

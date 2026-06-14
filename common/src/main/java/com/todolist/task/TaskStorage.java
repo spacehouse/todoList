@@ -110,6 +110,31 @@ public class TaskStorage {
     }
 
     /**
+     * 在 H2 模式下同时保存本地个人任务与玩家个人任务。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param tasks 待保存的任务列表
+     * @throws IOException 保存失败时抛出
+     */
+    public void saveLocalAndPlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2TaskStore.saveLocalAndPlayerTasks(playerUuid, tasks);
+            return;
+        }
+        savePlayerTasks(playerUuid, tasks);
+        saveTasks(tasks);
+    }
+
+    /**
+     * 返回当前是否选择 H2 作为任务存储后端。
+     *
+     * @return 选择 H2 时返回 true
+     */
+    public boolean isH2StorageSelected() {
+        return StorageBackendFactory.isH2Selected();
+    }
+
+    /**
      * 按当前服务端运行模式保存个人任务。
      * 单人本地模式写入单文件，其余模式写入玩家文件。
      *
