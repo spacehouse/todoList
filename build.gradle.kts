@@ -77,7 +77,7 @@ tasks.register<Copy>("distReleaseJars") {
 
 tasks.register("h2JarContentCheck") {
     group = "verification"
-    description = "Check Fabric and Forge release jars contain exactly one org/h2/Driver.class entry."
+    description = "Check Fabric, Forge, and NeoForge release jars contain exactly one org/h2/Driver.class entry."
 
     dependsOn("distReleaseJars")
     outputs.file(h2JarContentReport)
@@ -86,7 +86,8 @@ tasks.register("h2JarContentCheck") {
         val distDir = layout.buildDirectory.dir("libs").get().asFile
         val releaseJars = listOf(
             "fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"),
-            "forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
+            "forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar"),
+            "neoforge" to distDir.resolve("todolist-neoforge-$releaseMinecraftVersion-$releaseModVersion.jar")
         )
 
         val reportLines = mutableListOf<String>()

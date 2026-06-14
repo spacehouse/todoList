@@ -832,7 +832,8 @@ public final class CommandBootstrap {
             );
         }
         if (!storageStatus.isAvailable()) {
-            sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", storageStatus.getReason(), sanitizeStatusMessage(storageStatus.getMessage()));
+            String reasonText = storageStatus.getReason() == null ? "UNKNOWN" : storageStatus.getReason().name();
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", reasonText, sanitizeStatusMessage(storageStatus.getMessage()));
         } else if (tcpStatus.getLastFailure() != null && !tcpStatus.getLastFailure().isBlank()) {
             sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", "TCP", sanitizeStatusMessage(tcpStatus.getLastFailure()));
         }
