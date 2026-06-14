@@ -173,7 +173,7 @@ public class TaskPackets {
             List<Task> tasksToSave = mergeTeamTasksWithPermission(player, currentTasks, submittedTasks);
             H2MaintenanceGuard.ensureWritableIfH2();
             storage.saveTeamTasks(tasksToSave);
-            if (baseTasks == null && taskListsEquivalent(tasksToSave, submittedTasks)) {
+            if (baseTasks == null) {
                 broadcastTeamTasksExcept(server, player);
             } else {
                 broadcastTeamTasks(server);
@@ -258,7 +258,7 @@ public class TaskPackets {
         }
         Project project = findTaskProject(current);
         if (project == null) {
-            return false;
+            return true;
         }
 
         if (hasEditableFieldChanges(current, incoming)
@@ -375,7 +375,7 @@ public class TaskPackets {
     private static boolean canEditTaskInProject(ServerPlayer player, Task task) {
         Project project = findTaskProject(task);
         if (project == null) {
-            return false;
+            return true;
         }
         return canOperateInProject(player, task, project, Operation.EDIT_TASK, ViewScope.TEAM_ALL);
     }
@@ -386,7 +386,7 @@ public class TaskPackets {
     private static boolean canDeleteTaskInProject(ServerPlayer player, Task task) {
         Project project = findTaskProject(task);
         if (project == null) {
-            return false;
+            return true;
         }
         return canOperateInProject(player, task, project, Operation.DELETE_TASK, ViewScope.TEAM_ALL);
     }
@@ -397,7 +397,7 @@ public class TaskPackets {
     private static boolean canAddTaskInProject(ServerPlayer player, Task task) {
         Project project = findTaskProject(task);
         if (project == null) {
-            return false;
+            return true;
         }
         return canOperateInProject(player, task, project, Operation.ADD_TASK, ViewScope.TEAM_ALL);
     }

@@ -11,6 +11,7 @@ import com.todolist.gui.TodoScreenLayoutSupport.LayoutRect;
 import com.todolist.gui.TodoScreenLayoutSupport.MainLayoutMetrics;
 import com.todolist.gui.TodoScreenLayoutSupport.ResponsiveTier;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
 import com.todolist.storage.H2MaintenanceGuard;
@@ -29,7 +30,9 @@ import com.todolist.task.TaskManager;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -346,7 +349,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private List<Task> loadPersonalTasksForGui(Minecraft currentMinecraft) {
         try {
-            return ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft);
+            H2ConnectionProvider.enableEmbeddedConnectionReuseForCurrentThread();
+            List<Task> tasks;
+            try {
+                tasks = ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), currentMinecraft);
+            } finally {
+                H2ConnectionProvider.disableEmbeddedConnectionReuseForCurrentThread();
+            }
+            return tasks;
         } catch (Exception exception) {
             throw new GuiTaskLoadException(exception);
         }
@@ -431,7 +441,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         List<Task> copies = new ArrayList<>();
         for (Task task : tasks) {
             if (task != null) {
-                copies.add(Task.fromNbt(task.toNbt()));
+                copies.add(task.copy());
             }
         }
         return copies;
@@ -980,7 +990,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             ));
             currentProject = TodoScreenActiveProjectSupport.syncActiveProjectIdWithCurrentProject(projectManager, currentProject);
             syncHudViewForProject(null);
-            rebuildUI();
+            refreshUiAfterProjectSwitch();
             if (projectListWidget != null) {
                 projectListWidget.setScrollOffset(savedProjectListScrollOffset);
             }
@@ -1014,10 +1024,55 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             ));
         }
         syncHudViewForProject(project);
-        rebuildUI();
+        refreshUiAfterProjectSwitch();
         if (projectListWidget != null) {
             projectListWidget.setScrollOffset(savedProjectListScrollOffset);
         }
+    }
+
+    /**
+     * 在项目切换时优先复用现有控件，仅刷新列表与按钮状态，避免整页重建。
+     * 当关键控件尚未初始化时回退到完整重建逻辑。
+     */
+    private void refreshUiAfterProjectSwitch() {
+        if (!canUseLightweightProjectSwitchRefresh()) {
+            rebuildUI();
+            return;
+        }
+        syncViewStateForCurrentProject();
+        currentFilter = "active";
+        searchQuery = searchQuery == null ? "" : searchQuery.trim().toLowerCase();
+        projectSearchQuery = projectSearchQuery == null ? "" : projectSearchQuery.trim();
+        savedTaskListScrollOffset = taskListWidget == null ? savedTaskListScrollOffset : taskListWidget.getScrollOffset();
+        baseFilteredTasks = new ArrayList<>();
+        filteredTasks = new ArrayList<>();
+        taskListWidget.setTeamAllViewForNonOp(
+                TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject) == Role.MEMBER
+                        && viewMode == ViewMode.TEAM_ALL
+        );
+        updateProjectList();
+        applyResponsiveWidgetVisibility();
+        filterTasks();
+        if (taskListWidget != null) {
+            taskListWidget.setScrollOffset(savedTaskListScrollOffset);
+        }
+        syncDetailWidgetsFromState();
+        updateButtonStates();
+        updateProjectActionButtons();
+        this.setFocused(quickAddField);
+    }
+
+    /**
+     * 判断当前界面是否具备轻量项目切换刷新所需的关键控件。
+     */
+    private boolean canUseLightweightProjectSwitchRefresh() {
+        return layoutMetrics != null
+                && projectListWidget != null
+                && taskListWidget != null
+                && quickAddField != null
+                && searchField != null
+                && saveButton != null
+                && cancelButton != null;
     }
 
     private void rebuildUI() {
@@ -1836,7 +1891,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * 在关闭界面且未保存时，按需丢弃个人任务的临时改动。
      */
     private void discardPersonalTasksOnCloseIfNeeded() {
-        boolean discarded = TodoScreenPersistenceSupport.discardUnsavedPersonalTasks(personalTaskManager, this.minecraft);
+        boolean discarded = restorePersonalTasksFromCachedSnapshot();
+        if (!discarded) {
+            discarded = TodoScreenPersistenceSupport.discardUnsavedPersonalTasks(personalTaskManager, this.minecraft);
+        }
         if (discarded) {
             personalHasUnsavedChanges = false;
             if (viewMode == ViewMode.PERSONAL) {
@@ -1844,6 +1902,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             publishPersonalTasksToHud();
         }
+    }
+
+    /**
+     * 关闭未保存的个人视图时优先恢复最近一次缓存快照，避免同步读盘造成界面停顿。
+     *
+     * @return 成功恢复缓存快照时返回 true
+     */
+    private boolean restorePersonalTasksFromCachedSnapshot() {
+        if (personalTaskManager == null || !openedStorageNamespace.equals(cachedPersonalTasksNamespace)) {
+            return false;
+        }
+        replacePersonalTasks(copyTasks(cachedPersonalTasksSnapshot));
+        if (currentSpaceMode == SpaceMode.PERSONAL) {
+            taskManager = personalTaskManager;
+        }
+        return true;
     }
 
     /**
@@ -3318,5 +3392,3 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
 }
-
-

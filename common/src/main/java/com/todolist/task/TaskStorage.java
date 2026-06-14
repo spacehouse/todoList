@@ -110,6 +110,23 @@ public class TaskStorage {
     }
 
     /**
+     * 在本地集成服务端场景下，同时保存本地个人任务与玩家个人任务。
+     * H2 后端下会合并为一次事务，减少重复写入开销。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param tasks 待保存的任务列表
+     * @throws IOException 当写入失败时抛出
+     */
+    public void saveLocalIntegratedPersonalTasks(UUID playerUuid, List<Task> tasks) throws IOException {
+        if (StorageBackendFactory.isH2Selected()) {
+            h2TaskStore.saveLocalAndPlayerTasks(playerUuid, tasks);
+            return;
+        }
+        savePlayerTasks(playerUuid, tasks);
+        saveTasks(tasks);
+    }
+
+    /**
      * 按当前服务端运行模式保存个人任务。
      * 单人本地模式写入单文件，其余模式写入玩家文件。
      *

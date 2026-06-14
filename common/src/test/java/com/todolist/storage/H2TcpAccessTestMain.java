@@ -32,6 +32,7 @@ public final class H2TcpAccessTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldCreateSafeDefaultConfig", H2TcpAccessTestMain::shouldCreateSafeDefaultConfig);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldPreserveCorruptConfig", H2TcpAccessTestMain::shouldPreserveCorruptConfig);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepEmbeddedDatabaseOpenBetweenShortConnections", H2TcpAccessTestMain::shouldKeepEmbeddedDatabaseOpenBetweenShortConnections);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldUseTcpUrlAndAccountPermissions", H2TcpAccessTestMain::shouldUseTcpUrlAndAccountPermissions);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldIncrementPortWhenDefaultBusy", H2TcpAccessTestMain::shouldIncrementPortWhenDefaultBusy);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldFallbackWhenAllPortsBusy", H2TcpAccessTestMain::shouldFallbackWhenAllPortsBusy);
@@ -75,6 +76,24 @@ public final class H2TcpAccessTestMain {
             GuiTestSupport.assertFalse(config.isTcpEnabled(), "损坏配置重建后 TCP 应保持关闭");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 TCP 损坏配置恢复时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证嵌入式 H2 URL 会保留数据库实例，避免短连接频繁关闭时重复付出关库成本。
+     */
+    private static void shouldKeepEmbeddedDatabaseOpenBetweenShortConnections() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-embedded-url-");
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            String jdbcUrl = provider.getJdbcUrl();
+            GuiTestSupport.assertTrue(jdbcUrl.startsWith("jdbc:h2:file:"), "TCP 关闭时应使用嵌入式 H2 URL");
+            GuiTestSupport.assertTrue(jdbcUrl.contains("DB_CLOSE_DELAY=-1"), "嵌入式 H2 URL 应保持数据库实例存活，避免短连接频繁关库");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证嵌入式 H2 URL 保活配置时发生异常", exception);
         } finally {
             cleanup(tempGameDir);
         }

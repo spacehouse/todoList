@@ -63,7 +63,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy task data",
-                path -> NbtIo.read(path.toFile()),
+                NbtIo::read,
                 root -> root != null
         );
         if (!readResult.isFound()) {
@@ -112,7 +112,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy project data",
-                path -> NbtIo.read(path.toFile()),
+                NbtIo::read,
                 root -> root != null
         );
         if (!readResult.isFound()) {
@@ -163,7 +163,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy project player state",
-                path -> NbtIo.read(path.toFile()),
+                NbtIo::read,
                 root -> root != null
         );
         if (!readResult.isFound()) {

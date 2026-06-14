@@ -51,6 +51,31 @@ public class Task {
         this.projectId = null;
     }
 
+    /**
+     * 基于现有任务创建一个完整副本，避免界面缓存与后台保存共享同一对象。
+     *
+     * @param source 原始任务
+     */
+    private Task(Task source) {
+        this.id = source.id;
+        this.title = source.title;
+        this.description = source.description;
+        this.completed = source.completed;
+        this.priority = source.priority;
+        this.tags = new LinkedHashSet<>(source.tags);
+        this.createdAt = source.createdAt;
+        this.dueDate = source.dueDate;
+        this.subtasks = new ArrayList<>();
+        for (Task subtask : source.subtasks) {
+            this.subtasks.add(subtask == null ? null : new Task(subtask));
+        }
+        this.scope = source.scope;
+        this.creatorUuid = source.creatorUuid;
+        this.assigneeUuid = source.assigneeUuid;
+        this.assigneeName = source.assigneeName;
+        this.projectId = source.projectId;
+    }
+
     // NBT Serialization
     public CompoundTag toNbt() {
         CompoundTag nbt = new CompoundTag();
@@ -164,6 +189,15 @@ public class Task {
         return task;
     }
 
+    /**
+     * 创建当前任务的完整副本，供缓存或后台保存使用。
+     *
+     * @return 当前任务的深拷贝
+     */
+    public Task copy() {
+        return new Task(this);
+    }
+
     // Getters and Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -263,5 +297,4 @@ public class Task {
                 '}';
     }
 }
-
 

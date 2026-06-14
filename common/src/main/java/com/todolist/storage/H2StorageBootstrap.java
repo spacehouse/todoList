@@ -194,4 +194,5 @@ public final class H2StorageBootstrap {
         H2StorageAvailability.resetForTests();
         H2MaintenanceLock.resetForTests();
     }
+
 }
