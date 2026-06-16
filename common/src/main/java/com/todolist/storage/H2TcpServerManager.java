@@ -69,7 +69,9 @@ public final class H2TcpServerManager {
      * 停止当前 H2 TCP Server。
      */
     public static synchronized void stop() {
+        H2ConnectionProvider.invalidateReusableConnections();
         if (server == null) {
+            status = StatusSnapshot.disabled();
             return;
         }
         try {
@@ -79,6 +81,7 @@ public final class H2TcpServerManager {
             TodoConstants.LOGGER.warn("Failed to stop H2 TCP server cleanly", exception);
         } finally {
             server = null;
+            status = StatusSnapshot.disabled();
         }
     }
 

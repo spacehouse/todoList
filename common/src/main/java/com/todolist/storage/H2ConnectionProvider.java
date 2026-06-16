@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * H2ConnectionProvider 负责按当前存储命名空间派生 H2 文件库路径并创建短连接。
@@ -18,6 +19,7 @@ public final class H2ConnectionProvider {
     private static final String EMBEDDED_JDBC_OPTIONS = ";AUTO_SERVER=FALSE;DATABASE_TO_UPPER=FALSE;TRACE_LEVEL_FILE=0;DB_CLOSE_DELAY=-1";
     private static final ThreadLocal<Boolean> REUSE_BACKGROUND_CONNECTION = ThreadLocal.withInitial(() -> Boolean.FALSE);
     private static final ThreadLocal<CachedConnection> CACHED_BACKGROUND_CONNECTION = new ThreadLocal<>();
+    private static final AtomicLong REUSABLE_CONNECTION_CONTEXT_VERSION = new AtomicLong(0L);
 
     /**
      * 创建 H2 连接提供器。
@@ -39,6 +41,17 @@ public final class H2ConnectionProvider {
      */
     public static void disableEmbeddedConnectionReuseForCurrentThread() {
         REUSE_BACKGROUND_CONNECTION.remove();
+    }
+
+    /**
+     * 使当前进程内全部线程缓存的可复用 H2 连接失效。
+     * 用于服务端停止、TCP 重启、命名空间切换等生命周期边界，避免旧 session 被复用到新上下文。
+     */
+    public static void invalidateReusableConnections() {
+        REUSABLE_CONNECTION_CONTEXT_VERSION.incrementAndGet();
+        CachedConnection cached = CACHED_BACKGROUND_CONNECTION.get();
+        closeCachedConnection(cached);
+        CACHED_BACKGROUND_CONNECTION.remove();
     }
 
     /**
@@ -149,12 +162,21 @@ public final class H2ConnectionProvider {
         boolean cacheClosed = cached != null && cached.connection().isClosed();
         boolean cacheUrlMatches = cached != null && cached.jdbcUrl().equals(jdbcUrl);
         boolean cacheUserMatches = cached != null && cached.user().equals(user);
-        if (cached == null || cacheClosed || !cacheUrlMatches || !cacheUserMatches) {
+        long contextVersion = REUSABLE_CONNECTION_CONTEXT_VERSION.get();
+        boolean cacheContextMatches = cached != null && cached.contextVersion() == contextVersion;
+        if (cached == null || cacheClosed || !cacheUrlMatches || !cacheUserMatches || !cacheContextMatches) {
             closeCachedConnection(cached);
-            cached = new CachedConnection(jdbcUrl, user, DriverManager.getConnection(jdbcUrl, user, password));
+            cached = new CachedConnection(jdbcUrl, user, contextVersion, DriverManager.getConnection(jdbcUrl, user, password));
             CACHED_BACKGROUND_CONNECTION.set(cached);
         }
-        resetReusableConnectionState(cached.connection());
+        try {
+            resetReusableConnectionState(cached.connection());
+        } catch (SQLException firstFailure) {
+            closeCachedConnection(cached);
+            cached = new CachedConnection(jdbcUrl, user, contextVersion, DriverManager.getConnection(jdbcUrl, user, password));
+            CACHED_BACKGROUND_CONNECTION.set(cached);
+            resetReusableConnectionState(cached.connection());
+        }
         Connection physicalConnection = cached.connection();
         return (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(),
@@ -205,7 +227,7 @@ public final class H2ConnectionProvider {
      *
      * @param cached 旧缓存连接
      */
-    private void closeCachedConnection(CachedConnection cached) {
+    private static void closeCachedConnection(CachedConnection cached) {
         if (cached == null || cached.connection() == null) {
             return;
         }
@@ -218,10 +240,12 @@ public final class H2ConnectionProvider {
     /**
      * 当前线程缓存的嵌入式连接信息。
      *
-     * @param jdbcUrl 连接对应的 JDBC URL
+     * @param jdbcUrl JDBC URL
+     * @param user 用户名
+     * @param contextVersion 连接上下文版本
      * @param connection 物理连接
      */
-    private record CachedConnection(String jdbcUrl, String user, Connection connection) {
+    private record CachedConnection(String jdbcUrl, String user, long contextVersion, Connection connection) {
     }
 
 }
