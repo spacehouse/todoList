@@ -307,6 +307,26 @@ final class TodoScreenTaskSupport {
         return applySearchQueryToTasks(searchQuery, scopedTasks);
     }
 
+    /**
+     * 收集当前项目下全部已完成任务的 ID，供批量清理操作复用。
+     *
+     * @param taskManager 任务管理器
+     * @param currentProjectId 当前项目 ID
+     * @return 已完成任务 ID 列表
+     */
+    static List<String> collectCompletedTaskIdsForProject(TaskManager taskManager, String currentProjectId) {
+        if (taskManager == null || currentProjectId == null || currentProjectId.isEmpty()) {
+            return List.of();
+        }
+        List<String> taskIds = new ArrayList<>();
+        for (Task task : taskManager.getCompletedTasks()) {
+            if (task != null && task.belongsToProject(currentProjectId) && task.getId() != null && !task.getId().isEmpty()) {
+                taskIds.add(task.getId());
+            }
+        }
+        return taskIds;
+    }
+
     static List<TaskListWidget.SectionModel> buildTaskPaneSections(List<Task> activeTasks,
                                                                     List<Task> completedTasks,
                                                                     boolean activeExpanded,

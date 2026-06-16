@@ -589,6 +589,27 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 返回当前项目范围内的任务列表。
+     *
+     * @return 当前项目任务快照
+     */
+    List<Task> getCurrentProjectTasksForTest() {
+        TaskManager manager = readScreenField("taskManager", TaskManager.class);
+        Project currentProject = readScreenField("currentProject", Project.class);
+        if (manager == null || currentProject == null || currentProject.getId() == null) {
+            return List.of();
+        }
+        String projectId = currentProject.getId();
+        List<Task> scopedTasks = new ArrayList<>();
+        for (Task task : manager.getAllTasks()) {
+            if (task != null && task.belongsToProject(projectId)) {
+                scopedTasks.add(task);
+            }
+        }
+        return List.copyOf(scopedTasks);
+    }
+
+    /**
      * 返回上下文菜单条目文本。
      *
      * @return 菜单文本列表
@@ -971,6 +992,15 @@ final class TodoScreenTestAccess {
      */
     int[] getCancelButtonBoundsForTest() {
         return TodoScreenTestSupport.toWidgetBounds(readScreenField("cancelButton", Button.class));
+    }
+
+    /**
+     * 返回“清理已完成”按钮。
+     *
+     * @return 清理按钮
+     */
+    Button getClearCompletedButtonForTest() {
+        return readScreenField("clearCompletedButton", Button.class);
     }
 
     /**

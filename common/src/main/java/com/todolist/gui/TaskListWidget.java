@@ -728,6 +728,36 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
+     * 返回指定分段标题在当前可见区域内的中心纵坐标。
+     *
+     * @param sectionId 分段 ID
+     * @return 标题中心纵坐标；当前不可见时返回 -1
+     */
+    int getVisibleSectionHeaderCenterY(String sectionId) {
+        if (sectionId == null || displayRows == null) {
+            return -1;
+        }
+        int startIndex = scrollBar.getValue();
+        int endIndex = getVisibleBottomIndex(startIndex);
+        for (int index = startIndex; index <= endIndex && index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType == RowType.SECTION_HEADER && sectionId.equals(row.sectionId)) {
+                return getRowTopForVisibleIndex(index) + getRowHeight(index) / 2;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 返回任务内容区右边界，便于在列表标题右侧对齐附加操作按钮。
+     *
+     * @return 内容区右边界横坐标
+     */
+    int getContentRightX() {
+        return scrollBar.getBarX() - 4;
+    }
+
+    /**
      * 返回指定坐标命中的任务分段信息。
      *
      * @param mouseX 鼠标 X 坐标
@@ -1181,16 +1211,7 @@ public class TaskListWidget implements Renderable {
     }
 
     int getSectionHeaderCenterYForTest(String sectionId) {
-        if (sectionId == null || displayRows == null) {
-            return -1;
-        }
-        for (int index = 0; index < displayRows.size(); index++) {
-            DisplayRow row = displayRows.get(index);
-            if (row.rowType == RowType.SECTION_HEADER && sectionId.equals(row.sectionId)) {
-                return getRowTopForVisibleIndex(index) + getRowHeight(index) / 2;
-            }
-        }
-        return -1;
+        return getVisibleSectionHeaderCenterY(sectionId);
     }
 
     /**

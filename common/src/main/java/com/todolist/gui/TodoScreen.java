@@ -104,6 +104,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private Button assignOthersButton;
     private Button saveButton;
     private Button cancelButton;
+    private Button clearCompletedButton;
     private Button sidebarToggleButton;
 
     // 新建或编辑任务时选中的优先级
@@ -1267,6 +1268,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         taskListWidget = taskAreaWidgets.taskListWidget;
         quickAddField = taskAreaWidgets.quickAddField;
         this.addRenderableWidget(quickAddField);
+        Component clearCompletedText = Component.translatable("gui.todolist.completed.clear");
+        int clearCompletedButtonWidth = Math.max(52, this.font.width(clearCompletedText) + 12);
+        clearCompletedButton = Button.builder(clearCompletedText, button -> openClearCompletedConfirmScreen())
+                .bounds(contentX, listTop, clearCompletedButtonWidth, 16)
+                .build();
+        clearCompletedButton.visible = false;
+        clearCompletedButton.active = false;
+        this.addRenderableWidget(clearCompletedButton);
 
         TodoScreenWidgetBuildSupport.DetailWidgets detailWidgets = TodoScreenWidgetBuildSupport.buildDetailWidgets(
                 this.font,
@@ -1529,6 +1538,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        refreshClearCompletedButtonState();
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
         Component title = hasUnsavedChanges ? Component.translatable("gui.todolist.title.unsaved") : TITLE;
@@ -1718,6 +1728,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 )
                 && projectSearchFieldHit) {
             projectSearchPrefixDropdownOpen = true;
+        }
+        refreshClearCompletedButtonState();
+        if (button == 0
+                && clearCompletedButton != null
+                && clearCompletedButton.visible
+                && clearCompletedButton.active
+                && clearCompletedButton.isMouseOver(mouseX, mouseY)) {
+            clearCompletedButton.onPress();
+            return true;
         }
         if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
             resetTaskRowDragState();
@@ -2191,6 +2210,65 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return false;
     }
 
+    /**
+     * 判断当前项目是否允许通过 GUI 清理已完成任务。
+     *
+     * @return 允许清理时返回 true
+     */
+    private boolean canClearCompletedTasksInCurrentProject() {
+        if (currentProject == null || taskManager == null || this.minecraft == null || this.minecraft.player == null) {
+            return false;
+        }
+        if (currentProject.getScope() == Project.Scope.PERSONAL) {
+            return true;
+        }
+        if (this.minecraft.player.hasPermissions(2)) {
+            return true;
+        }
+        String ownerUuid = currentProject.getOwnerUuid();
+        String currentPlayerUuid = TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft);
+        return ownerUuid != null && !ownerUuid.isEmpty() && ownerUuid.equals(currentPlayerUuid);
+    }
+
+    /**
+     * 返回当前项目下全部已完成任务的数量。
+     *
+     * @return 已完成任务数量
+     */
+    private int getCompletedTaskCountInCurrentProject() {
+        return TodoScreenTaskSupport.collectCompletedTaskIdsForProject(
+                taskManager,
+                currentProject == null ? null : currentProject.getId()
+        ).size();
+    }
+
+    /**
+     * 刷新“清理已完成”按钮的可见性、可点击状态与布局位置。
+     */
+    private void refreshClearCompletedButtonState() {
+        if (clearCompletedButton == null) {
+            return;
+        }
+        boolean canShowButton = canClearCompletedTasksInCurrentProject() && getCompletedTaskCountInCurrentProject() > 0;
+        if (!canShowButton || taskListWidget == null) {
+            clearCompletedButton.visible = false;
+            clearCompletedButton.active = false;
+            return;
+        }
+        int centerY = taskListWidget.getVisibleSectionHeaderCenterY("completed");
+        if (centerY < 0) {
+            clearCompletedButton.visible = false;
+            clearCompletedButton.active = false;
+            return;
+        }
+        int buttonWidth = clearCompletedButton.getWidth();
+        int buttonHeight = clearCompletedButton.getHeight();
+        clearCompletedButton.setX(Math.max(0, taskListWidget.getContentRightX() - buttonWidth));
+        clearCompletedButton.setY(centerY - buttonHeight / 2);
+        clearCompletedButton.visible = true;
+        clearCompletedButton.active = !taskSaveInFlight;
+    }
+
     private void updateButtonStates() {
         boolean hasSelection = selectedTask != null;
         boolean isCompleted = hasSelection && selectedTask.isCompleted();
@@ -2227,6 +2305,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (saveButton != null) {
             saveButton.active = !taskSaveInFlight;
         }
+        refreshClearCompletedButtonState();
         rebuildContextMenuIfNeeded();
         applyResponsiveWidgetVisibility();
     }
@@ -2360,6 +2439,39 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 打开“清理已完成”确认弹窗，避免误删当前项目中的已完成任务。
+     */
+    private void openClearCompletedConfirmScreen() {
+        if (minecraft == null) {
+            return;
+        }
+        if (!canClearCompletedTasksInCurrentProject()) {
+            addNotification(Component.translatable("message.todolist.completed.clear.permission_denied").getString());
+            refreshClearCompletedButtonState();
+            return;
+        }
+        int completedTaskCount = getCompletedTaskCountInCurrentProject();
+        if (completedTaskCount <= 0) {
+            addNotification(Component.translatable("message.todolist.completed.clear.none").getString());
+            refreshClearCompletedButtonState();
+            return;
+        }
+        String projectName = currentProject == null ? "" : ProjectNameFormatter.toDisplayText(currentProject).getString();
+        Component message = Component.translatable(
+                "gui.todolist.completed.clear_confirm.message",
+                projectName,
+                Integer.toString(completedTaskCount)
+        );
+        minecraft.setScreen(new ConfirmActionScreen(
+                this,
+                Component.translatable("gui.todolist.completed.clear_confirm.title"),
+                message,
+                Component.translatable("gui.todolist.completed.clear_confirm.button"),
+                this::confirmClearCompletedTasks
+        ));
+    }
+
+    /**
      * 在用户确认后真正删除任务，并同步刷新选中状态与列表显示。
      * 删除成功后会立即尝试持久化当前视图任务，避免再额外点击保存按钮。
      *
@@ -2376,6 +2488,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         applySearchFilter();
         markUnsaved();
         persistCurrentViewTasksInBackground("deletion");
+    }
+
+    /**
+     * 在用户确认后真正清理当前项目中的已完成任务，并立即后台持久化。
+     */
+    private void confirmClearCompletedTasks() {
+        if (!canClearCompletedTasksInCurrentProject() || currentProject == null || taskManager == null) {
+            addNotification(Component.translatable("message.todolist.completed.clear.permission_denied").getString());
+            refreshClearCompletedButtonState();
+            return;
+        }
+        List<String> completedTaskIds = TodoScreenTaskSupport.collectCompletedTaskIdsForProject(taskManager, currentProject.getId());
+        if (completedTaskIds.isEmpty()) {
+            addNotification(Component.translatable("message.todolist.completed.clear.none").getString());
+            refreshClearCompletedButtonState();
+            return;
+        }
+        boolean removedSelectedTask = selectedTask != null
+                && selectedTask.getId() != null
+                && completedTaskIds.contains(selectedTask.getId());
+        for (String taskId : completedTaskIds) {
+            taskManager.deleteTask(taskId);
+        }
+        if (removedSelectedTask) {
+            clearSelectedTask();
+        } else {
+            applySearchFilter();
+        }
+        markUnsaved();
+        addNotification(Component.translatable(
+                "message.todolist.completed.clear.success",
+                Integer.toString(completedTaskIds.size())
+        ).getString());
+        persistCurrentViewTasksInBackground("clear_completed");
     }
 
     /**
