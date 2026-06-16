@@ -429,6 +429,16 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 返回描述输入框当前可见文本。
+     *
+     * @return 当前可见文本
+     */
+    String getDescFieldMessageTextForTest() {
+        MultiLineEditBox field = getDescFieldForTest();
+        return field == null ? "" : field.getMessage().getString();
+    }
+
+    /**
      * 返回标签输入框。
      *
      * @return 标签输入框

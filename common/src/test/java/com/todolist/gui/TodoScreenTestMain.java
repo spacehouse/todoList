@@ -1779,6 +1779,11 @@ public final class TodoScreenTestMain {
                 "详情标题输入框应提示当前用于编辑任务标题"
         );
         GuiTestSupport.assertEquals(
+                "gui.todolist.input.description.placeholder",
+                access(screen).getDescFieldMessageTextForTest(),
+                "描述输入框应显示补充任务说明提示"
+        );
+        GuiTestSupport.assertEquals(
                 "gui.todolist.input.tags.placeholder",
                 access(screen).getTagHintTextForTest(),
                 "标签输入框应显示标签格式提示"

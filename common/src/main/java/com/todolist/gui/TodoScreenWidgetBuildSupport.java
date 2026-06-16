@@ -413,7 +413,7 @@ final class TodoScreenWidgetBuildSupport {
                 descFieldY,
                 rightFieldWidth,
                 descFieldHeight,
-                Component.translatable("gui.todolist.input.description"),
+                Component.translatable("gui.todolist.input.description.placeholder"),
                 Component.translatable("gui.todolist.input.description.placeholder")
         );
         descField.setValue("");
