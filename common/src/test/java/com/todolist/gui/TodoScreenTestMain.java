@@ -80,6 +80,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen", TodoScreenTestMain::shouldHideOverlayDetailPanelAfterDeletingSelectedTaskOnCompactScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskWhenCancelingDeleteConfirmation", TodoScreenTestMain::shouldKeepTaskWhenCancelingDeleteConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistTaskDeletionImmediatelyAfterConfirmation", TodoScreenTestMain::shouldPersistTaskDeletionImmediatelyAfterConfirmation);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepCompletedTasksWhenCancelingClearConfirmation", TodoScreenTestMain::shouldKeepCompletedTasksWhenCancelingClearConfirmation);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClearCompletedTasksOnlyInCurrentProjectAfterConfirmation", TodoScreenTestMain::shouldClearCompletedTasksOnlyInCurrentProjectAfterConfirmation);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistClaimAndAbandonImmediatelyInTeamView", TodoScreenTestMain::shouldPersistClaimAndAbandonImmediatelyInTeamView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowCompletionFeedbackForEachSequentialTeamToggle", TodoScreenTestMain::shouldShowCompletionFeedbackForEachSequentialTeamToggle);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldPersistPersonalTaskCompletionToggleImmediately", TodoScreenTestMain::shouldPersistPersonalTaskCompletionToggleImmediately);
@@ -538,6 +540,70 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "确认删除后应立即同步个人任务整表");
         GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().get(0).size(), "删除后同步的个人任务列表应为空");
         GuiTestSupport.assertEquals(0, ops.getReplaceTeamTaskCalls().size(), "个人视图删除不应触发团队任务同步");
+    }
+
+    /**
+     * 验证取消“清理已完成”确认后，不会删除当前项目中的已完成任务。
+     */
+    private static void shouldKeepCompletedTasksWhenCancelingClearConfirmation() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Completed Task To Keep");
+        Task task = requireTaskByTitle(screen, "Completed Task To Keep");
+        task.setCompleted(true);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        Screen confirmScreen = openClearCompletedConfirmScreen(minecraft, screen);
+        clickDialogButton(confirmScreen, 1);
+
+        GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "取消清理后应返回待办主界面");
+        GuiTestSupport.assertEquals(1, access(screen).getCurrentProjectTasksForTest().size(), "取消清理后当前项目中的已完成任务不应被删除");
+        GuiTestSupport.assertEquals(task.getId(), access(screen).getCurrentProjectTasksForTest().get(0).getId(), "取消清理后原已完成任务应保留");
+        GuiTestSupport.assertEquals(0, ops.getReplaceAllTaskCalls().size(), "取消清理后不应触发个人任务同步");
+    }
+
+    /**
+     * 验证确认“清理已完成”后，只会删除当前项目中的已完成任务，并立即后台保存。
+     */
+    private static void shouldClearCompletedTasksOnlyInCurrentProjectAfterConfirmation() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project currentProject = createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project otherProject = createPersonalProject("personal-clean-other", "Other Personal");
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Active Task");
+        addTaskViaInput(screen, "Completed Task A");
+        addTaskViaInput(screen, "Completed Task B");
+        requireTaskByTitle(screen, "Completed Task A").setCompleted(true);
+        requireTaskByTitle(screen, "Completed Task B").setCompleted(true);
+        access(screen).switchProjectForTest(currentProject);
+
+        access(screen).switchProjectForTest(otherProject);
+        addTaskViaInput(screen, "Other Project Completed Task");
+        requireTaskByTitle(screen, "Other Project Completed Task").setCompleted(true);
+        access(screen).switchProjectForTest(currentProject);
+
+        Screen confirmScreen = openClearCompletedConfirmScreen(minecraft, screen);
+        clickDialogButton(confirmScreen, 0);
+
+        GuiTestSupport.assertEquals(screen, minecraft.getLastScreen(), "确认清理后应返回待办主界面");
+        GuiTestSupport.assertEquals(1, access(screen).getCurrentProjectTasksForTest().size(), "确认清理后当前项目应只保留未完成任务");
+        GuiTestSupport.assertEquals("Active Task", access(screen).getCurrentProjectTasksForTest().get(0).getTitle(), "确认清理后当前项目未完成任务应保留");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "确认清理完成后不应残留未保存标记");
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "确认清理后应立即同步个人任务整表");
+
+        access(screen).switchProjectForTest(otherProject);
+        GuiTestSupport.assertEquals(1, access(screen).getCurrentProjectTasksForTest().size(), "其他项目中的已完成任务不应被一起清理");
+        GuiTestSupport.assertEquals("Other Project Completed Task", access(screen).getCurrentProjectTasksForTest().get(0).getTitle(), "其他项目任务应保持不变");
     }
 
     /**
@@ -2395,6 +2461,26 @@ public final class TodoScreenTestMain {
         Screen confirmScreen = minecraft.getLastScreen();
         GuiTestSupport.assertNotNull(confirmScreen, "点击删除后应弹出确认窗口");
         GuiTestSupport.assertTrue(confirmScreen instanceof ConfirmActionScreen, "点击删除后应打开任务删除确认弹窗");
+        ScreenDriver.init(minecraft, confirmScreen);
+        return confirmScreen;
+    }
+
+    /**
+     * 点击“清理已完成”按钮并返回确认弹窗。
+     *
+     * @param minecraft 假客户端
+     * @param screen 待办主界面
+     * @return 已初始化的清理确认弹窗
+     */
+    private static Screen openClearCompletedConfirmScreen(FakeMinecraftClient minecraft, TodoScreen screen) {
+        Button button = access(screen).getClearCompletedButtonForTest();
+        GuiTestSupport.assertNotNull(button, "存在已完成任务时应创建清理按钮");
+        GuiTestSupport.assertTrue(button.visible, "存在已完成任务时清理按钮应可见");
+        GuiTestSupport.assertTrue(button.active, "存在已完成任务时清理按钮应可点击");
+        ScreenDriver.click(button);
+        Screen confirmScreen = minecraft.getLastScreen();
+        GuiTestSupport.assertNotNull(confirmScreen, "点击清理后应弹出确认窗口");
+        GuiTestSupport.assertTrue(confirmScreen instanceof ConfirmActionScreen, "点击清理后应打开确认弹窗");
         ScreenDriver.init(minecraft, confirmScreen);
         return confirmScreen;
     }
