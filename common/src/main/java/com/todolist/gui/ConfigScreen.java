@@ -33,6 +33,7 @@ public class ConfigScreen extends Screen {
     private Button hudShowWhenEmptyButton;
     private Button hudVisibilityButton;
     private Button hudProjectSourceButton;
+    private Button autoSaveButton;
     private Button saveButton;
     private Button cancelButton;
 
@@ -55,6 +56,7 @@ public class ConfigScreen extends Screen {
     private boolean hudVisibleValue;
     private String hudProjectSourceValue;
     private int hudProjectSourceIndex;
+    private boolean autoSaveValue;
 
     /**
      * 创建配置界面。
@@ -112,6 +114,15 @@ public class ConfigScreen extends Screen {
     }
 
     /**
+     * 返回 GUI 自动保存开关按钮，供测试点击。
+     *
+     * @return GUI 自动保存开关按钮
+     */
+    Button getAutoSaveButtonForTest() {
+        return autoSaveButton;
+    }
+
+    /**
      * 返回取消按钮，供测试触发取消。
      *
      * @return 取消按钮
@@ -136,6 +147,15 @@ public class ConfigScreen extends Screen {
      */
     String getHudProjectSourceValueForTest() {
         return hudProjectSourceValue;
+    }
+
+    /**
+     * 返回 GUI 自动保存开关值，供测试断言。
+     *
+     * @return true 表示已启用 GUI 自动保存
+     */
+    boolean isAutoSaveValueForTest() {
+        return autoSaveValue;
     }
 
     /**
@@ -273,9 +293,18 @@ public class ConfigScreen extends Screen {
         this.addRenderableWidget(hudProjectSourceButton);
         row++;
 
+        autoSaveValue = config.isAutoSave();
+        autoSaveButton = Button.builder(Component.empty(), button -> {
+            autoSaveValue = !autoSaveValue;
+            updateAutoSaveButtonLabel();
+        }).bounds(leftFieldX, y + row * rowHeight, leftFieldWidth, fieldHeight).build();
+        this.addRenderableWidget(autoSaveButton);
+        row++;
+
         updateHudShowWhenEmptyButtonLabel();
         updateHudVisibilityButtonLabel();
         updateHudProjectSourceButtonLabel();
+        updateAutoSaveButtonLabel();
 
         previewUseCustom = config.isHudUseCustomPosition();
         previewHudWidth = Math.max(1, config.getHudWidth());
@@ -320,6 +349,7 @@ public class ConfigScreen extends Screen {
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_visibility"), hudVisibilityButton, textHeight);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_opacity"), hudOpacitySlider, textHeight);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_project_source"), hudProjectSourceButton, textHeight);
+        drawLabelForWidget(context, Component.translatable("gui.todolist.config.gui_auto_save"), autoSaveButton, textHeight);
 
         previewHudWidth = Math.max(1, parseIntSafe(hudWidthField.getValue(), ModConfig.getInstance().getHudWidth()));
         previewHudHeight = Math.max(1, resolvePreviewHudHeight());
@@ -427,6 +457,7 @@ public class ConfigScreen extends Screen {
         config.setHudOpacity(hudOpacitySlider.getDoubleValue());
         config.setHudShowWhenEmpty(hudShowWhenEmptyValue);
         config.setHudProjectSource(hudProjectSourceValue);
+        config.setAutoSave(autoSaveValue);
 
         previewHudWidth = Math.max(1, config.getHudWidth());
         previewHudHeight = Math.max(1, resolvePreviewHudHeight());
@@ -625,6 +656,17 @@ public class ConfigScreen extends Screen {
             return;
         }
         hudProjectSourceButton.setMessage(Component.translatable("gui.todolist.hud.project_source.all"));
+    }
+
+    /**
+     * 刷新 GUI 自动保存按钮文案。
+     */
+    private void updateAutoSaveButtonLabel() {
+        if (autoSaveButton == null) {
+            return;
+        }
+        String key = autoSaveValue ? "gui.todolist.config.toggle.on" : "gui.todolist.config.toggle.off";
+        autoSaveButton.setMessage(Component.translatable(key));
     }
 
     /**

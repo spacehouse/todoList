@@ -110,6 +110,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSwitchProjectToTeamScopeAndSyncActiveProject", TodoScreenTestMain::shouldSwitchProjectToTeamScopeAndSyncActiveProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHandleProjectLifecycleChanges", TodoScreenTestMain::shouldHandleProjectLifecycleChanges);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldEditSelectedTaskAndMarkUnsaved", TodoScreenTestMain::shouldEditSelectedTaskAndMarkUnsaved);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAutoSaveDetailEditsWhenDetailFieldsBlur", TodoScreenTestMain::shouldAutoSaveDetailEditsWhenDetailFieldsBlur);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAutoSaveDetailEditsWhenClosingScreen", TodoScreenTestMain::shouldAutoSaveDetailEditsWhenClosingScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMarkUnsavedAfterManualReorder", TodoScreenTestMain::shouldMarkUnsavedAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder);
@@ -1397,6 +1399,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldEditSelectedTaskAndMarkUnsaved() {
         GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(false);
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
         createDefaultTeamProject();
@@ -1414,6 +1417,69 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(2, task.getTags().size(), "编辑标签后应拆分为两个标签");
         GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "编辑任务后应标记存在未保存改动");
         GuiTestSupport.assertTrue(TodoScreen.hasPersonalUnsavedChanges(), "编辑个人任务后应同步个人未保存标记");
+    }
+
+    /**
+     * 验证开启 GUI 自动保存后，详情区输入框失焦会自动保存当前编辑结果。
+     */
+    private static void shouldAutoSaveDetailEditsWhenDetailFieldsBlur() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Blur Save Task");
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+        access(screen).beginDetailTitleEditingForTest();
+        ScreenDriver.setText(access(screen).getTitleFieldForTest(), "Blur Save Task Updated");
+
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
+        int[] titleBounds = access(screen).getDetailTitleFieldBoundsForTest();
+        int[] descBounds = access(screen).getDescFieldBoundsForTest();
+        int blankX = detailBounds[0] + 10;
+        int blankY = Math.min(detailBounds[1] + detailBounds[3] - 10, titleBounds[1] + titleBounds[3] + 4);
+        if (blankY >= descBounds[1]) {
+            blankY = descBounds[1] - 4;
+        }
+
+        screen.mouseClicked(blankX, blankY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        GuiTestSupport.assertEquals("Blur Save Task Updated", task.getTitle(), "失焦后应保留当前编辑结果");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "失焦自动保存后不应残留未保存标记");
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "详情输入框失焦后应自动保存个人任务");
+    }
+
+    /**
+     * 验证开启 GUI 自动保存后，关闭界面前会先保存个人编辑结果，而不是直接丢弃。
+     */
+    private static void shouldAutoSaveDetailEditsWhenClosingScreen() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parent = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parent);
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Close Save Task");
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+        access(screen).beginDetailTitleEditingForTest();
+        ScreenDriver.setText(access(screen).getTitleFieldForTest(), "Close Save Task Updated");
+
+        screen.onClose();
+        waitForTaskSaveToFinish(screen);
+
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "关闭界面时应先自动保存个人任务");
+        GuiTestSupport.assertEquals("Close Save Task Updated", ops.getReplaceAllTaskCalls().get(0).get(0).getTitle(), "关闭界面时应保存最新编辑结果");
+        GuiTestSupport.assertFalse(TodoScreen.hasPersonalUnsavedChanges(), "关闭并自动保存后应清除个人未保存标记");
+        GuiTestSupport.assertEquals(parent, minecraft.getLastScreen(), "自动保存完成后应返回父界面");
     }
 
     /**
@@ -1879,6 +1945,7 @@ public final class TodoScreenTestMain {
      */
     private static void shouldDiscardUnsavedPersonalChangesOnClose() {
         RecordingClientOps ops = GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(false);
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
         createDefaultTeamProject();

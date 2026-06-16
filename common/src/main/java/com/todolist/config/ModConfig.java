@@ -123,7 +123,7 @@ public class ModConfig {
     private boolean enableTaskBook = true;
     private boolean enableSoundEffects = true;
     private int maxTasksPerPlayer = 100;
-    private boolean autoSave = true;
+    private boolean autoSave = false;
     private int autoSaveIntervalMinutes = 5;
     private String defaultPriority = "MEDIUM";
     private boolean enableTaskRewards = false;
@@ -1397,5 +1397,4 @@ public class ModConfig {
         return value;
     }
 }
-
 

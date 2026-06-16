@@ -966,6 +966,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param project 目标项目
      */
     private void switchProject(Project project) {
+        if ((project == null && currentProject != null)
+                || (project != null && (currentProject == null || !project.getId().equals(currentProject.getId())))) {
+            triggerAutoSaveIfNeeded("auto_switch_project", false);
+        }
         if (projectListWidget != null) {
             savedProjectListScrollOffset = projectListWidget.getScrollOffset();
         }
@@ -1283,7 +1287,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 rightPanelX,
                 rightPanelWidth,
                 viewMode != ViewMode.PERSONAL,
-                this::clearSelectedTask,
+                this::onDetailClose,
                 this::onClaimTask,
                 this::onAbandonTask,
                 this::onAssignOthers);
@@ -1636,6 +1640,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * 清理当前界面内所有文本输入框的焦点。
      */
     private void clearTextFieldFocus() {
+        boolean detailFieldFocused = (titleField != null && titleField.isFocused())
+                || (descField != null && descField.isFocused())
+                || (tagField != null && tagField.isFocused())
+                || (detailDraft != null && detailDraft.titleEditing);
         TodoScreenFocusSupport.clearTextFieldFocus(
                 searchField,
                 projectSearchField,
@@ -1645,6 +1653,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 tagField);
         projectSearchPrefixDropdownOpen = false;
         this.setFocused(null);
+        finishDetailTitleEditing();
+        if (detailFieldFocused) {
+            triggerAutoSaveIfNeeded("auto_blur_detail", false);
+        }
     }
 
     @Override
@@ -1836,6 +1848,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         resetTaskRowDragState();
         boolean cleared = false;
         if (button == 0 && selectedTask != null && !detailBlankClicked && !clickInEditArea) {
+            triggerAutoSaveIfNeeded("auto_clear_selection", false);
             clearSelectedTask();
             cleared = true;
         }
@@ -1893,6 +1906,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     @Override
     public void onClose() {
+        if (triggerAutoSaveIfNeeded("auto_close", true)) {
+            return;
+        }
         if (!personalTaskSaveInFlight) {
             discardPersonalTasksOnCloseIfNeeded();
         }
@@ -2001,9 +2017,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         markUnsaved();
         filterTasks();
+        if (isGuiAutoSaveEnabled()) {
+            persistCurrentViewTasksInBackground("auto_add");
+        }
+    }
+
+    /**
+     * 响应详情面板关闭按钮，按配置决定是否先自动保存再关闭详情区。
+     */
+    private void onDetailClose() {
+        triggerAutoSaveIfNeeded("auto_close_detail", false);
+        clearSelectedTask();
     }
 
     private void selectTask(Task task) {
+        if (task != null && (selectedTask == null || !task.getId().equals(selectedTask.getId()))) {
+            triggerAutoSaveIfNeeded("auto_switch_task", false);
+        }
         selectedTask = task;
         selectedPriority = task.getPriority();
         detailDraft = createDetailDraft(task);
@@ -2117,6 +2147,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             titleField.setFocused(true);
             this.setFocused(titleField);
         }
+    }
+
+    /**
+     * 结束详情标题编辑模式，并恢复只读展示状态。
+     */
+    private void finishDetailTitleEditing() {
+        if (detailDraft == null || !detailDraft.titleEditing) {
+            return;
+        }
+        detailDraft.titleEditing = false;
+        applyDetailWidgetEditability();
     }
 
     /**
@@ -3465,6 +3506,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param mode 目标视图模式
      */
     private void switchView(ViewMode mode) {
+        if (mode != null && mode != this.viewMode) {
+            triggerAutoSaveIfNeeded("auto_switch_view", false);
+        }
         this.viewMode = mode;
         syncViewStateForCurrentProject();
         clearSelectedTask();
@@ -3477,7 +3521,32 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         updateViewButtonsState();
         rebuildUI();
     }
-    
+
+    /**
+     * 判断当前是否启用了 GUI 编辑自动保存。
+     *
+     * @return true 表示已启用自动保存
+     */
+    private boolean isGuiAutoSaveEnabled() {
+        return ModConfig.getInstance().isAutoSave();
+    }
+
+    /**
+     * 在开启自动保存且存在脏任务时，提交一次后台保存。
+     *
+     * @param operationName 自动保存操作名
+     * @param closeAfterSave 保存完成后是否关闭当前界面
+     * @return 本次是否实际触发了自动保存
+     */
+    private boolean triggerAutoSaveIfNeeded(String operationName, boolean closeAfterSave) {
+        if (!isGuiAutoSaveEnabled() || (!personalHasUnsavedChanges && !teamHasUnsavedChanges)) {
+            return false;
+        }
+        finishDetailTitleEditing();
+        persistDirtyTasksInBackground(operationName, closeAfterSave, personalHasUnsavedChanges, teamHasUnsavedChanges);
+        return true;
+    }
+
     private void onAddProject() {
         Project.Scope defaultScope = Project.Scope.PERSONAL;
         if (currentProject != null) {

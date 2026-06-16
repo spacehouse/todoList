@@ -95,6 +95,7 @@
   "gui.todolist.config.hud_visibility": "HUD Visibility:",
   "gui.todolist.config.hud_default_view": "HUD List Default View:",
   "gui.todolist.config.hud_project_source": "HUD List Project Source:",
+  "gui.todolist.config.gui_auto_save": "GUI Auto Save:",
   "gui.todolist.hud.project_source.current": "Current",
   "gui.todolist.hud.project_source.current_selected": "Current selected: %s",
   "gui.todolist.hud.project_source.current_selected_fallback": "Current selected",
