@@ -40,6 +40,8 @@ public final class H2TcpAccessTestMain {
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepGameWritesAvailableWithExternalTcpSession", H2TcpAccessTestMain::shouldKeepGameWritesAvailableWithExternalTcpSession);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldRecoverAfterExternalTcpWriteLockIsReleased", H2TcpAccessTestMain::shouldRecoverAfterExternalTcpWriteLockIsReleased);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepPlayerStateWritableAfterUppercaseTcpSession", H2TcpAccessTestMain::shouldKeepPlayerStateWritableAfterUppercaseTcpSession);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepPlayerStateWritableAfterTcpServerRestartWithCachedReusableConnection", H2TcpAccessTestMain::shouldKeepPlayerStateWritableAfterTcpServerRestartWithCachedReusableConnection);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepPlayerStateWritableAfterLeavingTcpWorldToEmbeddedWorld", H2TcpAccessTestMain::shouldKeepPlayerStateWritableAfterLeavingTcpWorldToEmbeddedWorld);
     }
 
     /**
@@ -347,6 +349,103 @@ public final class H2TcpAccessTestMain {
     }
 
     /**
+     * 验证当前线程缓存了旧 TCP 可复用连接后，TCP 服务重启仍不会导致玩家项目状态写入失败。
+     */
+    private static void shouldKeepPlayerStateWritableAfterTcpServerRestartWithCachedReusableConnection() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-restart-reuse-");
+            Path databasePath = tempGameDir.resolve("todo").resolve("todolist");
+            writeTcpEnabledConfig(databasePath, 19182, 4);
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            H2StorageBootstrap bootstrap = new H2StorageBootstrap();
+            bootstrap.ensureReady();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            primeReusableConnection(provider);
+
+            H2StorageBootstrap.resetDatabaseState(provider.getDatabaseBasePath());
+            H2TcpServerManager.stop();
+
+            bootstrap.ensureReady();
+            GuiTestSupport.assertTrue(H2TcpServerManager.getStatus().isTcpActive(), "TCP 重启后应重新回到活跃状态");
+
+            H2ProjectPlayerStateStore store = new H2ProjectPlayerStateStore();
+            java.util.UUID playerId = java.util.UUID.fromString("9b17065a-10e8-4e55-a5ce-dcb2a4d9a8ba");
+            ProjectPlayerState expected = new ProjectPlayerState("restart-project", List.of("restart-project"), true);
+            store.savePlayerState(playerId, expected);
+
+            GuiTestSupport.assertEquals(
+                    "restart-project",
+                    store.loadPlayerState(playerId).getActiveProjectId(),
+                    "TCP 服务重启后旧缓存连接不应让玩家项目状态写入失败"
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 TCP 服务重启后的可复用连接失效处理时发生异常", exception);
+        } finally {
+            H2ConnectionProvider.disableEmbeddedConnectionReuseForCurrentThread();
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证离开启用 TCP 的世界后再进入嵌入式世界时，旧 TCP 可复用连接不会污染未发布单人保存。
+     */
+    private static void shouldKeepPlayerStateWritableAfterLeavingTcpWorldToEmbeddedWorld() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-to-embedded-");
+            Path databasePath = tempGameDir.resolve("todo").resolve("todolist");
+            writeTcpEnabledConfig(databasePath, 19192, 4);
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
+
+            H2StorageBootstrap bootstrap = new H2StorageBootstrap();
+            bootstrap.ensureReady();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            primeReusableConnection(provider);
+
+            writeTcpDisabledConfig(databasePath);
+            H2StorageBootstrap.resetDatabaseState(provider.getDatabaseBasePath());
+            H2TcpServerManager.stop();
+
+            bootstrap.ensureReady();
+            GuiTestSupport.assertFalse(H2TcpServerManager.getStatus().isTcpActive(), "退回未发布单人后应走嵌入式连接分支");
+
+            H2ProjectPlayerStateStore store = new H2ProjectPlayerStateStore();
+            java.util.UUID playerId = java.util.UUID.fromString("8ef0ea48-2f53-4b26-bf8b-4e42cdb6ab6a");
+            ProjectPlayerState expected = new ProjectPlayerState("embedded-project", List.of("embedded-project"), true);
+            store.savePlayerState(playerId, expected);
+
+            GuiTestSupport.assertEquals(
+                    "embedded-project",
+                    store.loadPlayerState(playerId).getActiveProjectId(),
+                    "从 TCP 世界退回嵌入式世界后玩家项目状态仍应可写"
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证从 TCP 世界退回嵌入式世界时发生异常", exception);
+        } finally {
+            H2ConnectionProvider.disableEmbeddedConnectionReuseForCurrentThread();
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 预热当前线程的可复用 H2 连接缓存，模拟 GUI 后台线程跨生命周期复用连接。
+     *
+     * @param provider H2 连接提供器
+     * @throws Exception 预热失败时抛出
+     */
+    private static void primeReusableConnection(H2ConnectionProvider provider) throws Exception {
+        H2ConnectionProvider.enableEmbeddedConnectionReuseForCurrentThread();
+        try (Connection connection = provider.openConnection();
+             Statement statement = connection.createStatement()) {
+            statement.executeQuery("SELECT 1");
+        }
+    }
+
+    /**
      * 执行 SQL 并返回是否失败。
      *
      * @param statement SQL statement
@@ -406,6 +505,37 @@ public final class H2TcpAccessTestMain {
                   }
                 }
                 """.formatted(port, maxPortAttempts, h2Path);
+        Files.writeString(H2TcpConfig.getConfigPath(), json, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 写入关闭 TCP 的测试配置，但保持数据库路径与账号配置不变，用于模拟退出局域网后回到嵌入式世界。
+     *
+     * @param databasePath 数据库基础路径
+     * @throws Exception 写入失败时抛出
+     */
+    private static void writeTcpDisabledConfig(Path databasePath) throws Exception {
+        Files.createDirectories(H2TcpConfig.getConfigPath().getParent());
+        String h2Path = databasePath.toAbsolutePath().toString().replace("\\", "/");
+        String json = """
+                {
+                  "tcpEnabled": false,
+                  "bindAddress": "127.0.0.1",
+                  "port": 19192,
+                  "autoIncrementPort": true,
+                  "maxPortAttempts": 4,
+                  "allowRemote": false,
+                  "databasePathOverride": "%s",
+                  "accounts": {
+                    "adminUser": "todo_admin",
+                    "adminPassword": "admin-password-123456789012",
+                    "readonlyUser": "todo_readonly",
+                    "readonlyPassword": "readonly-password-123456789",
+                    "readwriteUser": "todo_readwrite",
+                    "readwritePassword": "readwrite-password-12345678"
+                  }
+                }
+                """.formatted(h2Path);
         Files.writeString(H2TcpConfig.getConfigPath(), json, StandardCharsets.UTF_8);
     }
 

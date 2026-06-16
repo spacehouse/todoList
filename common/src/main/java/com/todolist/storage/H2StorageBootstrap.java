@@ -181,6 +181,7 @@ public final class H2StorageBootstrap {
         synchronized (READY_DATABASES) {
             READY_DATABASES.remove(normalizedPath);
         }
+        H2ConnectionProvider.invalidateReusableConnections();
         H2StorageAvailability.reset(normalizedPath);
     }
 
