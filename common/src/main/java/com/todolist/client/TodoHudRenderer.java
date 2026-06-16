@@ -743,7 +743,11 @@ public class TodoHudRenderer {
 
         if (renderPlan.showMore) {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, buildHiddenCountText(renderPlan.hiddenCount), x + 4, moreY, toOpaqueColor(0xAAAAAA));
+            context.drawString(client.font,
+                    buildHiddenCountText(cachedPendingTotalCount, cachedDoneTotalCount),
+                    x + 4,
+                    moreY,
+                    toOpaqueColor(0xAAAAAA));
         }
     }
 
@@ -1360,7 +1364,7 @@ public class TodoHudRenderer {
      * @return 隐藏计数文本
      */
     String getHiddenCountTextForTest() {
-        return buildHiddenCountText(getHiddenCountForTest()).getString();
+        return buildHiddenCountText(cachedPendingTotalCount, cachedDoneTotalCount).getString();
     }
 
     /**
@@ -1493,9 +1497,10 @@ public class TodoHudRenderer {
      * @param hiddenCount 隐藏任务数量
      * @return 隐藏任务计数文本
      */
-    private Component buildHiddenCountText(int hiddenCount) {
-        return Component.translatableWithFallback("hud.todolist.more_tasks", "... %s more tasks",
-                Integer.toString(Math.max(0, hiddenCount)));
+    private Component buildHiddenCountText(int pendingCount, int doneCount) {
+        return Component.translatableWithFallback("hud.todolist.summary.fixed", "Todo %s | Done %s",
+                Integer.toString(Math.max(0, pendingCount)),
+                Integer.toString(Math.max(0, doneCount)));
     }
 
     /**

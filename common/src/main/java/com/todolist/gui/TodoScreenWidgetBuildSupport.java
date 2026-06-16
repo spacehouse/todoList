@@ -347,7 +347,7 @@ final class TodoScreenWidgetBuildSupport {
         taskListWidget.setOnTaskReorder(onTaskReorder);
 
         EditBox quickAddField = new EditBox(font, quickAddFieldX, inputRowY, quickAddFieldWidth, inputRowHeight, Component.empty());
-        quickAddField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
+        quickAddField.setHint(Component.translatable("gui.todolist.input.quick_add.placeholder"));
         quickAddField.setValue("");
         quickAddField.setMaxLength(100);
 
@@ -388,7 +388,7 @@ final class TodoScreenWidgetBuildSupport {
                 .build();
 
         EditBox titleField = new EditBox(font, assignsX, titleFieldY, titleFieldWidth, titleFieldHeight, Component.empty());
-        titleField.setHint(Component.translatable("gui.todolist.input.title.placeholder"));
+        titleField.setHint(Component.translatable("gui.todolist.input.title.edit.placeholder"));
         titleField.setValue("");
         titleField.setMaxLength(100);
         titleField.setEditable(false);
@@ -413,13 +413,14 @@ final class TodoScreenWidgetBuildSupport {
                 descFieldY,
                 rightFieldWidth,
                 descFieldHeight,
-                Component.translatable("gui.todolist.input.description"),
+                Component.translatable("gui.todolist.input.description.placeholder"),
                 Component.translatable("gui.todolist.input.description.placeholder")
         );
         descField.setValue("");
         descField.setCharacterLimit(2000);
 
         EditBox tagField = new EditBox(font, assignsX, tagFieldY, rightFieldWidth, 20, Component.empty());
+        tagField.setHint(Component.translatable("gui.todolist.input.tags.placeholder"));
         tagField.setValue("");
         tagField.setMaxLength(100);
 
