@@ -95,6 +95,7 @@
   "gui.todolist.config.hud_visibility": "HUD显示:",
   "gui.todolist.config.hud_default_view": "HUD列表默认视图:",
   "gui.todolist.config.hud_project_source": "HUD列表项目来源:",
+  "gui.todolist.config.gui_auto_save": "GUI编辑自动保存:",
   "gui.todolist.hud.project_source.current": "当前选中",
   "gui.todolist.hud.project_source.current_selected": "当前选中：%s",
   "gui.todolist.hud.project_source.current_selected_fallback": "当前选中",
