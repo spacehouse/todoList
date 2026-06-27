@@ -1,18 +1,13 @@
 # Roadmap
 
-This roadmap intentionally contains only two directions:
+This roadmap now focuses on work that is still planned after the `1.4.0` release, while keeping the multi-loader maintenance context for the `1.21.1` branch.
 
-- Phase 4: Gamification
-- Command system
+## 1.4.0 Delivered Baseline
 
-## Command System
-
-- Provide a `/todo` command entry that covers common operations for both personal and team projects
-- Representative capabilities:
-  - Quick add: `/todo add <title> [description] [tags]`
-  - List/query: `/todo list` (with filter/search parameters)
-  - Complete/delete: `/todo complete <ID>`, `/todo delete <ID>`, `/todo clear`
-  - Team-related commands are validated server-side (permissions) and follow the existing sync workflow
+- `/todo` now covers task, project, HUD, join-approval, admin, and H2 maintenance flows
+- H2 now includes `NBT -> H2` migration, TCP external access, online backup, health checks, database reload, and password reset
+- H2 mode now includes query optimization for GUI/HUD paths and key lifecycle fixes
+- The GUI now includes one-click cleanup for completed tasks and an auto-save toggle for detail editing
 
 ## Phase 4: Gamification
 
@@ -23,4 +18,10 @@ This roadmap intentionally contains only two directions:
 - Notifications & feedback: show key events (claim/assign/complete) via chat or on-screen prompts
 - Auto tasks & progress tracking: generate tasks from in-game events, auto-evaluate completion, and show real-time progress
 - Stats & insights: provide completion trends and personal/team contribution overviews
+
+## 1.4.x Follow-up Work
+
+- H2 operations UX: improve status visibility, connection examples, backup guidance, and troubleshooting docs
+- Command usability: add more batch operations, clearer help output, and more consistent permission messaging
+- GUI/HUD stability: continue tightening regressions around cross-project switching, multiplayer sync, and high-frequency editing flows
 

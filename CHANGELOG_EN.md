@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.4.0] - 2026-06-17
+
+### New Features
+- **H2 Storage Backend Delivered**: Added `storageBackend=h2` as a relational storage mode covering tasks, projects, player project state, legacy `.dat` migration, and SQL-backed GUI/HUD query paths.
+- **H2 TCP Access & Maintenance Commands**: Added H2 TCP configuration, three account roles (`admin / readonly / readwrite`), online backup, health checks, database reload, TCP restart, and password reset for local or LAN maintenance workflows.
+- **Expanded Command System**: `/todo` now covers task operations, project management, member management, HUD control, join approval, command-access mode switching, and H2 maintenance entry points, while keeping `/todolist` as an alias.
+- **One-click Cleanup for Completed Tasks**: Added a current-project cleanup action in the GUI completed section, protected by a second confirmation step.
+- **GUI Auto-save Toggle**: Added a GUI editing auto-save toggle in the config screen, allowing detail edits to be saved on blur, task switch, project switch, and screen close.
+
+### Improvements & Fixes
+- **HUD / GUI Query Optimization**: In H2 mode, project counts, HUD lists, and advanced GUI filters now increasingly use database queries instead of repeated full in-memory scans.
+- **H2 Lifecycle Stability Fixes**: Fixed stale reusable connections being reused across LAN publish/exit/back-to-local transitions, reducing false “storage unavailable” failures.
+- **H2 Write-path Reliability Fixes**: Fixed H2 lock waits being misclassified as storage-unavailable, restored personal-task save performance, and reduced stutter when switching back to personal projects after team saves.
+- **HUD & Input Experience Fixes**: Fixed HUD quick-toggle flicker, improved expanded-state summary text, and clarified description/tag input placeholder behavior.
+- **Task Interaction Stability Fixes**: Fixed async-save versus team-sync races, fast-operation flashing in team tasks, and delayed GUI/HUD refresh after synchronization.
+- **Config Guidance Improvements**: Added bilingual explanatory comments for `storageBackend` and `h2BackupOnStart` to reduce configuration mistakes.
+
+### Documentation & Operations
+- **H2 Documentation Added**: Added dedicated guides for storage-mode switching and external-client access, covering `NBT/H2` switching, TCP access, account usage, and common troubleshooting.
+
 ## [1.3.0] - 2026-04-26
 
 ### New Features

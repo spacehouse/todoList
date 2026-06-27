@@ -6,19 +6,21 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.3.0 Capability Overview / 1.3.0 版本能力概览
+### v1.4.0 Capability Overview / 1.4.0 版本能力概览
 - ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
-- ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks / 游戏内 GUI 任务管理：增删改查、优先级、标签、筛选搜索，以及未完成任务拖拽排序
-- ✅ Reworked main UI flow: clearer project sidebar, detail drawer, segmented todo/done list, and delete confirmation / 重构主界面交互：更清晰的项目侧栏、详情抽屉、待办/已办分段列表与删除确认
-- ✅ Team collaboration upgrades: project search hints, offline-member assignment, and optional all-player mode / 团队协作增强：项目搜索提示、离线成员指派，以及可选的全服任务模式
-- ✅ HUD improvements: expand/collapse, visibility toggle, synchronized priority colors, hidden-count summary, and view sync / HUD 增强：支持展开/收起、显示切换、优先级色块、隐藏数量摘要与视图同步
-- ✅ Safer persistence: backup-aware safe writes and automatic recovery for task/project/config data / 更安全的持久化：任务/项目/配置文件支持带备份的安全写盘与自动恢复
-- ✅ i18n: Chinese & English / 多语言：中文与英文
+- ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks, current-project completed-task cleanup, and optional detail auto-save / 游戏内 GUI 任务管理：支持增删改查、优先级、标签、筛选搜索、未完成任务拖拽排序、当前项目一键清理已完成项，以及可选的详情自动保存
+- ✅ Personal and team projects: project hints, member management, join approval, and all-player team mode / 个人与团队项目：支持项目提示、成员管理、加入审批，以及可选的团队全服任务模式
+- ✅ Expanded command system: `/todo` covers tasks, projects, HUD, join flow, admin operations, and H2 maintenance / 命令系统增强：`/todo` 已覆盖任务、项目、HUD、加入流程、管理操作与 H2 运维入口
+- ✅ H2 storage backend: NBT/H2 switching, migration, SQL-backed query optimization, online backup, health checks, and TCP external access / H2 存储后端：支持 NBT/H2 切换、迁移、SQL 查询优化、在线备份、健康检查与 TCP 外部访问
+- ✅ HUD improvements: expand/collapse, visibility toggle, synchronized priority colors, hidden-count summary, and current-view sync / HUD 增强：支持展开/收起、显示切换、优先级色块、隐藏数量摘要与当前视图同步
+- ✅ Safer persistence and recovery: backup-aware persistence for tasks, projects, player project state, and config data / 更安全的持久化与恢复：任务、项目、玩家项目状态与配置文件统一使用带备份保护的持久化链路
 
 More details / 更多说明：
 - [FEATURES.md](FEATURES.md) / [FEATURES_EN.md](FEATURES_EN.md)
 - [ROADMAP.md](ROADMAP.md) / [ROADMAP_EN.md](ROADMAP_EN.md)
 - [CHANGELOG.md](CHANGELOG.md) / [CHANGELOG_EN.md](CHANGELOG_EN.md)
+- [docs/storage-backend-h2-guide.md](docs/storage-backend-h2-guide.md)
+- [docs/h2-external-client-guide.md](docs/h2-external-client-guide.md)
 
 ## 📸 Screenshots / 截图
 
@@ -98,6 +100,8 @@ More details / 更多说明：
 - Use filter buttons to show specific tasks / 使用筛选按钮查看特定任务
 - Use the search box to filter by title/description/tags / 使用搜索框按标题、描述、标签过滤任务
 - Use priority buttons (High/Medium/Low) to quickly filter / 使用高/中/低优先级按钮快速筛选
+- Completed tasks in the current project can be cleaned in one click with a second confirmation / 当前项目中的已完成任务可通过二次确认后一键清理
+- GUI detail editing can optionally auto-save on blur, task switch, project switch, quick add, and screen close / GUI 详情编辑可按需在失焦、切换任务、切换项目、快速新增和关闭界面时自动保存
 
 ### Team Tasks / 团队任务
 - Use view buttons at the top of the GUI to switch between Personal and team views: **Unassigned**, **All Assigned**, **Assigned to Me** / 使用界面顶部视图按钮在个人视图和团队视图之间切换：**待分配**、**已分配**、**分配给我**
@@ -120,6 +124,13 @@ More details / 更多说明：
 - Tasks, projects, player project state, and config files now use safer temp-write plus backup recovery flow. / 任务、项目、玩家项目状态和配置文件现在使用更安全的临时写入加备份恢复流程。
 - When a main data file is corrupted, the mod can attempt to recover from the latest backup automatically. / 当主数据文件损坏时，模组会自动尝试从最近一次备份恢复。
 - Local singleplayer personal-task files now keep local and player-specific copies in sync to reduce accidental rollback-like restores. / 本地单人个人任务文件会同步维护本地与玩家副本，减少类似意外回滚的问题。
+- The storage backend can switch between `NBT` and `H2`; H2 mode adds migration, TCP access, backup, health checks, and external tooling support. / 底层存储可在 `NBT` 与 `H2` 间切换；H2 模式额外提供迁移、TCP 访问、备份、健康检查与外部工具支持。
+
+### Commands / 命令
+- `/todo` is the main command entry, with `/todolist` kept as an alias. / `/todo` 是主命令入口，`/todolist` 仍保留为别名。
+- Task commands support listing, pagination, quick add, done, remove, assign, claim, abandon, and batch cleanup. / 任务命令支持列表查询、分页、快速新增、完成、删除、指派、领取、放弃与批量清理。
+- Project commands support create, remove, select, star, rename, and member management. / 项目命令支持创建、删除、选择、星标、重命名与成员管理。
+- H2 commands support status, backup, health checks, TCP restart, database reload, and password reset. / H2 命令支持状态检查、在线备份、健康检查、TCP 重启、数据库重载与密码重置。
 
 
 ## 🛡️ Permission System / 权限系统
@@ -184,8 +195,8 @@ cd todoList
 
 ### Release / 发布
 
-- Releases are published by pushing a Git tag that starts with `v`, for example `v1.3.0`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.3.0`
-- Release names include the Minecraft version suffix, for example `TodoList-v1.3.0-mc1.21.1-release`. / 发布名称会带上 Minecraft 版本后缀，例如 `TodoList-v1.3.0-mc1.21.1-release`
+- Releases are published by pushing a Git tag that starts with `v`, for example `v1.4.0`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.4.0`
+- Release names include the Minecraft version suffix, for example `TodoList-v1.4.0-mc1.21.1-release`. / 发布名称会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.0-mc1.21.1-release`
 - The release workflow extracts notes from `CHANGELOG.md` based on the tag version. / 发布工作流会根据标签版本从 `CHANGELOG.md` 提取发布说明
 
 ### Project Structure / 项目结构

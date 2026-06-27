@@ -71,8 +71,6 @@ local.properties
 */log/*
 *.log
 
-docs/*
-!docs/h2-storage-migration*.md
 *.bak.*
 *.tmp.*
 AGENTS.md
