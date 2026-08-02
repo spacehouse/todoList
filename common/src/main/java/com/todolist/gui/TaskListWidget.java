@@ -3,7 +3,12 @@ package com.todolist.gui;
 import com.todolist.config.ModConfig;
 import com.todolist.task.Task;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -24,6 +29,9 @@ public class TaskListWidget implements Renderable {
     private static final int TASK_CHECKBOX_SIZE = 12;
     private static final int TASK_CONTENT_GAP = 6;
     private static final int TASK_META_GAP = 6;
+    private static final int TASK_DISCLOSURE_WIDTH = 10;
+    private static final int TASK_DISCLOSURE_GAP = 4;
+    private static final int SUBTASK_INDENT = 14;
     private static final int TASK_TITLE_MIN_WIDTH = 40;
     private static final int TASK_LEADING_META_MAX_WIDTH = 96;
     private static final int TASK_TRAILING_META_MIN_WIDTH = 48;
@@ -35,7 +43,8 @@ public class TaskListWidget implements Renderable {
      */
     public enum RowType {
         SECTION_HEADER,
-        TASK
+        TASK,
+        SUBTASK
     }
 
     /**
@@ -182,6 +191,8 @@ public class TaskListWidget implements Renderable {
         private final boolean sectionExpandable;
         private final boolean sectionExpanded;
         private final Task task;
+        private final boolean taskExpandable;
+        private final boolean taskExpanded;
 
         /**
          * 创建一行渲染数据。
@@ -192,13 +203,16 @@ public class TaskListWidget implements Renderable {
          * @param task 当前行任务
          */
         private DisplayRow(RowType rowType, String sectionId, String sectionTitle,
-                           boolean sectionExpandable, boolean sectionExpanded, Task task) {
+                           boolean sectionExpandable, boolean sectionExpanded,
+                           Task task, boolean taskExpandable, boolean taskExpanded) {
             this.rowType = rowType;
             this.sectionId = sectionId;
             this.sectionTitle = sectionTitle;
             this.sectionExpandable = sectionExpandable;
             this.sectionExpanded = sectionExpanded;
             this.task = task;
+            this.taskExpandable = taskExpandable;
+            this.taskExpanded = taskExpanded;
         }
     }
 
@@ -209,6 +223,12 @@ public class TaskListWidget implements Renderable {
     private final int height;
 
     private List<Task> tasks = new ArrayList<>();
+    /**
+     * 父任务 ID 到直属子任务列表的反向索引；在 {@link #setTasks}、{@link #setSections}
+     * 或拖拽重排更新 {@link #tasks} 时一并重建，避免渲染与重建路径对每个父任务
+     * 都遍历整张任务列表。
+     */
+    private Map<String, List<Task>> childrenByParentId = new LinkedHashMap<>();
     private List<SectionModel> sections = new ArrayList<>();
     private List<DisplayRow> displayRows = new ArrayList<>();
     private List<Integer> rowHeights = new ArrayList<>();
@@ -228,6 +248,8 @@ public class TaskListWidget implements Renderable {
     private Task draggedTask;
     private String draggedTaskSectionId;
     private int dragTargetIndex = -1;
+    private final Set<String> expandedParentTaskIds = new LinkedHashSet<>();
+    private final Set<String> forcedExpandedParentTaskIds = new LinkedHashSet<>();
 
     /**
      * 创建任务列表组件。
@@ -261,6 +283,7 @@ public class TaskListWidget implements Renderable {
         clearTaskDragState();
         this.tasks = tasks == null ? new ArrayList<>() : new ArrayList<>(tasks);
         this.sections = List.of(new SectionModel("default", "", this.tasks, false, true));
+        rebuildChildrenIndex();
         rebuildDisplayRows(previousScroll);
     }
 
@@ -282,7 +305,24 @@ public class TaskListWidget implements Renderable {
             mergedTasks.addAll(section.tasks);
         }
         this.tasks = mergedTasks;
+        rebuildChildrenIndex();
         rebuildDisplayRows(previousScroll);
+    }
+
+    /**
+     * 设置当前列表中需要被外部临时强制展开的父任务集合。
+     *
+     * @param parentTaskIds 需要强制展开的父任务 ID 集合
+     */
+    void setForcedExpandedParentTaskIds(Set<String> parentTaskIds) {
+        forcedExpandedParentTaskIds.clear();
+        if (parentTaskIds != null) {
+            for (String parentTaskId : parentTaskIds) {
+                if (parentTaskId != null && !parentTaskId.isEmpty()) {
+                    forcedExpandedParentTaskIds.add(parentTaskId);
+                }
+            }
+        }
     }
 
     private void updateMaxScroll() {
@@ -372,7 +412,7 @@ public class TaskListWidget implements Renderable {
             if (row.rowType == RowType.SECTION_HEADER) {
                 renderSectionHeader(context, textRenderer, row, rowIndex, rowY, rowHeight, mouseX, mouseY);
             } else if (row.task != null) {
-                renderTaskRow(context, textRenderer, config, row.task, rowIndex, rowY, rowHeight, mouseX, mouseY);
+                renderTaskRow(context, textRenderer, config, row, rowIndex, rowY, rowHeight, mouseX, mouseY);
             }
             rowY += rowHeight;
         }
@@ -416,7 +456,8 @@ public class TaskListWidget implements Renderable {
      * 渲染任务行。
      */
     private void renderTaskRow(net.minecraft.client.gui.GuiGraphics context, Font textRenderer, ModConfig config,
-                               Task task, int rowIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
+                               DisplayRow row, int rowIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
+        Task task = row.task;
         int bgColor = getTaskBackgroundColor(rowIndex, taskY, rowHeight, mouseX, mouseY);
         int priorityColor = task.getPriority().getColor();
         int textColor = task.isCompleted() ? 0xFF888888 : 0xFFFFFFFF;
@@ -426,10 +467,22 @@ public class TaskListWidget implements Renderable {
 
         context.fill(x + 1, taskY, x + width - 1, taskY + rowHeight - 1, bgColor);
 
-        int priorityLeft = x + TASK_ROW_LEFT_PADDING;
+        int priorityLeft = getPriorityLeft(row);
         context.fill(priorityLeft, rowTopInset, priorityLeft + TASK_PRIORITY_BAR_WIDTH, rowBottomInset, priorityColor);
 
-        int checkboxX = priorityLeft + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP;
+        int disclosureX = getDisclosureLeft(row);
+        if (row.taskExpandable) {
+            context.drawString(
+                    textRenderer,
+                    Component.nullToEmpty(row.taskExpanded ? "v" : ">"),
+                    disclosureX,
+                    textBaselineY,
+                    0xFFAAAAAA,
+                    false
+            );
+        }
+
+        int checkboxX = getCheckboxLeft(row);
         int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
         context.fill(checkboxX, checkboxY, checkboxX + TASK_CHECKBOX_SIZE, checkboxY + TASK_CHECKBOX_SIZE, 0xFF000000);
         context.renderOutline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
@@ -546,8 +599,78 @@ public class TaskListWidget implements Renderable {
      * @return 负责人文本；无人负责时返回空字符串
      */
     private String buildTaskTrailingMetaText(Task task) {
+        String progress = buildSubtaskProgressText(task);
+        if (!progress.isEmpty()) {
+            return progress;
+        }
         String assigneeName = resolveAssigneeName(task);
         return assigneeName.isEmpty() ? "" : "@" + assigneeName;
+    }
+
+    /**
+     * 构建父任务右侧显示的子任务完成进度摘要。
+     *
+     * @param task 目标任务
+     * @return 进度摘要；无直属子任务时返回空字符串
+     */
+    private String buildSubtaskProgressText(Task task) {
+        List<Task> children = getDirectChildren(task);
+        if (children.isEmpty()) {
+            return "";
+        }
+        int completedCount = 0;
+        for (Task child : children) {
+            if (child != null && child.isCompleted()) {
+                completedCount++;
+            }
+        }
+        return completedCount + "/" + children.size();
+    }
+
+    /**
+     * 返回任务在当前快照中的直属子任务列表，并按父内顺序稳定排序。
+     *
+     * <p>实现读取 {@link #childrenByParentId} 反向索引，避免渲染路径对每个父任务
+     * 都遍历整张任务列表（O(n²) → O(n)）。
+     *
+     * @param parent 父任务
+     * @return 直属子任务列表的副本；无子任务时返回空列表
+     */
+    private List<Task> getDirectChildren(Task parent) {
+        if (parent == null) {
+            return new ArrayList<>();
+        }
+        String parentTaskId = parent.getId();
+        if (parentTaskId == null || parentTaskId.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Task> cached = childrenByParentId.get(parentTaskId);
+        return cached == null ? new ArrayList<>() : new ArrayList<>(cached);
+    }
+
+    /**
+     * 根据 {@link #tasks} 重建父任务到直属子任务的反向索引，并按父内顺序稳定排序。
+     * 该方法在任务列表发生替换（设置、分段、拖拽回写）时调用一次，渲染与展开
+     * 路径共享同一份索引结果。
+     */
+    private void rebuildChildrenIndex() {
+        Map<String, List<Task>> index = new LinkedHashMap<>();
+        if (tasks != null) {
+            for (Task task : tasks) {
+                if (task == null) {
+                    continue;
+                }
+                String parentId = task.getParentTaskId();
+                if (parentId == null || parentId.isEmpty()) {
+                    continue;
+                }
+                index.computeIfAbsent(parentId, key -> new ArrayList<>()).add(task);
+            }
+        }
+        for (List<Task> children : index.values()) {
+            children.sort(this::compareSubtaskOrder);
+        }
+        childrenByParentId = index;
     }
 
     /**
@@ -581,6 +704,46 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
+     * 返回任务行优先级色块的起始横坐标。
+     *
+     * @param row 当前任务行
+     * @return 优先级色块起始横坐标
+     */
+    private int getPriorityLeft(DisplayRow row) {
+        return x + TASK_ROW_LEFT_PADDING + getTaskIndent(row);
+    }
+
+    /**
+     * 返回任务行展开箭头的起始横坐标。
+     *
+     * @param row 当前任务行
+     * @return 展开箭头起始横坐标
+     */
+    private int getDisclosureLeft(DisplayRow row) {
+        return getPriorityLeft(row) + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP;
+    }
+
+    /**
+     * 返回任务行复选框的起始横坐标。
+     *
+     * @param row 当前任务行
+     * @return 复选框起始横坐标
+     */
+    private int getCheckboxLeft(DisplayRow row) {
+        return getDisclosureLeft(row) + TASK_DISCLOSURE_WIDTH + TASK_DISCLOSURE_GAP;
+    }
+
+    /**
+     * 返回任务行的层级缩进。
+     *
+     * @param row 当前任务行
+     * @return 层级缩进
+     */
+    private int getTaskIndent(DisplayRow row) {
+        return row != null && row.rowType == RowType.SUBTASK ? SUBTASK_INDENT : 0;
+    }
+
+    /**
      * 渲染拖拽中的插入指示线，帮助用户预览落点。
      *
      * @param context 当前绘制上下文
@@ -589,7 +752,7 @@ public class TaskListWidget implements Renderable {
         if (draggedTask == null || dragTargetIndex < 0) {
             return;
         }
-        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId);
+        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId, draggedTask);
         if (rowIndexes.isEmpty()) {
             return;
         }
@@ -626,12 +789,20 @@ public class TaskListWidget implements Renderable {
             int index = findVisibleRowIndexAt(mouseY);
             if (index >= 0 && index < displayRows.size()) {
                 DisplayRow row = displayRows.get(index);
-                if (row.rowType != RowType.TASK || row.task == null) {
+                if (row.task == null) {
                     return false;
                 }
                 int taskY = getRowTopForVisibleIndex(index);
                 int rowHeight = getRowHeight(index);
-                int checkboxX = x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP;
+                int disclosureX = getDisclosureLeft(row);
+                // 命中展开箭头：精确切换展开状态并吃掉事件，避免触发选中。
+                if (button == 0 && row.taskExpandable
+                        && mouseX >= disclosureX && mouseX < disclosureX + TASK_DISCLOSURE_WIDTH
+                        && mouseY >= taskY && mouseY < taskY + rowHeight) {
+                    toggleParentExpanded(row.task);
+                    return true;
+                }
+                int checkboxX = getCheckboxLeft(row);
                 int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
 
                 // 检查点击是否在复选框范围内 (12x12)
@@ -643,7 +814,12 @@ public class TaskListWidget implements Renderable {
                     }
                     return true;
                 }
-                if (button == 0 && canHandleTaskReorder() && canStartDrag(row.task)) {
+                // 父任务行任意非箭头、非复选框区域同样切换展开状态；
+                // 这里不 return true，让外层继续触发 selectTask / pendingDrag。
+                if (button == 0 && row.taskExpandable) {
+                    toggleParentExpanded(row.task);
+                }
+                if (button == 0 && canStartRowDrag(row)) {
                     pendingDragTask = row.task;
                     pendingDragSectionId = row.sectionId;
                     pendingDragStartX = mouseX;
@@ -719,7 +895,7 @@ public class TaskListWidget implements Renderable {
             int index = findVisibleRowIndexAt(y);
             if (index >= 0 && index < displayRows.size()) {
                 DisplayRow row = displayRows.get(index);
-                if (row.rowType == RowType.TASK) {
+                if (row.rowType == RowType.TASK || row.rowType == RowType.SUBTASK) {
                     return row.task;
                 }
             }
@@ -806,7 +982,7 @@ public class TaskListWidget implements Renderable {
      */
     boolean hasPriorityColorBlockForTaskForTest(String taskId) {
         for (DisplayRow row : displayRows) {
-            if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
+            if (row.rowType != RowType.SECTION_HEADER && row.task != null && taskId.equals(row.task.getId())) {
                 return true;
             }
         }
@@ -821,6 +997,19 @@ public class TaskListWidget implements Renderable {
      */
     boolean canStartDrag(Task task) {
         return task != null && !task.isCompleted();
+    }
+
+    /**
+     * 判断给定渲染行是否允许作为拖拽起点。
+     *
+     * @param row 当前渲染行
+     * @return true 表示该行允许开始拖拽
+     */
+    private boolean canStartRowDrag(DisplayRow row) {
+        return row != null
+                && (row.rowType == RowType.TASK || row.rowType == RowType.SUBTASK)
+                && canHandleTaskReorder()
+                && canStartDrag(row.task);
     }
 
     /**
@@ -879,11 +1068,11 @@ public class TaskListWidget implements Renderable {
         if (draggedTask == null) {
             return;
         }
-        List<Task> sectionTasks = getDraggableTasksForSection(draggedTaskSectionId);
+        List<Task> sectionTasks = getDraggableTasksForSection(draggedTaskSectionId, draggedTask);
         List<Task> reorderedTasks = reorderActiveTasks(sectionTasks, draggedTask.getId(), dragTargetIndex);
         boolean changed = !sameTaskOrder(sectionTasks, reorderedTasks);
         if (changed) {
-            applySectionTaskOrder(draggedTaskSectionId, reorderedTasks);
+            applySectionTaskOrder(draggedTaskSectionId, draggedTask, reorderedTasks);
             if (onTaskReorder != null) {
                 onTaskReorder.accept(List.copyOf(reorderedTasks));
             }
@@ -898,7 +1087,7 @@ public class TaskListWidget implements Renderable {
      * @return 当前拖拽目标索引
      */
     int resolveDropIndex(double mouseY) {
-        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId);
+        List<Integer> rowIndexes = collectDraggableRowIndexes(draggedTaskSectionId, draggedTask);
         if (rowIndexes.isEmpty()) {
             return -1;
         }
@@ -999,17 +1188,14 @@ public class TaskListWidget implements Renderable {
      * @param sectionId 目标分段 ID
      * @return 可拖拽任务行索引列表
      */
-    private List<Integer> collectDraggableRowIndexes(String sectionId) {
+    private List<Integer> collectDraggableRowIndexes(String sectionId, Task anchorTask) {
         List<Integer> rowIndexes = new ArrayList<>();
-        if (sectionId == null || displayRows == null) {
+        if (sectionId == null || displayRows == null || anchorTask == null) {
             return rowIndexes;
         }
         for (int index = 0; index < displayRows.size(); index++) {
             DisplayRow row = displayRows.get(index);
-            if (row.rowType == RowType.TASK
-                    && row.task != null
-                    && sectionId.equals(row.sectionId)
-                    && canStartDrag(row.task)) {
+            if (isTaskInDragGroup(sectionId, anchorTask, row, null)) {
                 rowIndexes.add(index);
             }
         }
@@ -1022,19 +1208,23 @@ public class TaskListWidget implements Renderable {
      * @param sectionId 分段 ID
      * @return 当前可拖拽的任务列表
      */
-    private List<Task> getDraggableTasksForSection(String sectionId) {
+    private List<Task> getDraggableTasksForSection(String sectionId, Task anchorTask) {
         List<Task> sectionTasks = new ArrayList<>();
-        if (sectionId == null || sections == null) {
+        if (sectionId == null || sections == null || anchorTask == null) {
             return sectionTasks;
         }
         for (SectionModel section : sections) {
             if (section == null || !sectionId.equals(section.id)) {
                 continue;
             }
+            Map<String, Task> sectionTaskIndex = buildSectionTaskIndex(section.tasks);
             for (Task task : section.tasks) {
-                if (canStartDrag(task)) {
+                if (isTaskInDragGroup(sectionId, anchorTask, null, task, sectionTaskIndex)) {
                     sectionTasks.add(task);
                 }
+            }
+            if (anchorTask.isSubtask()) {
+                sectionTasks.sort(this::compareSubtaskOrder);
             }
             break;
         }
@@ -1047,8 +1237,14 @@ public class TaskListWidget implements Renderable {
      * @param sectionId 分段 ID
      * @param reorderedTasks 重排后的任务列表
      */
-    private void applySectionTaskOrder(String sectionId, List<Task> reorderedTasks) {
-        if (sectionId == null || reorderedTasks == null) {
+    private void applySectionTaskOrder(String sectionId, Task anchorTask, List<Task> reorderedTasks) {
+        if (sectionId == null || anchorTask == null || reorderedTasks == null) {
+            return;
+        }
+        if (anchorTask.isSubtask()) {
+            applySiblingSubtaskOrder(reorderedTasks);
+            rebuildChildrenIndex();
+            rebuildDisplayRows(scrollBar.getValue());
             return;
         }
         List<SectionModel> updatedSections = new ArrayList<>();
@@ -1060,10 +1256,12 @@ public class TaskListWidget implements Renderable {
                 updatedSections.add(section);
                 continue;
             }
+            Map<String, Task> sectionTaskIndex = buildSectionTaskIndex(section.tasks);
             List<Task> mergedSectionTasks = new ArrayList<>();
             int reorderedIndex = 0;
             for (Task task : section.tasks) {
-                if (canStartDrag(task) && reorderedIndex < reorderedTasks.size()) {
+                if (isTaskInDragGroup(section.id, anchorTask, null, task, sectionTaskIndex)
+                        && reorderedIndex < reorderedTasks.size()) {
                     mergedSectionTasks.add(reorderedTasks.get(reorderedIndex++));
                 } else {
                     mergedSectionTasks.add(task);
@@ -1080,6 +1278,7 @@ public class TaskListWidget implements Renderable {
             }
         }
         this.tasks = mergedTasks;
+        rebuildChildrenIndex();
         rebuildDisplayRows(previousScroll);
     }
 
@@ -1117,7 +1316,7 @@ public class TaskListWidget implements Renderable {
             if (row.rowType == RowType.SECTION_HEADER) {
                 snapshot.add("HEADER:" + buildSectionHeaderText(row));
             } else if (row.task != null) {
-                snapshot.add("TASK:" + row.task.getId());
+                snapshot.add((row.rowType == RowType.SUBTASK ? "SUBTASK:" : "TASK:") + row.task.getId());
             }
         }
         return List.copyOf(snapshot);
@@ -1184,11 +1383,25 @@ public class TaskListWidget implements Renderable {
     /**
      * 返回任务内容区域内的测试用横坐标。
      *
-     * @return 任务内容区域内的测试用横坐标
+     * @return 顶层任务内容区域内的测试用横坐标
      */
     int getInteractXForTest() {
-        return x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP
-                + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP + 4;
+        return getCheckboxLeft(null) + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP + 4;
+    }
+
+    /**
+     * 返回指定任务当前可见行内容区域内的测试用横坐标。
+     *
+     * @param taskId 任务 ID
+     * @return 当前任务行内容区域内的测试用横坐标；未命中时回退到顶层坐标
+     */
+    int getInteractXForTest(String taskId) {
+        int rowIndex = findTaskRowIndex(taskId);
+        if (rowIndex < 0 || rowIndex >= displayRows.size()) {
+            return getInteractXForTest();
+        }
+        DisplayRow row = displayRows.get(rowIndex);
+        return getCheckboxLeft(row) + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP + 4;
     }
 
     /**
@@ -1203,7 +1416,7 @@ public class TaskListWidget implements Renderable {
         }
         for (int index = 0; index < displayRows.size(); index++) {
             DisplayRow row = displayRows.get(index);
-            if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
+            if (row.rowType != RowType.SECTION_HEADER && row.task != null && taskId.equals(row.task.getId())) {
                 return getRowTopForVisibleIndex(index) + getRowHeight(index) / 2;
             }
         }
@@ -1226,7 +1439,7 @@ public class TaskListWidget implements Renderable {
      * @return 复选框中心点横坐标
      */
     int getCheckboxCenterXForTest() {
-        return x + TASK_ROW_LEFT_PADDING + TASK_PRIORITY_BAR_WIDTH + TASK_CONTENT_GAP + TASK_CHECKBOX_SIZE / 2;
+        return getCheckboxLeft(null) + TASK_CHECKBOX_SIZE / 2;
     }
 
     /**
@@ -1237,12 +1450,26 @@ public class TaskListWidget implements Renderable {
     int getCheckboxCenterYForTest() {
         for (int index = scrollBar.getValue(); index < displayRows.size(); index++) {
             DisplayRow row = displayRows.get(index);
-            if (row.rowType == RowType.TASK) {
+            if (row.rowType != RowType.SECTION_HEADER) {
                 int rowTop = getRowTopForVisibleIndex(index);
                 return rowTop + (getRowHeight(index) - TASK_CHECKBOX_SIZE) / 2 + TASK_CHECKBOX_SIZE / 2;
             }
         }
         return y + (taskItemHeight - TASK_CHECKBOX_SIZE) / 2 + TASK_CHECKBOX_SIZE / 2;
+    }
+
+    /**
+     * 返回指定父任务展开按钮的中心横坐标，供测试稳定命中展开区域。
+     *
+     * @param taskId 任务 ID
+     * @return 展开按钮中心横坐标；任务不存在时返回 -1
+     */
+    int getExpandToggleCenterXForTest(String taskId) {
+        int rowIndex = findTaskRowIndex(taskId);
+        if (rowIndex < 0) {
+            return -1;
+        }
+        return getDisclosureLeft(displayRows.get(rowIndex)) + TASK_DISCLOSURE_WIDTH / 2;
     }
 
     /**
@@ -1254,6 +1481,17 @@ public class TaskListWidget implements Renderable {
     String getTaskLeadingMetaTextForTest(String taskId) {
         Task task = findTaskById(taskId);
         return buildTaskLeadingMetaText(task);
+    }
+
+    /**
+     * 返回指定任务当前用于右侧展示的元信息文本，供测试断言父任务进度摘要等语义。
+     *
+     * @param taskId 任务 ID
+     * @return 右侧元信息文本；任务不存在时返回空字符串
+     */
+    String getTaskTrailingMetaTextForTest(String taskId) {
+        Task task = findTaskById(taskId);
+        return buildTaskTrailingMetaText(task);
     }
 
     /**
@@ -1270,7 +1508,7 @@ public class TaskListWidget implements Renderable {
         }
         for (int index = 0; index < displayRows.size(); index++) {
             DisplayRow row = displayRows.get(index);
-            if (row.rowType != RowType.TASK || row.task == null || !taskId.equals(row.task.getId())) {
+            if (row.rowType == RowType.SECTION_HEADER || row.task == null || !taskId.equals(row.task.getId())) {
                 continue;
             }
             return getTaskBackgroundColor(index, getRowTopForVisibleIndex(index), getRowHeight(index), mouseX, mouseY);
@@ -1289,11 +1527,30 @@ public class TaskListWidget implements Renderable {
             return null;
         }
         for (DisplayRow row : displayRows) {
-            if (row.rowType == RowType.TASK && row.task != null && taskId.equals(row.task.getId())) {
+            if (row.rowType != RowType.SECTION_HEADER && row.task != null && taskId.equals(row.task.getId())) {
                 return row.task;
             }
         }
         return null;
+    }
+
+    /**
+     * 根据任务 ID 返回当前渲染行索引。
+     *
+     * @param taskId 任务 ID
+     * @return 行索引；不存在时返回 -1
+     */
+    private int findTaskRowIndex(String taskId) {
+        if (taskId == null || displayRows == null) {
+            return -1;
+        }
+        for (int index = 0; index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType != RowType.SECTION_HEADER && row.task != null && taskId.equals(row.task.getId())) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -1388,7 +1645,7 @@ public class TaskListWidget implements Renderable {
         for (int i = 0; i < displayRows.size(); i++) {
             DisplayRow row = displayRows.get(i);
             Task t = row.task;
-            if (row.rowType == RowType.TASK && t != null && selectedTaskId.equals(t.getId())) {
+            if (row.rowType != RowType.SECTION_HEADER && t != null && selectedTaskId.equals(t.getId())) {
                 selectedTaskIndex = i;
                 return;
             }
@@ -1476,6 +1733,7 @@ public class TaskListWidget implements Renderable {
      */
     private void rebuildDisplayRowsFromSections() {
         List<DisplayRow> rows = new ArrayList<>();
+        Set<String> expandableTaskIds = new LinkedHashSet<>();
         if (sections == null || sections.isEmpty()) {
             this.displayRows = rows;
             this.rowHeights = new ArrayList<>();
@@ -1492,26 +1750,226 @@ public class TaskListWidget implements Renderable {
                         section.title,
                         section.expandable,
                         section.expanded,
-                        null));
+                        null,
+                        false,
+                        false));
             }
             if (!section.expandable || section.expanded) {
+                Map<String, Task> sectionTaskIndex = new LinkedHashMap<>();
                 for (Task task : section.tasks) {
-                    if (task != null) {
+                    if (task != null && task.getId() != null && !task.getId().isEmpty()) {
+                        sectionTaskIndex.put(task.getId(), task);
+                    }
+                }
+                for (Task task : section.tasks) {
+                    if (task != null && isTopLevelTask(task, sectionTaskIndex)) {
+                        List<Task> children = getDirectChildren(task);
+                        boolean expandable = !children.isEmpty();
+                        boolean expanded = expandable
+                                && (expandedParentTaskIds.contains(task.getId())
+                                || forcedExpandedParentTaskIds.contains(task.getId()));
+                        if (expandable) {
+                            expandableTaskIds.add(task.getId());
+                        }
                         rows.add(new DisplayRow(RowType.TASK,
                                 section.id,
                                 section.title,
                                 section.expandable,
                                 section.expanded,
-                                task));
+                                task,
+                                expandable,
+                                expanded));
+                        if (expanded) {
+                            for (Task child : children) {
+                                rows.add(new DisplayRow(RowType.SUBTASK,
+                                        section.id,
+                                        section.title,
+                                        section.expandable,
+                                        section.expanded,
+                                        child,
+                                        false,
+                                        false));
+                            }
+                        }
                     }
                 }
             }
         }
+        expandedParentTaskIds.retainAll(expandableTaskIds);
         this.displayRows = rows;
         List<Integer> heights = new ArrayList<>(rows.size());
         for (DisplayRow row : rows) {
             heights.add(getRowHeight(row));
         }
         this.rowHeights = heights;
+    }
+
+    /**
+     * 判断任务是否应作为当前分段中的顶层行展示。
+     *
+     * @param task 当前任务
+     * @param sectionTaskIndex 当前分段的任务索引
+     * @return true 表示应作为顶层行展示
+     */
+    private boolean isTopLevelTask(Task task, Map<String, Task> sectionTaskIndex) {
+        if (task == null) {
+            return false;
+        }
+        String parentTaskId = task.getParentTaskId();
+        if (parentTaskId == null || parentTaskId.isEmpty()) {
+            return true;
+        }
+        return sectionTaskIndex == null || !sectionTaskIndex.containsKey(parentTaskId);
+    }
+
+    /**
+     * 切换父任务的展开状态，并立即刷新当前显示行快照。
+     *
+     * @param task 父任务
+     */
+    private void toggleParentExpanded(Task task) {
+        if (task == null || task.getId() == null || task.getId().isEmpty() || getDirectChildren(task).isEmpty()) {
+            return;
+        }
+        if (expandedParentTaskIds.contains(task.getId())) {
+            expandedParentTaskIds.remove(task.getId());
+        } else {
+            expandedParentTaskIds.add(task.getId());
+        }
+        rebuildDisplayRows(scrollBar.getValue());
+    }
+
+    /**
+     * 返回当前由用户主动展开的父任务 ID 集合的副本，供外层在重建 widget 时保留展开状态。
+     *
+     * @return 当前展开的父任务 ID 集合副本
+     */
+    Set<String> getExpandedParentTaskIds() {
+        return new LinkedHashSet<>(expandedParentTaskIds);
+    }
+
+    /**
+     * 用指定集合覆盖当前展开的父任务 ID；用于外层 widget 重建后回填用户已展开状态。
+     *
+     * <p> setter 会在覆盖后立即触发 {@link #rebuildDisplayRows}，确保新的展开集合
+     * 反映到 {@code displayRows} 上；否则仅修改字段而不刷新显示行，会让重建后的
+     * widget 视觉状态与字段不一致。
+     *
+     * @param parentTaskIds 应展开的父任务 ID 集合；为 {@code null} 时清空
+     */
+    void setExpandedParentTaskIds(Set<String> parentTaskIds) {
+        expandedParentTaskIds.clear();
+        if (parentTaskIds != null) {
+            for (String parentTaskId : parentTaskIds) {
+                if (parentTaskId != null && !parentTaskId.isEmpty()) {
+                    expandedParentTaskIds.add(parentTaskId);
+                }
+            }
+        }
+        rebuildDisplayRows(scrollBar.getValue());
+    }
+
+    /**
+     * 构建当前分段的任务索引，供顶层/子任务分组判断复用。
+     *
+     * @param sectionTasks 分段任务列表
+     * @return 任务索引
+     */
+    private Map<String, Task> buildSectionTaskIndex(List<Task> sectionTasks) {
+        Map<String, Task> sectionTaskIndex = new LinkedHashMap<>();
+        if (sectionTasks == null) {
+            return sectionTaskIndex;
+        }
+        for (Task task : sectionTasks) {
+            if (task != null && task.getId() != null && !task.getId().isEmpty()) {
+                sectionTaskIndex.put(task.getId(), task);
+            }
+        }
+        return sectionTaskIndex;
+    }
+
+    /**
+     * 判断指定任务或渲染行是否属于当前拖拽分组。
+     *
+     * @param sectionId 分段 ID
+     * @param anchorTask 当前拖拽中的锚点任务
+     * @param row 候选渲染行
+     * @param task 候选任务
+     * @return true 表示属于同一拖拽分组
+     */
+    private boolean isTaskInDragGroup(String sectionId, Task anchorTask, DisplayRow row, Task task) {
+        return isTaskInDragGroup(sectionId, anchorTask, row, task, null);
+    }
+
+    /**
+     * 判断指定任务或渲染行是否属于当前拖拽分组。
+     *
+     * @param sectionId 分段 ID
+     * @param anchorTask 当前拖拽中的锚点任务
+     * @param row 候选渲染行
+     * @param task 候选任务
+     * @param sectionTaskIndex 当前分段任务索引
+     * @return true 表示属于同一拖拽分组
+     */
+    private boolean isTaskInDragGroup(String sectionId, Task anchorTask, DisplayRow row, Task task, Map<String, Task> sectionTaskIndex) {
+        Task candidateTask = row != null ? row.task : task;
+        if (sectionId == null
+                || anchorTask == null
+                || candidateTask == null
+                || !canStartDrag(candidateTask)) {
+            return false;
+        }
+        String candidateSectionId = row != null ? row.sectionId : sectionId;
+        if (!sectionId.equals(candidateSectionId)) {
+            return false;
+        }
+        if (anchorTask.isSubtask()) {
+            if (row != null && row.rowType != RowType.SUBTASK) {
+                return false;
+            }
+            return candidateTask.isSubtask()
+                    && Objects.equals(anchorTask.getParentTaskId(), candidateTask.getParentTaskId());
+        }
+        if (row != null && row.rowType != RowType.TASK) {
+            return false;
+        }
+        if (row != null) {
+            return true;
+        }
+        return isTopLevelTask(candidateTask, sectionTaskIndex == null ? buildSectionTaskIndex(tasks) : sectionTaskIndex);
+    }
+
+    /**
+     * 按当前父内顺序比较两个子任务，确保拖拽前后的顺序计算稳定。
+     *
+     * @param left 左侧子任务
+     * @param right 右侧子任务
+     * @return 比较结果
+     */
+    private int compareSubtaskOrder(Task left, Task right) {
+        int sortCompare = Long.compare(left.getSubtaskSortOrder(), right.getSubtaskSortOrder());
+        if (sortCompare != 0) {
+            return sortCompare;
+        }
+        String leftId = left.getId() == null ? "" : left.getId();
+        String rightId = right.getId() == null ? "" : right.getId();
+        return leftId.compareTo(rightId);
+    }
+
+    /**
+     * 将同父级子任务的拖拽结果回写为新的父内排序号。
+     *
+     * @param reorderedTasks 重排后的同父级子任务
+     */
+    private void applySiblingSubtaskOrder(List<Task> reorderedTasks) {
+        if (reorderedTasks == null) {
+            return;
+        }
+        for (int index = 0; index < reorderedTasks.size(); index++) {
+            Task task = reorderedTasks.get(index);
+            if (task != null) {
+                task.setSubtaskSortOrder(index);
+            }
+        }
     }
 }

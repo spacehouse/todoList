@@ -35,12 +35,16 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldPlaceTagsBeforeTaskTitle", TaskListWidgetTestMain::shouldPlaceTagsBeforeTaskTitle);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded", TaskListWidgetTestMain::shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderSectionHeadersWithExpandMarkers", TaskListWidgetTestMain::shouldRenderSectionHeadersWithExpandMarkers);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepSubtasksCollapsedByDefault", TaskListWidgetTestMain::shouldKeepSubtasksCollapsedByDefault);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldExpandParentRowWhenClickingToggle", TaskListWidgetTestMain::shouldExpandParentRowWhenClickingToggle);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldShowParentProgressSummaryWhenSubtasksExist", TaskListWidgetTestMain::shouldShowParentProgressSummaryWhenSubtasksExist);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepScrollOffsetInsideScrollableTaskArea", TaskListWidgetTestMain::shouldKeepScrollOffsetInsideScrollableTaskArea);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedRowsSeparatedFromActiveRows", TaskListWidgetTestMain::shouldKeepCompletedRowsSeparatedFromActiveRows);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldHideActiveTasksWhenSectionCollapsed", TaskListWidgetTestMain::shouldHideActiveTasksWhenSectionCollapsed);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldStartDraggingOnlyForActiveTasks", TaskListWidgetTestMain::shouldStartDraggingOnlyForActiveTasks);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldUpdateDropTargetWhileDragging", TaskListWidgetTestMain::shouldUpdateDropTargetWhileDragging);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlyCurrentVisibleActiveTasks", TaskListWidgetTestMain::shouldReorderOnlyCurrentVisibleActiveTasks);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlySiblingSubtasksWhenDraggingSubtask", TaskListWidgetTestMain::shouldReorderOnlySiblingSubtasksWhenDraggingSubtask);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedSectionUnchangedAfterReorder", TaskListWidgetTestMain::shouldKeepCompletedSectionUnchangedAfterReorder);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldAutoScrollWhenDraggingNearListEdge", TaskListWidgetTestMain::shouldAutoScrollWhenDraggingNearListEdge);
     }
@@ -258,6 +262,69 @@ public final class TaskListWidgetTestMain {
     }
 
     /**
+     * 校验含子任务的父任务在默认状态下仍保持收起，只展示顶层任务行。
+     */
+    private static void shouldKeepSubtasksCollapsedByDefault() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task parent = createTask("task-parent", "Parent");
+        Task childA = createSubtask("task-child-a", "Child A", parent.getId(), 0L);
+        Task childB = createSubtask("task-child-b", "Child B", parent.getId(), 1L);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(parent, childA, childB), true, true)
+        ));
+
+        GuiTestSupport.assertEquals(
+                List.of("HEADER:v 未完成（1）", "TASK:task-parent"),
+                widget.getRowDebugSnapshotForTest(),
+                "默认状态下父任务应收起子任务，仅展示顶层任务行"
+        );
+    }
+
+    /**
+     * 校验点击父任务展开按钮后，会把直属子任务渲染到父任务下方。
+     */
+    private static void shouldExpandParentRowWhenClickingToggle() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task parent = createTask("task-parent", "Parent");
+        Task childA = createSubtask("task-child-a", "Child A", parent.getId(), 0L);
+        Task childB = createSubtask("task-child-b", "Child B", parent.getId(), 1L);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(parent, childA, childB), true, true)
+        ));
+
+        boolean handled = widget.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+
+        GuiTestSupport.assertTrue(handled, "点击父任务展开按钮应由组件处理");
+        GuiTestSupport.assertEquals(
+                List.of("HEADER:v 未完成（1）", "TASK:task-parent", "SUBTASK:task-child-a", "SUBTASK:task-child-b"),
+                widget.getRowDebugSnapshotForTest(),
+                "展开父任务后应按父内顺序显示直属子任务"
+        );
+    }
+
+    /**
+     * 校验父任务会显示直属子任务的完成进度摘要。
+     */
+    private static void shouldShowParentProgressSummaryWhenSubtasksExist() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 120);
+        Task parent = createTask("task-parent", "Parent");
+        Task childDone = createSubtask("task-child-done", "Child Done", parent.getId(), 0L);
+        childDone.setCompleted(true);
+        Task childPending = createSubtask("task-child-pending", "Child Pending", parent.getId(), 1L);
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（1）", List.of(parent, childDone, childPending), true, true)
+        ));
+
+        GuiTestSupport.assertEquals("1/2", widget.getTaskTrailingMetaTextForTest(parent.getId()), "父任务右侧应显示已完成子任务进度摘要");
+    }
+
+    /**
      * 校验滚动行为会被限制在任务滚动区内，不会超过可滚动范围。
      */
     private static void shouldKeepScrollOffsetInsideScrollableTaskArea() {
@@ -407,6 +474,56 @@ public final class TaskListWidgetTestMain {
     }
 
     /**
+     * 校验拖拽子任务时，只会重排同一父任务下的直属子任务，不会混入顶层任务或其他父任务的子任务。
+     */
+    private static void shouldReorderOnlySiblingSubtasksWhenDraggingSubtask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 180);
+        Task topLevel = createTask("task-top", "Top");
+        Task parentA = createTask("task-parent-a", "Parent A");
+        Task childA = createSubtask("task-child-a", "Child A", parentA.getId(), 0L);
+        Task childB = createSubtask("task-child-b", "Child B", parentA.getId(), 1L);
+        Task parentB = createTask("task-parent-b", "Parent B");
+        Task childC = createSubtask("task-child-c", "Child C", parentB.getId(), 0L);
+        AtomicReference<List<String>> reorderedIds = new AtomicReference<>(List.of());
+        widget.setSections(List.of(
+                new TaskListWidget.SectionModel("active", "未完成（3）", List.of(topLevel, parentA, childA, childB, parentB, childC), true, true)
+        ));
+        widget.setOnTaskReorder(tasks -> reorderedIds.set(tasks.stream().map(Task::getId).toList()));
+
+        widget.mouseClicked(widget.getExpandToggleCenterXForTest(parentA.getId()), widget.getTaskRowCenterYForTest(parentA.getId()), 0);
+        widget.mouseClicked(widget.getExpandToggleCenterXForTest(parentB.getId()), widget.getTaskRowCenterYForTest(parentB.getId()), 0);
+
+        int interactX = widget.getInteractXForTest(childB.getId());
+        int startY = widget.getTaskRowCenterYForTest(childB.getId());
+        int targetY = widget.getTaskRowCenterYForTest(childA.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        widget.armPendingTaskDrag(childB, "active", interactX, startY);
+        widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        widget.mouseReleased(interactX, targetY, 0);
+
+        GuiTestSupport.assertEquals(
+                List.of("task-child-b", "task-child-a"),
+                reorderedIds.get(),
+                "拖拽子任务时回调应只返回同父级子任务的新顺序"
+        );
+        GuiTestSupport.assertEquals(
+                List.of(
+                        "HEADER:v 未完成（3）",
+                        "TASK:task-top",
+                        "TASK:task-parent-a",
+                        "SUBTASK:task-child-b",
+                        "SUBTASK:task-child-a",
+                        "TASK:task-parent-b",
+                        "SUBTASK:task-child-c"
+                ),
+                widget.getRowDebugSnapshotForTest(),
+                "拖拽子任务后列表应仅更新当前父任务下的子任务顺序"
+        );
+    }
+
+    /**
      * 校验重排未完成分组时不会破坏已完成分组的结构和顺序。
      */
     private static void shouldKeepCompletedSectionUnchangedAfterReorder() {
@@ -474,6 +591,22 @@ public final class TaskListWidgetTestMain {
     private static Task createTask(String id, String title) {
         Task task = new Task(title, "");
         task.setId(id);
+        return task;
+    }
+
+    /**
+     * 创建测试子任务对象。
+     *
+     * @param id 任务 ID
+     * @param title 任务标题
+     * @param parentTaskId 父任务 ID
+     * @param subtaskSortOrder 父内顺序
+     * @return 测试子任务对象
+     */
+    private static Task createSubtask(String id, String title, String parentTaskId, long subtaskSortOrder) {
+        Task task = createTask(id, title);
+        task.setParentTaskId(parentTaskId);
+        task.setSubtaskSortOrder(subtaskSortOrder);
         return task;
     }
 }

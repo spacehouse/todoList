@@ -42,6 +42,7 @@ final class TodoScreenHitTestSupport {
                                      EditBox tagField,
                                      boolean quickAddMarkerHit,
                                      Button detailCloseButton,
+                                     Button addSubtaskButton,
                                      Button claimButton,
                                      Button abandonButton,
                                      Button assignOthersButton,
@@ -60,6 +61,7 @@ final class TodoScreenHitTestSupport {
             return true;
         }
         if (detailCloseButton != null && detailCloseButton.visible && detailCloseButton.isMouseOver(mouseX, mouseY)) return true;
+        if (addSubtaskButton != null && addSubtaskButton.visible && addSubtaskButton.isMouseOver(mouseX, mouseY)) return true;
         if (claimButton != null && claimButton.visible && claimButton.isMouseOver(mouseX, mouseY)) return true;
         if (abandonButton != null && abandonButton.visible && abandonButton.isMouseOver(mouseX, mouseY)) return true;
         if (assignOthersButton != null && assignOthersButton.visible && assignOthersButton.isMouseOver(mouseX, mouseY)) return true;

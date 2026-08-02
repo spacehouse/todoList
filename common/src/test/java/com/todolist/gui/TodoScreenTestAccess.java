@@ -51,6 +51,8 @@ final class TodoScreenTestAccess {
         writeStaticScreenField("teamHasUnsavedChanges", false);
         writeStaticScreenField("personalSaveVersion", 0L);
         writeStaticScreenField("teamSaveVersion", 0L);
+        writeStaticScreenField("cachedPersonalTasksNamespace", "");
+        writeStaticScreenField("cachedPersonalTasksSnapshot", List.of());
         writeStaticScreenField("cachedTeamTasksSnapshot", List.of());
         writeStaticScreenField("deferredTeamTasksSnapshot", null);
         writeStaticScreenField("deferredTeamTasksNamespace", "");
@@ -94,6 +96,26 @@ final class TodoScreenTestAccess {
      */
     Task getSelectedTaskForTest() {
         return readScreenField("selectedTask", Task.class);
+    }
+
+    /**
+     * 返回当前任务管理器中的全部任务快照。
+     *
+     * @return 当前任务列表快照
+     */
+    List<Task> getManagedTasksForTest() {
+        TaskManager manager = readScreenField("taskManager", TaskManager.class);
+        return manager == null ? List.of() : new ArrayList<>(manager.getAllTasks());
+    }
+
+    /**
+     * 返回当前选中子任务在详情区使用的父任务上下文文本。
+     *
+     * @return 父任务上下文文本；不存在时返回空字符串
+     */
+    String getSelectedTaskParentContextTextForTest() {
+        String text = invokeScreen("resolveSelectedTaskParentContextTextForTest", String.class);
+        return text == null ? "" : text;
     }
 
     /**
@@ -595,6 +617,18 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 向当前界面的任务管理器中直接追加一条任务，供测试构造父子任务结构。
+     *
+     * @param task 待追加任务
+     */
+    void addTaskToManagerForTest(Task task) {
+        TaskManager manager = readScreenField("taskManager", TaskManager.class);
+        if (manager != null && task != null) {
+            manager.addTask(task);
+        }
+    }
+
+    /**
      * 返回当前项目范围内的任务列表。
      *
      * @return 当前项目任务快照
@@ -820,6 +854,15 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 切换到团队“我的”视图。
+     */
+    void switchToTeamAssignedViewForTest() {
+        Method method = resolveMethodByArity(TodoScreen.class, "switchView", 1);
+        Object viewMode = enumConstantByName(method.getParameterTypes()[0], "TEAM_ASSIGNED");
+        invokeRaw(screen, method, viewMode);
+    }
+
+    /**
      * 切换侧栏覆盖层显示状态。
      */
     void toggleSidebarOverlayForTest() {
@@ -873,6 +916,42 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 清空当前选中任务，供测试消除详情区对列表展示的干扰。
+     */
+    void clearSelectedTaskForTest() {
+        invokeScreenVoid("clearSelectedTask");
+    }
+
+    /**
+     * 点击“添加子任务”按钮。
+     */
+    void clickAddSubtaskButtonForTest() {
+        Button button = readScreenField("addSubtaskButton", Button.class);
+        if (button != null) {
+            button.onPress();
+        }
+    }
+
+    /**
+     * 判断“添加子任务”按钮是否可见。
+     *
+     * @return 可见时返回 true
+     */
+    boolean isAddSubtaskButtonVisibleForTest() {
+        Button button = readScreenField("addSubtaskButton", Button.class);
+        return button != null && button.visible;
+    }
+
+    /**
+     * 返回“添加子任务”按钮边界。
+     *
+     * @return 按钮边界数组
+     */
+    int[] getAddSubtaskButtonBoundsForTest() {
+        return TodoScreenTestSupport.toWidgetBounds(readScreenField("addSubtaskButton", Button.class));
+    }
+
+    /**
      * 返回详情关闭按钮边界。
      *
      * @return 按钮边界数组
@@ -911,6 +990,16 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 判断领取按钮当前是否可点击。
+     *
+     * @return 可点击时返回 true
+     */
+    boolean isClaimButtonActiveForTest() {
+        Button button = readScreenField("claimButton", Button.class);
+        return button != null && button.active;
+    }
+
+    /**
      * 判断放弃按钮是否可见。
      *
      * @return 可见时返回 true
@@ -928,6 +1017,16 @@ final class TodoScreenTestAccess {
     boolean isAssignOthersButtonVisibleForTest() {
         Button button = readScreenField("assignOthersButton", Button.class);
         return button != null && button.visible;
+    }
+
+    /**
+     * 判断指派他人按钮当前是否可点击。
+     *
+     * @return 可点击时返回 true
+     */
+    boolean isAssignOthersButtonActiveForTest() {
+        Button button = readScreenField("assignOthersButton", Button.class);
+        return button != null && button.active;
     }
 
     /**
@@ -1044,6 +1143,38 @@ final class TodoScreenTestAccess {
         } else {
             invokeScreenVoid("closeTaskContextMenu");
         }
+    }
+
+    /**
+     * 按显示文本点击上下文菜单中的指定条目。
+     *
+     * @param text 目标条目文本
+     */
+    void clickContextMenuItemByTextForTest(String text) {
+        List<?> items = readScreenListField("contextMenuItems");
+        if (!TodoScreenContextMenuSupport.hasContextMenu(readScreenField("contextMenuTask", Task.class), items)
+                || text == null
+                || text.isEmpty()) {
+            invokeScreenVoid("closeTaskContextMenu");
+            return;
+        }
+        for (int index = 0; index < items.size(); index++) {
+            Object item = items.get(index);
+            Component itemText = readField(item, "text", Component.class);
+            if (itemText != null && text.equals(itemText.getString())) {
+                clickContextMenuItemForTest(index);
+                return;
+            }
+        }
+        invokeScreenVoid("closeTaskContextMenu");
+    }
+
+    /**
+     * 点击上下文菜单中的最后一个条目。
+     */
+    void clickLastContextMenuItemForTest() {
+        List<?> items = readScreenListField("contextMenuItems");
+        clickContextMenuItemForTest(items == null ? -1 : items.size() - 1);
     }
 
     /**
