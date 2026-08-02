@@ -10,10 +10,13 @@ import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
 import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.Task;
+import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,7 +58,10 @@ public class TodoHudRenderer {
     private List<Task> cachedDoneTasks = new ArrayList<>();
     private int cachedPendingTotalCount;
     private int cachedDoneTotalCount;
+    private int cachedPendingSummaryCount;
+    private int cachedDoneSummaryCount;
     private final Map<String, RowRenderCache> rowRenderCacheByTaskId = new HashMap<>();
+    private final Map<String, ParentSubtaskProgress> parentProgressByTaskId = new HashMap<>();
     private HudViewMode cachedHudViewMode = HudViewMode.PERSONAL;
     private Project.Scope cachedHudScope = Project.Scope.PERSONAL;
     private String cachedProjectSourceMode = "";
@@ -71,6 +77,8 @@ public class TodoHudRenderer {
     private static final int HUD_LABEL_MAX_CHARS = 8;
     private static final int HUD_PRIORITY_BLOCK_WIDTH = 4;
     private static final int HUD_PRIORITY_BLOCK_GAP = 4;
+    private static final int HUD_SUBTASK_EXTRA_INDENT = 4;
+    private static final String HUD_SUBTASK_PREFIX = "- ";
     
     // 缓存视图标签
     private static final Component LABEL_SPACE_PERSONAL = Component.translatable("hud.todolist.space_label.personal");
@@ -85,7 +93,10 @@ public class TodoHudRenderer {
      * HUD 行视觉元数据：统一描述优先级色块、前置标签和标题位置。
      */
     private static class HudRowVisual {
+        private final int priorityBlockOffset;
         private final int priorityBlockColor;
+        private final int prefixOffset;
+        private final Component prefixText;
         private final String priorityText;
         private final String assigneeText;
         private final String tagText;
@@ -93,6 +104,8 @@ public class TodoHudRenderer {
         private final int tagOffset;
         private final int titleOffset;
         private final Component titleText;
+        private final int progressOffset;
+        private final Component progressText;
 
         /**
          * 创建 HUD 行视觉元数据。
@@ -105,10 +118,17 @@ public class TodoHudRenderer {
          * @param tagOffset 标签偏移
          * @param titleOffset 标题起始偏移
          * @param titleText 行标题文本
+         * @param progressOffset 右侧进度文本起始偏移
+         * @param progressText 右侧进度文本
          */
-        private HudRowVisual(int priorityBlockColor, String priorityText, String assigneeText, String tagText,
-                             int assigneeOffset, int tagOffset, int titleOffset, Component titleText) {
+        private HudRowVisual(int priorityBlockOffset, int priorityBlockColor, int prefixOffset, Component prefixText,
+                             String priorityText, String assigneeText, String tagText,
+                             int assigneeOffset, int tagOffset, int titleOffset, Component titleText,
+                             int progressOffset, Component progressText) {
+            this.priorityBlockOffset = priorityBlockOffset;
             this.priorityBlockColor = priorityBlockColor;
+            this.prefixOffset = prefixOffset;
+            this.prefixText = prefixText;
             this.priorityText = priorityText;
             this.assigneeText = assigneeText;
             this.tagText = tagText;
@@ -116,6 +136,36 @@ public class TodoHudRenderer {
             this.tagOffset = tagOffset;
             this.titleOffset = titleOffset;
             this.titleText = titleText;
+            this.progressOffset = progressOffset;
+            this.progressText = progressText;
+        }
+    }
+
+    /**
+     * 记录父任务直属子任务的完成进度。
+     */
+    private static final class ParentSubtaskProgress {
+        private final int completedCount;
+        private final int totalCount;
+
+        private ParentSubtaskProgress(int completedCount, int totalCount) {
+            this.completedCount = completedCount;
+            this.totalCount = totalCount;
+        }
+    }
+
+    /**
+     * 保存 HUD 当前帧使用的父子任务分组结果。
+     */
+    private static final class HudDisplayModel {
+        private final List<Task> pendingTasks;
+        private final List<Task> doneTasks;
+        private final Map<String, ParentSubtaskProgress> parentProgress;
+
+        private HudDisplayModel(List<Task> pendingTasks, List<Task> doneTasks, Map<String, ParentSubtaskProgress> parentProgress) {
+            this.pendingTasks = List.copyOf(pendingTasks);
+            this.doneTasks = List.copyOf(doneTasks);
+            this.parentProgress = Map.copyOf(parentProgress);
         }
     }
 
@@ -257,32 +307,40 @@ public class TodoHudRenderer {
         List<Task> done;
         int pendingTotal;
         int doneTotal;
+        int pendingSummaryTotal;
+        int doneSummaryTotal;
+        parentProgressByTaskId.clear();
         if (sqlResult != null) {
-            pending = new ArrayList<>(sqlResult.getPendingTasks());
-            done = new ArrayList<>(sqlResult.getDoneTasks());
+            List<Task> topLevelTasks = new ArrayList<>(sqlResult.getPendingTasks());
+            topLevelTasks.addAll(sqlResult.getDoneTasks());
+            HudDisplayModel displayModel = buildHudDisplayModel(topLevelTasks, config.isHudShowSubtasks());
+            pending = displayModel.pendingTasks;
+            done = displayModel.doneTasks;
             pendingTotal = sqlResult.getPendingTotal();
             doneTotal = sqlResult.getDoneTotal();
+            pendingSummaryTotal = sqlResult.getPendingTotal();
+            doneSummaryTotal = sqlResult.getDoneTotal();
+            parentProgressByTaskId.putAll(displayModel.parentProgress);
         } else {
             List<Task> tasks = loadTasksByScope(scope);
             tasks = filterByViewMode(tasks, viewMode);
             tasks = filterByProjectSource(tasks, scope, config);
 
-            pending = new ArrayList<>();
-            done = new ArrayList<>();
-            for (Task task : tasks) {
-                if (task.isCompleted()) {
-                    done.add(task);
-                } else {
-                    pending.add(task);
-                }
-            }
+            HudDisplayModel displayModel = buildHudDisplayModel(tasks, config.isHudShowSubtasks());
+            pending = displayModel.pendingTasks;
+            done = displayModel.doneTasks;
             pendingTotal = pending.size();
             doneTotal = done.size();
+            pendingSummaryTotal = countTopLevelTasks(pending);
+            doneSummaryTotal = countTopLevelTasks(done);
+            parentProgressByTaskId.putAll(displayModel.parentProgress);
         }
         cachedPendingTasks = pending;
         cachedDoneTasks = done;
         cachedPendingTotalCount = pendingTotal;
         cachedDoneTotalCount = doneTotal;
+        cachedPendingSummaryCount = pendingSummaryTotal;
+        cachedDoneSummaryCount = doneSummaryTotal;
         rebuildRowRenderCache(pending, done, hudWidth);
         cachedHudViewMode = viewMode;
         cachedHudScope = scope;
@@ -316,6 +374,145 @@ public class TodoHudRenderer {
                 || !playerUuid.equals(cachedPlayerUuid)
                 || hudWidth != cachedLayoutHudWidth
                 || Double.compare(guiScale, cachedGuiScale) != 0;
+    }
+
+    /**
+     * 按“父任务在前、直属子任务紧随其后”的方式整理 HUD 任务顺序。
+     *
+     * @param source 原始任务列表
+     * @return 适合 HUD 展示的新顺序
+     */
+    private List<Task> orderTasksForHudDisplay(List<Task> source) {
+        List<Task> input = source == null ? List.of() : new ArrayList<>(source);
+        if (input.size() < 2) {
+            return input;
+        }
+
+        Map<String, Task> topLevelTasksById = new LinkedHashMap<>();
+        Map<String, List<Task>> subtasksByParentId = new LinkedHashMap<>();
+        Map<String, Integer> originalIndexes = new HashMap<>();
+        List<Task> orphanSubtasks = new ArrayList<>();
+
+        for (int index = 0; index < input.size(); index++) {
+            Task task = input.get(index);
+            if (task == null) {
+                continue;
+            }
+            String taskId = valueOrEmpty(task.getId());
+            if (!taskId.isEmpty()) {
+                originalIndexes.put(taskId, index);
+            }
+            if (task.isSubtask()) {
+                String parentTaskId = valueOrEmpty(task.getParentTaskId());
+                subtasksByParentId.computeIfAbsent(parentTaskId, ignored -> new ArrayList<>()).add(task);
+                continue;
+            }
+            if (!taskId.isEmpty()) {
+                topLevelTasksById.put(taskId, task);
+            }
+        }
+
+        Comparator<Task> subtaskComparator = Comparator
+                .comparingLong(Task::getSubtaskSortOrder)
+                .thenComparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE));
+        for (List<Task> siblingSubtasks : subtasksByParentId.values()) {
+            siblingSubtasks.sort(subtaskComparator);
+        }
+
+        List<Task> ordered = new ArrayList<>(input.size());
+        for (Task task : input) {
+            if (task == null || task.isSubtask()) {
+                continue;
+            }
+            ordered.add(task);
+            String parentTaskId = valueOrEmpty(task.getId());
+            List<Task> childTasks = subtasksByParentId.remove(parentTaskId);
+            if (childTasks != null && !childTasks.isEmpty()) {
+                ordered.addAll(childTasks);
+            }
+        }
+
+        for (List<Task> remainingSubtasks : subtasksByParentId.values()) {
+            orphanSubtasks.addAll(remainingSubtasks);
+        }
+        orphanSubtasks.sort(Comparator.comparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE)));
+        ordered.addAll(orphanSubtasks);
+        return ordered;
+    }
+
+    /**
+     * 将任务集合转换为 HUD 使用的父子分组模型。
+     * 对于拥有直属子任务的父任务，仅当其直属子任务全部完成时，整组才进入已完成部分。
+     *
+     * @param source 原始任务列表
+     * @param showSubtasks 是否将子任务作为独立行显示在 HUD 中
+     * @return HUD 父子分组结果
+     */
+    private HudDisplayModel buildHudDisplayModel(List<Task> source, boolean showSubtasks) {
+        List<Task> input = source == null ? List.of() : new ArrayList<>(source);
+        if (input.isEmpty()) {
+            return new HudDisplayModel(List.of(), List.of(), Map.of());
+        }
+
+        Map<String, List<Task>> subtasksByParentId = new LinkedHashMap<>();
+        Map<String, Integer> originalIndexes = new HashMap<>();
+        Map<String, ParentSubtaskProgress> progressByParentId = new HashMap<>();
+        List<Task> orphanSubtasks = new ArrayList<>();
+
+        for (int index = 0; index < input.size(); index++) {
+            Task task = input.get(index);
+            if (task == null) {
+                continue;
+            }
+            String taskId = valueOrEmpty(task.getId());
+            if (!taskId.isEmpty()) {
+                originalIndexes.put(taskId, index);
+            }
+            if (task.isSubtask()) {
+                String parentTaskId = valueOrEmpty(task.getParentTaskId());
+                subtasksByParentId.computeIfAbsent(parentTaskId, ignored -> new ArrayList<>()).add(task);
+            }
+        }
+
+        Comparator<Task> subtaskComparator = Comparator
+                .comparingLong(Task::getSubtaskSortOrder)
+                .thenComparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE));
+        for (List<Task> siblingSubtasks : subtasksByParentId.values()) {
+            siblingSubtasks.sort(subtaskComparator);
+        }
+
+        List<Task> pending = new ArrayList<>(input.size());
+        List<Task> done = new ArrayList<>(input.size());
+        for (Task task : input) {
+            if (task == null || task.isSubtask()) {
+                continue;
+            }
+            String parentTaskId = valueOrEmpty(task.getId());
+            List<Task> childTasks = subtasksByParentId.remove(parentTaskId);
+            ParentSubtaskProgress progress = buildParentSubtaskProgress(childTasks);
+            if (progress != null && !parentTaskId.isEmpty()) {
+                progressByParentId.put(parentTaskId, progress);
+            }
+            List<Task> target = isHudGroupCompleted(task, progress) ? done : pending;
+            target.add(task);
+            if (showSubtasks && childTasks != null && !childTasks.isEmpty()) {
+                target.addAll(childTasks);
+            }
+        }
+
+        if (showSubtasks) {
+            for (List<Task> remainingSubtasks : subtasksByParentId.values()) {
+                orphanSubtasks.addAll(remainingSubtasks);
+            }
+            orphanSubtasks.sort(Comparator.comparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE)));
+            for (Task orphanSubtask : orphanSubtasks) {
+                if (orphanSubtask == null) {
+                    continue;
+                }
+                (orphanSubtask.isCompleted() ? done : pending).add(orphanSubtask);
+            }
+        }
+        return new HudDisplayModel(pending, done, progressByParentId);
     }
 
     /**
@@ -514,13 +711,13 @@ public class TodoHudRenderer {
         List<Task> result = new ArrayList<>();
         String myUuid = client.player == null ? null : client.player.getStringUUID();
         for (Task task : source) {
-            String assignee = task.getAssigneeUuid();
-            boolean assigned = assignee != null && !assignee.isEmpty();
-            if (viewMode == HudViewMode.TEAM_UNASSIGNED && !assigned) {
+            if (viewMode == HudViewMode.TEAM_UNASSIGNED
+                    && TaskAssignmentSupport.isVisibleInTeamUnassigned(task, source)) {
                 result.add(task);
             } else if (viewMode == HudViewMode.TEAM_ALL) {
                 result.add(task);
-            } else if (viewMode == HudViewMode.TEAM_ASSIGNED && assigned && myUuid != null && myUuid.equals(assignee)) {
+            } else if (viewMode == HudViewMode.TEAM_ASSIGNED
+                    && TaskAssignmentSupport.isVisibleInTeamAssigned(task, source, myUuid)) {
                 result.add(task);
             }
         }
@@ -720,7 +917,7 @@ public class TodoHudRenderer {
         currentY += headerHeight;
 
         if (!expanded) {
-            Component summary = buildCollapsedSummaryText(cachedPendingTotalCount, cachedDoneTotalCount);
+            Component summary = buildCollapsedSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
             context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xDDDDDD));
             return;
@@ -745,7 +942,7 @@ public class TodoHudRenderer {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
             context.drawString(
                     client.font,
-                    buildExpandedFooterSummaryText(cachedPendingTotalCount, cachedDoneTotalCount),
+                    buildExpandedFooterSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount),
                     x + 4,
                     moreY,
                     toOpaqueColor(0xAAAAAA)
@@ -776,7 +973,11 @@ public class TodoHudRenderer {
         int labelColor = toOpaqueColor(0x55FFFF);
 
         HudRowVisual rowVisual = rowCache.rowVisual;
-        context.fill(rowLeft, y + 2, rowLeft + HUD_PRIORITY_BLOCK_WIDTH, y + rowHeight - 2,
+        if (rowVisual.prefixText != null) {
+            context.drawString(client.font, rowVisual.prefixText, rowLeft + rowVisual.prefixOffset, titleTextY, textColor);
+        }
+        context.fill(rowLeft + rowVisual.priorityBlockOffset, y + 2,
+                rowLeft + rowVisual.priorityBlockOffset + HUD_PRIORITY_BLOCK_WIDTH, y + rowHeight - 2,
                 toOpaqueColor(rowVisual.priorityBlockColor));
 
         if (rowVisual.tagText != null && !rowVisual.tagText.isEmpty()) {
@@ -784,6 +985,9 @@ public class TodoHudRenderer {
         }
         if (rowVisual.titleText != null) {
             context.drawString(client.font, rowVisual.titleText, rowLeft + rowVisual.titleOffset, titleTextY, textColor);
+        }
+        if (rowVisual.progressText != null) {
+            context.drawString(client.font, rowVisual.progressText, rowLeft + rowVisual.progressOffset, titleTextY, textColor);
         }
     }
 
@@ -831,10 +1035,16 @@ public class TodoHudRenderer {
      */
     private HudRowVisual buildRowVisual(Task task, int hudWidth) {
         int rowWidth = Math.max(0, hudWidth - 8);
-        int currentOffset = HUD_PRIORITY_BLOCK_WIDTH + HUD_PRIORITY_BLOCK_GAP;
+        boolean subtask = task != null && task.isSubtask();
+        int prefixWidth = subtask ? client.font.width(HUD_SUBTASK_PREFIX) : 0;
+        int priorityBlockOffset = subtask ? HUD_SUBTASK_EXTRA_INDENT + prefixWidth : 0;
+        int currentOffset = priorityBlockOffset + HUD_PRIORITY_BLOCK_WIDTH + HUD_PRIORITY_BLOCK_GAP;
         int maxLabelWidth = Math.max(18, rowWidth / 3);
 
         String tagToken = buildHudLabelToken(resolveFirstTaskTag(task), maxLabelWidth);
+        ParentSubtaskProgress parentProgress = resolveParentSubtaskProgress(task);
+        String progressToken = buildParentProgressText(parentProgress);
+        int progressWidth = progressToken.isEmpty() ? 0 : client.font.width(progressToken);
 
         int assigneeOffset = 0;
         int tagOffset = 0;
@@ -844,18 +1054,28 @@ public class TodoHudRenderer {
         }
 
         int titleOffset = currentOffset;
-        int titleMaxWidth = Math.max(0, rowWidth - titleOffset);
-        String titleCore = trimWithEllipsis(valueOrEmpty(task.getTitle()), titleMaxWidth);
+        int titleMaxWidth = Math.max(0, rowWidth - titleOffset - (progressWidth <= 0 ? 0 : progressWidth + 6));
+        String titleCore = trimWithEllipsis(buildHudRowTitle(task), titleMaxWidth);
+        boolean rowCompleted = isTaskCompletedInHud(task);
+        Component prefixText = null;
+        if (subtask) {
+            prefixText = Component.literal(HUD_SUBTASK_PREFIX).withStyle(rowCompleted ? ChatFormatting.GRAY : ChatFormatting.WHITE);
+        }
         Component titleText = titleCore.isEmpty()
                 ? null
-                : (task.isCompleted()
+                : (rowCompleted
                 ? Component.literal(titleCore).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
                 : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
+        int progressOffset = progressWidth <= 0 ? 0 : Math.max(titleOffset, rowWidth - progressWidth);
+        Component progressText = progressToken.isEmpty()
+                ? null
+                : Component.literal(progressToken).withStyle(rowCompleted ? ChatFormatting.DARK_GRAY : ChatFormatting.GRAY);
 
-        return new HudRowVisual(resolvePriorityBlockColor(task.getPriority()), "",
+        return new HudRowVisual(priorityBlockOffset, resolvePriorityBlockColor(task.getPriority()),
+                subtask ? HUD_SUBTASK_EXTRA_INDENT : 0, prefixText, "",
                 null,
                 tagToken.isEmpty() ? null : tagToken,
-                assigneeOffset, tagOffset, titleOffset, titleText);
+                assigneeOffset, tagOffset, titleOffset, titleText, progressOffset, progressText);
     }
 
     /**
@@ -869,11 +1089,92 @@ public class TodoHudRenderer {
     private String buildRowLayoutKey(Task task, int hudWidth, double guiScale) {
         return valueOrEmpty(task.getId()) + '|'
                 + valueOrEmpty(task.getTitle()) + '|'
+                + valueOrEmpty(task.getParentTaskId()) + '|'
                 + task.getPriority().name() + '|'
-                + task.isCompleted() + '|'
+                + isTaskCompletedInHud(task) + '|'
+                + buildParentProgressText(resolveParentSubtaskProgress(task)) + '|'
                 + resolveFirstTaskTag(task) + '|'
                 + hudWidth + '|'
                 + guiScale;
+    }
+
+    /**
+     * 解析父任务的直属子任务完成进度。
+     *
+     * @param task 当前任务
+     * @return 父任务进度；非父任务或无子任务时返回 null
+     */
+    private ParentSubtaskProgress resolveParentSubtaskProgress(Task task) {
+        if (task == null || task.isSubtask()) {
+            return null;
+        }
+        String taskId = valueOrEmpty(task.getId());
+        return taskId.isEmpty() ? null : parentProgressByTaskId.get(taskId);
+    }
+
+    /**
+     * 构建直属子任务完成进度文本。
+     *
+     * @param progress 父任务直属子任务完成进度
+     * @return 右侧显示文本；没有直属子任务时返回空串
+     */
+    private String buildParentProgressText(ParentSubtaskProgress progress) {
+        if (progress == null || progress.totalCount <= 0) {
+            return "";
+        }
+        return progress.completedCount + "/" + progress.totalCount;
+    }
+
+    /**
+     * 基于直属子任务集合构建父任务完成进度。
+     *
+     * @param subtasks 直属子任务列表
+     * @return 父任务完成进度；没有直属子任务时返回 null
+     */
+    private ParentSubtaskProgress buildParentSubtaskProgress(List<Task> subtasks) {
+        if (subtasks == null || subtasks.isEmpty()) {
+            return null;
+        }
+        int completedCount = 0;
+        for (Task subtask : subtasks) {
+            if (subtask != null && subtask.isCompleted()) {
+                completedCount++;
+            }
+        }
+        return new ParentSubtaskProgress(completedCount, subtasks.size());
+    }
+
+    /**
+     * 判断当前父任务组是否应进入 HUD 已完成部分。
+     *
+     * @param task 当前顶层任务
+     * @param progress 直属子任务完成进度
+     * @return 整组进入已完成部分时返回 true
+     */
+    private boolean isHudGroupCompleted(Task task, ParentSubtaskProgress progress) {
+        if (task == null) {
+            return false;
+        }
+        if (progress != null && progress.totalCount > 0) {
+            return progress.completedCount >= progress.totalCount;
+        }
+        return task.isCompleted();
+    }
+
+    /**
+     * 判断 HUD 中当前任务标题是否应按已完成样式渲染。
+     *
+     * @param task 当前任务
+     * @return 标题应显示已完成样式时返回 true
+     */
+    private boolean isTaskCompletedInHud(Task task) {
+        if (task == null) {
+            return false;
+        }
+        if (task.isSubtask()) {
+            return task.isCompleted();
+        }
+        return isHudGroupCompleted(task, resolveParentSubtaskProgress(task));
     }
 
     /**
@@ -903,6 +1204,19 @@ public class TodoHudRenderer {
      */
     private int resolvePriorityBlockColor(Task.Priority priority) {
         return priority == null ? Task.Priority.MEDIUM.getColor() : priority.getColor();
+    }
+
+    /**
+     * 构建 HUD 行标题文本，对子任务追加轻量层级前缀。
+     *
+     * @param task 当前任务
+     * @return HUD 行标题
+     */
+    private String buildHudRowTitle(Task task) {
+        if (task == null) {
+            return "";
+        }
+        return valueOrEmpty(task.getTitle());
     }
 
     /**
@@ -1129,6 +1443,9 @@ public class TodoHudRenderer {
         cachedDoneTasks = new ArrayList<>();
         cachedPendingTotalCount = 0;
         cachedDoneTotalCount = 0;
+        cachedPendingSummaryCount = 0;
+        cachedDoneSummaryCount = 0;
+        parentProgressByTaskId.clear();
         rowRenderCacheByTaskId.clear();
     }
 
@@ -1157,6 +1474,9 @@ public class TodoHudRenderer {
         cachedDoneTasks = new ArrayList<>();
         cachedPendingTotalCount = 0;
         cachedDoneTotalCount = 0;
+        cachedPendingSummaryCount = 0;
+        cachedDoneSummaryCount = 0;
+        parentProgressByTaskId.clear();
         rowRenderCacheByTaskId.clear();
     }
 
@@ -1297,9 +1617,68 @@ public class TodoHudRenderer {
         return cache == null || cache.rowVisual.tagText == null ? "" : cache.rowVisual.tagText;
     }
 
+    /**
+     * 返回指定任务行的标题文本，供离线测试断言子任务层级前缀。
+     *
+     * @param taskId 任务 ID
+     * @return 行标题文本
+     */
+    String getRowTitleTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.titleText == null ? "" : cache.rowVisual.titleText.getString();
+    }
+
+    String getRowPrefixTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.prefixText == null ? "" : cache.rowVisual.prefixText.getString();
+    }
+
+    /**
+     * 返回指定任务行右侧的进度文本，供离线测试断言父任务子任务统计。
+     *
+     * @param taskId 任务 ID
+     * @return 行右侧进度文本
+     */
+    String getRowTrailingTextForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null || cache.rowVisual.progressText == null ? "" : cache.rowVisual.progressText.getString();
+    }
+
+    /**
+     * 返回指定任务行标题是否带删除线，供离线测试断言完成态渲染。
+     *
+     * @param taskId 任务 ID
+     * @return 带删除线时返回 true
+     */
+    boolean isRowTitleStrikethroughForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache != null
+                && cache.rowVisual.titleText != null
+                && cache.rowVisual.titleText.getStyle().isStrikethrough();
+    }
+
+    /**
+     * 返回指定任务行标题是否为灰色，供离线测试断言完成态渲染。
+     *
+     * @param taskId 任务 ID
+     * @return 灰色标题时返回 true
+     */
+    boolean isRowTitleGrayForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        if (cache == null || cache.rowVisual.titleText == null || cache.rowVisual.titleText.getStyle().getColor() == null) {
+            return false;
+        }
+        return cache.rowVisual.titleText.getStyle().getColor().getValue() == ChatFormatting.GRAY.getColor();
+    }
+
     int getRowTitleOffsetForTest(String taskId) {
         RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
         return cache == null ? 0 : cache.rowVisual.titleOffset;
+    }
+
+    int getPriorityBlockOffsetForTest(String taskId) {
+        RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
+        return cache == null ? 0 : cache.rowVisual.priorityBlockOffset;
     }
 
     /**
@@ -1366,7 +1745,7 @@ public class TodoHudRenderer {
      * @return 隐藏计数文本
      */
     String getHiddenCountTextForTest() {
-        return buildExpandedFooterSummaryText(cachedPendingTotalCount, cachedDoneTotalCount).getString();
+        return buildExpandedFooterSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount).getString();
     }
 
     /**
@@ -1375,7 +1754,7 @@ public class TodoHudRenderer {
      * @return 折叠态摘要文本
      */
     String getCollapsedSummaryTextForTest() {
-        return buildCollapsedSummaryText(cachedPendingTotalCount, cachedDoneTotalCount).getString();
+        return buildCollapsedSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount).getString();
     }
 
     private String valueOrEmpty(String value) {
@@ -1475,7 +1854,7 @@ public class TodoHudRenderer {
      * @return 折叠态摘要文本
      */
     private Component buildCollapsedSummaryText(List<Task> pending, List<Task> done) {
-        return buildCollapsedSummaryText(pending == null ? 0 : pending.size(), done == null ? 0 : done.size());
+        return buildCollapsedSummaryText(countTopLevelTasks(pending), countTopLevelTasks(done));
     }
 
     /**
@@ -1507,6 +1886,25 @@ public class TodoHudRenderer {
                 Integer.toString(Math.max(0, pendingCount)),
                 Integer.toString(Math.max(0, doneCount))
         );
+    }
+
+    /**
+     * 统计任务列表中的顶层任务数量，排除所有子任务行。
+     *
+     * @param tasks 任务列表
+     * @return 顶层任务数量
+     */
+    private int countTopLevelTasks(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (Task task : tasks) {
+            if (task != null && !task.isSubtask()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**

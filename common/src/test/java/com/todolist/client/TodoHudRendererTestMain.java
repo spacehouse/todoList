@@ -33,6 +33,8 @@ public final class TodoHudRendererTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFallbackToPersonalViewWhenTeamProjectsDisabled", TodoHudRendererTestMain::shouldFallbackToPersonalViewWhenTeamProjectsDisabled);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterUnassignedTasksInTeamUnassignedView", TodoHudRendererTestMain::shouldFilterUnassignedTasksInTeamUnassignedView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldHideParentWhenAllSubtasksAssignedInTeamUnassignedView", TodoHudRendererTestMain::shouldHideParentWhenAllSubtasksAssignedInTeamUnassignedView);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowParentInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToPlayer", TodoHudRendererTestMain::shouldShowParentInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToPlayer);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterAssignedTasksFromCurrentTeamProject", TodoHudRendererTestMain::shouldFilterAssignedTasksFromCurrentTeamProject);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFilterStarredProjectsInTeamAllView", TodoHudRendererTestMain::shouldFilterStarredProjectsInTeamAllView);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldKeepTaskManagerOrderInTeamAllView", TodoHudRendererTestMain::shouldKeepTaskManagerOrderInTeamAllView);
@@ -41,9 +43,15 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldBuildHeaderWithStarredProjectSource", TodoHudRendererTestMain::shouldBuildHeaderWithStarredProjectSource);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldBuildHeaderWithAllProjectSource", TodoHudRendererTestMain::shouldBuildHeaderWithAllProjectSource);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldHideAssigneeLabelInHudRows", TodoHudRendererTestMain::shouldHideAssigneeLabelInHudRows);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldHideSubtaskRowsWhenHudSubtasksDisabled", TodoHudRendererTestMain::shouldHideSubtaskRowsWhenHudSubtasksDisabled);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRenderPriorityAsColorBlockMetadata", TodoHudRendererTestMain::shouldRenderPriorityAsColorBlockMetadata);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldDifferentiateSubtaskRowsInHud", TodoHudRendererTestMain::shouldDifferentiateSubtaskRowsInHud);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldPlaceSubtasksDirectlyAfterParentInHud", TodoHudRendererTestMain::shouldPlaceSubtasksDirectlyAfterParentInHud);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowParentSubtaskProgressAndKeepCompletedChildInPendingSection", TodoHudRendererTestMain::shouldShowParentSubtaskProgressAndKeepCompletedChildInPendingSection);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldMoveParentGroupToDoneSectionOnlyAfterAllSubtasksComplete", TodoHudRendererTestMain::shouldMoveParentGroupToDoneSectionOnlyAfterAllSubtasksComplete);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldRespectTodoAndDoneLimitsSeparately", TodoHudRendererTestMain::shouldRespectTodoAndDoneLimitsSeparately);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldShowHiddenCountSummaryWhenCollapsedOrTruncated", TodoHudRendererTestMain::shouldShowHiddenCountSummaryWhenCollapsedOrTruncated);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldExcludeSubtasksFromHudSummaryCounts", TodoHudRendererTestMain::shouldExcludeSubtasksFromHudSummaryCounts);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldReserveRowForHiddenCountWhenHeightIsTight", TodoHudRendererTestMain::shouldReserveRowForHiddenCountWhenHeightIsTight);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldClearCachesWhenForceRefreshing", TodoHudRendererTestMain::shouldClearCachesWhenForceRefreshing);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFollowGuiPersonalTaskSnapshot", TodoHudRendererTestMain::shouldFollowGuiPersonalTaskSnapshot);
@@ -86,6 +94,99 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.assertEquals(List.of("Unassigned Pending"), taskTitles(renderer.getCachedPendingTasksForTest()), "TEAM_UNASSIGNED 视图应只保留未指派的未完成任务");
         GuiTestSupport.assertEquals(List.of("Unassigned Done"), taskTitles(renderer.getCachedDoneTasksForTest()), "TEAM_UNASSIGNED 视图应只保留未指派的已完成任务");
         GuiTestSupport.assertEquals(2, renderer.getRowRenderCacheSizeForTest(), "未指派视图应只缓存命中的未指派任务");
+    }
+
+    /**
+     * 验证当父任务直属子任务全部已指派后，HUD 的 TEAM_UNASSIGNED 视图不再显示该父任务；
+     * 若仍存在未指派子任务，则父任务继续保留作为上下文。
+     */
+    private static void shouldHideParentWhenAllSubtasksAssignedInTeamUnassignedView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_UNASSIGNED");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-parent-assigned", "HUD Parent Assigned");
+        Task fullyAssignedParent = createTeamTask("Fully Assigned Parent", project.getId(), null, null, Task.Priority.HIGH, false);
+        Task fullyAssignedChildA = createTeamTask("Fully Assigned Child A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        fullyAssignedChildA.setParentTaskId(fullyAssignedParent.getId());
+        fullyAssignedChildA.setSubtaskSortOrder(0L);
+        Task fullyAssignedChildB = createTeamTask("Fully Assigned Child B", project.getId(), OTHER_ID.toString(), "other", Task.Priority.LOW, false);
+        fullyAssignedChildB.setParentTaskId(fullyAssignedParent.getId());
+        fullyAssignedChildB.setSubtaskSortOrder(1L);
+
+        Task mixedParent = createTeamTask("Mixed Parent", project.getId(), null, null, Task.Priority.HIGH, false);
+        Task mixedAssignedChild = createTeamTask("Mixed Assigned Child", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        mixedAssignedChild.setParentTaskId(mixedParent.getId());
+        mixedAssignedChild.setSubtaskSortOrder(0L);
+        Task mixedUnassignedChild = createTeamTask("Mixed Unassigned Child", project.getId(), null, null, Task.Priority.LOW, false);
+        mixedUnassignedChild.setParentTaskId(mixedParent.getId());
+        mixedUnassignedChild.setSubtaskSortOrder(1L);
+
+        Task standaloneUnassigned = createTeamTask("Standalone Unassigned", project.getId(), null, null, Task.Priority.MEDIUM, false);
+
+        ops.getTeamTaskManager().addTask(fullyAssignedParent);
+        ops.getTeamTaskManager().addTask(fullyAssignedChildA);
+        ops.getTeamTaskManager().addTask(fullyAssignedChildB);
+        ops.getTeamTaskManager().addTask(mixedParent);
+        ops.getTeamTaskManager().addTask(mixedAssignedChild);
+        ops.getTeamTaskManager().addTask(mixedUnassignedChild);
+        ops.getTeamTaskManager().addTask(standaloneUnassigned);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Mixed Parent", "Mixed Unassigned Child", "Standalone Unassigned"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "TEAM_UNASSIGNED 视图应隐藏直属子任务已全部指派的父任务，但保留仍有未指派子任务的父任务上下文与未指派子任务"
+        );
+    }
+
+    /**
+     * 验证 TEAM_ASSIGNED 视图只会保留直属子任务中存在当前玩家的父任务，或直接分配给当前玩家的普通任务。
+     */
+    private static void shouldShowParentInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToPlayer() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ASSIGNED");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-parent-mine", "HUD Parent Mine");
+        Task mixedParent = createTeamTask("Mixed Parent", project.getId(), null, null, Task.Priority.HIGH, false);
+        Task myChild = createTeamTask("My Child", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        myChild.setParentTaskId(mixedParent.getId());
+        myChild.setSubtaskSortOrder(0L);
+        Task otherChild = createTeamTask("Other Child", project.getId(), OTHER_ID.toString(), "other", Task.Priority.LOW, false);
+        otherChild.setParentTaskId(mixedParent.getId());
+        otherChild.setSubtaskSortOrder(1L);
+
+        Task othersOnlyParent = createTeamTask("Others Only Parent", project.getId(), null, null, Task.Priority.HIGH, false);
+        Task othersOnlyChild = createTeamTask("Others Only Child", project.getId(), OTHER_ID.toString(), "other", Task.Priority.MEDIUM, false);
+        othersOnlyChild.setParentTaskId(othersOnlyParent.getId());
+        othersOnlyChild.setSubtaskSortOrder(0L);
+
+        Task directMine = createTeamTask("Direct Mine", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        Task directOther = createTeamTask("Direct Other", project.getId(), OTHER_ID.toString(), "other", Task.Priority.MEDIUM, false);
+
+        ops.getTeamTaskManager().addTask(mixedParent);
+        ops.getTeamTaskManager().addTask(myChild);
+        ops.getTeamTaskManager().addTask(otherChild);
+        ops.getTeamTaskManager().addTask(othersOnlyParent);
+        ops.getTeamTaskManager().addTask(othersOnlyChild);
+        ops.getTeamTaskManager().addTask(directMine);
+        ops.getTeamTaskManager().addTask(directOther);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Mixed Parent", "My Child", "Direct Mine"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "TEAM_ASSIGNED 视图应只保留直属子任务中存在当前玩家的父任务，以及直接分配给当前玩家的普通任务"
+        );
     }
 
     /**
@@ -279,6 +380,38 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
+     * 验证关闭 HUD 子任务展示后，只保留父任务行并继续显示父任务进度。
+     */
+    private static void shouldHideSubtaskRowsWhenHudSubtasksDisabled() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+        config.setHudShowSubtasks(false);
+
+        Project project = createTeamProject("hud-hide-subtasks", "HUD Hide Subtasks");
+        Task parent = createTeamTask("Parent Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task childTodo = createTeamTask("Child Todo", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        childTodo.setParentTaskId(parent.getId());
+        childTodo.setSubtaskSortOrder(0L);
+        Task childDone = createTeamTask("Child Done", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true);
+        childDone.setParentTaskId(parent.getId());
+        childDone.setSubtaskSortOrder(1L);
+
+        ops.getTeamTaskManager().addTask(parent);
+        ops.getTeamTaskManager().addTask(childTodo);
+        ops.getTeamTaskManager().addTask(childDone);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(List.of("Parent Task"), taskTitles(renderer.getCachedPendingTasksForTest()), "关闭 HUD 子任务展示后，未完成区应只保留父任务");
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedDoneTasksForTest()), "关闭 HUD 子任务展示后，子任务不应单独出现在已完成区");
+        GuiTestSupport.assertEquals("1/2", renderer.getRowTrailingTextForTest(parent.getId()), "关闭 HUD 子任务展示后，父任务右侧进度应继续保留");
+    }
+
+    /**
      * 验证 HUD 任务行会暴露色块优先级元数据，而不是依赖优先级文本图标。
      */
     private static void shouldRenderPriorityAsColorBlockMetadata() {
@@ -299,6 +432,148 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.assertEquals(Task.Priority.HIGH.getColor(), renderer.getPriorityBlockColorForTest(task.getId()), "HUD 优先级应改为与主界面一致的色块颜色");
         GuiTestSupport.assertEquals("", renderer.getPriorityTextForTest(task.getId()), "HUD 任务行不应再依赖优先级文本图标");
         GuiTestSupport.assertTrue(renderer.getRowTitleOffsetForTest(task.getId()) > 8, "HUD 标题应位于优先级色块和前置标签之后");
+    }
+
+    /**
+     * 验证 HUD 中的子任务行会带层级前缀和额外缩进，不再与普通任务完全一致。
+     */
+    private static void shouldDifferentiateSubtaskRowsInHud() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-subtask", "HUD Subtask");
+        Task parent = createTeamTask("Parent Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task subtask = createTeamTask("Child Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        subtask.setParentTaskId(parent.getId());
+        ops.getTeamTaskManager().addTask(parent);
+        ops.getTeamTaskManager().addTask(subtask);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals("Parent Task", renderer.getRowTitleTextForTest(parent.getId()), "父任务 HUD 标题应保持原样");
+        GuiTestSupport.assertEquals("- ", renderer.getRowPrefixTextForTest(subtask.getId()), "子任务前缀应独立绘制在优先级色块前");
+        GuiTestSupport.assertEquals("Child Task", renderer.getRowTitleTextForTest(subtask.getId()), "子任务标题正文不应再混入层级前缀");
+        GuiTestSupport.assertTrue(
+                renderer.getPriorityBlockOffsetForTest(subtask.getId()) > renderer.getPriorityBlockOffsetForTest(parent.getId()),
+                "子任务优先级色块应整体右移，作为层级缩进起点"
+        );
+        GuiTestSupport.assertTrue(
+                renderer.getRowTitleOffsetForTest(subtask.getId()) > renderer.getRowTitleOffsetForTest(parent.getId()),
+                "子任务 HUD 标题应比父任务额外缩进"
+        );
+    }
+
+    /**
+     * 验证 HUD 会把直属子任务排到对应父任务下方，而不是继续沿用原始插入顺序散落显示。
+     */
+    private static void shouldPlaceSubtasksDirectlyAfterParentInHud() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-subtask-order", "HUD Subtask Order");
+        Task parentA = createTeamTask("Parent A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task unrelated = createTeamTask("Other Task", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        Task childA2 = createTeamTask("Child A2", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false);
+        childA2.setParentTaskId(parentA.getId());
+        childA2.setSubtaskSortOrder(2L);
+        Task childA1 = createTeamTask("Child A1", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        childA1.setParentTaskId(parentA.getId());
+        childA1.setSubtaskSortOrder(1L);
+
+        ops.getTeamTaskManager().addTask(parentA);
+        ops.getTeamTaskManager().addTask(unrelated);
+        ops.getTeamTaskManager().addTask(childA2);
+        ops.getTeamTaskManager().addTask(childA1);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Parent A", "Child A1", "Child A2", "Other Task"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "HUD 中子任务应紧跟在对应父任务下方，并按父内顺序排列"
+        );
+    }
+
+    /**
+     * 验证父任务会在右侧显示直属子任务完成进度，且部分完成时子任务仍保留在父任务下方。
+     */
+    private static void shouldShowParentSubtaskProgressAndKeepCompletedChildInPendingSection() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-subtask-progress", "HUD Subtask Progress");
+        Task parent = createTeamTask("Parent Progress", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task completedChild = createTeamTask("Child Done", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, true);
+        completedChild.setParentTaskId(parent.getId());
+        completedChild.setSubtaskSortOrder(0L);
+        Task pendingChild = createTeamTask("Child Todo", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false);
+        pendingChild.setParentTaskId(parent.getId());
+        pendingChild.setSubtaskSortOrder(1L);
+
+        ops.getTeamTaskManager().addTask(parent);
+        ops.getTeamTaskManager().addTask(completedChild);
+        ops.getTeamTaskManager().addTask(pendingChild);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Parent Progress", "Child Done", "Child Todo"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "只完成部分子任务时，父任务组仍应保留在未完成部分"
+        );
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedDoneTasksForTest()), "父任务未全部完成前，不应提前进入已完成部分");
+        GuiTestSupport.assertEquals("1/2", renderer.getRowTrailingTextForTest(parent.getId()), "父任务右侧应显示直属子任务已完成数与总数");
+        GuiTestSupport.assertTrue(renderer.isRowTitleStrikethroughForTest(completedChild.getId()), "已完成子任务在原位置应显示删除线");
+        GuiTestSupport.assertTrue(renderer.isRowTitleGrayForTest(completedChild.getId()), "已完成子任务在原位置应显示灰色标题");
+        GuiTestSupport.assertTrue(!renderer.isRowTitleStrikethroughForTest(pendingChild.getId()), "未完成子任务不应显示删除线");
+    }
+
+    /**
+     * 验证只有当直属子任务全部完成后，父任务组才整体进入已完成部分。
+     */
+    private static void shouldMoveParentGroupToDoneSectionOnlyAfterAllSubtasksComplete() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-subtask-all-done", "HUD Subtask All Done");
+        Task parent = createTeamTask("Parent All Done", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task childA = createTeamTask("Child A", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, true);
+        childA.setParentTaskId(parent.getId());
+        childA.setSubtaskSortOrder(0L);
+        Task childB = createTeamTask("Child B", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true);
+        childB.setParentTaskId(parent.getId());
+        childB.setSubtaskSortOrder(1L);
+
+        ops.getTeamTaskManager().addTask(parent);
+        ops.getTeamTaskManager().addTask(childA);
+        ops.getTeamTaskManager().addTask(childB);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedPendingTasksForTest()), "直属子任务全部完成后，父任务组不应继续停留在未完成部分");
+        GuiTestSupport.assertEquals(
+                List.of("Parent All Done", "Child A", "Child B"),
+                taskTitles(renderer.getCachedDoneTasksForTest()),
+                "直属子任务全部完成后，父任务及其子任务应整体进入已完成部分"
+        );
+        GuiTestSupport.assertEquals("2/2", renderer.getRowTrailingTextForTest(parent.getId()), "全部完成后，父任务右侧统计应显示满额进度");
+        GuiTestSupport.assertTrue(renderer.isRowTitleStrikethroughForTest(parent.getId()), "进入已完成部分的父任务应显示删除线");
     }
 
     /**
@@ -359,6 +634,47 @@ public final class TodoHudRendererTestMain {
 
         String collapsedExpected = Component.translatableWithFallback("hud.todolist.summary.with_completed", "Todo: %s | Done: %s", "2", "2").getString();
         GuiTestSupport.assertEquals(collapsedExpected, renderer.getCollapsedSummaryTextForTest(), "折叠态应保持原有摘要语义");
+    }
+
+    /**
+     * 验证 HUD 底部和折叠态摘要统计只计算顶层任务，不把子任务计入任务数。
+     */
+    private static void shouldExcludeSubtasksFromHudSummaryCounts() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+        config.setHudTodoLimit(6);
+        config.setHudDoneLimit(6);
+        config.setHudMaxHeight(400);
+        config.setHudDefaultExpanded(true);
+
+        Project project = createTeamProject("hud-summary-subtask", "HUD Summary Subtask");
+        Task pendingParent = createTeamTask("Pending Parent", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task pendingChild = createTeamTask("Pending Child", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        pendingChild.setParentTaskId(pendingParent.getId());
+        pendingChild.setSubtaskSortOrder(0L);
+        Task doneParent = createTeamTask("Done Parent", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false);
+        Task doneChild = createTeamTask("Done Child", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true);
+        doneChild.setParentTaskId(doneParent.getId());
+        doneChild.setSubtaskSortOrder(0L);
+
+        ops.getTeamTaskManager().addTask(pendingParent);
+        ops.getTeamTaskManager().addTask(pendingChild);
+        ops.getTeamTaskManager().addTask(doneParent);
+        ops.getTeamTaskManager().addTask(doneChild);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        String expandedExpected = Component.translatableWithFallback("hud.todolist.summary.fixed", "Todo %s | Done %s", "1", "1").getString();
+        GuiTestSupport.assertEquals(expandedExpected, renderer.getHiddenCountTextForTest(), "展开态底部统计不应把子任务计入任务数");
+
+        renderer.toggleExpanded();
+
+        String collapsedExpected = Component.translatableWithFallback("hud.todolist.summary.with_completed", "Todo: %s | Done: %s", "1", "1").getString();
+        GuiTestSupport.assertEquals(collapsedExpected, renderer.getCollapsedSummaryTextForTest(), "折叠态摘要也不应把子任务计入任务数");
     }
 
     /**
