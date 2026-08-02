@@ -187,7 +187,7 @@ public final class H2TaskStore {
         try (Connection connection = connectionProvider.openConnection()) {
             java.util.Map<String, ListTag> tagsByTaskId = loadTagsByTaskId(connection, bucketType, ownerUuid);
             try (PreparedStatement statement = connection.prepareStatement("""
-                     SELECT id, scope, project_id, title, description, completed, priority, created_at,
+                     SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
                             due_date, creator_uuid, assignee_uuid, assignee_name
                      FROM tasks
                      WHERE bucket_type = ? AND owner_uuid = ?
@@ -336,8 +336,9 @@ public final class H2TaskStore {
     private void insertTasks(Connection connection, String bucketType, String ownerUuid, List<Task> tasks, long updatedAt) throws SQLException {
         try (PreparedStatement taskStatement = connection.prepareStatement("""
                 INSERT INTO tasks(bucket_type, owner_uuid, id, scope, project_id, title, description, completed, priority,
-                                  created_at, due_date, creator_uuid, assignee_uuid, assignee_name, sort_order, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  created_at, due_date, creator_uuid, assignee_uuid, assignee_name, parent_task_id,
+                                  subtask_sort_order, sort_order, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """);
              PreparedStatement tagStatement = connection.prepareStatement("""
                 MERGE INTO task_tags KEY(bucket_type, owner_uuid, task_id, tag)
@@ -438,8 +439,10 @@ public final class H2TaskStore {
         setNullableString(statement, 12, task.getCreatorUuid());
         setNullableString(statement, 13, task.getAssigneeUuid());
         setNullableString(statement, 14, task.getAssigneeName());
-        statement.setLong(15, sortOrder);
-        statement.setLong(16, updatedAt);
+        setNullableString(statement, 15, task.getParentTaskId());
+        statement.setLong(16, task.getSubtaskSortOrder());
+        statement.setLong(17, sortOrder);
+        statement.setLong(18, updatedAt);
     }
 
     /**
@@ -457,6 +460,8 @@ public final class H2TaskStore {
         taskTag.putString("id", resultSet.getString("id"));
         taskTag.putString("scope", resultSet.getString("scope"));
         putOptionalString(taskTag, "projectId", resultSet.getString("project_id"));
+        putOptionalString(taskTag, "parentTaskId", resultSet.getString("parent_task_id"));
+        taskTag.putLong("subtaskSortOrder", resultSet.getLong("subtask_sort_order"));
         taskTag.putString("title", resultSet.getString("title"));
         putOptionalString(taskTag, "description", resultSet.getString("description"));
         taskTag.putBoolean("completed", resultSet.getBoolean("completed"));

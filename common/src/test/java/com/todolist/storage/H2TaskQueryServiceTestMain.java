@@ -27,10 +27,12 @@ public final class H2TaskQueryServiceTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldCountLocalTasksByProjectLikeTaskManager", H2TaskQueryServiceTestMain::shouldCountLocalTasksByProjectLikeTaskManager);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldCountTeamTasksByProjectLikeTaskManager", H2TaskQueryServiceTestMain::shouldCountTeamTasksByProjectLikeTaskManager);
+        GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQuerySubtasksByParentTaskId", H2TaskQueryServiceTestMain::shouldQuerySubtasksByParentTaskId);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryHudTasksWithTotalsAndLimits", H2TaskQueryServiceTestMain::shouldQueryHudTasksWithTotalsAndLimits);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryHudAssignedAndUnassignedViews", H2TaskQueryServiceTestMain::shouldQueryHudAssignedAndUnassignedViews);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryHudAnyAssignedProjectFallback", H2TaskQueryServiceTestMain::shouldQueryHudAnyAssignedProjectFallback);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryGuiTaskIdsLikeMemoryFilters", H2TaskQueryServiceTestMain::shouldQueryGuiTaskIdsLikeMemoryFilters);
+        GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldKeepParentContextWhenGuiSearchMatchesSubtask", H2TaskQueryServiceTestMain::shouldKeepParentContextWhenGuiSearchMatchesSubtask);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldTreatLikeWildcardsAsLiteralSearchText", H2TaskQueryServiceTestMain::shouldTreatLikeWildcardsAsLiteralSearchText);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryGuiTaskIdsWithLimitOffsetAndCount", H2TaskQueryServiceTestMain::shouldQueryGuiTaskIdsWithLimitOffsetAndCount);
     }
@@ -42,12 +44,13 @@ public final class H2TaskQueryServiceTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-query-local-");
-            List<Task> tasks = List.of(
-                    createTask("local-active-a", "project-a", false, Task.Scope.PERSONAL),
-                    createTask("local-done-a", "project-a", true, Task.Scope.PERSONAL),
-                    createTask("local-active-b", "project-b", false, Task.Scope.PERSONAL),
-                    createTask("local-unassigned", null, false, Task.Scope.PERSONAL)
-            );
+            Task projectAParentActive = createTask("local-active-a", "project-a", false, Task.Scope.PERSONAL);
+            Task projectAChild = createSubtask("local-child-a", "project-a", false, Task.Scope.PERSONAL, projectAParentActive.getId(), 0L);
+            Task projectADone = createTask("local-done-a", "project-a", true, Task.Scope.PERSONAL);
+            Task projectBParent = createTask("local-active-b", "project-b", false, Task.Scope.PERSONAL);
+            Task projectBChild = createSubtask("local-child-b", "project-b", true, Task.Scope.PERSONAL, projectBParent.getId(), 0L);
+            Task unassigned = createTask("local-unassigned", null, false, Task.Scope.PERSONAL);
+            List<Task> tasks = List.of(projectAParentActive, projectAChild, projectADone, projectBParent, projectBChild, unassigned);
             new H2TaskStore().saveLocalTasks(tasks);
 
             Map<String, Integer> actual = new H2TaskQueryService().countTasksByProjectIds(
@@ -75,12 +78,13 @@ public final class H2TaskQueryServiceTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-query-team-");
-            List<Task> tasks = List.of(
-                    createTask("team-active-a", "team-project-a", false, Task.Scope.TEAM),
-                    createTask("team-done-a", "team-project-a", true, Task.Scope.TEAM),
-                    createTask("team-active-b", "team-project-b", false, Task.Scope.TEAM),
-                    createTask("team-unassigned", "", false, Task.Scope.TEAM)
-            );
+            Task teamAParentActive = createTask("team-active-a", "team-project-a", false, Task.Scope.TEAM);
+            Task teamAChild = createSubtask("team-child-a", "team-project-a", false, Task.Scope.TEAM, teamAParentActive.getId(), 0L);
+            Task teamADone = createTask("team-done-a", "team-project-a", true, Task.Scope.TEAM);
+            Task teamBParent = createTask("team-active-b", "team-project-b", false, Task.Scope.TEAM);
+            Task teamBChild = createSubtask("team-child-b", "team-project-b", true, Task.Scope.TEAM, teamBParent.getId(), 0L);
+            Task teamUnassigned = createTask("team-unassigned", "", false, Task.Scope.TEAM);
+            List<Task> tasks = List.of(teamAParentActive, teamAChild, teamADone, teamBParent, teamBChild, teamUnassigned);
             new H2TaskStore().saveTeamTasks(tasks);
 
             Map<String, Integer> actual = new H2TaskQueryService().countTasksByProjectIds(
@@ -101,18 +105,50 @@ public final class H2TaskQueryServiceTestMain {
     }
 
     /**
+     * 验证 H2 可按父任务查询子任务，并按父内排序返回。
+     */
+    private static void shouldQuerySubtasksByParentTaskId() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-query-subtasks-");
+            Task parent = createTask("subtask-parent", "sub-project", false, Task.Scope.TEAM);
+            Task childB = createSubtask("subtask-child-b", "sub-project", false, Task.Scope.TEAM, parent.getId(), 1L);
+            Task childA = createSubtask("subtask-child-a", "sub-project", true, Task.Scope.TEAM, parent.getId(), 0L);
+            Task otherParent = createTask("other-parent", "sub-project", false, Task.Scope.TEAM);
+            Task otherChild = createSubtask("other-child", "sub-project", false, Task.Scope.TEAM, otherParent.getId(), 0L);
+            new H2TaskStore().saveTeamTasks(List.of(parent, childB, childA, otherParent, otherChild));
+
+            List<Task> actual = new H2TaskQueryService().querySubtasksByParentTaskId(
+                    H2TaskStore.TEAM_BUCKET,
+                    H2TaskStore.TEAM_OWNER,
+                    parent.getId()
+            );
+
+            GuiTestSupport.assertEquals(List.of("subtask-child-a", "subtask-child-b"), titles(actual), "子任务查询应仅返回目标父任务下的子任务并按父内顺序排序");
+            GuiTestSupport.assertEquals(parent.getId(), actual.get(0).getParentTaskId(), "返回的子任务应保留父任务 ID");
+            GuiTestSupport.assertEquals(0L, actual.get(0).getSubtaskSortOrder(), "首个子任务应保持父内顺序");
+            GuiTestSupport.assertEquals(1L, actual.get(1).getSubtaskSortOrder(), "第二个子任务应保持父内顺序");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 子任务展开查询时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
      * 验证 HUD 查询会返回总数和受 limit 限制的可绘制任务行。
      */
     private static void shouldQueryHudTasksWithTotalsAndLimits() {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-query-hud-limit-");
-            List<Task> tasks = List.of(
-                    createTask("hud-pending-first", "hud-project-a", false, Task.Scope.TEAM),
-                    createTask("hud-pending-second", "hud-project-a", false, Task.Scope.TEAM),
-                    createTask("hud-done-first", "hud-project-a", true, Task.Scope.TEAM),
-                    createTask("hud-other-project", "hud-project-b", false, Task.Scope.TEAM)
-            );
+            Task pendingFirst = createTask("hud-pending-first", "hud-project-a", false, Task.Scope.TEAM);
+            Task pendingSecond = createTask("hud-pending-second", "hud-project-a", false, Task.Scope.TEAM);
+            Task pendingChild = createSubtask("hud-pending-child", "hud-project-a", false, Task.Scope.TEAM, pendingFirst.getId(), 0L);
+            Task doneFirst = createTask("hud-done-first", "hud-project-a", true, Task.Scope.TEAM);
+            Task doneChild = createSubtask("hud-done-child", "hud-project-a", true, Task.Scope.TEAM, doneFirst.getId(), 0L);
+            Task otherProject = createTask("hud-other-project", "hud-project-b", false, Task.Scope.TEAM);
+            List<Task> tasks = List.of(pendingFirst, pendingSecond, pendingChild, doneFirst, doneChild, otherProject);
             new H2TaskStore().saveTeamTasks(tasks);
 
             H2TaskQueryService.HudTaskQueryResult result = new H2TaskQueryService().queryHudTasks(new H2TaskQueryService.HudTaskQuery(
@@ -126,8 +162,8 @@ public final class H2TaskQueryServiceTestMain {
                     1
             ));
 
-            GuiTestSupport.assertEquals(2, result.getPendingTotal(), "HUD 查询应返回未完成匹配总数");
-            GuiTestSupport.assertEquals(1, result.getDoneTotal(), "HUD 查询应返回已完成匹配总数");
+            GuiTestSupport.assertEquals(2, result.getPendingTotal(), "HUD 查询应只统计顶层未完成任务总数");
+            GuiTestSupport.assertEquals(1, result.getDoneTotal(), "HUD 查询应只统计顶层已完成任务总数");
             GuiTestSupport.assertEquals(List.of("hud-pending-first"), titles(result.getPendingTasks()), "HUD 未完成可绘制行应受 limit 限制并保持顺序");
             GuiTestSupport.assertEquals(List.of("hud-done-first"), titles(result.getDoneTasks()), "HUD 已完成可绘制行应受 limit 限制并保持顺序");
         } catch (Exception exception) {
@@ -231,6 +267,8 @@ public final class H2TaskQueryServiceTestMain {
             matched.setPriority(Task.Priority.HIGH);
             matched.setAssigneeUuid("player-a");
             matched.addTag("中文标签");
+            Task matchedChild = createSubtask("Alpha Child", "gui-project", false, Task.Scope.TEAM, matched.getId(), 0L);
+            matchedChild.addTag("中文子标签");
             Task wrongPriority = createTask("Alpha Low", "gui-project", false, Task.Scope.TEAM);
             wrongPriority.setPriority(Task.Priority.LOW);
             wrongPriority.setAssigneeUuid("player-a");
@@ -240,7 +278,7 @@ public final class H2TaskQueryServiceTestMain {
             Task completed = createTask("Alpha Done", "gui-project", true, Task.Scope.TEAM);
             completed.setPriority(Task.Priority.HIGH);
             completed.setAssigneeUuid("player-a");
-            new H2TaskStore().saveTeamTasks(List.of(matched, wrongPriority, wrongAssignee, completed));
+            new H2TaskStore().saveTeamTasks(List.of(matched, matchedChild, wrongPriority, wrongAssignee, completed));
 
             List<String> actual = new H2TaskQueryService().queryGuiTaskIds(
                     H2TaskStore.TEAM_BUCKET,
@@ -256,6 +294,55 @@ public final class H2TaskQueryServiceTestMain {
             GuiTestSupport.assertEquals(List.of(matched.getId()), actual, "GUI SQL 查询应匹配项目、优先级、指派和中文标签搜索");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 GUI 任务查询时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证 GUI SQL 搜索命中子任务时会返回其父任务，保留顶层上下文。
+     */
+    private static void shouldKeepParentContextWhenGuiSearchMatchesSubtask() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-query-gui-subtask-context-");
+            Task parent = createTask("Parent Wrapper", "gui-project", false, Task.Scope.TEAM);
+            parent.setPriority(Task.Priority.LOW);
+            Task child = createSubtask("Child Search Hit", "gui-project", false, Task.Scope.TEAM, parent.getId(), 0L);
+            child.setPriority(Task.Priority.HIGH);
+            child.setAssigneeUuid("player-a");
+            child.addTag("中文子命中");
+            Task otherParent = createTask("Other Parent", "gui-project", false, Task.Scope.TEAM);
+            otherParent.setPriority(Task.Priority.HIGH);
+            otherParent.setAssigneeUuid("player-b");
+            new H2TaskStore().saveTeamTasks(List.of(parent, child, otherParent));
+
+            H2TaskQueryService queryService = new H2TaskQueryService();
+            List<String> actual = queryService.queryGuiTaskIds(
+                    H2TaskStore.TEAM_BUCKET,
+                    H2TaskStore.TEAM_OWNER,
+                    "gui-project",
+                    false,
+                    Task.Priority.HIGH.name(),
+                    H2TaskQueryService.HudAssigneeFilter.ASSIGNED_TO_PLAYER,
+                    "player-a",
+                    "中文子"
+            );
+            int total = queryService.countGuiTaskIds(
+                    H2TaskStore.TEAM_BUCKET,
+                    H2TaskStore.TEAM_OWNER,
+                    "gui-project",
+                    false,
+                    Task.Priority.HIGH.name(),
+                    H2TaskQueryService.HudAssigneeFilter.ASSIGNED_TO_PLAYER,
+                    "player-a",
+                    "中文子"
+            );
+
+            GuiTestSupport.assertEquals(List.of(parent.getId()), actual, "GUI SQL 搜索命中子任务时应返回父任务 ID");
+            GuiTestSupport.assertEquals(1, total, "GUI SQL 搜索命中子任务时总数应按父任务计数");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 GUI 搜索保留父任务上下文时发生异常", exception);
         } finally {
             cleanup(tempGameDir);
         }
@@ -313,10 +400,11 @@ public final class H2TaskQueryServiceTestMain {
             tempGameDir = prepareTempGameDir("todolist-h2-query-gui-page-");
             Task first = createTask("Page 1", "page-project", true, Task.Scope.PERSONAL);
             Task second = createTask("Page 2", "page-project", true, Task.Scope.PERSONAL);
+            Task secondChild = createSubtask("Page 2 child", "page-project", true, Task.Scope.PERSONAL, second.getId(), 0L);
             Task third = createTask("Page 3", "page-project", true, Task.Scope.PERSONAL);
             Task fourth = createTask("Page 4", "page-project", true, Task.Scope.PERSONAL);
             Task otherProject = createTask("Page other", "other-project", true, Task.Scope.PERSONAL);
-            new H2TaskStore().saveLocalTasks(List.of(first, second, third, fourth, otherProject));
+            new H2TaskStore().saveLocalTasks(List.of(first, second, secondChild, third, fourth, otherProject));
 
             H2TaskQueryService queryService = new H2TaskQueryService();
             List<String> page = queryService.queryGuiTaskIds(
@@ -343,7 +431,7 @@ public final class H2TaskQueryServiceTestMain {
             );
 
             GuiTestSupport.assertEquals(List.of(second.getId(), third.getId()), page, "GUI SQL 分页应保持 sort_order 顺序并应用 offset");
-            GuiTestSupport.assertEquals(4, total, "GUI SQL 总数应忽略分页限制并按完整过滤条件统计");
+            GuiTestSupport.assertEquals(4, total, "GUI SQL 总数应忽略分页限制并只统计顶层任务");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 GUI 分页查询时发生异常", exception);
         } finally {
@@ -382,6 +470,29 @@ public final class H2TaskQueryServiceTestMain {
         task.setProjectId(projectId);
         task.setCompleted(completed);
         task.setScope(scope);
+        return task;
+    }
+
+    /**
+     * 创建测试子任务。
+     *
+     * @param title 任务标题
+     * @param projectId 项目 ID
+     * @param completed 是否已完成
+     * @param scope 任务空间
+     * @param parentTaskId 父任务 ID
+     * @param subtaskSortOrder 父内顺序
+     * @return 测试子任务
+     */
+    private static Task createSubtask(String title,
+                                      String projectId,
+                                      boolean completed,
+                                      Task.Scope scope,
+                                      String parentTaskId,
+                                      long subtaskSortOrder) {
+        Task task = createTask(title, projectId, completed, scope);
+        task.setParentTaskId(parentTaskId);
+        task.setSubtaskSortOrder(subtaskSortOrder);
         return task;
     }
 

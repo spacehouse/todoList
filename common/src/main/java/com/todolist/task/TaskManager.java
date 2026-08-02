@@ -1,6 +1,7 @@
 package com.todolist.task;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -14,6 +15,11 @@ import java.util.stream.Collectors;
  */
 public class TaskManager {
     private final Map<String, Task> tasks;
+    /**
+     * 父任务完成态惰性同步标志。任何结构或完成态变更时置为 {@code true}，
+     * 由读路径在必要时统一重建，避免每次 getter 都触发全量父子扫描。
+     */
+    private boolean parentCompletionDirty = true;
 
     /**
      * 初始化任务管理器，创建空的任务存储。
@@ -32,6 +38,7 @@ public class TaskManager {
     public Task addTask(String title, String description) {
         Task task = new Task(title, description);
         tasks.put(task.getId(), task);
+        parentCompletionDirty = true;
         return task;
     }
 
@@ -42,6 +49,7 @@ public class TaskManager {
      */
     public void addTask(Task task) {
         tasks.put(task.getId(), task);
+        parentCompletionDirty = true;
     }
 
     /**
@@ -51,6 +59,7 @@ public class TaskManager {
      * @return 对应任务，不存在时返回 {@code null}
      */
     public Task getTask(String id) {
+        syncParentCompletionStates();
         return tasks.get(id);
     }
 
@@ -60,6 +69,7 @@ public class TaskManager {
      * @return 当前顺序下的全部任务列表
      */
     public List<Task> getAllTasks() {
+        syncParentCompletionStates();
         return new ArrayList<>(tasks.values());
     }
 
@@ -70,6 +80,7 @@ public class TaskManager {
      */
     public void deleteTask(String taskId) {
         tasks.remove(taskId);
+        parentCompletionDirty = true;
     }
 
     /**
@@ -92,6 +103,7 @@ public class TaskManager {
                 removedCount++;
             }
         }
+        parentCompletionDirty = true;
         return removedCount;
     }
 
@@ -101,9 +113,11 @@ public class TaskManager {
      * @param taskId 任务 ID
      */
     public void toggleTaskCompletion(String taskId) {
+        syncParentCompletionStates();
         Task task = tasks.get(taskId);
-        if (task != null) {
+        if (task != null && !hasChildren(task.getId())) {
             task.setCompleted(!task.isCompleted());
+            parentCompletionDirty = true;
         }
     }
 
@@ -113,7 +127,9 @@ public class TaskManager {
      * @return 已完成任务列表
      */
     public List<Task> getCompletedTasks() {
+        syncParentCompletionStates();
         return tasks.values().stream()
+                .filter(Task::isTopLevelTask)
                 .filter(Task::isCompleted)
                 .collect(Collectors.toList());
     }
@@ -124,7 +140,9 @@ public class TaskManager {
      * @return 未完成任务列表
      */
     public List<Task> getIncompleteTasks() {
+        syncParentCompletionStates();
         return tasks.values().stream()
+                .filter(Task::isTopLevelTask)
                 .filter(task -> !task.isCompleted())
                 .collect(Collectors.toList());
     }
@@ -136,7 +154,9 @@ public class TaskManager {
      * @return 指定项目下的任务列表
      */
     public List<Task> getTasksByProject(String projectId) {
+        syncParentCompletionStates();
         return tasks.values().stream()
+                .filter(Task::isTopLevelTask)
                 .filter(task -> Objects.equals(task.getProjectId(), projectId))
                 .collect(Collectors.toList());
     }
@@ -192,9 +212,133 @@ public class TaskManager {
     }
 
     /**
+     * 按指定顺序重排同一父任务下的直属子任务，并同步更新父内排序号。
+     *
+     * @param parentTaskId 父任务 ID
+     * @param orderedSubtaskIds 目标顺序下的子任务 ID 列表
+     * @return 当子任务顺序发生变化时返回 {@code true}
+     */
+    public boolean reorderSubtasks(String parentTaskId, List<String> orderedSubtaskIds) {
+        if (parentTaskId == null || parentTaskId.isEmpty() || orderedSubtaskIds == null || orderedSubtaskIds.size() < 2) {
+            return false;
+        }
+        LinkedHashSet<String> targetIds = new LinkedHashSet<>();
+        for (String taskId : orderedSubtaskIds) {
+            Task task = taskId == null ? null : tasks.get(taskId);
+            if (task != null && task.isSubtask() && Objects.equals(parentTaskId, task.getParentTaskId())) {
+                targetIds.add(taskId);
+            }
+        }
+        if (targetIds.size() < 2) {
+            return false;
+        }
+
+        List<Task> currentSiblings = getSiblingSubtasksInOrder(parentTaskId);
+        List<String> currentOrderIds = currentSiblings.stream()
+                .map(Task::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        List<String> targetOrderIds = new ArrayList<>(targetIds);
+        if (currentOrderIds.size() != targetOrderIds.size()) {
+            return false;
+        }
+        if (currentOrderIds.equals(targetOrderIds)) {
+            return false;
+        }
+
+        for (int index = 0; index < targetOrderIds.size(); index++) {
+            Task task = tasks.get(targetOrderIds.get(index));
+            if (task != null) {
+                task.setSubtaskSortOrder(index);
+            }
+        }
+        parentCompletionDirty = true;
+        return true;
+    }
+
+    /**
      * 清空当前管理器中的全部任务。
      */
     public void clearAll() {
         tasks.clear();
+        parentCompletionDirty = true;
+    }
+
+    /**
+     * 判断指定任务是否存在直属子任务。
+     *
+     * @param taskId 任务 ID
+     * @return 存在直属子任务时返回 true
+     */
+    private boolean hasChildren(String taskId) {
+        if (taskId == null || taskId.isEmpty()) {
+            return false;
+        }
+        return tasks.values().stream().anyMatch(task -> taskId.equals(task.getParentTaskId()));
+    }
+
+    /**
+     * 返回指定父任务下的直属子任务，并按父内顺序稳定排序。
+     *
+     * @param parentTaskId 父任务 ID
+     * @return 当前父任务下的直属子任务
+     */
+    private List<Task> getSiblingSubtasksInOrder(String parentTaskId) {
+        if (parentTaskId == null || parentTaskId.isEmpty()) {
+            return List.of();
+        }
+        return tasks.values().stream()
+                .filter(task -> task != null && task.isSubtask() && Objects.equals(parentTaskId, task.getParentTaskId()))
+                .sorted((left, right) -> {
+                    int sortCompare = Long.compare(left.getSubtaskSortOrder(), right.getSubtaskSortOrder());
+                    if (sortCompare != 0) {
+                        return sortCompare;
+                    }
+                    String leftId = left.getId() == null ? "" : left.getId();
+                    String rightId = right.getId() == null ? "" : right.getId();
+                    return leftId.compareTo(rightId);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 根据直属子任务完成状态同步父任务完成状态。
+     *
+     * <p>采用惰性重建：仅当 {@link #parentCompletionDirty} 为 {@code true} 时执行一次
+     * O(n) 扫描，扫描结束后清标志；后续读路径再次调用时直接返回，避免在
+     * {@code getAllTasks()} / {@code getTask()} 等高频 getter 上反复触发 O(n²) 扫描。
+     */
+    private void syncParentCompletionStates() {
+        if (!parentCompletionDirty) {
+            return;
+        }
+        parentCompletionDirty = false;
+        // Pass 1: 一次扫描统计每个父任务的子任务总数与已完成数（O(n)）
+        Map<String, int[]> childrenStats = new HashMap<>();
+        for (Task task : tasks.values()) {
+            if (task == null || !task.isSubtask()) {
+                continue;
+            }
+            String parentId = task.getParentTaskId();
+            if (parentId == null || parentId.isEmpty()) {
+                continue;
+            }
+            int[] stats = childrenStats.computeIfAbsent(parentId, key -> new int[2]);
+            stats[0]++;
+            if (task.isCompleted()) {
+                stats[1]++;
+            }
+        }
+        // Pass 2: 根据统计结果更新父任务完成态（仅遍历父任务，无内层扫描）
+        for (Task parent : tasks.values()) {
+            if (parent == null || parent.isSubtask()) {
+                continue;
+            }
+            int[] stats = childrenStats.get(parent.getId());
+            if (stats == null || stats[0] == 0) {
+                continue;
+            }
+            parent.setCompleted(stats[0] == stats[1]);
+        }
     }
 }

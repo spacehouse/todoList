@@ -36,6 +36,7 @@ public final class H2StorageBackendIntegrationTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteTaskStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteTaskStorageToH2);
+        GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldPreserveSubtaskFieldsThroughH2", H2StorageBackendIntegrationTestMain::shouldPreserveSubtaskFieldsThroughH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldSerializeConcurrentPlayerTaskSavesWithTags", H2StorageBackendIntegrationTestMain::shouldSerializeConcurrentPlayerTaskSavesWithTags);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectPlayerStateToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectPlayerStateToH2);
@@ -75,6 +76,40 @@ public final class H2StorageBackendIntegrationTestMain {
             GuiTestSupport.assertEquals("h2-team", storage.loadTeamTasks().get(0).getTitle(), "H2 团队任务应可读回");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 任务门面时发生异常", exception);
+        } finally {
+            selectNbtBackendQuietly();
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证 H2 任务读写会保留子任务父级绑定和父内排序字段。
+     */
+    private static void shouldPreserveSubtaskFieldsThroughH2() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-subtask-fields-");
+            selectH2Backend();
+
+            Task parent = createTask("h2-parent");
+            parent.setId("h2-parent-id");
+            parent.setProjectId("project-a");
+            Task child = createTask("h2-child");
+            child.setId("h2-child-id");
+            child.setProjectId("project-a");
+            child.setParentTaskId(parent.getId());
+            child.setSubtaskSortOrder(2L);
+
+            TaskStorage storage = new TaskStorage();
+            storage.saveTasks(List.of(parent, child));
+            List<Task> loaded = storage.loadTasks();
+
+            GuiTestSupport.assertEquals(2, loaded.size(), "H2 保存父子任务后应保持两条平铺记录");
+            GuiTestSupport.assertTrue(loaded.get(0).isTopLevelTask(), "父任务读回后仍应为顶层任务");
+            GuiTestSupport.assertEquals("h2-parent-id", loaded.get(1).getParentTaskId(), "子任务读回后应保留父任务 ID");
+            GuiTestSupport.assertEquals(2L, loaded.get(1).getSubtaskSortOrder(), "子任务读回后应保留父内排序号");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 子任务字段读写时发生异常", exception);
         } finally {
             selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);

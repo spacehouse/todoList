@@ -34,8 +34,10 @@ public final class H2LegacyMigrationTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldReadBackupWithoutRestoringPrimary", H2LegacyMigrationTestMain::shouldReadBackupWithoutRestoringPrimary);
-        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldRejectNonEmptySubtasks", H2LegacyMigrationTestMain::shouldRejectNonEmptySubtasks);
+        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldAllowSingleLevelSubtasks", H2LegacyMigrationTestMain::shouldAllowSingleLevelSubtasks);
+        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldRejectNestedSubtasksBeyondOneLevel", H2LegacyMigrationTestMain::shouldRejectNestedSubtasksBeyondOneLevel);
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldMigrateLegacyDataInSingleTransaction", H2LegacyMigrationTestMain::shouldMigrateLegacyDataInSingleTransaction);
+        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldFlattenSingleLevelSubtasksDuringMigration", H2LegacyMigrationTestMain::shouldFlattenSingleLevelSubtasksDuringMigration);
     }
 
     /**
@@ -69,11 +71,37 @@ public final class H2LegacyMigrationTestMain {
     }
 
     /**
-     * 验证旧数据存在非空子任务时预检会阻断迁移。
+     * 验证旧数据中的单层 subtasks 可通过预检。
      */
-    private static void shouldRejectNonEmptySubtasks() {
+    private static void shouldAllowSingleLevelSubtasks() {
         Task parent = createTask("parent");
-        parent.addSubtask(createTask("child"));
+        parent.setId("parent-1");
+        parent.setProjectId("project-a");
+        Task child = createTask("child");
+        child.setId("child-1");
+        parent.addSubtask(child);
+        LegacyMigrationData data = new LegacyMigrationData(
+                List.of(new LegacyTaskBucket("LOCAL_PERSONAL", "LOCAL", 1L, List.of(parent))),
+                List.of(),
+                List.of()
+        );
+        try {
+            new H2LegacyMigrationPreflight().validate(data);
+        } catch (LegacyMigrationException exception) {
+            throw new IllegalStateException("单层 subtasks 预检不应失败", exception);
+        }
+    }
+
+    /**
+     * 验证两层及以上旧 subtasks 仍会阻断迁移。
+     */
+    private static void shouldRejectNestedSubtasksBeyondOneLevel() {
+        Task parent = createTask("parent");
+        parent.setId("parent-1");
+        Task child = createTask("child");
+        child.setId("child-1");
+        child.addSubtask(createTask("grandchild"));
+        parent.addSubtask(child);
         LegacyMigrationData data = new LegacyMigrationData(
                 List.of(new LegacyTaskBucket("LOCAL_PERSONAL", "LOCAL", 1L, List.of(parent))),
                 List.of(),
@@ -83,9 +111,9 @@ public final class H2LegacyMigrationTestMain {
         try {
             new H2LegacyMigrationPreflight().validate(data);
         } catch (LegacyMigrationException exception) {
-            failed = exception.getMessage().contains("子任务");
+            failed = exception.getMessage().contains("两层") || exception.getMessage().contains("子任务");
         }
-        GuiTestSupport.assertTrue(failed, "非空子任务应阻断 H2 M1 迁移");
+        GuiTestSupport.assertTrue(failed, "两层及以上旧 subtasks 应阻断迁移");
     }
 
     /**
@@ -121,6 +149,32 @@ public final class H2LegacyMigrationTestMain {
     }
 
     /**
+     * 验证旧单层 subtasks 在迁移到 H2 时会展平成父子两条记录。
+     */
+    private static void shouldFlattenSingleLevelSubtasksDuringMigration() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = Files.createTempDirectory("todolist-h2-migrate-subtasks-");
+            Path finalTempGameDir = tempGameDir;
+            DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
+            DataPathProvider.resetStorageNamespace();
+            LegacyMigrationData data = createLegacyDataWithSingleLevelSubtasks();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            try (Connection connection = provider.openConnection()) {
+                new H2LegacyMigrator().migrate(connection, data);
+                assertCount(connection, "tasks", 2);
+                assertTaskRelation(connection, "legacy-parent-1", null, 0L, "project-a", Task.Scope.TEAM.name(), "creator-a", "assignee-a", "Assignee A");
+                assertTaskRelation(connection, "legacy-child-1", "legacy-parent-1", 0L, "project-a", Task.Scope.TEAM.name(), "creator-a", "assignee-a", "Assignee A");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证旧 subtasks 迁移展平时发生异常", exception);
+        } finally {
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
      * 写入用于迁移测试的旧 NBT 数据。
      *
      * @throws Exception 写入失败时抛出
@@ -142,6 +196,29 @@ public final class H2LegacyMigrationTestMain {
                 true
         );
         new ProjectPlayerStateStorage().savePlayerState(TEST_PLAYER, state);
+    }
+
+    /**
+     * 创建一份包含单层 subtasks 的旧数据快照。
+     *
+     * @return 旧数据快照
+     */
+    private static LegacyMigrationData createLegacyDataWithSingleLevelSubtasks() {
+        Task parent = createTask("legacy parent");
+        parent.setId("legacy-parent-1");
+        parent.setProjectId("project-a");
+        parent.setScope(Task.Scope.TEAM);
+        parent.setCreatorUuid("creator-a");
+        parent.setAssigneeUuid("assignee-a");
+        parent.setAssigneeName("Assignee A");
+        Task child = createTask("legacy child");
+        child.setId("legacy-child-1");
+        parent.addSubtask(child);
+        return new LegacyMigrationData(
+                List.of(new LegacyTaskBucket("TEAM", "TEAM", 1L, List.of(parent))),
+                List.of(),
+                List.of()
+        );
     }
 
     /**
@@ -183,6 +260,41 @@ public final class H2LegacyMigrationTestMain {
              ResultSet resultSet = statement.executeQuery("SELECT \"value\" FROM storage_meta WHERE \"key\" = '" + key + "'")) {
             GuiTestSupport.assertTrue(resultSet.next(), "storage_meta 缺少键: " + key);
             GuiTestSupport.assertEquals(expected, resultSet.getString(1), "storage_meta 值不符合预期: " + key);
+        }
+    }
+
+    /**
+     * 断言任务关系字段已按预期写入 H2。
+     *
+     * @param connection H2 连接
+     * @param taskId 任务 ID
+     * @param expectedParentId 期望父任务 ID
+     * @param expectedSubtaskOrder 期望父内排序
+     * @param expectedProjectId 期望项目 ID
+     * @param expectedScope 期望作用域
+     * @throws Exception 查询失败时抛出
+     */
+    private static void assertTaskRelation(Connection connection,
+                                           String taskId,
+                                           String expectedParentId,
+                                           long expectedSubtaskOrder,
+                                           String expectedProjectId,
+                                           String expectedScope,
+                                           String expectedCreatorUuid,
+                                           String expectedAssigneeUuid,
+                                           String expectedAssigneeName) throws Exception {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(
+                     "SELECT parent_task_id, subtask_sort_order, project_id, scope, creator_uuid, assignee_uuid, assignee_name FROM tasks WHERE id = '" + taskId + "'"
+             )) {
+            GuiTestSupport.assertTrue(resultSet.next(), "缺少迁移后的任务: " + taskId);
+            GuiTestSupport.assertEquals(expectedParentId, resultSet.getString(1), "父任务 ID 不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedSubtaskOrder, resultSet.getLong(2), "子任务顺序不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedProjectId, resultSet.getString(3), "项目 ID 不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedScope, resultSet.getString(4), "作用域不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedCreatorUuid, resultSet.getString(5), "创建者 UUID 不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedAssigneeUuid, resultSet.getString(6), "负责人 UUID 不符合预期: " + taskId);
+            GuiTestSupport.assertEquals(expectedAssigneeName, resultSet.getString(7), "负责人名称不符合预期: " + taskId);
         }
     }
 

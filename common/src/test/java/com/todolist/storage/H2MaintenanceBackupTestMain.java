@@ -121,7 +121,10 @@ public final class H2MaintenanceBackupTestMain {
             new H2StorageBootstrap().ensureReady();
 
             GuiTestSupport.assertEquals(H2SchemaInitializer.SCHEMA_VERSION, readSchemaVersion(provider), "旧 schema 应升级到当前版本");
-            GuiTestSupport.assertTrue(hasBackupWithPrefix("schema-upgrade-v0-to-v1"), "schema 升级前应创建备份");
+            GuiTestSupport.assertTrue(
+                    hasBackupWithPrefix("schema-upgrade-v0-to-v" + H2SchemaInitializer.SCHEMA_VERSION),
+                    "schema 升级前应创建备份"
+            );
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 schema 升级备份时发生异常", exception);
         } finally {

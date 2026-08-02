@@ -2,6 +2,7 @@ package com.todolist.storage;
 
 import com.todolist.project.Project;
 import com.todolist.task.Task;
+import com.todolist.task.TaskCompatibilityAdapter;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -34,7 +35,7 @@ public final class H2LegacyMigrationPreflight {
     }
 
     /**
-     * 校验任务桶、任务字段、重复 ID 和非空子任务。
+     * 校验任务桶、任务字段、重复 ID 和旧 subtasks 迁移约束。
      *
      * @param data 旧数据迁移快照
      * @throws LegacyMigrationException 发现不可迁移任务时抛出
@@ -44,7 +45,7 @@ public final class H2LegacyMigrationPreflight {
             requireLength(bucket.bucketType(), 32, "task bucket_type");
             requireLength(bucket.ownerUuid(), 64, "task owner_uuid");
             Set<String> taskIds = new HashSet<>();
-            for (Task task : bucket.tasks()) {
+            for (Task task : normalizeTasks(bucket)) {
                 requirePresent(task.getId(), "task id");
                 if (!taskIds.add(task.getId())) {
                     throw new LegacyMigrationException("Duplicate task id in bucket " + bucket.bucketType() + "/" + bucket.ownerUuid() + ": " + task.getId());
@@ -61,9 +62,6 @@ public final class H2LegacyMigrationPreflight {
                 }
                 if (task.getScope() == null) {
                     throw new LegacyMigrationException("Task scope is missing: " + task.getId());
-                }
-                if (!task.getSubtasks().isEmpty()) {
-                    throw new LegacyMigrationException("旧数据包含暂不支持迁移的子任务: " + task.getId());
                 }
                 for (String tag : task.getTags()) {
                     requireLength(tag, 128, "task tag");
@@ -165,6 +163,22 @@ public final class H2LegacyMigrationPreflight {
             UUID.fromString(value);
         } catch (IllegalArgumentException exception) {
             throw new LegacyMigrationException(label + " is not a valid UUID: " + value, exception);
+        }
+    }
+
+    /**
+     * 将旧任务桶标准化为可迁移的平铺结构；仅允许单层 subtasks。
+     *
+     * @param bucket 旧任务桶
+     * @return 标准化后的任务列表
+     * @throws LegacyMigrationException 检测到不可迁移嵌套时抛出
+     */
+    private Iterable<Task> normalizeTasks(LegacyTaskBucket bucket) throws LegacyMigrationException {
+        try {
+            return TaskCompatibilityAdapter.normalizeLoadedTasks(bucket.tasks());
+        } catch (IllegalStateException exception) {
+            throw new LegacyMigrationException("旧数据包含两层及以上 subtasks，当前迁移仅支持单层结构: "
+                    + bucket.bucketType() + "/" + bucket.ownerUuid(), exception);
         }
     }
 }

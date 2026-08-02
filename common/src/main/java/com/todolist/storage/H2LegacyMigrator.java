@@ -2,6 +2,7 @@ package com.todolist.storage;
 
 import com.todolist.project.Project;
 import com.todolist.task.Task;
+import com.todolist.task.TaskCompatibilityAdapter;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,7 +11,7 @@ import java.sql.Types;
 import java.util.StringJoiner;
 
 /**
- * H2LegacyMigrator 负责把旧 NBT 快照单事务导入 H2 schema v1。
+ * H2LegacyMigrator 负责把旧 NBT 快照单事务导入当前 H2 schema。
  */
 public final class H2LegacyMigrator {
     private static final int META_VALUE_MAX_LENGTH = 4096;
@@ -80,10 +81,12 @@ public final class H2LegacyMigrator {
      * @param data 旧数据快照
      * @throws SQLException 写入失败时抛出
      */
-    private void insertTaskBuckets(Connection connection, LegacyMigrationData data) throws SQLException {
+    private void insertTaskBuckets(Connection connection, LegacyMigrationData data) throws SQLException, LegacyMigrationException {
         try (PreparedStatement taskStatement = connection.prepareStatement("""
-                MERGE INTO tasks KEY(bucket_type, owner_uuid, id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                MERGE INTO tasks (bucket_type, owner_uuid, id, scope, project_id, title, description, completed, priority,
+                 created_at, due_date, creator_uuid, assignee_uuid, assignee_name, parent_task_id,
+                 subtask_sort_order, sort_order, updated_at) KEY(bucket_type, owner_uuid, id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """);
              PreparedStatement tagStatement = connection.prepareStatement("""
                 MERGE INTO task_tags KEY(bucket_type, owner_uuid, task_id, tag)
@@ -95,8 +98,9 @@ public final class H2LegacyMigrator {
                 """)) {
             for (LegacyTaskBucket bucket : data.taskBuckets()) {
                 long updatedAt = bucket.lastSaved() > 0 ? bucket.lastSaved() : System.currentTimeMillis();
-                for (int index = 0; index < bucket.tasks().size(); index++) {
-                    Task task = bucket.tasks().get(index);
+                java.util.List<Task> normalizedTasks = normalizeTasks(bucket);
+                for (int index = 0; index < normalizedTasks.size(); index++) {
+                    Task task = normalizedTasks.get(index);
                     bindTask(taskStatement, bucket, task, index, updatedAt);
                     taskStatement.executeUpdate();
                     int tagOrder = 0;
@@ -114,6 +118,22 @@ public final class H2LegacyMigrator {
                 bucketMetaStatement.setLong(3, updatedAt);
                 bucketMetaStatement.executeUpdate();
             }
+        }
+    }
+
+    /**
+     * 将旧任务桶标准化为平铺结构后再迁移到 H2。
+     *
+     * @param bucket 旧任务桶
+     * @return 标准化后的平铺任务列表
+     * @throws LegacyMigrationException 检测到不可迁移嵌套时抛出
+     */
+    private java.util.List<Task> normalizeTasks(LegacyTaskBucket bucket) throws LegacyMigrationException {
+        try {
+            return TaskCompatibilityAdapter.normalizeLoadedTasks(bucket.tasks());
+        } catch (IllegalStateException exception) {
+            throw new LegacyMigrationException("旧数据包含两层及以上 subtasks，无法迁移到 H2: "
+                    + bucket.bucketType() + "/" + bucket.ownerUuid(), exception);
         }
     }
 
@@ -142,8 +162,10 @@ public final class H2LegacyMigrator {
         setNullableString(statement, 12, task.getCreatorUuid());
         setNullableString(statement, 13, task.getAssigneeUuid());
         setNullableString(statement, 14, task.getAssigneeName());
-        statement.setLong(15, sortOrder);
-        statement.setLong(16, updatedAt > 0 ? updatedAt : task.getCreatedAt());
+        setNullableString(statement, 15, task.getParentTaskId());
+        statement.setLong(16, task.getSubtaskSortOrder());
+        statement.setLong(17, sortOrder);
+        statement.setLong(18, updatedAt > 0 ? updatedAt : task.getCreatedAt());
     }
 
     /**
