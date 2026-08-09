@@ -76,10 +76,24 @@ public final class GuiTestSupport {
 
     /**
      * 重置 GUI 测试状态并返回新的客户端操作记录器。
+     * 默认将存储后端强制设为 NBT，因为绝大多数 GUI 测试验证的是界面交互行为而非 H2 持久化；
+     * 如需测试默认存储后端选择，请使用 {@link #resetStateKeepDefaultBackend()}。
      *
      * @return 新的操作记录器
      */
     public static RecordingClientOps resetState() {
+        RecordingClientOps ops = resetStateKeepDefaultBackend();
+        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
+        return ops;
+    }
+
+    /**
+     * 重置 GUI 测试状态但不覆盖存储后端配置，保留 ModConfig 的默认后端（H2）。
+     * 仅供存储后端选择相关测试使用。
+     *
+     * @return 新的操作记录器
+     */
+    public static RecordingClientOps resetStateKeepDefaultBackend() {
         bootstrapEnvironment();
         cleanTestGameDir();
         DataPathProvider.setGameDirSupplier(() -> TEST_GAME_DIR);

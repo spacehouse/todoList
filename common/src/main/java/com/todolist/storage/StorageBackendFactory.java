@@ -11,12 +11,12 @@ public final class StorageBackendFactory {
 
     /**
      * 返回当前配置中的存储后端。
+     * 生产环境中 ModConfig.normalize() 强制为 H2，但测试可通过 setStorageBackend 临时切换。
      *
-     * @return 当前配置的存储后端，配置缺失时返回 NBT
+     * @return 当前配置的存储后端
      */
     public static ModConfig.StorageBackend getConfiguredBackend() {
-        ModConfig.StorageBackend backend = ModConfig.getInstance().getStorageBackend();
-        return backend == ModConfig.StorageBackend.H2 ? ModConfig.StorageBackend.H2 : ModConfig.StorageBackend.NBT;
+        return ModConfig.getInstance().getStorageBackend();
     }
 
     /**

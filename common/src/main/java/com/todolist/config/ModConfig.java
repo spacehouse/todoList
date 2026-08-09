@@ -57,8 +57,8 @@ public class ModConfig {
     };
     private static final String[] STORAGE_BACKEND_COMMENT_FALLBACK_EN = new String[] {
             "storageBackend notes:",
-            "nbt: default local file storage, suitable for simple singleplayer use",
-            "h2: H2 database storage, suitable when you need relational queries, backups, or external tools"
+            "h2: H2 database storage (forced, only supported mode)",
+            "nbt: deprecated legacy file storage, will be ignored and forced to h2"
     };
     private static final String[] H2_BACKUP_ON_START_COMMENT_KEYS = new String[] {
             "config.todolist.h2_backup_on_start.comment.title",
@@ -109,7 +109,7 @@ public class ModConfig {
 
     /**
      * 存储后端类型。
-     * NBT 是当前默认文件存储，H2 用于后续关系型存储迁移阶段。
+     * H2 为唯一支持的模式，NBT 已废弃但仍保留枚举值供内部降级使用。
      */
     public enum StorageBackend {
         @SerializedName("nbt")
@@ -134,7 +134,7 @@ public class ModConfig {
     // FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器）
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
     private transient boolean commandAccessModeDirty;
-    private StorageBackend storageBackend = StorageBackend.NBT;
+    private StorageBackend storageBackend = StorageBackend.H2;
     private boolean h2BackupOnStart = false;
 
     // GUI settings
@@ -268,6 +268,7 @@ public class ModConfig {
             );
             if (!readResult.isFound()) {
                 instance = new ModConfig();
+                instance.normalize();
                 save();
                 instance.commandAccessModeDirty = false;
                 TodoConstants.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
@@ -293,8 +294,10 @@ public class ModConfig {
 
     private boolean normalize() {
         boolean changed = false;
-        if (storageBackend == null) {
-            storageBackend = StorageBackend.NBT;
+        // 强制使用 H2 存储后端，NBT 模式已废弃，不再支持通过配置切换回 NBT
+        if (storageBackend != StorageBackend.H2) {
+            TodoConstants.LOGGER.info("Storage backend forced to H2 (configured: {}); NBT mode is no longer supported.", storageBackend);
+            storageBackend = StorageBackend.H2;
             changed = true;
         }
         if (gui == null) {
