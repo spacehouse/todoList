@@ -19,6 +19,8 @@ import net.minecraft.network.chat.Component;
 public class Task {
     private static final int NBT_LIST_TYPE = 9;
     private static final int NBT_COMPOUND_TYPE = 10;
+    private static final String PARENT_TASK_ID_KEY = "parentTaskId";
+    private static final String SUBTASK_SORT_ORDER_KEY = "subtaskSortOrder";
     private String id;
     private String title;
     private String description;
@@ -33,6 +35,8 @@ public class Task {
     private String assigneeUuid;
     private String assigneeName;
     private String projectId; // New field for project association
+    private String parentTaskId;
+    private long subtaskSortOrder;
 
     public Task(String title, String description) {
         this.id = UUID.randomUUID().toString();
@@ -49,6 +53,8 @@ public class Task {
         this.assigneeUuid = null;
         this.assigneeName = null;
         this.projectId = null;
+        this.parentTaskId = null;
+        this.subtaskSortOrder = 0L;
     }
 
     /**
@@ -74,9 +80,16 @@ public class Task {
         this.assigneeUuid = source.assigneeUuid;
         this.assigneeName = source.assigneeName;
         this.projectId = source.projectId;
+        this.parentTaskId = source.parentTaskId;
+        this.subtaskSortOrder = source.subtaskSortOrder;
     }
 
-    // NBT Serialization
+    /**
+     * 将任务写入 NBT。
+     * Phase 1 开始统一按平铺结构写出，只保留兼容读取旧 subtasks 的能力。
+     *
+     * @return 当前任务的 NBT 表示
+     */
     public CompoundTag toNbt() {
         CompoundTag nbt = new CompoundTag();
         nbt.putString("id", id);
@@ -113,17 +126,25 @@ public class Task {
         if (projectId != null) {
             nbt.putString("projectId", projectId);
         }
-
-        // Subtasks
-        ListTag subtasksList = new ListTag();
-        for (Task subtask : subtasks) {
-            subtasksList.add(subtask.toNbt());
+        if (parentTaskId != null) {
+            nbt.putString(PARENT_TASK_ID_KEY, parentTaskId);
         }
+        nbt.putLong(SUBTASK_SORT_ORDER_KEY, subtaskSortOrder);
+
+        // 新格式不再持久化旧的递归 subtasks 结构，仅保留空列表兼容旧读取方。
+        ListTag subtasksList = new ListTag();
         nbt.put("subtasks", subtasksList);
 
         return nbt;
     }
 
+    /**
+     * 从 NBT 读取任务。
+     * 同时兼容旧的递归 subtasks 与新的平铺子任务字段。
+     *
+     * @param nbt 任务 NBT
+     * @return 还原后的任务对象
+     */
     public static Task fromNbt(CompoundTag nbt) {
         String title = nbt.getString("title");
         String description = nbt.getString("description");
@@ -177,6 +198,12 @@ public class Task {
         if (nbt.contains("projectId")) {
             task.projectId = nbt.getString("projectId");
         }
+        if (nbt.contains(PARENT_TASK_ID_KEY)) {
+            task.parentTaskId = normalizeOptionalText(nbt.getString(PARENT_TASK_ID_KEY));
+        }
+        if (nbt.contains(SUBTASK_SORT_ORDER_KEY)) {
+            task.subtaskSortOrder = nbt.getLong(SUBTASK_SORT_ORDER_KEY);
+        }
 
         // Subtasks
         if (nbt.contains("subtasks", NBT_LIST_TYPE)) {
@@ -196,6 +223,19 @@ public class Task {
      */
     public Task copy() {
         return new Task(this);
+    }
+
+    /**
+     * 将可选字符串标准化为 null 或有效值，避免空串被当作有效关联。
+     *
+     * @param value 原始字符串
+     * @return 标准化后的可选值
+     */
+    private static String normalizeOptionalText(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        return value;
     }
 
     // Getters and Setters
@@ -237,6 +277,48 @@ public class Task {
     public void setAssigneeName(String assigneeName) { this.assigneeName = assigneeName; }
     public String getProjectId() { return projectId; }
     public void setProjectId(String projectId) { this.projectId = projectId; }
+    /**
+     * 返回当前子任务的父任务 ID。
+     *
+     * @return 父任务 ID，顶层任务时返回 null
+     */
+    public String getParentTaskId() { return parentTaskId; }
+
+    /**
+     * 设置父任务 ID，并将空串标准化为 null。
+     *
+     * @param parentTaskId 父任务 ID
+     */
+    public void setParentTaskId(String parentTaskId) { this.parentTaskId = normalizeOptionalText(parentTaskId); }
+
+    /**
+     * 返回子任务在父任务内的排序号。
+     *
+     * @return 子任务排序号
+     */
+    public long getSubtaskSortOrder() { return subtaskSortOrder; }
+
+    /**
+     * 设置子任务排序号。
+     *
+     * @param subtaskSortOrder 子任务排序号
+     */
+    public void setSubtaskSortOrder(long subtaskSortOrder) { this.subtaskSortOrder = subtaskSortOrder; }
+
+    /**
+     * 判断当前任务是否为子任务。
+     *
+     * @return 存在父任务 ID 时返回 true
+     */
+    public boolean isSubtask() { return parentTaskId != null && !parentTaskId.isEmpty(); }
+
+    /**
+     * 判断当前任务是否为顶层任务。
+     *
+     * @return 不存在父任务 ID 时返回 true
+     */
+    public boolean isTopLevelTask() { return !isSubtask(); }
+
     public boolean isProjectUnassigned() { return projectId == null || projectId.isEmpty(); }
     public boolean belongsToProject(String targetProjectId) {
         return targetProjectId != null && !targetProjectId.isEmpty() && targetProjectId.equals(projectId);
@@ -297,4 +379,3 @@ public class Task {
                 '}';
     }
 }
-

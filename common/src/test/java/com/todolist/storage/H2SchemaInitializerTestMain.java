@@ -53,8 +53,12 @@ public final class H2SchemaInitializerTestMain {
                 assertTableExists(connection, "storage_bucket_meta");
                 assertTableExists(connection, "storage_meta");
                 assertSchemaVersion(connection);
+                assertColumnExists(connection, "tasks", "parent_task_id");
+                assertColumnExists(connection, "tasks", "subtask_sort_order");
                 assertTableComment(connection, "tasks");
                 assertColumnComment(connection, "tasks", "title");
+                assertColumnComment(connection, "tasks", "parent_task_id");
+                assertColumnComment(connection, "tasks", "subtask_sort_order");
                 assertColumnComment(connection, "storage_meta", "key");
             }
 
@@ -82,6 +86,20 @@ public final class H2SchemaInitializerTestMain {
     }
 
     /**
+     * 断言指定字段已经存在。
+     *
+     * @param connection H2 数据库连接
+     * @param tableName 表名
+     * @param columnName 字段名
+     * @throws Exception 查询失败时抛出
+     */
+    private static void assertColumnExists(Connection connection, String tableName, String columnName) throws Exception {
+        try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName, columnName)) {
+            GuiTestSupport.assertTrue(resultSet.next(), "缺少 H2 字段: " + tableName + "." + columnName);
+        }
+    }
+
+    /**
      * 断言 schema_version 元数据已经写入。
      *
      * @param connection H2 数据库连接
@@ -91,7 +109,7 @@ public final class H2SchemaInitializerTestMain {
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("SELECT \"value\" FROM storage_meta WHERE \"key\" = 'schema_version'")) {
             GuiTestSupport.assertTrue(resultSet.next(), "storage_meta 应包含 schema_version");
-            GuiTestSupport.assertEquals(H2SchemaInitializer.SCHEMA_VERSION, resultSet.getString(1), "schema_version 应为 v1");
+            GuiTestSupport.assertEquals(H2SchemaInitializer.SCHEMA_VERSION, resultSet.getString(1), "schema_version 应与当前 H2 schema 版本一致");
         }
     }
 

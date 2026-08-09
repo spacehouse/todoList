@@ -26,14 +26,17 @@ import com.todolist.permission.PermissionCenter.Operation;
 import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
+import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -99,6 +102,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     // 按钮
     private Button detailCloseButton;
+    private Button addSubtaskButton;
     private Button claimButton;
     private Button abandonButton;
     private Button assignOthersButton;
@@ -135,6 +139,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private boolean teamProjectsEnabled = true;
     private int savedProjectListScrollOffset;
     private int savedTaskListScrollOffset;
+    /**
+     * widget 重建过程中保留的“用户已展开的父任务 ID 集合”。
+     * 每次进入 {@link #rebuildUI()} 时从旧 widget 读出，重建后再写回新 widget，
+     * 避免“点击任务行触发选中”导致子任务展开状态丢失。
+     */
+    private Set<String> savedExpandedParentTaskIds = new LinkedHashSet<>();
     private int currentPriorityFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low
     
     private Task selectedTask;
@@ -1049,6 +1059,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         searchQuery = searchQuery == null ? "" : searchQuery.trim().toLowerCase();
         projectSearchQuery = projectSearchQuery == null ? "" : projectSearchQuery.trim();
         savedTaskListScrollOffset = taskListWidget == null ? savedTaskListScrollOffset : taskListWidget.getScrollOffset();
+        savedExpandedParentTaskIds = taskListWidget == null
+                ? savedExpandedParentTaskIds
+                : taskListWidget.getExpandedParentTaskIds();
         baseFilteredTasks = new ArrayList<>();
         filteredTasks = new ArrayList<>();
         taskListWidget.setTeamAllViewForNonOp(
@@ -1059,6 +1072,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         applyResponsiveWidgetVisibility();
         filterTasks();
         if (taskListWidget != null) {
+            taskListWidget.setExpandedParentTaskIds(savedExpandedParentTaskIds);
             taskListWidget.setScrollOffset(savedTaskListScrollOffset);
         }
         syncDetailWidgetsFromState();
@@ -1080,12 +1094,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && cancelButton != null;
     }
 
+    /**
+     * 在列表重建前抓取当前任务列表视图状态，避免展开态和滚动位置丢失。
+     */
+    private void captureTaskListViewState() {
+        if (taskListWidget == null) {
+            return;
+        }
+        savedTaskListScrollOffset = taskListWidget.getScrollOffset();
+        savedExpandedParentTaskIds = taskListWidget.getExpandedParentTaskIds();
+    }
+
     private void rebuildUI() {
         syncViewStateForCurrentProject();
         currentFilter = "active";
         searchQuery = searchQuery == null ? "" : searchQuery.trim().toLowerCase();
         projectSearchQuery = projectSearchQuery == null ? "" : projectSearchQuery.trim();
-        savedTaskListScrollOffset = taskListWidget == null ? savedTaskListScrollOffset : taskListWidget.getScrollOffset();
+        captureTaskListViewState();
         baseFilteredTasks = new ArrayList<>();
         filteredTasks = new ArrayList<>();
         this.clearWidgets();
@@ -1287,7 +1312,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 rightPanelX,
                 rightPanelWidth,
                 viewMode != ViewMode.PERSONAL,
+                shouldShowAddSubtaskButton(),
+                hasSelectedTaskParentContext(),
                 this::onDetailClose,
+                this::onAddSubtask,
                 this::onClaimTask,
                 this::onAbandonTask,
                 this::onAssignOthers);
@@ -1295,6 +1323,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         titleField = detailWidgets.titleField;
         descField = detailWidgets.descField;
         tagField = detailWidgets.tagField;
+        addSubtaskButton = detailWidgets.addSubtaskButton;
         claimButton = detailWidgets.claimButton;
         abandonButton = detailWidgets.abandonButton;
         assignOthersButton = detailWidgets.assignOthersButton;
@@ -1302,6 +1331,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         this.addRenderableWidget(titleField);
         this.addRenderableWidget(descField);
         this.addRenderableWidget(tagField);
+        this.addRenderableWidget(addSubtaskButton);
         this.addRenderableWidget(claimButton);
         this.addRenderableWidget(abandonButton);
         this.addRenderableWidget(assignOthersButton);
@@ -1324,6 +1354,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         bindWidgetResponders();
         filterTasks();
         if (taskListWidget != null) {
+            taskListWidget.setExpandedParentTaskIds(savedExpandedParentTaskIds);
             taskListWidget.setScrollOffset(savedTaskListScrollOffset);
         }
         syncDetailWidgetsFromState();
@@ -1420,6 +1451,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (assignOthersButton != null) {
             assignOthersButton.visible = detailVisible && assignOthersButton.visible;
             assignOthersButton.active = detailVisible && assignOthersButton.active;
+        }
+        if (addSubtaskButton != null) {
+            addSubtaskButton.visible = detailVisible && addSubtaskButton.visible;
+            addSubtaskButton.active = detailVisible && addSubtaskButton.active;
         }
         if (sidebarToggleButton != null) {
             sidebarToggleButton.visible = layoutMetrics.sidebarOverlay;
@@ -1572,9 +1607,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
         int color = 0xFFFFFFFF;
         int textH = this.font.lineHeight;
+        Component parentContext = resolveSelectedTaskParentContextComponent();
 
         if (descField != null && descField.visible) {
             int dy = descField.getY() - textH - 2;
+            if (parentContext != null) {
+                int parentY = dy - textH - 4;
+                context.drawString(this.font, parentContext, descField.getX(), parentY, color, false);
+            }
             context.drawString(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
         }
         if (tagField != null && tagField.visible) {
@@ -1609,6 +1649,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     private void onSaveTasks() {
+        discardSelectedEmptyPlaceholderSubtask();
         if (!personalHasUnsavedChanges && !teamHasUnsavedChanges) {
             onClose();
             return;
@@ -1654,6 +1695,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         projectSearchPrefixDropdownOpen = false;
         this.setFocused(null);
         finishDetailTitleEditing();
+        boolean discardedEmptyPlaceholder = discardSelectedEmptyPlaceholderSubtask();
+        if (discardedEmptyPlaceholder) {
+            if (isGuiAutoSaveEnabled()) {
+                persistCurrentViewTasksInBackground("auto_discard_empty_subtask");
+            }
+            return;
+        }
         if (detailFieldFocused) {
             triggerAutoSaveIfNeeded("auto_blur_detail", false);
         }
@@ -1750,18 +1798,54 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             clearCompletedButton.onPress();
             return true;
         }
-        if (taskListWidget != null && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
+        if (button == 0
+                && saveButton != null
+                && saveButton.visible
+                && saveButton.active
+                && saveButton.isMouseOver(mouseX, mouseY)) {
+            saveButton.onPress();
+            return true;
+        }
+        if (button == 0
+                && cancelButton != null
+                && cancelButton.visible
+                && cancelButton.active
+                && cancelButton.isMouseOver(mouseX, mouseY)) {
+            cancelButton.onPress();
+            return true;
+        }
+        if (button == 0
+                && addSubtaskButton != null
+                && addSubtaskButton.visible
+                && addSubtaskButton.active
+                && addSubtaskButton.isMouseOver(mouseX, mouseY)) {
+            addSubtaskButton.onPress();
+            return true;
+        }
+        boolean clickInsideVisibleDetailPanel = layoutMetrics != null
+                && layoutMetrics.detailVisible
+                && selectedTask != null
+                && layoutMetrics.detailBounds.contains(mouseX, mouseY);
+        if (button == 0 && !clickInsideVisibleDetailPanel) {
+            discardSelectedEmptyPlaceholderSubtask();
+        }
+        if (!clickInsideVisibleDetailPanel
+                && taskListWidget != null
+                && taskListWidget.mouseClicked(mouseX, mouseY, button)) {
             resetTaskRowDragState();
             closeTaskContextMenu();
             return true;
         }
-        if (projectListWidget != null && isSidebarPanelVisible() && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+        if (!clickInsideVisibleDetailPanel
+                && projectListWidget != null
+                && isSidebarPanelVisible()
+                && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
             resetTaskRowDragState();
             closeTaskContextMenu();
             return true;
         }
 
-        if (taskListWidget != null) {
+        if (!clickInsideVisibleDetailPanel && taskListWidget != null) {
             TaskListWidget.TaskSectionHitResult sectionHit = taskListWidget.getSectionAt(mouseX, mouseY);
             Task clickedTask = taskListWidget.getTaskAt((int) mouseX, (int) mouseY);
             if (button == 0
@@ -1775,6 +1859,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
             if (clickedTask != null) {
                 if (button == 0
+                        && selectedTask != null
+                        && !Objects.equals(clickedTask.getId(), selectedTask.getId())) {
+                    discardSelectedEmptyPlaceholderSubtask();
+                }
+                if (button == 0
+                        && sectionHit != null
+                        && (sectionHit.getRowType() == TaskListWidget.RowType.TASK
+                        || sectionHit.getRowType() == TaskListWidget.RowType.SUBTASK)
                         && TodoScreenPermissionSupport.canTaskReorderInView(
                         this.minecraft,
                         currentProject,
@@ -1832,6 +1924,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 tagField,
                 false,
                 detailCloseButton,
+                addSubtaskButton,
                 claimButton,
                 abandonButton,
                 assignOthersButton,
@@ -1906,6 +1999,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
     @Override
     public void onClose() {
+        discardSelectedEmptyPlaceholderSubtask();
         if (triggerAutoSaveIfNeeded("auto_close", true)) {
             return;
         }
@@ -2026,12 +2120,84 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * 响应详情面板关闭按钮，按配置决定是否先自动保存再关闭详情区。
      */
     private void onDetailClose() {
+        if (discardSelectedEmptyPlaceholderSubtask()) {
+            if (isGuiAutoSaveEnabled()) {
+                persistCurrentViewTasksInBackground("auto_discard_empty_subtask");
+            }
+            return;
+        }
         triggerAutoSaveIfNeeded("auto_close_detail", false);
         clearSelectedTask();
     }
 
+    /**
+     * 在当前选中的父任务下创建一个空白子任务，并切入标题编辑模式。
+     */
+    private void onAddSubtask() {
+        Task parentTask = selectedTask;
+        if (parentTask == null) {
+            return;
+        }
+        createSubtaskFromParent(parentTask);
+    }
+
+    /**
+     * 从指定父任务创建一个空白子任务，并切入标题编辑模式。
+     *
+     * @param parentTask 父任务
+     */
+    private void createSubtaskFromParent(Task parentTask) {
+        if (parentTask == null || !parentTask.isTopLevelTask()) {
+            return;
+        }
+        if (currentProject == null) {
+            addNotification(Component.translatable("message.todolist.select_project_first").getString());
+            return;
+        }
+        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
+            addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
+            return;
+        }
+        if (!canAddSubtaskToParent(parentTask)) {
+            addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
+            return;
+        }
+        Task subtask = taskManager.addTask("", "");
+        subtask.setPriority(parentTask.getPriority());
+        subtask.setProjectId(parentTask.getProjectId());
+        subtask.setScope(parentTask.getScope());
+        subtask.setCreatorUuid(parentTask.getCreatorUuid());
+        subtask.setAssigneeUuid(parentTask.getAssigneeUuid());
+        subtask.setAssigneeName(parentTask.getAssigneeName());
+        subtask.setParentTaskId(parentTask.getId());
+        subtask.setSubtaskSortOrder(resolveNextSubtaskSortOrder(parentTask.getId()));
+
+        markUnsaved();
+        applySearchFilter();
+        selectTask(subtask, false);
+        beginDetailTitleEditing();
+        closeTaskContextMenu();
+    }
+
     private void selectTask(Task task) {
-        if (task != null && (selectedTask == null || !task.getId().equals(selectedTask.getId()))) {
+        selectTask(task, true);
+    }
+
+    /**
+     * 切换当前选中任务，并按需触发“切换任务”自动保存。
+     *
+     * @param task 目标任务
+     * @param triggerAutoSaveBeforeSelect 是否在切换前执行自动保存
+     */
+    private void selectTask(Task task, boolean triggerAutoSaveBeforeSelect) {
+        if (task != null
+                && selectedTask != null
+                && !Objects.equals(task.getId(), selectedTask.getId())) {
+            discardSelectedEmptyPlaceholderSubtask();
+        }
+        if (triggerAutoSaveBeforeSelect
+                && task != null
+                && (selectedTask == null || !task.getId().equals(selectedTask.getId()))) {
             triggerAutoSaveIfNeeded("auto_switch_task", false);
         }
         selectedTask = task;
@@ -2046,6 +2212,153 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         detailDraft = null;
         detailOverlayVisible = false;
         rebuildUI();
+    }
+
+    /**
+     * 判断当前详情区是否需要展示子任务的父任务上下文。
+     *
+     * @return true 表示应显示父任务上下文提示
+     */
+    private boolean hasSelectedTaskParentContext() {
+        return resolveSelectedTaskParentContextComponent() != null;
+    }
+
+    /**
+     * 判断当前详情区是否应显示“添加子任务”入口。
+     *
+     * @return true 表示显示“添加子任务”按钮
+     */
+    private boolean shouldShowAddSubtaskButton() {
+        return selectedTask != null
+                && selectedTask.isTopLevelTask()
+                && canAddSubtaskToSelectedParent();
+    }
+
+    /**
+     * 判断当前选中的父任务是否允许继续创建子任务。
+     *
+     * @return true 表示允许创建子任务
+     */
+    private boolean canAddSubtaskToSelectedParent() {
+        return canAddSubtaskToParent(selectedTask);
+    }
+
+    /**
+     * 判断给定父任务是否允许继续创建子任务。
+     *
+     * @param parentTask 父任务
+     * @return true 表示允许创建子任务
+     */
+    private boolean canAddSubtaskToParent(Task parentTask) {
+        if (parentTask == null
+                || !parentTask.isTopLevelTask()
+                || currentProject == null
+                || taskManager == null
+                || parentTask.isCompleted()
+                || !TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())
+                || !TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name())) {
+            return false;
+        }
+        Task latestParent = taskManager.getTask(parentTask.getId());
+        return latestParent != null
+                && latestParent.isTopLevelTask()
+                && !latestParent.isCompleted()
+                && currentProject.getId() != null
+                && currentProject.getId().equals(latestParent.getProjectId());
+    }
+
+    /**
+     * 解析当前选中子任务的父任务上下文文案。
+     *
+     * @return 父任务上下文组件；没有父任务上下文时返回 {@code null}
+     */
+    private Component resolveSelectedTaskParentContextComponent() {
+        String parentTitle = resolveSelectedTaskParentTitle();
+        if (parentTitle == null || parentTitle.isEmpty()) {
+            return null;
+        }
+        String fullText = Component.translatable("gui.todolist.label.parent_task", parentTitle).getString();
+        int maxWidth = resolveSelectedTaskParentContextMaxWidth();
+        if (maxWidth <= 0) {
+            return Component.literal(fullText);
+        }
+        String displayText = TodoScreenTextSupport.trimTextToWidth(this.font, fullText, maxWidth);
+        if (displayText.isEmpty() && this.font != null) {
+            displayText = this.font.plainSubstrByWidth(fullText, maxWidth).trim();
+        }
+        return Component.literal(displayText.isEmpty() ? fullText : displayText);
+    }
+
+    /**
+     * 解析当前选中子任务的父任务标题。
+     *
+     * @return 父任务标题；没有父任务上下文时返回空字符串
+     */
+    private String resolveSelectedTaskParentTitle() {
+        if (selectedTask == null || !selectedTask.isSubtask() || taskManager == null) {
+            return "";
+        }
+        String parentTaskId = selectedTask.getParentTaskId();
+        if (parentTaskId == null || parentTaskId.isEmpty()) {
+            return "";
+        }
+        Task parentTask = taskManager.getTask(parentTaskId);
+        if (parentTask == null) {
+            return "";
+        }
+        String parentTitle = parentTask.getTitle();
+        if (parentTitle == null || parentTitle.isEmpty()) {
+            parentTitle = parentTaskId;
+        }
+        return parentTitle;
+    }
+
+    /**
+     * 返回当前选中子任务的父任务上下文文本，供测试断言。
+     *
+     * @return 父任务上下文文本；不存在时返回空字符串
+     */
+    private String resolveSelectedTaskParentContextTextForTest() {
+        Component component = resolveSelectedTaskParentContextComponent();
+        if (component == null) {
+            return "";
+        }
+        return component.getString();
+    }
+
+    /**
+     * 计算详情区“所属主任务”文案可用的最大显示宽度。
+     *
+     * @return 父任务上下文文案的最大可用宽度
+     */
+    private int resolveSelectedTaskParentContextMaxWidth() {
+        if (descField != null && descField.visible) {
+            return Math.max(0, descField.getWidth());
+        }
+        if (layoutMetrics == null || !layoutMetrics.detailVisible) {
+            return 0;
+        }
+        return Math.max(0, layoutMetrics.detailBounds.width - 8);
+    }
+
+    /**
+     * 计算当前父任务下下一个可用的子任务排序号。
+     *
+     * @param parentTaskId 父任务 ID
+     * @return 新子任务应使用的排序号
+     */
+    private long resolveNextSubtaskSortOrder(String parentTaskId) {
+        if (taskManager == null || parentTaskId == null || parentTaskId.isEmpty()) {
+            return 0L;
+        }
+        long nextSortOrder = 0L;
+        for (Task task : taskManager.getAllTasks()) {
+            if (task == null || !parentTaskId.equals(task.getParentTaskId())) {
+                continue;
+            }
+            nextSortOrder = Math.max(nextSortOrder, task.getSubtaskSortOrder() + 1L);
+        }
+        return nextSortOrder;
     }
 
     /**
@@ -2113,6 +2426,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             boolean showCloseButton = detailVisible && selectedTask != null;
             detailCloseButton.visible = showCloseButton;
             detailCloseButton.active = showCloseButton;
+        }
+        if (addSubtaskButton != null) {
+            boolean showAddSubtask = detailVisible && shouldShowAddSubtaskButton();
+            addSubtaskButton.visible = showAddSubtask;
+            addSubtaskButton.active = showAddSubtask;
         }
     }
 
@@ -2312,13 +2630,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     private void updateButtonStates() {
         boolean hasSelection = selectedTask != null;
+        List<Task> managedTasks = taskManager == null ? List.of() : taskManager.getAllTasks();
         boolean isCompleted = hasSelection && selectedTask.isCompleted();
-        boolean isAssigned = hasSelection
-                && selectedTask.getAssigneeUuid() != null
-                && !selectedTask.getAssigneeUuid().isEmpty();
+        boolean isAssigned = hasSelection && TaskAssignmentSupport.isAggregatedAssigned(selectedTask, managedTasks);
         Role role = TodoScreenPermissionSupport.getCurrentRole(this.minecraft, currentProject);
         ViewScope scope = TodoScreenPermissionSupport.resolveViewScope(viewMode.name());
-        boolean isAssigneeSelf = hasSelection && TodoScreenPermissionSupport.isCurrentPlayerAssignee(this.minecraft, selectedTask);
+        boolean isAssigneeSelf = hasSelection && TodoScreenPermissionSupport.isCurrentPlayerAssignee(this.minecraft, selectedTask, managedTasks);
         boolean projectMember = TodoScreenPermissionSupport.isCurrentPlayerProjectMember(this.minecraft, currentProject);
         boolean allowMemberCreate = currentProject != null && currentProject.isAllowMemberCreate();
         boolean allowAllPlayersClaimComplete = currentProject != null && currentProject.isAllowAllPlayersClaimComplete();
@@ -2342,6 +2659,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     && PermissionCenter.canPerform(Operation.ASSIGN_OTHERS, role, context);
             assignOthersButton.visible = detailVisible && showAssignOthers;
             assignOthersButton.active = detailVisible && showAssignOthers && hasSelection;
+        }
+        if (addSubtaskButton != null) {
+            boolean showAddSubtask = detailVisible && shouldShowAddSubtaskButton();
+            addSubtaskButton.visible = showAddSubtask;
+            addSubtaskButton.active = showAddSubtask && canAddSubtaskToSelectedParent();
         }
         if (saveButton != null) {
             saveButton.active = !taskSaveInFlight;
@@ -2403,6 +2725,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.high"), canEdit, () -> applyTaskPriority(task, Task.Priority.HIGH)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.medium"), canEdit, () -> applyTaskPriority(task, Task.Priority.MEDIUM)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.low"), canEdit, () -> applyTaskPriority(task, Task.Priority.LOW)));
+        if (task.isTopLevelTask()) {
+            items.add(new ContextMenuItem(
+                    Component.translatable("gui.todolist.subtask.add"),
+                    canAddSubtaskToParent(task),
+                    () -> createSubtaskFromParent(task)
+            ));
+        }
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.delete"), canDelete, () -> deleteTaskFromContextMenu(task)));
         return items;
     }
@@ -2589,6 +2918,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private void persistDirtyTasksInBackground(String operationName, boolean closeAfterSave, boolean savePersonal, boolean saveTeam) {
         Minecraft currentMinecraft = this.minecraft;
+        if (savePersonal) {
+            discardEmptyPlaceholderSubtasksBeforeSave(personalTaskManager, operationName, closeAfterSave);
+        }
+        if (saveTeam) {
+            discardEmptyPlaceholderSubtasksBeforeSave(teamTaskManager, operationName, closeAfterSave);
+        }
         List<Task> personalSnapshot = savePersonal ? copyTasks(personalTaskManager == null ? List.of() : personalTaskManager.getAllTasks()) : List.of();
         List<Task> teamSnapshot = saveTeam ? copyTasks(teamTaskManager == null ? List.of() : teamTaskManager.getAllTasks()) : List.of();
         List<Task> teamBaseSnapshot = saveTeam ? copyTasks(cachedTeamTasksSnapshot) : List.of();
@@ -2624,6 +2959,157 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                             failure
                     ));
                 });
+    }
+
+    /**
+     * 在保存前移除未填写任何内容的子任务占位项，避免空白子任务被持久化。
+     *
+     * @param manager 待清理的任务管理器
+     * @param operationName 当前保存操作名
+     * @param closeAfterSave 保存后是否会关闭当前界面
+     */
+    private void discardEmptyPlaceholderSubtasksBeforeSave(TaskManager manager, String operationName, boolean closeAfterSave) {
+        if (manager == null) {
+            return;
+        }
+        Task selectedBeforeRemoval = selectedTask;
+        Task fallbackParentTask = null;
+        boolean removedSelectedPlaceholder = false;
+        for (Task task : manager.getAllTasks()) {
+            if (!isEmptyPlaceholderSubtask(task)) {
+                continue;
+            }
+            if (shouldPreserveEditingPlaceholderSubtask(task, operationName, closeAfterSave)) {
+                continue;
+            }
+            if (selectedBeforeRemoval != null && Objects.equals(selectedBeforeRemoval.getId(), task.getId())) {
+                String parentTaskId = task.getParentTaskId();
+                fallbackParentTask = parentTaskId == null || parentTaskId.isEmpty() ? null : manager.getTask(parentTaskId);
+                removedSelectedPlaceholder = true;
+            }
+            manager.deleteTask(task.getId());
+        }
+        if (!removedSelectedPlaceholder) {
+            return;
+        }
+        if (fallbackParentTask != null) {
+            selectedTask = fallbackParentTask;
+            selectedPriority = fallbackParentTask.getPriority();
+            detailDraft = createDetailDraft(fallbackParentTask);
+            detailOverlayVisible = true;
+        } else {
+            selectedTask = null;
+            detailDraft = null;
+            detailOverlayVisible = false;
+        }
+        applySearchFilter();
+    }
+
+    /**
+     * 丢弃当前选中的空白子任务占位项，并优先回退到其父任务详情。
+     *
+     * @return true 表示本次确实删除了当前选中的空白子任务
+     */
+    private boolean discardSelectedEmptyPlaceholderSubtask() {
+        if (!isEmptyPlaceholderSubtask(selectedTask)) {
+            return false;
+        }
+        TaskManager manager = resolveManagerForTask(selectedTask);
+        if (manager == null) {
+            return false;
+        }
+        String parentTaskId = selectedTask.getParentTaskId();
+        Task fallbackParentTask = parentTaskId == null || parentTaskId.isEmpty() ? null : manager.getTask(parentTaskId);
+        manager.deleteTask(selectedTask.getId());
+        if (fallbackParentTask != null) {
+            selectedTask = fallbackParentTask;
+            selectedPriority = fallbackParentTask.getPriority();
+            detailDraft = createDetailDraft(fallbackParentTask);
+            detailOverlayVisible = true;
+        } else {
+            selectedTask = null;
+            detailDraft = null;
+            detailOverlayVisible = false;
+        }
+        applySearchFilter();
+        refreshUnsavedStateFromSnapshots();
+        return true;
+    }
+
+    /**
+     * 依据当前任务列表与最近一次已保存快照，重新计算 GUI 未保存状态。
+     */
+    private void refreshUnsavedStateFromSnapshots() {
+        List<Task> currentPersonalTasks = personalTaskManager == null ? List.of() : personalTaskManager.getAllTasks();
+        List<Task> currentTeamTasks = teamTaskManager == null ? List.of() : teamTaskManager.getAllTasks();
+        personalHasUnsavedChanges = !taskSnapshotsEquivalent(currentPersonalTasks, cachedPersonalTasksSnapshot);
+        teamHasUnsavedChanges = !taskSnapshotsEquivalent(currentTeamTasks, cachedTeamTasksSnapshot);
+        hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
+        if (viewMode == ViewMode.PERSONAL) {
+            publishPersonalTasksToHud();
+        }
+        updateButtonStates();
+    }
+
+    /**
+     * 根据任务作用域解析对应的任务管理器。
+     *
+     * @param task 目标任务
+     * @return 对应任务管理器；无法确定时返回 null
+     */
+    private TaskManager resolveManagerForTask(Task task) {
+        if (task == null) {
+            return null;
+        }
+        if (taskManager != null && task.getId() != null && taskManager.getTask(task.getId()) != null) {
+            return taskManager;
+        }
+        if (task.getScope() == Task.Scope.TEAM) {
+            return teamTaskManager;
+        }
+        return personalTaskManager;
+    }
+
+    /**
+     * 判断当前空白子任务是否处于“刚创建且仍在编辑”的自动保存窗口内。
+     * 这种场景下应先保留占位项，避免用户刚点“添加子任务”就被自动保存链路立即删掉。
+     *
+     * @param task 待判断子任务
+     * @param operationName 当前保存操作名
+     * @param closeAfterSave 保存后是否关闭界面
+     * @return true 表示本轮保存应暂时保留该占位子任务
+     */
+    private boolean shouldPreserveEditingPlaceholderSubtask(Task task, String operationName, boolean closeAfterSave) {
+        if (task == null || closeAfterSave || operationName == null || !operationName.startsWith("auto_")) {
+            return false;
+        }
+        return selectedTask != null && Objects.equals(selectedTask.getId(), task.getId());
+    }
+
+    /**
+     * 判断任务是否为尚未填写任何内容的子任务占位项。
+     *
+     * @param task 待判断任务
+     * @return true 表示应在保存前丢弃
+     */
+    private boolean isEmptyPlaceholderSubtask(Task task) {
+        if (task == null || !task.isSubtask()) {
+            return false;
+        }
+        String title = task.getTitle();
+        if (title != null && !title.trim().isEmpty()) {
+            return false;
+        }
+        String description = task.getDescription();
+        if (description != null && !description.trim().isEmpty()) {
+            return false;
+        }
+        for (String tag : task.getTags()) {
+            if (tag != null && !tag.trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -2933,7 +3419,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (orderedTaskIds.size() < 2) {
             return;
         }
-        if (!taskManager.reorderTasks(orderedTaskIds)) {
+        Task anchorTask = reorderedActiveTasks.get(0);
+        boolean changed;
+        if (anchorTask != null && anchorTask.isSubtask()) {
+            // 子任务拖拽前，列表控件已经按同父级顺序更新了同一批任务对象；
+            // 这里仍调用管理器以统一收口父内顺序，但不再依赖返回值判断是否发生变化。
+            taskManager.reorderSubtasks(anchorTask.getParentTaskId(), orderedTaskIds);
+            changed = true;
+        } else {
+            changed = taskManager.reorderTasks(orderedTaskIds);
+        }
+        if (!changed) {
             return;
         }
         if (selectedTask != null && selectedTask.getId() != null) {
@@ -3052,8 +3548,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskToClaim == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
+        List<Task> managedTasks = taskManager == null ? List.of() : taskManager.getAllTasks();
         String validationMessageKey = TodoScreenPermissionSupport.validateClaimTask(
                 taskToClaim,
+                managedTasks,
                 this.minecraft,
                 viewMode.name());
         if (validationMessageKey != null) {
@@ -3142,8 +3640,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskToAbandon == null || this.minecraft == null || this.minecraft.player == null) {
             return;
         }
+        List<Task> managedTasks = taskManager == null ? List.of() : taskManager.getAllTasks();
         String validationMessageKey = TodoScreenPermissionSupport.validateAbandonTask(
                 taskToAbandon,
+                managedTasks,
                 this.minecraft,
                 currentProject,
                 viewMode.name());
@@ -3164,13 +3664,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskToAssign == null || this.minecraft == null) {
             return;
         }
+        List<Task> managedTasks = taskManager == null ? List.of() : taskManager.getAllTasks();
         if (viewMode == ViewMode.PERSONAL) {
             addNotification(Component.translatable("message.todolist.assign_only_team").getString());
+            return;
+        }
+        if (TaskAssignmentSupport.areAllDirectSubtasksAssigned(taskToAssign, managedTasks)) {
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
             return;
         }
         if (!TodoScreenPermissionSupport.canTaskOperationInView(
                 Operation.EDIT_TASK,
                 taskToAssign,
+                managedTasks,
                 this.minecraft,
                 currentProject,
                 viewMode.name()
@@ -3211,8 +3717,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (applyH2GuiSearchFilter()) {
             return;
         }
-        filteredTasks = TodoScreenTaskSupport.applySearchQueryToTasks(searchQuery, baseFilteredTasks);
+        filteredTasks = TodoScreenTaskSupport.buildVisibleTasksForCurrentView(
+                taskManager,
+                currentProject == null ? null : currentProject.getId(),
+                false,
+                currentPriorityFilter,
+                viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                searchQuery
+        );
         if (taskListWidget != null) {
+            taskListWidget.setForcedExpandedParentTaskIds(resolveForcedExpandedParentTaskIds());
             taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
                     this.minecraft,
                     currentProject,
@@ -3252,10 +3767,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             Integer h2CompletedTotalCount = queryH2GuiTaskCount(true, searchQuery);
             completedTotalCount = h2CompletedTotalCount == null ? completedTasks.size() : h2CompletedTotalCount;
         }
+        List<Task> scopedProjectTasks = buildScopedProjectTasksForTaskPane();
         return TodoScreenTaskSupport.buildTaskPaneSections(
-                activeTasks,
+                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(activeTasks, scopedProjectTasks),
                 activeTotalCount,
-                completedTasks,
+                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(completedTasks, scopedProjectTasks),
                 completedTotalCount,
                 activeExpanded,
                 completedExpanded);
@@ -3321,12 +3837,65 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (taskListWidget == null) {
             return;
         }
+        taskListWidget.setForcedExpandedParentTaskIds(resolveForcedExpandedParentTaskIds());
         taskListWidget.setTaskReorderEnabled(TodoScreenPermissionSupport.canTaskReorderInView(
                 this.minecraft,
                 currentProject,
                 viewMode.name()
         ));
         taskListWidget.setSections(buildTaskPaneSections());
+    }
+
+    /**
+     * 构建任务面板层级展示所需的项目任务范围。
+     * 该范围保留当前项目与视图下的全部任务，用于补齐父任务的直属子任务。
+     *
+     * @return 任务面板层级展示范围
+     */
+    private List<Task> buildScopedProjectTasksForTaskPane() {
+        if (taskManager == null || currentProject == null || currentProject.getId() == null) {
+            return List.of();
+        }
+        return TodoScreenTaskSupport.applyAssignedFilterForView(
+                taskManager.getAllTasks(),
+                currentProject.getId(),
+                viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft)
+        );
+    }
+
+    /**
+     * 解析当前需要在列表中被强制展开的父任务集合。
+     * 搜索命中子任务或当前选中子任务时，会临时展开对应父任务，保证上下文可见。
+     *
+     * @return 当前需要强制展开的父任务 ID 集合
+     */
+    private Set<String> resolveForcedExpandedParentTaskIds() {
+        Set<String> parentTaskIds = new LinkedHashSet<>();
+        List<Task> scopedProjectTasks = buildScopedProjectTasksForTaskPane();
+        List<Task> activeTasks = filteredTasks == null ? List.of() : List.copyOf(filteredTasks);
+        List<Task> completedTasks = TodoScreenTaskSupport.buildCompletedTasksForCurrentView(
+                taskManager,
+                currentProject == null ? null : currentProject.getId(),
+                currentPriorityFilter,
+                viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                searchQuery
+        );
+        parentTaskIds.addAll(TodoScreenTaskSupport.collectAutoExpandedParentTaskIdsForSearch(
+                searchQuery,
+                activeTasks,
+                scopedProjectTasks
+        ));
+        parentTaskIds.addAll(TodoScreenTaskSupport.collectAutoExpandedParentTaskIdsForSearch(
+                searchQuery,
+                completedTasks,
+                scopedProjectTasks
+        ));
+        if (selectedTask != null && selectedTask.isSubtask() && selectedTask.getParentTaskId() != null) {
+            parentTaskIds.add(selectedTask.getParentTaskId());
+        }
+        return parentTaskIds;
     }
 
     /**
@@ -3507,6 +4076,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private void switchView(ViewMode mode) {
         if (mode != null && mode != this.viewMode) {
+            discardSelectedEmptyPlaceholderSubtask();
             triggerAutoSaveIfNeeded("auto_switch_view", false);
         }
         this.viewMode = mode;

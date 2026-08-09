@@ -7,6 +7,9 @@ import com.todolist.permission.PermissionCenter.Role;
 import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.project.Project;
 import com.todolist.task.Task;
+import com.todolist.task.TaskAssignmentSupport;
+
+import java.util.List;
 
 import net.minecraft.client.Minecraft;
 
@@ -21,7 +24,14 @@ final class TodoScreenPermissionSupport {
     }
 
     static boolean isCurrentPlayerAssignee(Minecraft minecraft, Task task) {
+        return isCurrentPlayerAssignee(minecraft, task, List.of());
+    }
+
+    static boolean isCurrentPlayerAssignee(Minecraft minecraft, Task task, List<Task> allTasks) {
         if (task == null || minecraft == null || minecraft.player == null) {
+            return false;
+        }
+        if (TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)) {
             return false;
         }
         String uuid = minecraft.player.getUUID().toString();
@@ -69,6 +79,7 @@ final class TodoScreenPermissionSupport {
 
     static boolean canTaskOperation(Operation operation,
                                     Task task,
+                                    List<Task> allTasks,
                                     Role role,
                                     ViewScope scope,
                                     boolean projectMember,
@@ -78,7 +89,7 @@ final class TodoScreenPermissionSupport {
             return false;
         }
         boolean isCompleted = task.isCompleted();
-        boolean isAssigned = task.getAssigneeUuid() != null && !task.getAssigneeUuid().isEmpty();
+        boolean isAssigned = TaskAssignmentSupport.isAggregatedAssigned(task, allTasks);
         Context context = new Context(
                 scope,
                 isCompleted,
@@ -156,26 +167,39 @@ final class TodoScreenPermissionSupport {
 
     static boolean canTaskOperationInView(Operation operation,
                                           Task task,
+                                          List<Task> allTasks,
                                           Minecraft minecraft,
                                           Project currentProject,
                                           String viewModeName) {
         return canTaskOperation(
                 operation,
                 task,
+                allTasks,
                 getCurrentRole(minecraft, currentProject),
                 resolveViewScope(viewModeName),
                 isCurrentPlayerProjectMember(minecraft, currentProject),
-                isCurrentPlayerAssignee(minecraft, task),
+                isCurrentPlayerAssignee(minecraft, task, allTasks),
                 currentProject != null && currentProject.isAllowAllPlayersClaimComplete()
         );
     }
 
-    static String validateClaimTask(Task task, Minecraft minecraft, String viewModeName) {
+    static boolean canTaskOperationInView(Operation operation,
+                                          Task task,
+                                          Minecraft minecraft,
+                                          Project currentProject,
+                                          String viewModeName) {
+        return canTaskOperationInView(operation, task, List.of(), minecraft, currentProject, viewModeName);
+    }
+
+    static String validateClaimTask(Task task, List<Task> allTasks, Minecraft minecraft, String viewModeName) {
         if (task == null || minecraft == null || minecraft.player == null) {
             return null;
         }
         if ("PERSONAL".equals(viewModeName)) {
             return "message.todolist.assign_only_team";
+        }
+        if (TaskAssignmentSupport.areAllDirectSubtasksAssigned(task, allTasks)) {
+            return "message.todolist.already_assigned";
         }
         String uuid = minecraft.player.getUUID().toString();
         String assignee = task.getAssigneeUuid();
@@ -188,7 +212,12 @@ final class TodoScreenPermissionSupport {
         return null;
     }
 
+    static String validateClaimTask(Task task, Minecraft minecraft, String viewModeName) {
+        return validateClaimTask(task, List.of(), minecraft, viewModeName);
+    }
+
     static String validateAbandonTask(Task task,
+                                      List<Task> allTasks,
                                       Minecraft minecraft,
                                       Project currentProject,
                                       String viewModeName) {
@@ -198,9 +227,16 @@ final class TodoScreenPermissionSupport {
         if ("PERSONAL".equals(viewModeName)) {
             return "message.todolist.assign_only_team";
         }
-        if (!canTaskOperationInView(Operation.ABANDON_TASK, task, minecraft, currentProject, viewModeName)) {
+        if (!canTaskOperationInView(Operation.ABANDON_TASK, task, allTasks, minecraft, currentProject, viewModeName)) {
             return "message.todolist.no_permission_toggle_team";
         }
         return null;
+    }
+
+    static String validateAbandonTask(Task task,
+                                      Minecraft minecraft,
+                                      Project currentProject,
+                                      String viewModeName) {
+        return validateAbandonTask(task, List.of(), minecraft, currentProject, viewModeName);
     }
 }

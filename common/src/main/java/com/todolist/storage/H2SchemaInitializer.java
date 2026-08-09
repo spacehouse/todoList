@@ -19,7 +19,7 @@ import java.util.Map;
  * H2SchemaInitializer 负责创建和升级 M1 schema v1 的表、索引与元数据。
  */
 public final class H2SchemaInitializer {
-    public static final String SCHEMA_VERSION = "1";
+    public static final String SCHEMA_VERSION = "2";
     private static final String COMMENT_KEY_PREFIX = "h2.schema.comment.";
     private static final String[][] TABLE_COMMENTS = {
             {"tasks"},
@@ -37,6 +37,8 @@ public final class H2SchemaInitializer {
             {"tasks", "id"},
             {"tasks", "scope"},
             {"tasks", "project_id"},
+            {"tasks", "parent_task_id"},
+            {"tasks", "subtask_sort_order"},
             {"tasks", "title"},
             {"tasks", "description"},
             {"tasks", "completed"},
@@ -111,11 +113,13 @@ public final class H2SchemaInitializer {
     public void initialize(Connection connection) throws SQLException, H2SchemaUpgradeException {
         try (Statement statement = connection.createStatement()) {
             createTables(statement);
+        }
+        schemaUpgrader.upgradeIfNeeded(connection);
+        try (Statement statement = connection.createStatement()) {
             createIndexes(statement);
             createComments(statement);
             ensureTcpUsers(statement);
         }
-        schemaUpgrader.upgradeIfNeeded(connection);
     }
 
     /**
@@ -132,6 +136,8 @@ public final class H2SchemaInitializer {
                     id VARCHAR(64) NOT NULL,
                     scope VARCHAR(16) NOT NULL,
                     project_id VARCHAR(64),
+                    parent_task_id VARCHAR(64),
+                    subtask_sort_order BIGINT NOT NULL DEFAULT 0,
                     title VARCHAR(512) NOT NULL,
                     description VARCHAR(16384),
                     completed BOOLEAN NOT NULL,
@@ -225,7 +231,10 @@ public final class H2SchemaInitializer {
      */
     private void createIndexes(Statement statement) throws SQLException {
         statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_bucket_order ON tasks(bucket_type, owner_uuid, sort_order, created_at, id)");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_bucket_top_level_order ON tasks(bucket_type, owner_uuid, parent_task_id, sort_order, created_at, id)");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_parent_sort ON tasks(bucket_type, owner_uuid, parent_task_id, subtask_sort_order, created_at, id)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project_completed ON tasks(project_id, completed)");
+        statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project_parent_completed ON tasks(bucket_type, owner_uuid, project_id, parent_task_id, completed)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_tasks_scope_completed_priority ON tasks(scope, completed, priority)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_task_tags_bucket_order ON task_tags(bucket_type, owner_uuid, task_id, sort_order)");
         statement.execute("CREATE INDEX IF NOT EXISTS idx_projects_bucket_order ON projects(bucket_type, sort_order, created_at, id)");

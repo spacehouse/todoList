@@ -3,6 +3,8 @@ package com.todolist.gui;
 import com.todolist.client.ClientTaskStorageHelperTestMain;
 import com.todolist.client.TodoHudRendererTestMain;
 import com.todolist.gui.testsupport.GuiTestSupport;
+import com.todolist.task.TaskCompatibilityTestMain;
+import com.todolist.task.TaskManagerSubtaskTestMain;
 
 /**
  * GUI 自测总入口：串行执行当前已经落地的离线 GUI 自动化测试。
@@ -23,6 +25,9 @@ public final class GuiSystemTestMain {
     public static void main(String[] args) throws Exception {
         GuiTestSupport.bootstrapEnvironment();
         GuiTestSupport.runTestGroup("ClientTaskStorageHelperTestMain", () -> ClientTaskStorageHelperTestMain.main(args));
+        GuiTestSupport.runTestGroup("TaskCompatibilityTestMain", () -> TaskCompatibilityTestMain.main(args));
+        GuiTestSupport.runTestGroup("TaskManagerSubtaskTestMain", () -> TaskManagerSubtaskTestMain.main(args));
+        GuiTestSupport.runTestGroup("TodoScreenTaskSupportTestMain", () -> TodoScreenTaskSupportTestMain.main(args));
         GuiTestSupport.runTestGroup("PersistenceSafetyTestMain", () -> PersistenceSafetyTestMain.main(args));
         GuiTestSupport.runTestGroup("ProjectListWidgetTestMain", () -> ProjectListWidgetTestMain.main(args));
         GuiTestSupport.runTestGroup("TaskListWidgetTestMain", () -> TaskListWidgetTestMain.main(args));

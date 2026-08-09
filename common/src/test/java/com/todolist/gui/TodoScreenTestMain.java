@@ -16,6 +16,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.UUID;
@@ -90,6 +91,8 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreStaleTeamTaskSaveCallback", TodoScreenTestMain::shouldIgnoreStaleTeamTaskSaveCallback);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldIgnoreOlderTeamSyncAfterNewerTeamSaveCompletes", TodoScreenTestMain::shouldIgnoreOlderTeamSyncAfterNewerTeamSaveCompletes);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDifferentiateClaimValidationMessageForSelfAndOthers", TodoScreenTestMain::shouldDifferentiateClaimValidationMessageForSelfAndOthers);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideParentTaskFromTeamUnassignedViewWhenAllSubtasksAssigned", TodoScreenTestMain::shouldHideParentTaskFromTeamUnassignedViewWhenAllSubtasksAssigned);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowParentTaskInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToMe", TodoScreenTestMain::shouldShowParentTaskInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToMe);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowVerticalTeamActionButtonsInTeamDetailDrawer", TodoScreenTestMain::shouldShowVerticalTeamActionButtonsInTeamDetailDrawer);
@@ -114,18 +117,36 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAutoSaveDetailEditsWhenClosingScreen", TodoScreenTestMain::shouldAutoSaveDetailEditsWhenClosingScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMarkUnsavedAfterManualReorder", TodoScreenTestMain::shouldMarkUnsavedAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshPersonalVisibleOrderImmediatelyAfterManualReorder);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshSiblingSubtaskOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshSiblingSubtaskOrderImmediatelyAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder", TodoScreenTestMain::shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskListScrollOffsetWhenSelectingTask", TodoScreenTestMain::shouldKeepTaskListScrollOffsetWhenSelectingTask);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepExpandedTaskListScrollOffsetWhenSelectingAnotherTask", TodoScreenTestMain::shouldKeepExpandedTaskListScrollOffsetWhenSelectingAnotherTask);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMovePromotedTaskAheadOfLowerPriorities", TodoScreenTestMain::shouldMovePromotedTaskAheadOfLowerPriorities);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldMoveDemotedTaskBehindHigherPriorities", TodoScreenTestMain::shouldMoveDemotedTaskBehindHigherPriorities);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange", TodoScreenTestMain::shouldKeepManualOrderInsidePriorityBucketAfterPriorityChange);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldFilterTasksBySearchAndStatus", TodoScreenTestMain::shouldFilterTasksBySearchAndStatus);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldExpandParentWhenSearchMatchesSubtask", TodoScreenTestMain::shouldExpandParentWhenSearchMatchesSubtask);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSelectSubtaskFromExpandedParentRows", TodoScreenTestMain::shouldSelectSubtaskFromExpandedParentRows);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldTrimLongParentTaskContextWithinDetailPanel", TodoScreenTestMain::shouldTrimLongParentTaskContextWithinDetailPanel);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCreateSubtaskFromParentDetailAction", TodoScreenTestMain::shouldCreateSubtaskFromParentDetailAction);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepNewEmptySubtaskWhileAutoSaveRuns", TodoScreenTestMain::shouldKeepNewEmptySubtaskWhileAutoSaveRuns);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenDetailLosesFocus", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenDetailLosesFocus);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenSelectingParentTask", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenSelectingParentTask);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenSelectingAnotherTask", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenSelectingAnotherTask);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenPressingEscape", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenPressingEscape);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardAutoSavedEmptySubtaskWhenPressingEscape", TodoScreenTestMain::shouldDiscardAutoSavedEmptySubtaskWhenPressingEscape);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskBeforeSaving", TodoScreenTestMain::shouldDiscardEmptySubtaskBeforeSaving);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardAutoSavedEmptySubtaskWhenClickingSaveButton", TodoScreenTestMain::shouldDiscardAutoSavedEmptySubtaskWhenClickingSaveButton);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenClickingCancel", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenClickingCancel);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenClickingCancelButton", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenClickingCancelButton);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardAutoSavedEmptySubtaskWhenClickingCancelButton", TodoScreenTestMain::shouldDiscardAutoSavedEmptySubtaskWhenClickingCancelButton);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseH2CompletedCountWhenCompletedSectionCollapsed", TodoScreenTestMain::shouldUseH2CompletedCountWhenCompletedSectionCollapsed);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowUncompleteCompletedTaskInPersonalView", TodoScreenTestMain::shouldAllowUncompleteCompletedTaskInPersonalView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowUncompletedTaskInActiveSectionImmediately", TodoScreenTestMain::shouldShowUncompletedTaskInActiveSectionImmediately);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAllowEnterAddWhileTaskSelected", TodoScreenTestMain::shouldAllowEnterAddWhileTaskSelected);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseClearInputHintsForQuickAddAndDetailFields", TodoScreenTestMain::shouldUseClearInputHintsForQuickAddAndDetailFields);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksAndClearUnsavedState", TodoScreenTestMain::shouldSavePersonalTasksAndClearUnsavedState);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalTasksWhenClickingSaveButton", TodoScreenTestMain::shouldSavePersonalTasksWhenClickingSaveButton);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld", TodoScreenTestMain::shouldKeepPersonalTasksAfterSavingInPublishedLocalWorld);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow", TodoScreenTestMain::shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSavePersonalAndTeamTasksWhenSavingFromTeamViewOnRemoteServer", TodoScreenTestMain::shouldSavePersonalAndTeamTasksWhenSavingFromTeamViewOnRemoteServer);
@@ -142,6 +163,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClearTaskSaveInFlightWhenMinecraftMissing", TodoScreenTestMain::shouldClearTaskSaveInFlightWhenMinecraftMissing);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowNotificationWhenAddingWithoutProject", TodoScreenTestMain::shouldShowNotificationWhenAddingWithoutProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOpenContextMenuAndApplyPriorityAction", TodoScreenTestMain::shouldOpenContextMenuAndApplyPriorityAction);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCreateSubtaskFromParentContextMenuAction", TodoScreenTestMain::shouldCreateSubtaskFromParentContextMenuAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSearchAndAssignPlayerFromAssignScreen", TodoScreenTestMain::shouldSearchAndAssignPlayerFromAssignScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldListOfflineProjectMembersInAssignScreen", TodoScreenTestMain::shouldListOfflineProjectMembersInAssignScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClampAssignDialogScrollOffsetWhenMembersOverflow", TodoScreenTestMain::shouldClampAssignDialogScrollOffsetWhenMembersOverflow);
@@ -918,6 +940,111 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 验证当父任务直属子任务全部已指派后，父任务不应继续出现在团队待分配视图，也不应再允许直接领取或指派。
+     */
+    private static void shouldHideParentTaskFromTeamUnassignedViewWhenAllSubtasksAssigned() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-parent-assigned", "Parent Assigned Team");
+
+        Task fullyAssignedParent = createTeamTask("Fully Assigned Parent", teamProject.getId(), false);
+        Task fullyAssignedChildA = createSubtask("Fully Assigned Child A", fullyAssignedParent, 0L);
+        fullyAssignedChildA.setAssigneeUuid(ALICE_ID.toString());
+        fullyAssignedChildA.setAssigneeName("alice");
+        Task fullyAssignedChildB = createSubtask("Fully Assigned Child B", fullyAssignedParent, 1L);
+        fullyAssignedChildB.setAssigneeUuid(BOB_ID.toString());
+        fullyAssignedChildB.setAssigneeName("bob");
+
+        Task mixedParent = createTeamTask("Mixed Parent", teamProject.getId(), false);
+        Task mixedAssignedChild = createSubtask("Mixed Assigned Child", mixedParent, 0L);
+        mixedAssignedChild.setAssigneeUuid(ALICE_ID.toString());
+        mixedAssignedChild.setAssigneeName("alice");
+        Task mixedUnassignedChild = createSubtask("Mixed Unassigned Child", mixedParent, 1L);
+
+        Task standaloneUnassigned = createTeamTask("Standalone Unassigned", teamProject.getId(), false);
+        restoreTasksToManager(
+                ops.getTeamTaskManager(),
+                List.of(
+                        fullyAssignedParent,
+                        fullyAssignedChildA,
+                        fullyAssignedChildB,
+                        mixedParent,
+                        mixedAssignedChild,
+                        mixedUnassignedChild,
+                        standaloneUnassigned
+                )
+        );
+
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+
+        GuiTestSupport.assertEquals("TEAM_UNASSIGNED", access(screen).getViewModeNameForTest(), "团队项目默认应进入待分配视图");
+        List<String> filteredTitles = access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList();
+        GuiTestSupport.assertFalse(filteredTitles.contains("Fully Assigned Parent"), "直属子任务全部已指派后，父任务不应继续出现在待分配视图");
+        GuiTestSupport.assertTrue(filteredTitles.contains("Mixed Parent"), "仍存在未指派子任务时，父任务应继续保留在待分配视图");
+        GuiTestSupport.assertTrue(filteredTitles.contains("Standalone Unassigned"), "普通未指派父任务仍应保留在待分配视图");
+
+        access(screen).selectTaskForTest(requireTaskByTitle(screen, "Fully Assigned Parent"));
+        GuiTestSupport.assertFalse(access(screen).isClaimButtonActiveForTest(), "直属子任务全部已指派后，父任务不应再允许直接领取");
+        GuiTestSupport.assertFalse(access(screen).isAssignOthersButtonActiveForTest(), "直属子任务全部已指派后，父任务不应再允许直接指派他人");
+
+        int syncCallsBeforeClaim = ops.getReplaceTeamTaskCalls().size();
+        access(screen).triggerClaimTaskForTest();
+        Task parentAfterClaim = requireTaskByTitle(screen, "Fully Assigned Parent");
+        GuiTestSupport.assertNull(parentAfterClaim.getAssigneeUuid(), "直属子任务全部已指派后，父任务不应再写入新的领取人");
+        GuiTestSupport.assertEquals(syncCallsBeforeClaim, ops.getReplaceTeamTaskCalls().size(), "禁止领取的父任务不应触发团队整表同步");
+    }
+
+    /**
+     * 验证团队“我的”视图只会保留与当前玩家存在直属子任务关联的父任务。
+     */
+    private static void shouldShowParentTaskInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToMe() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-parent-mine", "Parent Mine Team");
+
+        Task mixedParent = createTeamTask("Mixed Parent", teamProject.getId(), false);
+        Task myChild = createSubtask("My Child", mixedParent, 0L);
+        myChild.setAssigneeUuid(OWNER_ID.toString());
+        myChild.setAssigneeName("owner");
+        Task aliceChild = createSubtask("Alice Child", mixedParent, 1L);
+        aliceChild.setAssigneeUuid(ALICE_ID.toString());
+        aliceChild.setAssigneeName("alice");
+
+        Task othersOnlyParent = createTeamTask("Others Only Parent", teamProject.getId(), false);
+        Task bobChild = createSubtask("Bob Child", othersOnlyParent, 0L);
+        bobChild.setAssigneeUuid(BOB_ID.toString());
+        bobChild.setAssigneeName("bob");
+
+        Task directMine = createTeamTask("Direct Mine", teamProject.getId(), false);
+        directMine.setAssigneeUuid(OWNER_ID.toString());
+        directMine.setAssigneeName("owner");
+
+        Task nobodyMine = createTeamTask("Nobody Mine", teamProject.getId(), false);
+        restoreTasksToManager(
+                ops.getTeamTaskManager(),
+                List.of(mixedParent, myChild, aliceChild, othersOnlyParent, bobChild, directMine, nobodyMine)
+        );
+
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAssignedViewForTest();
+
+        GuiTestSupport.assertEquals("TEAM_ASSIGNED", access(screen).getViewModeNameForTest(), "应已切换到团队我的视图");
+        GuiTestSupport.assertEquals(
+                List.of("Mixed Parent", "Direct Mine"),
+                access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
+                "团队我的视图应只保留直属子任务中存在我的任务的父任务，以及直接分配给我的普通任务"
+        );
+    }
+
+    /**
      * 验证“领取 -> 指派 -> 服务端回推 -> 放弃”链路中，后续操作仍会作用于任务管理器最新对象。
      */
     private static void shouldKeepTaskMutationsEffectiveAfterAssignFlowResync() {
@@ -1558,6 +1685,66 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 验证子任务拖拽排序后，会立即刷新同父级子任务顺序并同步父内排序号。
+     */
+    private static void shouldRefreshSiblingSubtaskOrderImmediatelyAfterManualReorder() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Top Alpha");
+        addTaskViaInput(screen, "Parent Reorder");
+        Task parent = requireTaskByTitle(screen, "Parent Reorder");
+        Task topAlpha = requireTaskByTitle(screen, "Top Alpha");
+        Task childA = createSubtask("Child A", parent, 0L);
+        Task childB = createSubtask("Child B", parent, 1L);
+        access(screen).addTaskToManagerForTest(childA);
+        access(screen).addTaskToManagerForTest(childB);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "拖拽前应先处于已保存状态");
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+
+        int interactX = widget.getInteractXForTest(childB.getId());
+        int startY = widget.getTaskRowCenterYForTest(childB.getId());
+        int targetY = widget.getTaskRowCenterYForTest(childA.getId()) - widget.getTaskItemHeightForTest() / 2;
+
+        widget.armPendingTaskDrag(childB, "active", interactX, startY);
+        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        GuiTestSupport.assertTrue(widget.isTaskDraggingForTest(), "拖拽子任务时应进入列表拖拽态");
+        screen.mouseReleased(interactX, targetY, 0);
+
+        Task refreshedParent = requireTaskByTitle(screen, "Parent Reorder");
+        Task refreshedTopAlpha = requireTaskByTitle(screen, "Top Alpha");
+        Task refreshedChildA = requireTaskByTitle(screen, "Child A");
+        Task refreshedChildB = requireTaskByTitle(screen, "Child B");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "拖拽子任务后应标记为未保存");
+        GuiTestSupport.assertTrue(
+                refreshedChildB.getSubtaskSortOrder() < refreshedChildA.getSubtaskSortOrder(),
+                "拖拽子任务后应同步更新同父级子任务的父内排序号"
+        );
+        GuiTestSupport.assertEquals(
+                List.of(
+                        "HEADER:v 未完成（4）",
+                        "TASK:" + topAlpha.getId(),
+                        "TASK:" + refreshedParent.getId(),
+                        "SUBTASK:" + refreshedChildB.getId(),
+                        "SUBTASK:" + refreshedChildA.getId(),
+                        "HEADER:> 已完成（0）"
+                ),
+                access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest(),
+                "拖拽子任务后当前列表应立即刷新为新的同父级顺序"
+        );
+        GuiTestSupport.assertEquals(topAlpha.getId(), refreshedTopAlpha.getId(), "顶层任务引用应保持稳定，避免与子任务排序混排");
+    }
+
+    /**
      * 验证团队任务拖拽排序后，当前可见列表会立即刷新为最新顺序。
      */
     private static void shouldRefreshTeamVisibleOrderImmediatelyAfterManualReorder() {
@@ -1616,6 +1803,49 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertEquals(previousOffset, access(screen).getTaskListWidgetForTest().getScrollOffsetForTest(), "点击任务后应保持原有滚动偏移");
         GuiTestSupport.assertEquals(targetTask.getId(), access(screen).getSelectedTaskForTest().getId(), "点击任务后仍应正确选中目标任务");
+    }
+
+    /**
+     * 验证父任务展开后点击其他任务时，任务列表会保留原有滚动偏移。
+     */
+    private static void shouldKeepExpandedTaskListScrollOffsetWhenSelectingAnotherTask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Anchor Task");
+        addTaskViaInput(screen, "Expanded Parent");
+        Task parent = requireTaskByTitle(screen, "Expanded Parent");
+        for (int index = 0; index < 8; index++) {
+            access(screen).addTaskToManagerForTest(createSubtask("Child " + index, parent, index));
+        }
+        for (int index = 0; index < 8; index++) {
+            addTaskViaInput(screen, "Tail Task " + index);
+        }
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+
+        Task targetTask = requireTaskByTitle(screen, "Tail Task 7");
+        widget.ensureVisible(targetTask);
+        int previousOffset = widget.getScrollOffsetForTest();
+        GuiTestSupport.assertTrue(previousOffset > 0, "展开父任务后测试前应先滚动到非顶部位置");
+        GuiTestSupport.assertTrue(previousOffset > 2, "展开父任务后滚动偏移应足够大，才能覆盖恢复顺序导致的裁剪问题");
+
+        int clickX = widget.getInteractXForTest(targetTask.getId());
+        int clickY = widget.getTaskRowCenterYForTest(targetTask.getId());
+        int[] listBounds = widget.getBoundsForTest();
+        GuiTestSupport.assertTrue(clickY >= listBounds[1] && clickY < listBounds[1] + listBounds[3], "目标任务在点击前应位于当前可视区域内");
+
+        screen.mouseClicked(clickX, clickY, 0);
+        screen.mouseReleased(clickX, clickY, 0);
+
+        GuiTestSupport.assertEquals(previousOffset, access(screen).getTaskListWidgetForTest().getScrollOffsetForTest(), "展开父任务后点击其他任务应保持原有滚动偏移");
+        GuiTestSupport.assertEquals(targetTask.getId(), access(screen).getSelectedTaskForTest().getId(), "展开父任务后点击其他任务仍应正确选中目标任务");
     }
 
     /**
@@ -1770,6 +2000,419 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 验证搜索命中子任务时，任务列表会保留父任务并自动展开对应父任务。
+     */
+    private static void shouldExpandParentWhenSearchMatchesSubtask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Parent Alpha");
+        Task parent = requireTaskByTitle(screen, "Parent Alpha");
+        Task child = createSubtask("Child Gear", parent, 0L);
+        access(screen).addTaskToManagerForTest(child);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        ScreenDriver.setText(access(screen).getSearchFieldForTest(), "gear");
+
+        List<String> rows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
+        GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "搜索命中子任务时顶层过滤结果仍应只保留父任务");
+        GuiTestSupport.assertEquals(parent.getId(), access(screen).getFilteredTasksForTest().get(0).getId(), "搜索命中子任务时应返回父任务作为上下文");
+        GuiTestSupport.assertTrue(rows.contains("TASK:" + parent.getId()), "搜索命中子任务时父任务行应继续可见");
+        GuiTestSupport.assertTrue(rows.contains("SUBTASK:" + child.getId()), "搜索命中子任务时应自动展开并显示命中的子任务行");
+    }
+
+    /**
+     * 验证展开父任务后可直接选中子任务，并把详情区切换到子任务内容。
+     */
+    private static void shouldSelectSubtaskFromExpandedParentRows() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Parent Beta");
+        Task parent = requireTaskByTitle(screen, "Parent Beta");
+        Task child = createSubtask("Child Panel", parent, 0L);
+        access(screen).addTaskToManagerForTest(child);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+        int childRowCenterY = widget.getTaskRowCenterYForTest(child.getId());
+        int childInteractX = widget.getInteractXForTest(child.getId());
+        screen.mouseClicked(childInteractX, childRowCenterY, 0);
+        screen.mouseReleased(childInteractX, childRowCenterY, 0);
+
+        GuiTestSupport.assertEquals(child.getId(), access(screen).getSelectedTaskForTest().getId(), "点击子任务行后应切换为子任务选中态");
+        GuiTestSupport.assertEquals("Child Panel", access(screen).getTitleFieldForTest().getValue(), "选中子任务后详情标题应切换为子任务标题");
+        String parentContextText = access(screen).getSelectedTaskParentContextTextForTest();
+        int[] descBounds = access(screen).getDescFieldBoundsForTest();
+        GuiTestSupport.assertTrue(!parentContextText.isEmpty(), "选中子任务后详情区应显示所属父任务上下文");
+        GuiTestSupport.assertTrue(minecraft.font.width(parentContextText) <= descBounds[2], "选中子任务后所属父任务上下文应限制在详情区可用宽度内");
+    }
+
+    /**
+     * 验证子任务所属主任务名称过长时，详情区会按可用宽度裁剪文本，避免超出屏幕。
+     */
+    private static void shouldTrimLongParentTaskContextWithinDetailPanel() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 220, 180);
+        String parentTitle = "这是一个非常非常非常非常非常非常长的父任务标题用于验证详情区所属主任务文案会自动裁剪";
+        addTaskViaInput(screen, parentTitle);
+        Task parent = requireTaskByTitle(screen, parentTitle);
+        Task child = createSubtask("Child Overflow", parent, 0L);
+        access(screen).addTaskToManagerForTest(child);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        access(screen).selectTaskForTest(child);
+
+        String displayedText = access(screen).getSelectedTaskParentContextTextForTest();
+        String fullText = Component.translatable("gui.todolist.label.parent_task", parentTitle).getString();
+        int[] descBounds = access(screen).getDescFieldBoundsForTest();
+
+        GuiTestSupport.assertTrue(minecraft.font.width(fullText) > descBounds[2], "前置条件应成立：完整所属主任务文本宽度必须超过详情区可用宽度");
+        GuiTestSupport.assertTrue(!displayedText.isEmpty(), "父任务上下文文本不应为空");
+        GuiTestSupport.assertTrue(minecraft.font.width(displayedText) <= descBounds[2], "父任务上下文文本应被裁剪到详情区可用宽度内");
+        GuiTestSupport.assertTrue(!displayedText.equals(fullText), "父任务上下文文本过长时应显示裁剪后的内容");
+    }
+
+    /**
+     * 验证父任务详情区的“添加子任务”入口会创建并选中新子任务，并切入标题编辑。
+     */
+    private static void shouldCreateSubtaskFromParentDetailAction() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Parent Gamma");
+        Task parent = requireTaskByTitle(screen, "Parent Gamma");
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int clickX = widget.getInteractXForTest(parent.getId());
+        int clickY = widget.getTaskRowCenterYForTest(parent.getId());
+        screen.mouseClicked(clickX, clickY, 0);
+        screen.mouseReleased(clickX, clickY, 0);
+
+        GuiTestSupport.assertTrue(access(screen).isAddSubtaskButtonVisibleForTest(), "选中父任务后详情区应显示添加子任务入口");
+        int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
+        int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
+        int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
+        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
+        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+
+        Task selected = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "点击添加子任务后应选中新建的子任务");
+        GuiTestSupport.assertEquals(parent.getId(), selected.getParentTaskId(), "新子任务应挂载到当前父任务下");
+        GuiTestSupport.assertEquals(parent.getProjectId(), selected.getProjectId(), "新子任务应继承父任务项目");
+        GuiTestSupport.assertEquals(parent.getScope(), selected.getScope(), "新子任务应继承父任务作用域");
+        GuiTestSupport.assertTrue(access(screen).isDetailTitleEditableForTest(), "创建子任务后应自动进入标题编辑状态");
+        GuiTestSupport.assertEquals("", access(screen).getTitleFieldForTest().getValue(), "新子任务标题应初始化为空，等待用户输入");
+
+        boolean containsCreatedSubtask = false;
+        for (String row : access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest()) {
+            if (row.equals("SUBTASK:" + selected.getId())) {
+                containsCreatedSubtask = true;
+                break;
+            }
+        }
+        GuiTestSupport.assertTrue(containsCreatedSubtask, "新建子任务后父任务应自动展开并显示子任务行");
+        GuiTestSupport.assertEquals(2, access(screen).getManagedTasksForTest().size(), "创建子任务后当前任务管理器中应新增一条任务");
+    }
+
+    /**
+     * 验证开启自动保存时，刚创建且仍在编辑中的空白子任务不会被立即清理，
+     * 但也不会被自动保存提前落盘。
+     */
+    private static void shouldKeepNewEmptySubtaskWhileAutoSaveRuns() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        ModConfig.getInstance().setAutoSave(true);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Parent Auto Save Child");
+        Task parent = requireTaskByTitle(screen, "Parent Auto Save Child");
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int clickX = widget.getInteractXForTest(parent.getId());
+        int clickY = widget.getTaskRowCenterYForTest(parent.getId());
+        screen.mouseClicked(clickX, clickY, 0);
+        screen.mouseReleased(clickX, clickY, 0);
+
+        int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
+        int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
+        int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
+        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
+        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        Task selected = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "自动保存后仍应保留刚创建的空白子任务供继续编辑");
+        GuiTestSupport.assertEquals(parent.getId(), selected.getParentTaskId(), "自动保存后子任务仍应挂在原父任务下");
+        GuiTestSupport.assertTrue(access(screen).isDetailTitleEditableForTest(), "自动保存后仍应保持标题编辑状态");
+        GuiTestSupport.assertEquals(2, access(screen).getManagedTasksForTest().size(), "自动保存期间不应提前删除空白子任务占位项");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "空白子任务占位项不应被自动保存提前清掉未保存状态");
+    }
+
+    /**
+     * 验证空白子任务在详情区失焦后会被直接丢弃。
+     */
+    private static void shouldDiscardEmptySubtaskWhenDetailLosesFocus() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Blur Empty Child");
+
+        int[] detailBounds = access(screen).getDetailPanelBoundsForTest();
+        int[] titleBounds = access(screen).getDetailTitleFieldBoundsForTest();
+        int[] descBounds = access(screen).getDescFieldBoundsForTest();
+        int blankX = detailBounds[0] + 10;
+        int blankY = Math.min(detailBounds[1] + detailBounds[3] - 10, titleBounds[1] + titleBounds[3] + 4);
+        if (blankY >= descBounds[1]) {
+            blankY = descBounds[1] - 4;
+        }
+
+        screen.mouseClicked(blankX, blankY, 0);
+
+        assertOnlyParentTaskRemains(screen, parent, "详情区失焦后应直接丢弃空白子任务");
+        GuiTestSupport.assertEquals(parent.getId(), access(screen).getSelectedTaskForTest().getId(), "失焦后详情区应回退到父任务");
+    }
+
+    /**
+     * 验证点击父任务切换选中时，会先丢弃当前空白子任务。
+     */
+    private static void shouldDiscardEmptySubtaskWhenSelectingParentTask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 420, 250);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Select Self Empty Child");
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int parentClickX = widget.getInteractXForTest(parent.getId());
+        int parentClickY = widget.getTaskRowCenterYForTest(parent.getId());
+        screen.mouseClicked(parentClickX, parentClickY, 0);
+        screen.mouseReleased(parentClickX, parentClickY, 0);
+
+        assertOnlyParentTaskRemains(screen, parent, "点击父任务后应先清理当前空白子任务");
+        GuiTestSupport.assertEquals(parent.getId(), access(screen).getSelectedTaskForTest().getId(), "点击父任务后应选中父任务");
+    }
+
+    /**
+     * 验证点击其他任务切换选中时，会先丢弃当前空白子任务。
+     */
+    private static void shouldDiscardEmptySubtaskWhenSelectingAnotherTask() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        GuiTestSupport.initScreen(minecraft, screen, 420, 250);
+        addTaskViaInput(screen, "Sibling Select Other");
+        Task sibling = requireTaskByTitle(screen, "Sibling Select Other");
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Select Other Empty Child");
+
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int siblingClickX = widget.getInteractXForTest(sibling.getId());
+        int siblingClickY = widget.getTaskRowCenterYForTest(sibling.getId());
+        screen.mouseClicked(siblingClickX, siblingClickY, 0);
+        screen.mouseReleased(siblingClickX, siblingClickY, 0);
+
+        GuiTestSupport.assertEquals(2, access(screen).getManagedTasksForTest().size(), "点击其他任务后应只保留父任务和目标任务");
+        GuiTestSupport.assertTrue(
+                access(screen).getManagedTasksForTest().stream().noneMatch(task -> task.isSubtask() && parent.getId().equals(task.getParentTaskId())),
+                "点击其他任务后空白子任务应被移除"
+        );
+        GuiTestSupport.assertEquals(sibling.getId(), access(screen).getSelectedTaskForTest().getId(), "点击其他任务后应选中目标任务");
+    }
+
+    /**
+     * 验证空白子任务在按 Esc 关闭界面时会被丢弃，不会残留到已保存数据。
+     */
+    private static void shouldDiscardEmptySubtaskWhenPressingEscape() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Empty Child");
+
+        screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "按 Esc 后应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "按 Esc 退出后不应保留空白子任务");
+    }
+
+    /**
+     * 验证自动保存窗口结束后，按 Esc 仍会清理空白子任务。
+     */
+    private static void shouldDiscardAutoSavedEmptySubtaskWhenPressingEscape() {
+        GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Persisted Empty Child");
+        waitForTaskSaveToFinish(screen);
+
+        screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "自动保存窗口结束后按 Esc 也应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "自动保存窗口结束后按 Esc 不应保留空白子任务");
+    }
+
+    /**
+     * 验证通过详情区新增但未输入标题的空子任务不会被保存下来。
+     */
+    private static void shouldDiscardEmptySubtaskBeforeSaving() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Empty Child");
+
+        access(screen).saveTasksForTest();
+        waitForTaskSaveToFinish(screen);
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+
+        assertOnlyParentTaskRemains(screen, parent, "空标题子任务在保存后不应继续保留");
+    }
+
+    /**
+     * 验证自动保存窗口结束后，真实点击底部保存按钮仍会清理空白子任务。
+     */
+    private static void shouldDiscardAutoSavedEmptySubtaskWhenClickingSaveButton() {
+        GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Save Persisted Empty Child");
+        waitForTaskSaveToFinish(screen);
+
+        int[] saveBounds = access(screen).getSaveButtonBoundsForTest();
+        int saveCenterX = saveBounds[0] + saveBounds[2] / 2;
+        int saveCenterY = saveBounds[1] + saveBounds[3] / 2;
+        screen.mouseClicked(saveCenterX, saveCenterY, 0);
+        screen.mouseReleased(saveCenterX, saveCenterY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部保存按钮后应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "自动保存窗口结束后点击保存不应保留空白子任务");
+    }
+
+    /**
+     * 验证执行取消关闭语义时，空白子任务不会继续保留。
+     */
+    private static void shouldDiscardEmptySubtaskWhenClickingCancel() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Cancel Empty Child");
+
+        screen.onClose();
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击取消后应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "点击取消后不应保留空白子任务");
+    }
+
+    /**
+     * 验证底部取消按钮真实点击时，也会执行取消关闭语义并丢弃空白子任务。
+     */
+    private static void shouldDiscardEmptySubtaskWhenClickingCancelButton() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Cancel Button Empty Child");
+
+        int[] cancelBounds = access(screen).getCancelButtonBoundsForTest();
+        int cancelCenterX = cancelBounds[0] + cancelBounds[2] / 2;
+        int cancelCenterY = cancelBounds[1] + cancelBounds[3] / 2;
+        screen.mouseClicked(cancelCenterX, cancelCenterY, 0);
+        screen.mouseReleased(cancelCenterX, cancelCenterY, 0);
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部取消按钮后应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "点击底部取消按钮后不应保留空白子任务");
+    }
+
+    /**
+     * 验证自动保存窗口结束后，真实点击底部取消按钮仍会清理空白子任务。
+     */
+    private static void shouldDiscardAutoSavedEmptySubtaskWhenClickingCancelButton() {
+        GuiTestSupport.resetState();
+        ModConfig.getInstance().setAutoSave(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Cancel Persisted Empty Child");
+        waitForTaskSaveToFinish(screen);
+
+        int[] cancelBounds = access(screen).getCancelButtonBoundsForTest();
+        int cancelCenterX = cancelBounds[0] + cancelBounds[2] / 2;
+        int cancelCenterY = cancelBounds[1] + cancelBounds[3] / 2;
+        screen.mouseClicked(cancelCenterX, cancelCenterY, 0);
+        screen.mouseReleased(cancelCenterX, cancelCenterY, 0);
+
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部取消按钮后应关闭当前待办界面");
+        access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        assertOnlyParentTaskRemains(screen, parent, "自动保存窗口结束后点击取消不应保留空白子任务");
+    }
+
+    /**
      * 验证 H2 后端下已完成分组收起时只显示总数，展开后再加载具体已完成任务。
      */
     private static void shouldUseH2CompletedCountWhenCompletedSectionCollapsed() {
@@ -1795,12 +2438,21 @@ public final class TodoScreenTestMain {
         access(screen).saveTasksForTest();
         waitForTaskSaveToFinish(screen);
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
+        access(screen).clearSelectedTaskForTest();
+        if (access(screen).isCompletedSectionExpandedForTest()) {
+            access(screen).toggleCompletedSectionForTest();
+        }
 
         List<String> collapsedRows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
-        GuiTestSupport.assertEquals(3, collapsedRows.size(), "H2 已完成分组收起时应只显示两个标题和一条未完成任务");
-        GuiTestSupport.assertEquals("TASK:" + active.getId(), collapsedRows.get(1), "H2 收起时未完成任务仍应显示");
-        GuiTestSupport.assertTrue(collapsedRows.get(2).startsWith("HEADER:"), "H2 收起时最后一行应为已完成标题");
-        GuiTestSupport.assertTrue(collapsedRows.get(2).contains("3"), "H2 收起时已完成标题应显示 SQL 统计总数");
+        GuiTestSupport.assertEquals(
+                List.of(
+                        "HEADER:v 未完成（1）",
+                        "TASK:" + active.getId(),
+                        "HEADER:> 已完成（3）"
+                ),
+                collapsedRows,
+                "H2 已完成分组收起时应只显示两个标题和一条未完成任务"
+        );
 
         access(screen).toggleCompletedSectionForTest();
 
@@ -1938,6 +2590,33 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "保存后应清除未保存状态");
         GuiTestSupport.assertEquals(1, minecraft.getTestPlayerMessages().size(), "保存成功后应给玩家发送一条提示消息");
         GuiTestSupport.assertNotNull(minecraft.getLastScreen(), "保存后应返回父界面");
+    }
+
+    /**
+     * 验证真实点击底部保存按钮时，也会执行保存并关闭界面。
+     */
+    private static void shouldSavePersonalTasksWhenClickingSaveButton() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Screen parentScreen = ScreenDriver.createParentScreen("parent");
+        TodoScreen screen = new TodoScreen(parentScreen);
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Alpha");
+
+        int[] saveBounds = access(screen).getSaveButtonBoundsForTest();
+        int saveCenterX = saveBounds[0] + saveBounds[2] / 2;
+        int saveCenterY = saveBounds[1] + saveBounds[3] / 2;
+        screen.mouseClicked(saveCenterX, saveCenterY, 0);
+        screen.mouseReleased(saveCenterX, saveCenterY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "点击底部保存按钮后应向桥接层发送整表替换");
+        GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "点击底部保存按钮后应清除未保存状态");
+        GuiTestSupport.assertEquals(1, minecraft.getTestPlayerMessages().size(), "点击底部保存按钮成功后应给玩家发送一条提示消息");
+        GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部保存按钮后应返回父界面");
     }
 
     /**
@@ -2136,7 +2815,7 @@ public final class TodoScreenTestMain {
         access(screen).selectTaskForTest(task);
         access(screen).openTaskContextMenuForTest(task);
         GuiTestSupport.assertTrue(access(screen).hasContextMenuForTest(), "打开上下文菜单后应处于菜单打开状态");
-        GuiTestSupport.assertEquals(4, access(screen).getContextMenuItemTextsForTest().size(), "上下文菜单应包含四个操作项");
+        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含优先级、添加子任务和删除操作");
 
         access(screen).clickContextMenuItemForTest(0);
 
@@ -2144,6 +2823,33 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, ops.getUpdateTaskCalls().size(), "通过上下文菜单修改优先级后应发送更新请求");
         GuiTestSupport.assertFalse(access(screen).hasContextMenuForTest(), "执行上下文菜单操作后应关闭菜单");
         GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "通过上下文菜单修改任务后应标记未保存状态");
+    }
+
+    /**
+     * 验证父任务上下文菜单中的“添加子任务”会创建并选中新子任务。
+     */
+    private static void shouldCreateSubtaskFromParentContextMenuAction() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Parent Delta");
+        Task parent = access(screen).getFilteredTasksForTest().get(0);
+
+        access(screen).selectTaskForTest(parent);
+        access(screen).openTaskContextMenuForTest(parent);
+        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含添加子任务入口");
+
+        access(screen).clickContextMenuItemForTest(3);
+
+        Task selected = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "通过上下文菜单添加后应选中新建子任务");
+        GuiTestSupport.assertEquals(parent.getId(), selected.getParentTaskId(), "右键新增的子任务应挂到当前父任务下");
+        GuiTestSupport.assertTrue(access(screen).isDetailTitleEditableForTest(), "通过上下文菜单创建子任务后应进入标题编辑");
+        GuiTestSupport.assertFalse(access(screen).hasContextMenuForTest(), "执行上下文菜单操作后应关闭菜单");
     }
 
     /**
@@ -2493,6 +3199,26 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 基于父任务构造一条测试子任务，继承项目与作用域上下文。
+     *
+     * @param title 子任务标题
+     * @param parent 父任务
+     * @param subtaskSortOrder 父内顺序
+     * @return 测试子任务
+     */
+    private static Task createSubtask(String title, Task parent, long subtaskSortOrder) {
+        Task task = new Task(title, "");
+        task.setProjectId(parent == null ? null : parent.getProjectId());
+        task.setScope(parent == null ? Task.Scope.PERSONAL : parent.getScope());
+        task.setCreatorUuid(parent == null ? null : parent.getCreatorUuid());
+        task.setAssigneeUuid(parent == null ? null : parent.getAssigneeUuid());
+        task.setAssigneeName(parent == null ? null : parent.getAssigneeName());
+        task.setParentTaskId(parent == null ? null : parent.getId());
+        task.setSubtaskSortOrder(subtaskSortOrder);
+        return task;
+    }
+
+    /**
      * 将源任务拖拽到目标任务之前，用于校验任务列表的手动排序逻辑。
      *
      * @param screen 目标界面
@@ -2522,7 +3248,7 @@ public final class TodoScreenTestMain {
      */
     private static Screen openDeleteTaskConfirmScreen(FakeMinecraftClient minecraft, TodoScreen screen, Task task) {
         access(screen).openTaskContextMenuForTest(task);
-        access(screen).clickContextMenuItemForTest(3);
+        access(screen).clickLastContextMenuItemForTest();
         Screen confirmScreen = minecraft.getLastScreen();
         GuiTestSupport.assertNotNull(confirmScreen, "点击删除后应弹出确认窗口");
         GuiTestSupport.assertTrue(confirmScreen instanceof ConfirmActionScreen, "点击删除后应打开任务删除确认弹窗");
@@ -3260,6 +3986,51 @@ public final class TodoScreenTestMain {
 
     private static Task copyTask(Task task) {
         return task == null ? null : Task.fromNbt(task.toNbt());
+    }
+
+    /**
+     * 通过详情区按钮创建一个空白子任务，并返回其父任务。
+     *
+     * @param screen 目标界面
+     * @param parentTitle 父任务标题
+     * @return 父任务
+     */
+    private static Task createEmptySubtaskViaDetailButton(TodoScreen screen, String parentTitle) {
+        boolean autoSaveBefore = ModConfig.getInstance().isAutoSave();
+        ModConfig.getInstance().setAutoSave(true);
+        addTaskViaInput(screen, parentTitle);
+        waitForTaskSaveToFinish(screen);
+        ModConfig.getInstance().setAutoSave(autoSaveBefore);
+        Task parent = requireTaskByTitle(screen, parentTitle);
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int clickX = widget.getInteractXForTest(parent.getId());
+        int clickY = widget.getTaskRowCenterYForTest(parent.getId());
+        screen.mouseClicked(clickX, clickY, 0);
+        screen.mouseReleased(clickX, clickY, 0);
+
+        int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
+        int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
+        int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
+        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
+        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+
+        Task selected = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "创建空白子任务后应先进入子任务详情编辑态");
+        GuiTestSupport.assertEquals("", access(screen).getTitleFieldForTest().getValue(), "空白子任务标题应初始化为空");
+        return parent;
+    }
+
+    /**
+     * 断言当前任务管理器中只剩指定父任务。
+     *
+     * @param screen 目标界面
+     * @param parent 预期保留的父任务
+     * @param message 断言提示
+     */
+    private static void assertOnlyParentTaskRemains(TodoScreen screen, Task parent, String message) {
+        List<Task> tasks = access(screen).getManagedTasksForTest();
+        GuiTestSupport.assertEquals(1, tasks.size(), message);
+        GuiTestSupport.assertEquals(parent.getId(), tasks.get(0).getId(), message + "，且保留项应为原父任务");
     }
 
     /**

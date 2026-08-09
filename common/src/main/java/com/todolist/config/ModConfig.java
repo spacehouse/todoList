@@ -192,6 +192,7 @@ public class ModConfig {
         private Integer hudCustomHorizontalMargin;
         private Integer hudCustomVerticalMargin;
         private boolean hudShowWhenEmpty = false;
+        private boolean hudShowSubtasks = true;
         private String hudDefaultView = "PERSONAL";
         private String hudProjectSource = "ALL";
         private List<String> hudStarredProjectIds = new ArrayList<>();
@@ -1080,6 +1081,23 @@ public class ModConfig {
         save();
     }
 
+    /**
+     * 返回 HUD 是否显示子任务行。
+     *
+     * @return true 表示 HUD 会展示子任务行
+     */
+    public boolean isHudShowSubtasks() { return gui.hudShowSubtasks; }
+
+    /**
+     * 设置 HUD 是否显示子任务行。
+     *
+     * @param show true 表示 HUD 展示子任务行
+     */
+    public void setHudShowSubtasks(boolean show) {
+        gui.hudShowSubtasks = show;
+        save();
+    }
+
     public String getHudDefaultView() {
         if (gui.hudDefaultView == null || gui.hudDefaultView.isEmpty()) {
             gui.hudDefaultView = "PERSONAL";
@@ -1397,4 +1415,3 @@ public class ModConfig {
         return value;
     }
 }
-

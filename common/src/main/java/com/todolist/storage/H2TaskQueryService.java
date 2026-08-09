@@ -173,7 +173,7 @@ public final class H2TaskQueryService {
              PreparedStatement statement = connection.prepareStatement("""
                      SELECT project_id, COUNT(*) AS task_count
                      FROM tasks
-                     WHERE bucket_type = ? AND owner_uuid = ? AND project_id IS NOT NULL AND project_id <> ''
+                     WHERE bucket_type = ? AND owner_uuid = ? AND project_id IS NOT NULL AND project_id <> '' AND parent_task_id IS NULL
                      GROUP BY project_id
                      """)) {
             statement.setString(1, bucketType);
@@ -215,6 +215,43 @@ public final class H2TaskQueryService {
             return new HudTaskQueryResult(pending, done, pendingTotal, doneTotal);
         } catch (SQLException exception) {
             throw markUnavailable("Failed to query H2 HUD tasks", exception);
+        }
+    }
+
+    /**
+     * 查询指定父任务下的全部子任务，并按父内顺序返回。
+     *
+     * @param bucketType 任务桶类型
+     * @param ownerUuid 任务桶拥有者
+     * @param parentTaskId 父任务 ID
+     * @return 子任务列表
+     * @throws IOException 查询失败时抛出
+     */
+    public List<Task> querySubtasksByParentTaskId(String bucketType, String ownerUuid, String parentTaskId) throws IOException {
+        if (parentTaskId == null || parentTaskId.isEmpty()) {
+            return List.of();
+        }
+        bootstrap.ensureReady();
+        try (Connection connection = connectionProvider.openConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
+                            due_date, creator_uuid, assignee_uuid, assignee_name
+                     FROM tasks
+                     WHERE bucket_type = ? AND owner_uuid = ? AND parent_task_id = ?
+                     ORDER BY subtask_sort_order, created_at, id
+                     """)) {
+            statement.setString(1, bucketType);
+            statement.setString(2, ownerUuid);
+            statement.setString(3, parentTaskId);
+            List<Task> tasks = new ArrayList<>();
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    tasks.add(readTask(connection, bucketType, ownerUuid, resultSet));
+                }
+            }
+            return tasks;
+        } catch (SQLException exception) {
+            throw markUnavailable("Failed to query H2 subtasks by parent task id", exception);
         }
     }
 
@@ -300,17 +337,16 @@ public final class H2TaskQueryService {
             );
             String limitClause = "";
             if (limit >= 0) {
-                limitClause = "LIMIT ? OFFSET ?";
+                limitClause = "\nLIMIT ? OFFSET ?";
                 queryParts.parameters.add(Math.max(0, limit));
                 queryParts.parameters.add(Math.max(0, offset));
             }
-            try (PreparedStatement statement = connection.prepareStatement("""
-                    SELECT id
-                    FROM tasks
-                    """ + queryParts.whereClause + """
-                    ORDER BY sort_order, created_at, id
-                    """ + limitClause + """
-                    """)) {
+            String sql = "SELECT id\n"
+                    + "FROM tasks\n"
+                    + queryParts.whereClause
+                    + "\nORDER BY sort_order, created_at, id"
+                    + limitClause;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 bindHudQueryParameters(statement, queryParts.parameters);
                 List<String> ids = new ArrayList<>();
                 try (ResultSet resultSet = statement.executeQuery()) {
@@ -429,7 +465,7 @@ public final class H2TaskQueryService {
         QueryParts queryParts = buildHudQueryParts(query, completed);
         queryParts.parameters.add(Math.max(0, limit));
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT id, scope, project_id, title, description, completed, priority, created_at,
+                SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
                        due_date, creator_uuid, assignee_uuid, assignee_name
                 FROM tasks
                 """ + queryParts.whereClause + """
@@ -456,7 +492,7 @@ public final class H2TaskQueryService {
      */
     private QueryParts buildHudQueryParts(HudTaskQuery query, boolean completed) {
         List<Object> parameters = new ArrayList<>();
-        StringBuilder where = new StringBuilder("WHERE bucket_type = ? AND owner_uuid = ? AND completed = ?");
+        StringBuilder where = new StringBuilder("WHERE bucket_type = ? AND owner_uuid = ? AND completed = ? AND parent_task_id IS NULL");
         parameters.add(query.bucketType);
         parameters.add(query.ownerUuid);
         parameters.add(completed);
@@ -507,44 +543,93 @@ public final class H2TaskQueryService {
                                           String assigneeUuid,
                                           String searchQuery) {
         List<Object> parameters = new ArrayList<>();
-        StringBuilder where = new StringBuilder("WHERE bucket_type = ? AND owner_uuid = ? AND project_id = ? AND completed = ?");
+        StringBuilder where = new StringBuilder("WHERE bucket_type = ? AND owner_uuid = ? AND project_id = ? AND completed = ? AND parent_task_id IS NULL");
         parameters.add(bucketType);
         parameters.add(ownerUuid);
         parameters.add(projectId);
         parameters.add(completed);
 
+        String normalizedSearch = normalizeSearchQuery(searchQuery);
+        if (normalizedSearch.isEmpty()) {
+            appendGuiTaskPropertyFilters(where, parameters, "tasks", priorityName, assigneeFilter, assigneeUuid);
+            return new QueryParts(where.toString(), parameters);
+        }
+        String likePattern = "%" + escapeLike(normalizedSearch) + "%";
+        where.append(" AND (1=1");
+        appendGuiTaskPropertyFilters(where, parameters, "tasks", priorityName, assigneeFilter, assigneeUuid);
+        appendGuiTaskTextMatchClause(where, parameters, "tasks", "task_tags", likePattern);
+        where.append("""
+                 OR EXISTS (
+                     SELECT 1 FROM tasks child
+                     WHERE child.bucket_type = tasks.bucket_type
+                       AND child.owner_uuid = tasks.owner_uuid
+                       AND child.parent_task_id = tasks.id
+                       AND child.project_id = tasks.project_id
+                       AND child.completed = ?
+                """);
+        parameters.add(completed);
+        appendGuiTaskPropertyFilters(where, parameters, "child", priorityName, assigneeFilter, assigneeUuid);
+        appendGuiTaskTextMatchClause(where, parameters, "child", "child_tags", likePattern);
+        where.append("\n))");
+        return new QueryParts(where.toString(), parameters);
+    }
+
+    /**
+     * 追加 GUI 任务查询的优先级与指派过滤条件。
+     *
+     * @param where WHERE 子句构建器
+     * @param parameters 参数列表
+     * @param taskAlias 任务表别名
+     * @param priorityName 优先级名称
+     * @param assigneeFilter 指派过滤模式
+     * @param assigneeUuid 当前玩家 UUID
+     */
+    private void appendGuiTaskPropertyFilters(StringBuilder where,
+                                              List<Object> parameters,
+                                              String taskAlias,
+                                              String priorityName,
+                                              HudAssigneeFilter assigneeFilter,
+                                              String assigneeUuid) {
         if (priorityName != null && !priorityName.isEmpty()) {
-            where.append(" AND priority = ?");
+            where.append(" AND ").append(taskAlias).append(".priority = ?");
             parameters.add(priorityName);
         }
         if (assigneeFilter == HudAssigneeFilter.UNASSIGNED) {
-            where.append(" AND (assignee_uuid IS NULL OR assignee_uuid = '')");
+            where.append(" AND (").append(taskAlias).append(".assignee_uuid IS NULL OR ").append(taskAlias).append(".assignee_uuid = '')");
         } else if (assigneeFilter == HudAssigneeFilter.ASSIGNED_TO_PLAYER) {
-            where.append(" AND assignee_uuid = ?");
+            where.append(" AND ").append(taskAlias).append(".assignee_uuid = ?");
             parameters.add(assigneeUuid == null ? "" : assigneeUuid);
         }
+    }
 
-        String normalizedSearch = normalizeSearchQuery(searchQuery);
-        if (!normalizedSearch.isEmpty()) {
-            String likePattern = "%" + escapeLike(normalizedSearch) + "%";
-            where.append("""
-                     AND (
-                         LOWER(title) LIKE ? ESCAPE '\\'
-                         OR LOWER(description) LIKE ? ESCAPE '\\'
-                         OR EXISTS (
-                             SELECT 1 FROM task_tags
-                             WHERE task_tags.bucket_type = tasks.bucket_type
-                               AND task_tags.owner_uuid = tasks.owner_uuid
-                               AND task_tags.task_id = tasks.id
-                               AND LOWER(task_tags.tag) LIKE ? ESCAPE '\\'
-                         )
-                     )
-                    """);
-            parameters.add(likePattern);
-            parameters.add(likePattern);
-            parameters.add(likePattern);
-        }
-        return new QueryParts(where.toString(), parameters);
+    /**
+     * 追加 GUI 搜索文本匹配条件，支持标题、描述与标签。
+     *
+     * @param where WHERE 子句构建器
+     * @param parameters 参数列表
+     * @param taskAlias 任务表别名
+     * @param tagAlias 标签表别名
+     * @param likePattern LIKE 搜索模式
+     */
+    private void appendGuiTaskTextMatchClause(StringBuilder where,
+                                              List<Object> parameters,
+                                              String taskAlias,
+                                              String tagAlias,
+                                              String likePattern) {
+        where.append("\n                 AND (")
+                .append("\n                     LOWER(").append(taskAlias).append(".title) LIKE ? ESCAPE '\\'")
+                .append("\n                     OR LOWER(").append(taskAlias).append(".description) LIKE ? ESCAPE '\\'")
+                .append("\n                     OR EXISTS (")
+                .append("\n                         SELECT 1 FROM task_tags ").append(tagAlias)
+                .append("\n                         WHERE ").append(tagAlias).append(".bucket_type = ").append(taskAlias).append(".bucket_type")
+                .append("\n                           AND ").append(tagAlias).append(".owner_uuid = ").append(taskAlias).append(".owner_uuid")
+                .append("\n                           AND ").append(tagAlias).append(".task_id = ").append(taskAlias).append(".id")
+                .append("\n                           AND LOWER(").append(tagAlias).append(".tag) LIKE ? ESCAPE '\\'")
+                .append("\n                     )")
+                .append("\n                 )");
+        parameters.add(likePattern);
+        parameters.add(likePattern);
+        parameters.add(likePattern);
     }
 
     /**
@@ -625,6 +710,8 @@ public final class H2TaskQueryService {
         taskTag.putString("id", resultSet.getString("id"));
         taskTag.putString("scope", resultSet.getString("scope"));
         putOptionalString(taskTag, "projectId", resultSet.getString("project_id"));
+        putOptionalString(taskTag, "parentTaskId", resultSet.getString("parent_task_id"));
+        taskTag.putLong("subtaskSortOrder", resultSet.getLong("subtask_sort_order"));
         taskTag.putString("title", resultSet.getString("title"));
         putOptionalString(taskTag, "description", resultSet.getString("description"));
         taskTag.putBoolean("completed", resultSet.getBoolean("completed"));

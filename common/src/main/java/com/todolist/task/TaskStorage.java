@@ -334,8 +334,15 @@ public class TaskStorage {
             throw malformedTaskException;
         }
 
-        maybeLogLoadSummary(file, version, lastSaved, tasks.size());
-        return tasks;
+        List<Task> normalizedTasks;
+        try {
+            normalizedTasks = TaskCompatibilityAdapter.normalizeLoadedTasks(tasks);
+        } catch (IllegalStateException exception) {
+            throw new IOException("Failed to normalize legacy subtask data from " + file, exception);
+        }
+
+        maybeLogLoadSummary(file, version, lastSaved, normalizedTasks.size());
+        return normalizedTasks;
     }
 
     /**

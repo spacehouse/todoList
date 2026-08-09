@@ -171,7 +171,10 @@ public final class H2SchemaUpgrader {
      * @return 默认升级步骤列表
      */
     private static List<SchemaUpgradeStep> defaultUpgradeSteps() {
-        return List.of(new NoopUpgradeStep(0, 1));
+        return List.of(
+                new NoopUpgradeStep(0, 1),
+                new TaskSubtaskColumnsUpgradeStep(1, 2)
+        );
     }
 
     /**
@@ -215,6 +218,26 @@ public final class H2SchemaUpgrader {
         public void upgrade(Connection connection) throws SQLException {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("SELECT 1");
+            }
+        }
+    }
+
+    /**
+     * 为 tasks 表补充子任务列，支持从 v1 升级到 v2。
+     */
+    private record TaskSubtaskColumnsUpgradeStep(int fromVersion, int toVersion) implements SchemaUpgradeStep {
+        /**
+         * 执行 tasks 子任务列升级。
+         *
+         * @param connection H2 连接
+         * @throws SQLException SQL 执行失败时抛出
+         */
+        @Override
+        public void upgrade(Connection connection) throws SQLException {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_task_id VARCHAR(64)");
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtask_sort_order BIGINT NOT NULL DEFAULT 0");
+                statement.execute("UPDATE tasks SET subtask_sort_order = 0 WHERE subtask_sort_order IS NULL");
             }
         }
     }

@@ -37,6 +37,7 @@ public final class ConfigScreenTestMain {
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldUpdatePreviewPositionAfterDrag", ConfigScreenTestMain::shouldUpdatePreviewPositionAfterDrag);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistHudSourceAndVisibilityTogether", ConfigScreenTestMain::shouldPersistHudSourceAndVisibilityTogether);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistSafeValuesOnSave", ConfigScreenTestMain::shouldPersistSafeValuesOnSave);
+        GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistHudShowSubtasksToggle", ConfigScreenTestMain::shouldPersistHudShowSubtasksToggle);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldPersistGuiAutoSaveToggle", ConfigScreenTestMain::shouldPersistGuiAutoSaveToggle);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldEnableCustomPreviewAfterDragAndSave", ConfigScreenTestMain::shouldEnableCustomPreviewAfterDragAndSave);
         GuiTestSupport.runTestCase("ConfigScreenTestMain.shouldKeepFixedPreviewHeightWhenActualHudIsTall", ConfigScreenTestMain::shouldKeepFixedPreviewHeightWhenActualHudIsTall);
@@ -167,6 +168,29 @@ public final class ConfigScreenTestMain {
         GuiTestSupport.assertEquals(360, ModConfig.getInstance().getHudMaxHeight(), "非法 HUD 高度应回退到原有安全值");
         GuiTestSupport.assertFalse(ops.isHudVisible(), "保存后应保持当前 HUD 可见状态");
         GuiTestSupport.assertTrue(ops.getHudVisibilityCalls().size() >= 1, "保存流程应同步 HUD 可见状态");
+        GuiTestSupport.assertEquals(parent, minecraft.getLastScreen(), "保存后应返回父界面");
+    }
+
+    /**
+     * 验证 HUD 子任务展示开关会在配置页中正确切换并持久化。
+     */
+    private static void shouldPersistHudShowSubtasksToggle() {
+        GuiTestSupport.resetState();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudShowSubtasks(true);
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        Screen parent = ScreenDriver.createParentScreen("parent");
+        ConfigScreen screen = new ConfigScreen(parent);
+        ScreenDriver.init(minecraft, screen);
+
+        GuiTestSupport.assertTrue(screen.isHudShowSubtasksValueForTest(), "初始化时应回显当前 HUD 子任务展示配置");
+
+        ScreenDriver.click(screen.getHudShowSubtasksButtonForTest());
+        GuiTestSupport.assertFalse(screen.isHudShowSubtasksValueForTest(), "点击后应切换 HUD 子任务展示开关");
+
+        ScreenDriver.click(screen.getSaveButtonForTest());
+
+        GuiTestSupport.assertFalse(ModConfig.getInstance().isHudShowSubtasks(), "保存后应持久化 HUD 子任务展示开关");
         GuiTestSupport.assertEquals(parent, minecraft.getLastScreen(), "保存后应返回父界面");
     }
 

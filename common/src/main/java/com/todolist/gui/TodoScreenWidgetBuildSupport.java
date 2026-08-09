@@ -118,6 +118,7 @@ final class TodoScreenWidgetBuildSupport {
         final EditBox titleField;
         final MultiLineEditBox descField;
         final EditBox tagField;
+        final Button addSubtaskButton;
         final Button claimButton;
         final Button abandonButton;
         final Button assignOthersButton;
@@ -129,6 +130,7 @@ final class TodoScreenWidgetBuildSupport {
                       EditBox titleField,
                       MultiLineEditBox descField,
                       EditBox tagField,
+                      Button addSubtaskButton,
                       Button claimButton,
                       Button abandonButton,
                       Button assignOthersButton) {
@@ -136,6 +138,7 @@ final class TodoScreenWidgetBuildSupport {
             this.titleField = titleField;
             this.descField = descField;
             this.tagField = tagField;
+            this.addSubtaskButton = addSubtaskButton;
             this.claimButton = claimButton;
             this.abandonButton = abandonButton;
             this.assignOthersButton = assignOthersButton;
@@ -362,7 +365,10 @@ final class TodoScreenWidgetBuildSupport {
                                             int rightPanelX,
                                             int rightPanelWidth,
                                             boolean showAssignButtons,
+                                            boolean showAddSubtaskButton,
+                                            boolean showParentTaskContext,
                                             Runnable onDetailCloseClick,
+                                            Runnable onAddSubtaskClick,
                                             Runnable onClaimClick,
                                             Runnable onAbandonClick,
                                             Runnable onAssignOthersClick) {
@@ -394,9 +400,20 @@ final class TodoScreenWidgetBuildSupport {
         titleField.setEditable(false);
 
         int teamButtonsTop = titleFieldY + titleFieldHeight + rightSectionGap;
-        int detailFieldsTop = showAssignButtons
+        int detailActionTop = showAssignButtons
                 ? teamButtonsTop + assignButtonHeight + rightSectionGap
                 : teamButtonsTop;
+        Button addSubtaskButton = Button.builder(Component.translatable("gui.todolist.subtask.add"), b -> onAddSubtaskClick.run())
+                .bounds(assignsX, detailActionTop, rightFieldWidth, assignButtonHeight)
+                .build();
+        addSubtaskButton.visible = showAddSubtaskButton;
+        addSubtaskButton.active = showAddSubtaskButton;
+        int detailFieldsTop = showAddSubtaskButton
+                ? detailActionTop + assignButtonHeight + rightSectionGap
+                : detailActionTop;
+        if (showParentTaskContext) {
+            detailFieldsTop += textH + 4;
+        }
 
         int tagFieldY = rightPanelBottom - rightInnerPadding - 20;
         int descFieldY = detailFieldsTop + textH + 2;
@@ -447,6 +464,7 @@ final class TodoScreenWidgetBuildSupport {
                 titleField,
                 descField,
                 tagField,
+                addSubtaskButton,
                 claimButton,
                 abandonButton,
                 assignOthersButton
