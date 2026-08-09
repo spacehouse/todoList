@@ -87,6 +87,19 @@ public final class TaskAssignmentSupport {
     }
 
     /**
+     * 判断父任务的直属子任务是否全部分配给指定玩家。
+     *
+     * @param task 目标任务
+     * @param allTasks 同一作用域内的任务集合
+     * @param playerUuid 目标玩家 UUID
+     * @return 直属子任务全部分配给指定玩家时返回 true
+     */
+    public static boolean areAllDirectSubtasksAssignedToPlayer(Task task, List<Task> allTasks, String playerUuid) {
+        DirectSubtaskAssignmentState state = inspectDirectSubtasks(task, allTasks, playerUuid);
+        return state.totalCount > 0 && state.assignedToPlayerCount >= state.totalCount;
+    }
+
+    /**
      * 判断任务在团队视图里是否应被视为“已指派”。
      * 对父任务来说，只要直属子任务全部已指派，就不应再作为待分配父任务处理。
      *

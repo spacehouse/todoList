@@ -3310,6 +3310,85 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return taskManager.getTask(taskId);
     }
 
+    /**
+     * 收集目标父任务当前快照中的直属子任务。
+     *
+     * @param parentTask 父任务
+     * @param managedTasks 当前任务快照
+     * @return 按当前顺序返回直属子任务列表
+     */
+    private List<Task> getDirectSubtasksForBatchAction(Task parentTask, List<Task> managedTasks) {
+        if (parentTask == null || managedTasks == null || managedTasks.isEmpty()) {
+            return List.of();
+        }
+        String parentTaskId = parentTask.getId();
+        if (parentTaskId == null || parentTaskId.isBlank()) {
+            return List.of();
+        }
+        List<Task> directSubtasks = new ArrayList<>();
+        for (Task candidate : managedTasks) {
+            if (candidate != null && candidate.isSubtask() && Objects.equals(parentTaskId, candidate.getParentTaskId())) {
+                directSubtasks.add(candidate);
+            }
+        }
+        return directSubtasks;
+    }
+
+    /**
+     * 将领取人应用到任务或其尚未分配的直属子任务。
+     *
+     * @param task 目标任务
+     * @param managedTasks 当前任务快照
+     * @param assigneeUuid 领取人 UUID
+     * @param assigneeName 领取人名称
+     * @return 实际写入领取人的任务数量
+     */
+    private int assignPendingTaskTargets(Task task, List<Task> managedTasks, String assigneeUuid, String assigneeName) {
+        List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
+        if (directSubtasks.isEmpty()) {
+            task.setAssigneeUuid(assigneeUuid);
+            task.setAssigneeName(assigneeName);
+            return 1;
+        }
+        int changedCount = 0;
+        for (Task subtask : directSubtasks) {
+            if (TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
+                continue;
+            }
+            subtask.setAssigneeUuid(assigneeUuid);
+            subtask.setAssigneeName(assigneeName);
+            changedCount++;
+        }
+        return changedCount;
+    }
+
+    /**
+     * 清空任务或其直属子任务上的领取信息。
+     *
+     * @param task 目标任务
+     * @param managedTasks 当前任务快照
+     * @return 实际清空领取人的任务数量
+     */
+    private int clearAssignedTaskTargets(Task task, List<Task> managedTasks) {
+        List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
+        if (directSubtasks.isEmpty()) {
+            boolean wasAssigned = TaskAssignmentSupport.isDirectlyAssigned(task);
+            task.setAssigneeUuid(null);
+            task.setAssigneeName(null);
+            return wasAssigned ? 1 : 0;
+        }
+        int changedCount = 0;
+        for (Task subtask : directSubtasks) {
+            if (!TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
+                continue;
+            }
+            subtask.setAssigneeUuid(null);
+            subtask.setAssigneeName(null);
+            changedCount++;
+        }
+        return changedCount;
+    }
+
     private void onClaimTask() {
         Task taskToClaim = resolveCurrentSelectedTaskForMutation();
         if (taskToClaim == null || this.minecraft == null || this.minecraft.player == null) {
@@ -3327,8 +3406,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         String uuid = this.minecraft.player.getUUID().toString();
-        taskToClaim.setAssigneeUuid(uuid);
-        taskToClaim.setAssigneeName(this.minecraft.player.getName().getString());
+        int changedCount = assignPendingTaskTargets(
+                taskToClaim,
+                managedTasks,
+                uuid,
+                this.minecraft.player.getName().getString()
+        );
+        if (changedCount <= 0) {
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
+            filterTasks();
+            return;
+        }
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
         filterTasks();
@@ -3416,8 +3504,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable(validationKey).getString());
             return;
         }
-        taskToAbandon.setAssigneeUuid(null);
-        taskToAbandon.setAssigneeName(null);
+        int changedCount = clearAssignedTaskTargets(taskToAbandon, managedTasks);
+        if (changedCount <= 0) {
+            filterTasks();
+            return;
+        }
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
         filterTasks();
@@ -3439,7 +3530,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         if (!TodoScreenPermissionSupport.canTaskOperationInView(
-                Operation.EDIT_TASK,
+                Operation.ASSIGN_OTHERS,
                 taskToAssign,
                 managedTasks,
                 this.minecraft,
@@ -3484,8 +3575,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             filterTasks();
             return;
         }
-        taskToAssign.setAssigneeUuid(memberUuid);
-        taskToAssign.setAssigneeName(memberName);
+        int changedCount = assignPendingTaskTargets(taskToAssign, taskManager == null ? List.of() : taskManager.getAllTasks(), memberUuid, memberName);
+        if (changedCount <= 0) {
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
+            filterTasks();
+            return;
+        }
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskToAssign.getId())) {
             selectedTask = taskToAssign;
         }

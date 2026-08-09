@@ -31,10 +31,10 @@ final class TodoScreenPermissionSupport {
         if (task == null || minecraft == null || minecraft.player == null) {
             return false;
         }
-        if (TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)) {
-            return false;
-        }
         String uuid = minecraft.player.getUUID().toString();
+        if (TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)) {
+            return TaskAssignmentSupport.areAllDirectSubtasksAssignedToPlayer(task, allTasks, uuid);
+        }
         String assignee = task.getAssigneeUuid();
         return assignee != null && assignee.equals(uuid);
     }
@@ -198,10 +198,18 @@ final class TodoScreenPermissionSupport {
         if ("PERSONAL".equals(viewModeName)) {
             return "message.todolist.assign_only_team";
         }
-        if (TaskAssignmentSupport.areAllDirectSubtasksAssigned(task, allTasks)) {
-            return "message.todolist.already_assigned";
-        }
         String uuid = minecraft.player.getUUID().toString();
+        // 父任务：仅检查子任务指派状态，忽略父任务自身残留的 assigneeUuid
+        if (TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)) {
+            if (TaskAssignmentSupport.areAllDirectSubtasksAssigned(task, allTasks)) {
+                if (TaskAssignmentSupport.areAllDirectSubtasksAssignedToPlayer(task, allTasks, uuid)) {
+                    return "message.todolist.already_assigned_to_me";
+                }
+                return "message.todolist.already_assigned";
+            }
+            return null;
+        }
+        // 叶子任务：检查自身指派状态
         String assignee = task.getAssigneeUuid();
         if (assignee != null && !assignee.isEmpty()) {
             if (assignee.equals(uuid)) {
