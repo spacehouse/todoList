@@ -1,5 +1,6 @@
 package com.todolist.storage;
 
+import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
@@ -50,6 +51,7 @@ public final class H2LegacyMigrationTestMain {
             Path finalTempGameDir = tempGameDir;
             DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
             DataPathProvider.resetStorageNamespace();
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
             TaskStorage taskStorage = new TaskStorage();
             taskStorage.saveTasks(List.of(createTask("backup-old")));
             taskStorage.saveTasks(List.of(createTask("backup-new")));
@@ -126,6 +128,7 @@ public final class H2LegacyMigrationTestMain {
             Path finalTempGameDir = tempGameDir;
             DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
             DataPathProvider.resetStorageNamespace();
+            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
             writeLegacyData();
 
             LegacyMigrationData data = new H2LegacyMigrationReader().readAll();

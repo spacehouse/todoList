@@ -57,8 +57,8 @@ public class ModConfig {
     };
     private static final String[] STORAGE_BACKEND_COMMENT_FALLBACK_EN = new String[] {
             "storageBackend notes:",
-            "nbt: default local file storage, suitable for simple singleplayer use",
-            "h2: H2 database storage, suitable when you need relational queries, backups, or external tools"
+            "h2: H2 database storage (forced, only supported mode)",
+            "nbt: deprecated legacy file storage, will be ignored and forced to h2"
     };
     private static final String[] H2_BACKUP_ON_START_COMMENT_KEYS = new String[] {
             "config.todolist.h2_backup_on_start.comment.title",
@@ -109,7 +109,7 @@ public class ModConfig {
 
     /**
      * 存储后端类型。
-     * NBT 是当前默认文件存储，H2 用于后续关系型存储迁移阶段。
+     * H2 是当前默认数据库存储，NBT 仅作为旧版兼容保留。
      */
     public enum StorageBackend {
         @SerializedName("nbt")
@@ -134,7 +134,7 @@ public class ModConfig {
     // FULL：普通玩家可使用查看/编辑类命令（不建议公共服务器）
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
     private transient boolean commandAccessModeDirty;
-    private StorageBackend storageBackend = StorageBackend.NBT;
+    private StorageBackend storageBackend = StorageBackend.H2;
     private boolean h2BackupOnStart = false;
 
     // GUI settings
@@ -268,6 +268,7 @@ public class ModConfig {
             );
             if (!readResult.isFound()) {
                 instance = new ModConfig();
+                instance.normalize();
                 save();
                 instance.commandAccessModeDirty = false;
                 TodoConstants.LOGGER.info("Created default configuration at {}", CONFIG_PATH);
@@ -287,14 +288,17 @@ public class ModConfig {
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load configuration, using defaults", e);
             instance = new ModConfig();
+            instance.normalize();
             instance.commandAccessModeDirty = false;
         }
     }
 
     private boolean normalize() {
         boolean changed = false;
-        if (storageBackend == null) {
-            storageBackend = StorageBackend.NBT;
+        // 强制使用 H2 存储后端，NBT 模式已废弃，不再支持通过配置切换回 NBT
+        if (storageBackend != StorageBackend.H2) {
+            TodoConstants.LOGGER.info("Storage backend forced to H2 (configured: {}); NBT mode is no longer supported.", storageBackend);
+            storageBackend = StorageBackend.H2;
             changed = true;
         }
         if (gui == null) {
@@ -680,19 +684,19 @@ public class ModConfig {
     /**
      * 获取当前配置的存储后端。
      *
-     * @return 存储后端；缺失或非法时返回 NBT
+     * @return 存储后端；缺失或非法时返回 H2
      */
     public StorageBackend getStorageBackend() {
-        return storageBackend == null ? StorageBackend.NBT : storageBackend;
+        return storageBackend == null ? StorageBackend.H2 : storageBackend;
     }
 
     /**
      * 设置存储后端并立即写盘。
      *
-     * @param storageBackend 新的存储后端；传入 null 时回退 NBT
+     * @param storageBackend 新的存储后端；传入 null 时回退 H2
      */
     public void setStorageBackend(StorageBackend storageBackend) {
-        StorageBackend normalizedStorageBackend = storageBackend == null ? StorageBackend.NBT : storageBackend;
+        StorageBackend normalizedStorageBackend = storageBackend == null ? StorageBackend.H2 : storageBackend;
         if (getStorageBackend() == normalizedStorageBackend) {
             return;
         }

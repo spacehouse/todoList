@@ -30,10 +30,11 @@ public final class TodoListCommon {
 
     /**
      * 初始化通用组件。
+     * 存储后端强制使用 H2，NBT 模式已废弃。
      */
     public static void init() {
         ModConfig.getInstance();
-        StorageBackendFactory.getConfiguredBackend();
+        TodoConstants.LOGGER.info("[TodoList] Storage backend: H2 (forced). NBT mode is no longer supported.");
         taskStorage = new TaskStorage();
         projectStorage = new ProjectStorage();
         projectManager = new ProjectManager();

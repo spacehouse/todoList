@@ -36,6 +36,14 @@ public final class PersistenceSafetyTestMain {
     }
 
     /**
+     * 重置测试环境，NBT 后端由 GuiTestSupport.resetState() 默认设置。
+     * 持久化安全测试覆盖 NBT 文件备份与恢复场景，需要在 NBT 模式下运行。
+     */
+    private static void resetStateWithNbt() {
+        GuiTestSupport.resetState();
+    }
+
+    /**
      * 程序入口，串行执行持久化安全回归用例。
      *
      * @param args 命令行参数，当前未使用
@@ -56,7 +64,7 @@ public final class PersistenceSafetyTestMain {
      * 验证任务文件第二次保存后会生成最近一次成功版本的备份。
      */
     private static void shouldCreateTaskBackupOnSecondSave() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTasks(List.of(createTask("Task Backup Old")));
@@ -76,7 +84,7 @@ public final class PersistenceSafetyTestMain {
      * 验证任务主文件损坏时会自动回退到最近一次备份。
      */
     private static void shouldRecoverTasksFromBackupWhenPrimaryCorrupted() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTasks(List.of(createTask("Task Recover Old")));
@@ -98,7 +106,7 @@ public final class PersistenceSafetyTestMain {
      * 验证任务主文件中只要出现无法解析的坏任务，也会回退到最近一次备份。
      */
     private static void shouldRecoverTasksFromBackupWhenPrimaryContainsMalformedEntry() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTasks(List.of(createTask("Task Partial Old")));
@@ -119,7 +127,7 @@ public final class PersistenceSafetyTestMain {
      * 验证任务主文件丢失但备份存在时会自动从备份补回主文件。
      */
     private static void shouldRestoreTasksFromBackupWhenPrimaryMissing() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTasks(List.of(createTask("Task Missing Old")));
@@ -140,7 +148,7 @@ public final class PersistenceSafetyTestMain {
      * 验证任务主文件和备份都损坏时，严格读取失败而安全读取返回空列表。
      */
     private static void shouldReturnEmptyWhenTaskPrimaryAndBackupBothCorrupted() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             storage.saveTasks(List.of(createTask("Task Broken Old")));
@@ -169,7 +177,7 @@ public final class PersistenceSafetyTestMain {
      * 验证项目文件、团队项目文件和玩家项目状态文件都能从备份自动恢复。
      */
     private static void shouldRecoverProjectAndPlayerStateFilesFromBackup() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         ProjectStorage projectStorage = TodoListCommon.getProjectStorage();
         ProjectPlayerStateStorage playerStateStorage = new ProjectPlayerStateStorage();
         try {
@@ -207,7 +215,7 @@ public final class PersistenceSafetyTestMain {
      * 验证项目重载失败时不会先清空当前内存项目列表。
      */
     private static void shouldKeepProjectManagerStateWhenReloadFails() {
-        GuiTestSupport.resetState();
+        resetStateWithNbt();
         ProjectStorage projectStorage = TodoListCommon.getProjectStorage();
         ProjectManager projectManager = TodoListCommon.getProjectManager();
         try {

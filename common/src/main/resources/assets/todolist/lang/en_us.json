@@ -144,8 +144,8 @@
   "config.todolist.command_access_mode.comment.view_only": "VIEW_ONLY: non-OP can use view commands, edit still requires OP",
   "config.todolist.command_access_mode.comment.full": "FULL: non-OP can use view/edit commands (not recommended for public servers)",
   "config.todolist.storage_backend.comment.title": "storageBackend notes:",
-  "config.todolist.storage_backend.comment.nbt": "nbt: default local file storage, suitable for simple singleplayer use",
-  "config.todolist.storage_backend.comment.h2": "h2: H2 database storage, suitable when you need relational queries, backups, or external tools",
+  "config.todolist.storage_backend.comment.nbt": "nbt: deprecated legacy file storage, will be ignored and forced to h2",
+  "config.todolist.storage_backend.comment.h2": "h2: H2 database storage (forced, only supported mode)",
   "config.todolist.h2_backup_on_start.comment.title": "h2BackupOnStart notes:",
   "config.todolist.h2_backup_on_start.comment.disabled": "false: do not create a startup backup",
   "config.todolist.h2_backup_on_start.comment.enabled": "true: create one H2 backup after H2 initializes on startup (only effective when storageBackend is h2)",
@@ -471,5 +471,6 @@
   "h2.schema.comment.column.storage_meta.value": "Metadata value.",
   "h2.schema.comment.column.storage_meta.updated_at": "Metadata last update timestamp.",
   "command.todolist.status.incomplete": "incomplete",
-  "command.todolist.status.completed": "completed"
+  "command.todolist.status.completed": "completed",
+  "todolist.notice.h2_default": "[TodoList] Using H2 database storage. Admin commands: /todolist h2 status, /todolist h2 backup [name], /todolist h2 reload-db, /todolist h2 health."
 }

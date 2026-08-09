@@ -21,20 +21,20 @@ public final class StorageBackendSelectionTestMain {
      * @param args 命令行参数，当前未使用
      */
     public static void main(String[] args) {
-        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldDefaultToNbt", StorageBackendSelectionTestMain::shouldDefaultToNbt);
+        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldDefaultToH2", StorageBackendSelectionTestMain::shouldDefaultToH2);
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldLoadH2Backend", StorageBackendSelectionTestMain::shouldLoadH2Backend);
-        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldNormalizeInvalidBackendToNbt", StorageBackendSelectionTestMain::shouldNormalizeInvalidBackendToNbt);
+        GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldNormalizeInvalidBackendToH2", StorageBackendSelectionTestMain::shouldNormalizeInvalidBackendToH2);
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldWriteStorageBackendCommentsToConfig", StorageBackendSelectionTestMain::shouldWriteStorageBackendCommentsToConfig);
         GuiTestSupport.runTestCase("StorageBackendSelectionTestMain.shouldWriteH2BackupOnStartCommentsToConfig", StorageBackendSelectionTestMain::shouldWriteH2BackupOnStartCommentsToConfig);
     }
 
     /**
-     * 验证缺失配置时默认使用 NBT 后端。
+     * 验证缺失配置时默认使用 H2 后端。
      */
-    private static void shouldDefaultToNbt() {
-        GuiTestSupport.resetState();
-        GuiTestSupport.assertEquals(ModConfig.StorageBackend.NBT, ModConfig.getInstance().getStorageBackend(), "缺失 storageBackend 时应默认 NBT");
-        GuiTestSupport.assertTrue(StorageBackendFactory.isNbtSelected(), "默认配置应选择 NBT 后端");
+    private static void shouldDefaultToH2() {
+        GuiTestSupport.resetStateKeepDefaultBackend();
+        GuiTestSupport.assertEquals(ModConfig.StorageBackend.H2, ModConfig.getInstance().getStorageBackend(), "缺失 storageBackend 时应默认 H2");
+        GuiTestSupport.assertTrue(StorageBackendFactory.isH2Selected(), "默认配置应选择 H2 后端");
     }
 
     /**
@@ -49,9 +49,9 @@ public final class StorageBackendSelectionTestMain {
     }
 
     /**
-     * 验证非法 storageBackend 会规范化回 NBT 并写回配置。
+     * 验证非法 storageBackend 会规范化回 H2 并写回配置。
      */
-    private static void shouldNormalizeInvalidBackendToNbt() {
+    private static void shouldNormalizeInvalidBackendToH2() {
         GuiTestSupport.resetState();
         try {
             Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
@@ -59,9 +59,9 @@ public final class StorageBackendSelectionTestMain {
             Files.writeString(configFile, "{\"storageBackend\":\"BROKEN\"}", StandardCharsets.UTF_8);
             ModConfig.load();
 
-            GuiTestSupport.assertEquals(ModConfig.StorageBackend.NBT, ModConfig.getInstance().getStorageBackend(), "非法 storageBackend 应回退 NBT");
+            GuiTestSupport.assertEquals(ModConfig.StorageBackend.H2, ModConfig.getInstance().getStorageBackend(), "非法 storageBackend 应回退 H2");
             String savedConfig = Files.readString(configFile, StandardCharsets.UTF_8);
-            GuiTestSupport.assertTrue(savedConfig.contains("\"storageBackend\": \"nbt\""), "非法 storageBackend 规范化后应写回 nbt");
+            GuiTestSupport.assertTrue(savedConfig.contains("\"storageBackend\": \"h2\""), "非法 storageBackend 规范化后应写回 h2");
         } catch (Exception exception) {
             throw new IllegalStateException("验证非法 storageBackend 规范化时发生异常", exception);
         }
@@ -80,8 +80,8 @@ public final class StorageBackendSelectionTestMain {
             assertContainsEither(savedConfig, "// storageBackend notes:", "// storageBackend 说明：", "配置文件应写入 storageBackend 标题注释");
             assertContainsEither(
                     savedConfig,
-                    "// h2: H2 database storage, suitable when you need relational queries, backups, or external tools",
-                    "// h2：H2 数据库存储，适合需要关系查询、备份或外部工具连接的场景",
+                    "// h2: H2 database storage (forced, only supported mode)",
+                    "// h2：H2 数据库存储（强制使用，唯一支持的存储模式）",
                     "配置文件应写入 storageBackend 的 h2 说明注释"
             );
         } catch (Exception exception) {
