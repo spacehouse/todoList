@@ -14,6 +14,8 @@ public final class FabricTaskPacketRegistrar {
                 TaskPackets.onReplaceTasksPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(TaskPackets.TEAM_REPLACE_TASKS_ID, (server, player, handler, buf, responseSender) ->
                 TaskPackets.onTeamReplaceTasksPacket(server, player, buf));
+        ServerPlayNetworking.registerGlobalReceiver(TaskPackets.TEAM_REPLACE_TASKS_CHUNKED_ID, (server, player, handler, buf, responseSender) ->
+                TaskPackets.onTeamReplaceTasksChunkedPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(TaskPackets.TEAM_REQUEST_SYNC_ID, (server, player, handler, buf, responseSender) ->
                 TaskPackets.onTeamRequestSyncPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(TaskPackets.ADD_TASK_ID, (server, player, handler, buf, responseSender) ->

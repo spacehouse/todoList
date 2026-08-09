@@ -35,7 +35,14 @@ public class TaskPackets {
     public static final ResourceLocation TOGGLE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "toggle_task");
     public static final ResourceLocation TEAM_TOGGLE_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_toggle_task");
     public static final ResourceLocation TEAM_ASSIGN_TASK_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_assign_task");
+    /** 服务端→客户端：分块下发团队任务。 */
+    public static final ResourceLocation TEAM_SYNC_TASKS_CHUNKED_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_sync_tasks_chunked");
+    /** 客户端→服务端：分块提交团队任务替换/合并。 */
+    public static final ResourceLocation TEAM_REPLACE_TASKS_CHUNKED_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_replace_tasks_chunked");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
+
+    /** 服务端分块累积器，用于接收客户端发来的分块团队任务包。 */
+    private static final TaskPacketChunking.ChunkAccumulator serverChunkAccumulator = new TaskPacketChunking.ChunkAccumulator();
 
     public static void setServerPacketSender(ServerPacketSender sender) {
         serverPacketSender = sender == null ? (player, channelId, buf) -> { } : sender;
@@ -49,6 +56,22 @@ public class TaskPackets {
     public static void onTeamReplaceTasksPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
         List<Task> tasks = readTaskList(buf);
         List<Task> baseTasks = buf.readableBytes() > 0 ? readTaskList(buf) : null;
+        server.execute(() -> handleTeamReplaceTasks(server, player, tasks, baseTasks));
+    }
+
+    /**
+     * 处理客户端发来的分块团队任务替换/合并包。
+     * 累积所有分片后，重组为完整数据并执行原有替换/合并逻辑。
+     */
+    public static void onTeamReplaceTasksChunkedPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        TaskPacketChunking.ChunkData chunk = TaskPacketChunking.readChunk(buf);
+        byte[] assembled = serverChunkAccumulator.accept(chunk);
+        if (assembled == null) {
+            return;
+        }
+        List<Task>[] result = TaskPacketChunking.deserializeMergeTasks(assembled);
+        List<Task> tasks = result[0];
+        List<Task> baseTasks = result[1];
         server.execute(() -> handleTeamReplaceTasks(server, player, tasks, baseTasks));
     }
 
@@ -138,12 +161,44 @@ public class TaskPackets {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = storage.loadTeamTasks();
-            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-            writeTaskList(buf, tasks);
-            serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
+            sendTeamTasksToPlayer(player, tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for sync", e);
             StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
+        }
+    }
+
+    /**
+     * 向指定玩家发送团队任务列表，自动判断是否需要分块。
+     *
+     * @param player 目标玩家
+     * @param tasks 团队任务列表
+     */
+    private static void sendTeamTasksToPlayer(ServerPlayer player, List<Task> tasks) {
+        byte[] data = TaskPacketChunking.serializeTasks(tasks);
+        if (data.length <= TaskPacketChunking.MAX_CHUNK_BYTES) {
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data));
+            serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
+        } else {
+            sendChunkedTeamTasksToPlayer(player, data);
+        }
+    }
+
+    /**
+     * 以分块方式向玩家发送团队任务数据。
+     *
+     * @param player 目标玩家
+     * @param data 完整序列化字节数组
+     */
+    private static void sendChunkedTeamTasksToPlayer(ServerPlayer player, byte[] data) {
+        List<byte[]> chunks = TaskPacketChunking.splitPayload(data);
+        String sessionId = TaskPacketChunking.newSessionId();
+        TodoConstants.LOGGER.info("Sending chunked team tasks to player {}: {} chunks, {} bytes total",
+                player.getName().getString(), chunks.size(), data.length);
+        for (int i = 0; i < chunks.size(); i++) {
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            TaskPacketChunking.writeChunk(buf, sessionId, chunks.size(), i, chunks.get(i));
+            serverPacketSender.send(player, TEAM_SYNC_TASKS_CHUNKED_ID, buf);
         }
     }
 
@@ -302,9 +357,7 @@ public class TaskPackets {
                 if (excludedPlayer != null && player != null && player.getUUID().equals(excludedPlayer.getUUID())) {
                     continue;
                 }
-                FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-                writeTaskList(buf, tasks);
-                serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
+                sendTeamTasksToPlayer(player, tasks);
             }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to load team tasks for broadcast", e);

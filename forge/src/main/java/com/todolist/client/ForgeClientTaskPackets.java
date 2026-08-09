@@ -3,6 +3,7 @@ package com.todolist.client;
 import com.todolist.TodoListForge;
 import com.todolist.gui.TodoScreen;
 import com.todolist.forge.network.ForgeNetworkBridge;
+import com.todolist.network.TaskPacketChunking;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
@@ -17,6 +18,9 @@ import net.minecraft.network.FriendlyByteBuf;
 public final class ForgeClientTaskPackets {
     private ForgeClientTaskPackets() {
     }
+
+    /** Forge 客户端分块累积器，用于接收服务端发来的分块团队任务包。 */
+    private static final TaskPacketChunking.ChunkAccumulator clientChunkAccumulator = new TaskPacketChunking.ChunkAccumulator();
 
     /**
      * 注册客户端接收的数据包处理器。
@@ -62,6 +66,19 @@ public final class ForgeClientTaskPackets {
             });
         });
 
+        ForgeNetworkBridge.registerClientReceiver(TaskPackets.TEAM_SYNC_TASKS_CHUNKED_ID, (client, handler, buf, responseSender) -> {
+            TaskPacketChunking.ChunkData chunk = TaskPacketChunking.readChunk(buf);
+            byte[] assembled = clientChunkAccumulator.accept(chunk);
+            if (assembled == null) {
+                return;
+            }
+            List<Task> tasks = TaskPacketChunking.deserializeTasks(assembled);
+            client.execute(() -> {
+                TodoScreen.applySyncedTeamTasks(client, tasks);
+                TodoListForge.LOGGER.info("Received {} team tasks from server (chunked, {} bytes)", tasks.size(), assembled.length);
+            });
+        });
+
         ForgeNetworkBridge.registerClientReceiver(TaskPackets.TASK_CONFIRMED_ID, (client, handler, buf, responseSender) -> {
             String action = buf.readUtf();
             String taskId = buf.readUtf();
@@ -88,22 +105,33 @@ public final class ForgeClientTaskPackets {
 
     /**
      * 发送替换团队任务请求。
+     * 自动检测负载大小，超过限制时使用分块通道。
+     *
+     * @param tasks 需要替换的团队任务列表
      */
     public static void sendReplaceTeamTasks(List<Task> tasks) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
-            return;
+        byte[] data = TaskPacketChunking.serializeTasks(tasks);
+        if (data.length <= TaskPacketChunking.MAX_CHUNK_BYTES) {
+            if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
+                return;
+            }
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data));
+            ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
+        } else {
+            if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_CHUNKED_ID)) {
+                return;
+            }
+            sendChunkedReplaceTasks(data, null);
         }
-        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        TaskPackets.writeTaskList(buf, tasks);
-        ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
     }
 
     /**
      * 发送带基线快照的团队任务合并请求。
+     * 自动检测负载大小，超过限制时使用分块通道。
      *
      * @param baseTasks 保存发起时客户端已同步的团队任务基线
      * @param tasks 当前提交的团队任务列表
@@ -113,13 +141,37 @@ public final class ForgeClientTaskPackets {
         if (client == null || client.getConnection() == null) {
             return;
         }
-        if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
-            return;
+        byte[] data = TaskPacketChunking.serializeMergeTasks(tasks, baseTasks);
+        if (data.length <= TaskPacketChunking.MAX_CHUNK_BYTES) {
+            if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
+                return;
+            }
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data));
+            ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
+        } else {
+            if (!ForgeNetworkBridge.canSend(TaskPackets.TEAM_REPLACE_TASKS_CHUNKED_ID)) {
+                return;
+            }
+            sendChunkedReplaceTasks(data, baseTasks);
         }
-        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        TaskPackets.writeTaskList(buf, tasks);
-        TaskPackets.writeTaskList(buf, baseTasks);
-        ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_ID, buf);
+    }
+
+    /**
+     * 以分块方式向服务端发送团队任务替换/合并数据。
+     *
+     * @param data 完整序列化字节数组
+     * @param baseTasksMarker 基线标记（非 null 表示这是 merge 请求，仅用于日志）
+     */
+    private static void sendChunkedReplaceTasks(byte[] data, List<Task> baseTasksMarker) {
+        List<byte[]> chunks = TaskPacketChunking.splitPayload(data);
+        String sessionId = TaskPacketChunking.newSessionId();
+        TodoListForge.LOGGER.info("Sending chunked team tasks to server: {} chunks, {} bytes, merge={}",
+                chunks.size(), data.length, baseTasksMarker != null);
+        for (int i = 0; i < chunks.size(); i++) {
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            TaskPacketChunking.writeChunk(buf, sessionId, chunks.size(), i, chunks.get(i));
+            ForgeNetworkBridge.sendToServer(TaskPackets.TEAM_REPLACE_TASKS_CHUNKED_ID, buf);
+        }
     }
 
     /**
