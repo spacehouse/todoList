@@ -223,8 +223,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             filterTasks();
             return;
         }
-        taskToAssign.setAssigneeUuid(memberUuid);
-        taskToAssign.setAssigneeName(memberName);
+        int changedCount = assignPendingTaskTargets(taskToAssign, taskManager == null ? List.of() : taskManager.getAllTasks(), memberUuid, memberName);
+        if (changedCount <= 0) {
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
+            filterTasks();
+            return;
+        }
         if (selectedTask != null && selectedTask.getId() != null && selectedTask.getId().equals(taskToAssign.getId())) {
             selectedTask = taskToAssign;
         }
@@ -1545,9 +1549,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param task 待切换完成状态的任务
      */
     private void toggleTaskCompletion(Task task) {
+        List<Task> allTasks = taskManager == null ? List.of() : taskManager.getAllTasks();
         if (!TodoScreenPermissionSupport.canTaskOperationInView(
                 Operation.TOGGLE_COMPLETE,
                 task,
+                allTasks,
                 this.minecraft,
                 currentProject,
                 viewMode.name()
@@ -1555,11 +1561,45 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        taskManager.toggleTaskCompletion(task.getId());
+        String currentPlayerUuid = TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft);
+        if ("TEAM_ASSIGNED".equals(viewMode.name())
+                && TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)
+                && currentPlayerUuid != null
+                && !currentPlayerUuid.isEmpty()) {
+            toggleDirectSubtasksForPlayer(task, allTasks, currentPlayerUuid);
+        } else {
+            taskManager.toggleTaskCompletion(task.getId());
+        }
         markUnsaved();
         String operationName = task.isCompleted() ? "complete" : "uncomplete";
         filterTasks();
         persistCurrentViewTasksInBackground(operationName);
+    }
+
+    /**
+     * 在"我的"视图下切换父任务中属于当前玩家的直属子任务的完成状态。
+     * 仅影响分配给当前玩家的子任务，不影响其他玩家的子任务。
+     *
+     * @param parentTask 父任务
+     * @param allTasks 同作用域的任务列表
+     * @param playerUuid 当前玩家 UUID
+     */
+    private void toggleDirectSubtasksForPlayer(Task parentTask, List<Task> allTasks, String playerUuid) {
+        List<Task> playerSubtasks = getDirectSubtasksForBatchAction(parentTask, allTasks);
+        boolean anyIncomplete = playerSubtasks.stream()
+                .anyMatch(t -> t != null
+                        && playerUuid.equals(t.getAssigneeUuid())
+                        && !t.isCompleted());
+        for (Task subtask : playerSubtasks) {
+            if (subtask == null || !playerUuid.equals(subtask.getAssigneeUuid())) {
+                continue;
+            }
+            if (subtask.isCompleted() == anyIncomplete) {
+                continue;
+            }
+            subtask.setCompleted(anyIncomplete);
+        }
+        taskManager.markParentCompletionDirty();
     }
 
     /**
@@ -3518,6 +3558,94 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     /**
+     * 收集目标父任务当前快照中的直属子任务。
+     *
+     * @param parentTask 父任务
+     * @param managedTasks 当前任务快照
+     * @return 按当前顺序返回直属子任务列表
+     */
+    private List<Task> getDirectSubtasksForBatchAction(Task parentTask, List<Task> managedTasks) {
+        if (parentTask == null || managedTasks == null || managedTasks.isEmpty()) {
+            return List.of();
+        }
+        String parentTaskId = parentTask.getId();
+        if (parentTaskId == null || parentTaskId.isBlank()) {
+            return List.of();
+        }
+        List<Task> directSubtasks = new ArrayList<>();
+        for (Task candidate : managedTasks) {
+            if (candidate != null && candidate.isSubtask() && Objects.equals(parentTaskId, candidate.getParentTaskId())) {
+                directSubtasks.add(candidate);
+            }
+        }
+        return directSubtasks;
+    }
+
+    /**
+     * 将领取人应用到任务或其尚未分配的直属子任务。
+     *
+     * @param task 目标任务
+     * @param managedTasks 当前任务快照
+     * @param assigneeUuid 领取人 UUID
+     * @param assigneeName 领取人名称
+     * @return 实际写入领取人的任务数量
+     */
+    private int assignPendingTaskTargets(Task task, List<Task> managedTasks, String assigneeUuid, String assigneeName) {
+        List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
+        if (directSubtasks.isEmpty()) {
+            task.setAssigneeUuid(assigneeUuid);
+            task.setAssigneeName(assigneeName);
+            return 1;
+        }
+        int changedCount = 0;
+        for (Task subtask : directSubtasks) {
+            if (TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
+                continue;
+            }
+            subtask.setAssigneeUuid(assigneeUuid);
+            subtask.setAssigneeName(assigneeName);
+            changedCount++;
+        }
+        return changedCount;
+    }
+
+    /**
+     * 清空任务或其直属子任务上的领取信息。
+     * 在"我的"视图下仅清空属于当前玩家的子任务，不影响其他玩家领取的子任务。
+     *
+     * @param task 目标任务
+     * @param managedTasks 当前任务快照
+     * @param viewModeName 当前视图模式名称
+     * @param currentPlayerUuid 当前玩家 UUID
+     * @return 实际清空领取人的任务数量
+     */
+    private int clearAssignedTaskTargets(Task task, List<Task> managedTasks, String viewModeName, String currentPlayerUuid) {
+        List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
+        if (directSubtasks.isEmpty()) {
+            boolean wasAssigned = TaskAssignmentSupport.isDirectlyAssigned(task);
+            task.setAssigneeUuid(null);
+            task.setAssigneeName(null);
+            return wasAssigned ? 1 : 0;
+        }
+        boolean scopeToPlayer = "TEAM_ASSIGNED".equals(viewModeName)
+                && currentPlayerUuid != null
+                && !currentPlayerUuid.isEmpty();
+        int changedCount = 0;
+        for (Task subtask : directSubtasks) {
+            if (!TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
+                continue;
+            }
+            if (scopeToPlayer && !currentPlayerUuid.equals(subtask.getAssigneeUuid())) {
+                continue;
+            }
+            subtask.setAssigneeUuid(null);
+            subtask.setAssigneeName(null);
+            changedCount++;
+        }
+        return changedCount;
+    }
+
+    /**
      * 基于任务 ID 回查任务管理器中的最新任务对象。
      *
      * @param task 候选任务对象
@@ -3559,8 +3687,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         String uuid = this.minecraft.player.getUUID().toString();
-        taskToClaim.setAssigneeUuid(uuid);
-        taskToClaim.setAssigneeName(this.minecraft.player.getName().getString());
+        int changedCount = assignPendingTaskTargets(
+                taskToClaim,
+                managedTasks,
+                uuid,
+                this.minecraft.player.getName().getString()
+        );
+        if (changedCount <= 0) {
+            addNotification(Component.translatable("message.todolist.already_assigned").getString());
+            filterTasks();
+            return;
+        }
         addNotification(Component.translatable("message.todolist.assigned_to_me").getString());
         markUnsaved();
         filterTasks();
@@ -3651,8 +3788,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable(validationMessageKey).getString());
             return;
         }
-        taskToAbandon.setAssigneeUuid(null);
-        taskToAbandon.setAssigneeName(null);
+        int changedCount = clearAssignedTaskTargets(taskToAbandon, managedTasks, viewMode.name(),
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft));
+        if (changedCount <= 0) {
+            filterTasks();
+            return;
+        }
         addNotification(Component.translatable("message.todolist.abandoned_task").getString());
         markUnsaved();
         filterTasks();
@@ -3674,7 +3815,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         if (!TodoScreenPermissionSupport.canTaskOperationInView(
-                Operation.EDIT_TASK,
+                Operation.ASSIGN_OTHERS,
                 taskToAssign,
                 managedTasks,
                 this.minecraft,
@@ -3768,13 +3909,39 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             completedTotalCount = h2CompletedTotalCount == null ? completedTasks.size() : h2CompletedTotalCount;
         }
         List<Task> scopedProjectTasks = buildScopedProjectTasksForTaskPane();
+        // 收集未完成区任务的 ID 集合，用于已完成区去重
+        java.util.Set<String> activeTaskIds = new java.util.HashSet<>();
+        for (Task t : activeTasks) {
+            if (t != null && t.getId() != null) {
+                activeTaskIds.add(t.getId());
+            }
+        }
+        // 已完成区的子任务只展示已完成的，且排除其父任务已在未完成区展示的子任务
+        List<Task> completedScopedTasks = new ArrayList<>();
+        for (Task t : scopedProjectTasks) {
+            if (t == null) {
+                continue;
+            }
+            if (t.isSubtask() && (!t.isCompleted() || activeTaskIds.contains(t.getParentTaskId()))) {
+                continue;
+            }
+            completedScopedTasks.add(t);
+        }
+        // 去重：如果父任务已出现在未完成区（仍有未完成子任务），则不从已完成区重复展示
+        List<Task> dedupedCompletedTasks = new ArrayList<>();
+        for (Task t : completedTasks) {
+            if (t != null && !activeTaskIds.contains(t.getId())) {
+                dedupedCompletedTasks.add(t);
+            }
+        }
         return TodoScreenTaskSupport.buildTaskPaneSections(
                 TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(activeTasks, scopedProjectTasks),
                 activeTotalCount,
-                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(completedTasks, scopedProjectTasks),
-                completedTotalCount,
+                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(dedupedCompletedTasks, completedScopedTasks),
+                dedupedCompletedTasks.size() == 0 ? 0 : completedTotalCount,
                 activeExpanded,
-                completedExpanded);
+                completedExpanded
+        );
     }
 
     /**
@@ -3894,6 +4061,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         ));
         if (selectedTask != null && selectedTask.isSubtask() && selectedTask.getParentTaskId() != null) {
             parentTaskIds.add(selectedTask.getParentTaskId());
+        }
+        // 已完成区中补充的未完成父任务（含有已完成子任务）应自动展开，
+        // 让玩家能直接看到并操作已完成的子任务。
+        String currentPlayerUuid = TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft);
+        if (currentPlayerUuid != null && !currentPlayerUuid.isEmpty() && taskManager != null) {
+            for (Task task : completedTasks) {
+                if (task == null || task.isSubtask() || task.isCompleted()) {
+                    continue;
+                }
+                if (TaskAssignmentSupport.hasAnyCompletedDirectSubtaskAssignedToPlayer(task, taskManager.getAllTasks(), currentPlayerUuid)) {
+                    parentTaskIds.add(task.getId());
+                }
+            }
         }
         return parentTaskIds;
     }

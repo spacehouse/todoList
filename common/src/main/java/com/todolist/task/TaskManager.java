@@ -115,10 +115,34 @@ public class TaskManager {
     public void toggleTaskCompletion(String taskId) {
         syncParentCompletionStates();
         Task task = tasks.get(taskId);
-        if (task != null && !hasChildren(task.getId())) {
+        if (task == null) {
+            return;
+        }
+        if (!hasChildren(task.getId())) {
             task.setCompleted(!task.isCompleted());
             parentCompletionDirty = true;
+            return;
         }
+        boolean targetCompleted = !task.isCompleted();
+        boolean changed = false;
+        for (Task child : getSiblingSubtasksInOrder(task.getId())) {
+            if (child == null || child.isCompleted() == targetCompleted) {
+                continue;
+            }
+            child.setCompleted(targetCompleted);
+            changed = true;
+        }
+        if (changed) {
+            parentCompletionDirty = true;
+        }
+    }
+
+    /**
+     * 标记父任务完成状态为脏，下次读取时会重新聚合。
+     * 供 GUI 层在直接修改子任务完成状态后调用。
+     */
+    public void markParentCompletionDirty() {
+        parentCompletionDirty = true;
     }
 
     /**

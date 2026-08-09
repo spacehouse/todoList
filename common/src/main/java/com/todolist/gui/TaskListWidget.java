@@ -1443,6 +1443,24 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
+     * 返回指定任务复选框中心点的横坐标，考虑子任务缩进。
+     *
+     * @param taskId 目标任务 ID
+     * @return 复选框中心点横坐标，找不到时退回到默认值
+     */
+    int getCheckboxCenterXForTest(String taskId) {
+        if (taskId == null || displayRows == null) {
+            return getCheckboxCenterXForTest();
+        }
+        for (DisplayRow row : displayRows) {
+            if (row.rowType != RowType.SECTION_HEADER && row.task != null && taskId.equals(row.task.getId())) {
+                return getCheckboxLeft(row) + TASK_CHECKBOX_SIZE / 2;
+            }
+        }
+        return getCheckboxCenterXForTest();
+    }
+
+    /**
      * 返回首行任务复选框的中心纵坐标，供测试稳定命中复选框点击区域。
      *
      * @return 复选框中心点纵坐标

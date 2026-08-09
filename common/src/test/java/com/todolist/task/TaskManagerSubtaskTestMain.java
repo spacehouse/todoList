@@ -22,7 +22,7 @@ public final class TaskManagerSubtaskTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldCountOnlyTopLevelTasksByProject", TaskManagerSubtaskTestMain::shouldCountOnlyTopLevelTasksByProject);
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldAggregateParentCompletionFromChildren", TaskManagerSubtaskTestMain::shouldAggregateParentCompletionFromChildren);
-        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldIgnoreManualParentToggleWhenChildrenExist", TaskManagerSubtaskTestMain::shouldIgnoreManualParentToggleWhenChildrenExist);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldToggleAllDirectChildrenWhenParentToggled", TaskManagerSubtaskTestMain::shouldToggleAllDirectChildrenWhenParentToggled);
     }
 
     /**
@@ -63,18 +63,26 @@ public final class TaskManagerSubtaskTestMain {
     }
 
     /**
-     * 验证存在子任务的父任务不能被手动直接切换完成状态。
+     * 验证切换父任务时会批量切换直属子任务，并同步父任务聚合完成态。
      */
-    private static void shouldIgnoreManualParentToggleWhenChildrenExist() {
+    private static void shouldToggleAllDirectChildrenWhenParentToggled() {
         TaskManager manager = new TaskManager();
         Task parent = createTask("parent", "project-a", false, null);
-        Task child = createTask("child", "project-a", false, parent.getId());
-        addAll(manager, parent, child);
+        Task childA = createTask("child-a", "project-a", false, parent.getId());
+        Task childB = createTask("child-b", "project-a", true, parent.getId());
+        addAll(manager, parent, childA, childB);
 
         manager.toggleTaskCompletion(parent.getId());
 
-        GuiTestSupport.assertFalse(manager.getTask(parent.getId()).isCompleted(), "存在子任务的父任务不应允许手动直接切完成");
-        GuiTestSupport.assertFalse(manager.getTask(child.getId()).isCompleted(), "手动切父任务时不应连带改写子任务完成状态");
+        GuiTestSupport.assertTrue(manager.getTask(childA.getId()).isCompleted(), "父任务切为完成时应补齐未完成直属子任务");
+        GuiTestSupport.assertTrue(manager.getTask(childB.getId()).isCompleted(), "父任务切为完成时应保持已完成直属子任务");
+        GuiTestSupport.assertTrue(manager.getTask(parent.getId()).isCompleted(), "直属子任务全部完成后父任务应同步完成");
+
+        manager.toggleTaskCompletion(parent.getId());
+
+        GuiTestSupport.assertFalse(manager.getTask(childA.getId()).isCompleted(), "父任务取消完成时应批量恢复直属子任务为未完成");
+        GuiTestSupport.assertFalse(manager.getTask(childB.getId()).isCompleted(), "父任务取消完成时应批量恢复直属子任务为未完成");
+        GuiTestSupport.assertFalse(manager.getTask(parent.getId()).isCompleted(), "直属子任务恢复未完成后父任务也应同步恢复");
     }
 
     /**
