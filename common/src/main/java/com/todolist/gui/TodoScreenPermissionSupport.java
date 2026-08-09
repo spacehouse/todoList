@@ -33,7 +33,8 @@ final class TodoScreenPermissionSupport {
         }
         String uuid = minecraft.player.getUUID().toString();
         if (TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)) {
-            return TaskAssignmentSupport.areAllDirectSubtasksAssignedToPlayer(task, allTasks, uuid);
+            // 父任务：玩家领取了任意直属子任务即视为分配关系成立，支持批量操作自己领取的子任务
+            return TaskAssignmentSupport.hasAnyDirectSubtaskAssignedToPlayer(task, allTasks, uuid);
         }
         String assignee = task.getAssigneeUuid();
         return assignee != null && assignee.equals(uuid);

@@ -438,6 +438,11 @@ final class TodoScreenTaskSupport {
         }
         List<Task> topLevelTasks = filterTasksByProjectAndCompletion(taskManager.getAllTasks(), currentProjectId, completed, true);
         List<Task> scopedTasks = filterTasksByProjectAndCompletion(taskManager.getAllTasks(), currentProjectId, completed, false);
+        // 已完成区补充：当玩家在团队"我的"视图下有已完成的直属子任务时，
+        // 即使父任务本身未全部完成，也将其作为上下文条目加入已完成区。
+        if (completed && "TEAM_ASSIGNED".equals(viewModeName) && currentPlayerUuid != null && !currentPlayerUuid.isEmpty()) {
+            topLevelTasks = supplementParentsWithCompletedSubtasks(taskManager, topLevelTasks, currentProjectId, currentPlayerUuid);
+        }
         List<Task> topLevelScopedTasks = applyAssignedFilterForView(
                 applyPriorityFilterToTasks(currentPriorityFilter, topLevelTasks),
                 applyPriorityFilterToTasks(currentPriorityFilter, scopedTasks),
@@ -488,6 +493,46 @@ final class TodoScreenTaskSupport {
             result.add(task);
         }
         return result;
+    }
+
+    /**
+     * 在已完成区的顶层任务列表中，补充含有"已分配给当前玩家且已完成"直属子任务的未完成父任务。
+     * 这些父任务本身未全部完成，但作为上下文条目让玩家能看到并回退已完成的子任务。
+     *
+     * @param taskManager 任务管理器
+     * @param existingTopLevel 已有的顶层任务列表（不会被修改）
+     * @param currentProjectId 当前项目 ID
+     * @param currentPlayerUuid 当前玩家 UUID
+     * @return 补充后的新列表
+     */
+    private static List<Task> supplementParentsWithCompletedSubtasks(TaskManager taskManager,
+                                                                     List<Task> existingTopLevel,
+                                                                     String currentProjectId,
+                                                                     String currentPlayerUuid) {
+        java.util.Set<String> existingIds = new java.util.HashSet<>();
+        for (Task t : existingTopLevel) {
+            if (t != null) {
+                existingIds.add(t.getId());
+            }
+        }
+        List<Task> supplemented = new ArrayList<>(existingTopLevel);
+        List<Task> allTasks = taskManager.getAllTasks();
+        for (Task task : allTasks) {
+            if (task == null || task.isSubtask() || task.isCompleted()) {
+                continue;
+            }
+            if (!task.belongsToProject(currentProjectId)) {
+                continue;
+            }
+            if (existingIds.contains(task.getId())) {
+                continue;
+            }
+            if (TaskAssignmentSupport.hasAnyCompletedDirectSubtaskAssignedToPlayer(task, allTasks, currentPlayerUuid)) {
+                supplemented.add(task);
+                existingIds.add(task.getId());
+            }
+        }
+        return supplemented;
     }
 
     /**

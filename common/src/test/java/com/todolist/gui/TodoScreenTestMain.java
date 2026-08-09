@@ -96,6 +96,9 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClaimSubtasksEvenWhenParentHasStaleAssignee", TodoScreenTestMain::shouldClaimSubtasksEvenWhenParentHasStaleAssignee);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideParentTaskFromTeamUnassignedViewWhenAllSubtasksAssigned", TodoScreenTestMain::shouldHideParentTaskFromTeamUnassignedViewWhenAllSubtasksAssigned);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowParentTaskInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToMe", TodoScreenTestMain::shouldShowParentTaskInTeamAssignedViewOnlyWhenAnyDirectSubtaskBelongsToMe);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowCompletedSubtaskInTeamAssignedCompletedSection", TodoScreenTestMain::shouldShowCompletedSubtaskInTeamAssignedCompletedSection);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOnlyTogglePlayerOwnedSubtasksInTeamAssignedView", TodoScreenTestMain::shouldOnlyTogglePlayerOwnedSubtasksInTeamAssignedView);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOnlyAbandonPlayerOwnedSubtasksInTeamAssignedView", TodoScreenTestMain::shouldOnlyAbandonPlayerOwnedSubtasksInTeamAssignedView);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskMutationsEffectiveAfterAssignFlowResync", TodoScreenTestMain::shouldKeepTaskMutationsEffectiveAfterAssignFlowResync);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldAssignOnlyUnassignedDirectSubtasksFromParent", TodoScreenTestMain::shouldAssignOnlyUnassignedDirectSubtasksFromParent);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldHideTeamActionButtonsInPersonalDetailDrawer", TodoScreenTestMain::shouldHideTeamActionButtonsInPersonalDetailDrawer);
@@ -1161,6 +1164,154 @@ public final class TodoScreenTestMain {
                 List.of("Mixed Parent", "Direct Mine"),
                 access(screen).getFilteredTasksForTest().stream().map(Task::getTitle).toList(),
                 "团队我的视图应只保留直属子任务中存在我的任务的父任务，以及直接分配给我的普通任务"
+        );
+    }
+
+    /**
+     * 验证玩家在"我的"视图下完成子任务后，已完成区展示该子任务及其父任务上下文，
+     * 且不会混入未完成子任务；同时验证玩家可以在已完成区回退子任务完成状态。
+     */
+    private static void shouldShowCompletedSubtaskInTeamAssignedCompletedSection() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-completed-subtask-mine", "Completed Subtask Mine Team");
+
+        Task parent = createTeamTask("Completed Context Parent", teamProject.getId(), false);
+        Task myChild = createSubtask("My Completed Child", parent, 0L);
+        myChild.setAssigneeUuid(OWNER_ID.toString());
+        myChild.setAssigneeName("owner");
+        myChild.setCompleted(true);
+        Task uncompletedSibling = createSubtask("Uncompleted Sibling", parent, 1L);
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(parent, myChild, uncompletedSibling));
+
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAssignedViewForTest();
+
+        // 展开已完成区
+        access(screen).toggleCompletedSectionForTest();
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        List<String> snapshot = widget.getRowDebugSnapshotForTest();
+
+        // 已完成区应包含父任务上下文和已完成的子任务
+        String parentId = requireTaskByTitle(screen, "Completed Context Parent").getId();
+        String myChildId = requireTaskByTitle(screen, "My Completed Child").getId();
+        String siblingId = requireTaskByTitle(screen, "Uncompleted Sibling").getId();
+
+        GuiTestSupport.assertTrue(
+                snapshot.stream().anyMatch(s -> s.equals("TASK:" + parentId)),
+                "已完成区应展示含有已完成子任务的父任务作为上下文条目"
+        );
+        GuiTestSupport.assertTrue(
+                snapshot.stream().anyMatch(s -> s.equals("SUBTASK:" + myChildId)),
+                "已完成区应展示玩家已完成的子任务"
+        );
+        GuiTestSupport.assertFalse(
+                snapshot.stream().anyMatch(s -> s.contains(siblingId)),
+                "已完成区不应展示未完成的兄弟子任务"
+        );
+
+        // 验证可以在已完成区回退子任务完成状态
+        // 点击已完成子任务的勾选框（使用子任务特定的 X 坐标以考虑缩进）
+        int checkboxX = widget.getCheckboxCenterXForTest(myChildId);
+        int checkboxY = widget.getTaskRowCenterYForTest(myChildId);
+        GuiTestSupport.assertTrue(checkboxY >= 0, "已完成子任务应在组件中可见可点击");
+        screen.mouseClicked(checkboxX, checkboxY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        GuiTestSupport.assertFalse(
+                requireTaskByTitle(screen, "My Completed Child").isCompleted(),
+                "已完成区的子任务应能被回退为未完成"
+        );
+    }
+
+    /**
+     * 验证"我的"视图下切换父任务完成状态时，仅影响当前玩家领取的子任务，不影响其他玩家的子任务。
+     */
+    private static void shouldOnlyTogglePlayerOwnedSubtasksInTeamAssignedView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-toggle-scoped", "Toggle Scoped Team");
+
+        Task parent = createTeamTask("Toggle Scoped Parent", teamProject.getId(), false);
+        Task myChild = createSubtask("My Child", parent, 0L);
+        myChild.setAssigneeUuid(OWNER_ID.toString());
+        myChild.setAssigneeName("owner");
+        Task otherChild = createSubtask("Other Child", parent, 1L);
+        otherChild.setAssigneeUuid("other-player-uuid");
+        otherChild.setAssigneeName("other");
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(parent, myChild, otherChild));
+
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAssignedViewForTest();
+        access(screen).selectTaskForTest(requireTaskByTitle(screen, "Toggle Scoped Parent"));
+
+        // 点击父任务勾选框
+        TaskListWidget widget = access(screen).getTaskListWidgetForTest();
+        int checkboxX = widget.getCheckboxCenterXForTest(parent.getId());
+        int checkboxY = widget.getTaskRowCenterYForTest(parent.getId());
+        GuiTestSupport.assertTrue(checkboxY >= 0, "父任务应在组件中可见");
+        screen.mouseClicked(checkboxX, checkboxY, 0);
+        waitForTaskSaveToFinish(screen);
+
+        // 当前玩家的子任务应完成
+        GuiTestSupport.assertTrue(
+                requireTaskByTitle(screen, "My Child").isCompleted(),
+                "我的视图下切换父任务应完成当前玩家领取的子任务"
+        );
+        // 其他玩家的子任务不应被影响
+        GuiTestSupport.assertFalse(
+                requireTaskByTitle(screen, "Other Child").isCompleted(),
+                "我的视图下切换父任务不应影响其他玩家领取的子任务"
+        );
+    }
+
+    /**
+     * 验证"我的"视图下放弃父任务时，仅放弃当前玩家领取的子任务，不影响其他玩家的子任务。
+     */
+    private static void shouldOnlyAbandonPlayerOwnedSubtasksInTeamAssignedView() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        Project teamProject = createTeamProject("team-abandon-scoped", "Abandon Scoped Team");
+
+        Task parent = createTeamTask("Abandon Scoped Parent", teamProject.getId(), false);
+        Task myChild = createSubtask("My Abandon Child", parent, 0L);
+        myChild.setAssigneeUuid(OWNER_ID.toString());
+        myChild.setAssigneeName("owner");
+        Task otherChild = createSubtask("Other Abandon Child", parent, 1L);
+        otherChild.setAssigneeUuid("other-player-uuid");
+        otherChild.setAssigneeName("other");
+        restoreTasksToManager(ops.getTeamTaskManager(), List.of(parent, myChild, otherChild));
+
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        access(screen).switchProjectForTest(teamProject);
+        access(screen).switchToTeamAssignedViewForTest();
+        access(screen).selectTaskForTest(requireTaskByTitle(screen, "Abandon Scoped Parent"));
+
+        // 触发放弃
+        access(screen).triggerAbandonTaskForTest();
+        waitForTaskSaveToFinish(screen);
+
+        // 当前玩家的子任务应被放弃
+        GuiTestSupport.assertNull(
+                requireTaskByTitle(screen, "My Abandon Child").getAssigneeUuid(),
+                "我的视图下放弃父任务应清空当前玩家子任务的指派"
+        );
+        // 其他玩家的子任务不应被影响
+        GuiTestSupport.assertEquals(
+                "other-player-uuid",
+                requireTaskByTitle(screen, "Other Abandon Child").getAssigneeUuid(),
+                "我的视图下放弃父任务不应影响其他玩家领取的子任务"
         );
     }
 

@@ -138,6 +138,14 @@ public class TaskManager {
     }
 
     /**
+     * 标记父任务完成状态为脏，下次读取时会重新聚合。
+     * 供 GUI 层在直接修改子任务完成状态后调用。
+     */
+    public void markParentCompletionDirty() {
+        parentCompletionDirty = true;
+    }
+
+    /**
      * 按当前稳定顺序返回已完成任务。
      *
      * @return 已完成任务列表
