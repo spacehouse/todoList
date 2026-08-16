@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.4.1] - 2026-08-16
+
+### New Features
+- **Subtasks are now supported**: Tasks can now contain subtasks, making it much easier to break larger goals into smaller, manageable steps.
+- **Parent-task actions are more convenient**: From a parent task, you can now complete or uncomplete its direct subtasks in one step, and in team projects you can also claim or assign direct subtasks that have not been assigned yet.
+
+### Improvements & Fixes
+- **H2 is now the default storage path**: The mod now uses H2 as the normal storage mode going forward instead of continuing day-to-day support for legacy NBT storage; existing old NBT data is still migrated automatically on first access.
+- **Clearer in-game H2 guidance**: Players with management access now get clearer hints for common H2 commands such as checking status, creating backups, reloading the database, and running health checks.
+
 ## [1.4.0] - 2026-06-17
 
 ### New Features

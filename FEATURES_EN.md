@@ -1,70 +1,69 @@
-# Features (v1.4.0)
+# Features (v1.4.1)
 
-TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collaboration across Fabric / Forge / NeoForge. This document describes what is available in v1.4.0 from a user perspective.
+TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collaboration. This page is written for regular players and focuses on what you can directly use in v1.4.1.
 
 ## Task Management
 
 - Create, edit, delete, and complete/uncomplete tasks in an in-game GUI
+- Subtasks are supported, so larger goals can be broken down into smaller steps
 - Task fields: title, description, priority (Low/Medium/High), and tags (comma-separated)
 - Search & filters: real-time filtering by status, priority, text (title/description), and tags
 - Unfinished tasks can be reordered directly with drag-and-drop
+- Parent tasks can batch-handle their direct subtasks, which reduces repetitive clicking
 - Completed tasks now have a clearer split from open tasks, can be folded, and support one-click cleanup within the current project
 - Both task deletion and completed-task cleanup now use explicit confirmation steps to reduce accidental operations
-- Detail editing now supports an auto-save toggle; when enabled, edits can be saved on blur, task switch, project switch, quick add, and screen close
+- Detail editing now supports an auto-save toggle; when enabled, edits can be saved on blur, task switch, project switch, and screen close
 
 ## Projects & Views
 
-- Supports both personal projects and team projects
-- Sidebar project list: search and switch projects; create/edit/delete projects
-- Project search supports prefixes and dropdown hints for faster navigation in larger workspaces
-- Team views (multiplayer): Unassigned, All Assigned, Assigned to Me
-- Team projects support membership management, join requests, and team permission settings
-- Starred projects are sorted first and can be reused as HUD sources
-- Team projects can optionally enable an all-player task mode for broader shared workflows
+- Supports both personal projects and team projects, so it works for solo play as well as group play
+- The sidebar lets you search, switch, create, edit, and delete projects
+- When you have many projects, search prefixes and dropdown hints help you find the right one faster
+- In multiplayer, team tasks can be viewed through Unassigned, All Assigned, and Assigned to Me views
+- Team projects support member management, join requests, and team permission settings
+- Starred projects are sorted first and can also be used as HUD sources
+- Team projects can optionally enable an all-player task mode for more open shared workflows
 
 ## Multiplayer Collaboration & Permissions
 
-- In multiplayer, personal tasks are persisted per player; team tasks are stored on the server and synchronized to players
-- Team-view edits must be submitted via Save; Cancel or closing with Esc discards local unsaved edits and refreshes from the server to reduce conflicts
-- A unified server-side Permission Center validates all team operations based on role, view scope, completion state, and assignment relationship
-- The “Assign Others” dialog consistently uses project members, and offline members remain assignable
-- Role differences:
-  - Admins can fully manage team tasks, project members, and critical server commands
-  - Regular players can claim/abandon tasks and complete tasks assigned to them; “Assign Others” is visible to admins only
+- In multiplayer, personal tasks are saved per player, while team tasks are stored on the server and synced to members
+- Changes in team views need to be confirmed with Save; Cancel or closing with Esc discards local unsaved edits and reloads the latest server state
+- The “Assign Others” dialog shows project members directly, and offline members can still be assigned
+- Parent tasks can now complete or uncomplete their direct subtasks in one step, and team projects can also assign or claim remaining unassigned direct subtasks in one step
+- In the "Assigned to Me" view, parent-task batch complete, uncomplete, and abandon actions only affect direct subtasks claimed by the current player; completed subtasks also stay visible there so they can be rolled back later
+- Admins can manage team tasks, members, and critical commands
+- Regular players can claim, abandon, and complete tasks assigned to them; “Assign Others” is shown to admins only
 
 ## Command System
 
-- Provides a unified `/todo` command entry and keeps `/todolist` as an alias
-- Task commands cover list/query, pagination, quick add, add-with-project, done, remove, assign, claim, abandon, and batch cleanup with confirmation
-- Project commands cover list, select, star, rename, create/remove projects, and member add/remove/role changes
-- HUD commands cover visibility toggling
-- Admin commands cover command-access mode, H2 status, online backup, health checks, TCP restart, database reload, and password reset
+- Provides a unified `/todo` command entry, while `/todolist` remains available as an alias
+- Commands can quickly add, complete, delete, claim, and abandon tasks, and also help with project switching and HUD visibility
+- Managers can also use commands for team-member management, H2 status checks, backups, database reloads, and health checks
 
 ## HUD Display & Config
 
-- The top-right HUD shows tasks for the current view, supports expand/collapse (H key), visibility toggle (J key), and count summaries
-- The HUD header reflects the current view (Personal / Team-Unassigned / Team-All Assigned / Team-Assigned to Me)
-- In true single-player worlds, the HUD default view is locked to Personal and team views are hidden
-- Built-in HUD config screen: width, max height, todo/done item limits (0–30), default expanded state, show-when-empty, default view, and draggable preview positioning; supports Save & Apply
+- The top-right HUD shows tasks for the current view, supports expand/collapse (H key), and displays count summaries
+- The HUD title changes with the current view, so it is easier to tell whether you are looking at personal or team tasks
+- In true single-player worlds, the HUD stays on personal tasks and hides team views
+- The built-in HUD config screen lets you adjust width, height, item limits, default expanded state, empty-list display, and draggable position, then apply the settings directly
 - If Mod Menu is installed, the HUD config screen can also be opened from the mod entry
-- HUD semantics are aligned with the GUI for priority color blocks, hidden-count summaries, and current-view filtering; in H2 mode, high-frequency HUD paths can use database-backed query optimization
+- HUD colors, counts, and filtering stay consistent with the main GUI, which makes day-to-day use easier to read
 
 ## H2 Storage & Maintenance
 
-- The storage layer can switch between `NBT` and `H2`; `H2` mode can automatically migrate legacy `.dat` data
-- H2 now covers tasks, projects, player project state, query optimization, backup, health checks, maintenance locking, and schema upgrades
-- H2 supports external TCP access with separate `admin / readonly / readwrite` accounts
-- Online backup, database reload, TCP restart, health checks, and password reset are available for maintenance workflows
-- TCP lifecycle handling now invalidates stale reusable connections, reducing “storage unavailable” failures when moving between published LAN worlds and local single-player worlds
+- The mod now uses `H2` as its unified storage mode; old NBT data is migrated automatically the first time it is needed, so manual steps are usually unnecessary
+- Tasks, projects, and project-state data continue to be saved normally
+- If you run a server or manage a world, you can use `/todo h2 status` to check the current storage status
+- When troubleshooting, `/todo h2` commands can also create backups, reload the database, and run health checks
 
 ## Persistence & Localization
 
-- Safer file-based persistence is used for tasks, projects, player project state, and config data
-- When a primary data file is corrupted, the mod can recover automatically from the latest backup while preserving the corrupt copy
-- Local singleplayer personal tasks keep local-file and per-player-file copies in sync to reduce accidental rollback-like restores
-- Bilingual UI via language packs (English and Chinese), following the game language
+- Tasks, projects, player project state, and config data are saved with a safer persistence flow
+- If a primary data file is damaged, the mod can try to recover from the latest backup while preserving the damaged copy for troubleshooting
+- Local single-player personal tasks keep extra synchronization protection to reduce accidental rollbacks or clears
+- The UI includes both English and Chinese language packs and follows the game language
 
 ## Audit Logs
 
-- The server logs all effective team operations in a unified `[TEAM_OP]` format for auditing and troubleshooting
+- The server logs important team-task actions, which helps server owners troubleshoot issues
 
