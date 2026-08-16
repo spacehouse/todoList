@@ -72,7 +72,7 @@
 重点看：
 
 - `H2 当前连接模式：tcp`
-- `H2 TCP 地址：<bindAddress>:<port>（local/remote）`
+- `H2 TCP 地址：127.0.0.1:<port>（local）`
 
 常见例子：
 
@@ -85,6 +85,8 @@ H2 TCP 地址：127.0.0.1:9092（local）
 ```text
 H2 TCP 地址：127.0.0.1:9094（local）
 ```
+
+TCP 服务器固定只接受本机回环连接；远程机器要访问请先建 SSH 隧道（见 3.2）。
 
 所以不要假定永远是 `9092`，尤其你启用了自动递增端口时。
 
@@ -172,7 +174,6 @@ config/todolist-h2.json
 适合：
 
 - 游戏和 SQL 工具在同一台机器上
-- `allowRemote=false`
 
 模板：
 
@@ -186,31 +187,20 @@ jdbc:h2:tcp://127.0.0.1:<实际端口>/<游戏目录>/todo/<namespace>/todolist;
 jdbc:h2:tcp://127.0.0.1:9092/E:/Minecraft/.minecraft/todo/local/todolist;DATABASE_TO_UPPER=FALSE
 ```
 
-## 3.2 局域网远程连接模板
+## 3.2 远程机器连接模板（先建 SSH 隧道）
 
-适合：
+TCP 服务器不开放远程访问，历史配置中的 `bindAddress`、`allowRemote` 字段已被移除并忽略。
 
-- 数据库所在机器和查询工具不在同一台机器
-- 你已经在 `todolist-h2.json` 中设置 `allowRemote=true`
-
-模板：
+从另一台机器查库时，先建 SSH 隧道把服务器端口转发到本机：
 
 ```text
-jdbc:h2:tcp://<服务器局域网IP>:<实际端口>/<数据库基础路径>;DATABASE_TO_UPPER=FALSE
+ssh -L 9092:127.0.0.1:9092 user@服务器IP
 ```
 
-例子：
+然后按本机模板连接 `127.0.0.1:9092` 即可。注意两点：
 
-```text
-jdbc:h2:tcp://192.168.1.20:9092/E:/MinecraftServer/todo/local/todolist;DATABASE_TO_UPPER=FALSE
-```
-
-这里最容易犯的错是：
-
-- 把 `<服务器局域网IP>` 写对了
-- 但数据库路径却写成了本机自己的路径
-
-注意，URL 里的数据库路径必须是“服务器那台机器上的路径”，不是客户端电脑上的路径。
+- 数据库工具连接的地址是 `127.0.0.1`（隧道落点），不是服务器 IP
+- URL 里的数据库路径必须是“服务器那台机器上的路径”，不是你电脑上的路径
 
 ---
 
@@ -340,18 +330,18 @@ java -cp libs/h2-2.2.220.jar org.h2.tools.Shell -url "jdbc:h2:tcp://127.0.0.1:90
 - `DBeaver` 或 `DataGrip`
 - `todo_readonly`
 - `tcpEnabled=true`
-- `allowRemote=false`
 
 这是最稳、最安全、最不容易踩坑的组合。
 
 ## 7.2 我想从另一台机器查库
 
-需要同时满足：
+步骤：
 
-- `allowRemote=true`
-- 防火墙放行对应端口
-- 使用足够强的密码
-- 远程客户端 JDBC URL 里的数据库路径仍然是服务器端路径
+1. 在本机建 SSH 隧道：`ssh -L 9092:127.0.0.1:9092 user@服务器IP`
+2. 数据库工具连接 `127.0.0.1:9092`
+3. JDBC URL 里的数据库路径仍然写服务器端路径
+
+数据库不开放任何远程直连，这是有意设计。
 
 ## 7.3 我想做导出或排查
 
@@ -402,24 +392,13 @@ jdbc:h2:tcp://127.0.0.1:9092/E:/Minecraft/.minecraft/todo/local/todolist;DATABAS
 /todo h2 status
 ```
 
-### 4. `allowRemote=false` 却想让其他电脑连接
+### 4. 想让其他电脑直连数据库
 
-这时程序会绑定在：
+TCP 服务器只绑定 `127.0.0.1`，其他机器无论怎么配置都连不上，这是有意设计。远程查库请走 SSH 隧道（见 3.2）。
 
-```text
-127.0.0.1
-```
+### 5. 弱密码处理
 
-只能本机连，其他机器当然连不上。
-
-### 5. 用了弱密码，TCP 被自动关掉
-
-当 `allowRemote=true` 时，如果密码强度不够，程序会禁用 TCP。
-
-这种情况常见表现是：
-
-- 配置里写了 `tcpEnabled=true`
-- 但 ` /todo h2 status ` 仍显示不是 `tcp`
+账号密码由程序自动生成高强度随机值。如果手动改弱了密码，程序会在下次加载时自动重新生成强密码。
 
 ### 6. 忘了重启游戏或服务器
 

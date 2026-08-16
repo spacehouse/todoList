@@ -8,8 +8,12 @@ import java.nio.file.Path;
 
 /**
  * H2TcpServerManager 管理可选 H2 TCP Server 的启动、停止、重启和状态快照。
+ * TCP 服务器固定仅接受本机回环连接，用作同进程跨 classloader 的内部通道，
+ * 从机制上不提供远程访问能力。
  */
 public final class H2TcpServerManager {
+    /** H2 TCP 服务器唯一允许的连接地址，始终为本机回环。 */
+    public static final String LOOPBACK_BIND_ADDRESS = "127.0.0.1";
     private static Object server;
     private static StatusSnapshot status = StatusSnapshot.disabled();
 
@@ -38,8 +42,8 @@ public final class H2TcpServerManager {
             int port = safeConfig.getPort() + i;
             try {
                 server = createAndStartServer(safeConfig, port);
-                status = StatusSnapshot.tcpActive(safeConfig.getBindAddress(), port, safeConfig.isAllowRemote());
-                TodoConstants.LOGGER.info("H2 TCP server started on {}:{}", safeConfig.getBindAddress(), port);
+                status = StatusSnapshot.tcpActive(port);
+                TodoConstants.LOGGER.info("H2 TCP server started on {}:{}", LOOPBACK_BIND_ADDRESS, port);
                 return status;
             } catch (Exception exception) {
                 server = null;
@@ -103,12 +107,13 @@ public final class H2TcpServerManager {
     public static synchronized String buildTcpJdbcUrl(Path databaseBasePath) {
         Path normalizedPath = databaseBasePath.toAbsolutePath().normalize();
         String h2Path = normalizedPath.toString().replace("\\", "/");
-        return "jdbc:h2:tcp://" + status.bindAddress + ":" + status.actualPort + "/" + h2Path
+        return "jdbc:h2:tcp://" + LOOPBACK_BIND_ADDRESS + ":" + status.actualPort + "/" + h2Path
                 + ";DATABASE_TO_UPPER=FALSE";
     }
 
     /**
      * 通过反射创建并启动 H2 TCP Server，避免 NBT 模式静态依赖 H2 类。
+     * 不携带 -tcpAllowOthers 参数，H2 会在协议层拒绝所有非本机连接。
      *
      * @param config TCP 配置
      * @param port 目标端口
@@ -118,9 +123,7 @@ public final class H2TcpServerManager {
     private static Object createAndStartServer(H2TcpConfig config, int port) throws Exception {
         Class<?> serverClass = Class.forName("org.h2.tools.Server");
         Method createTcpServer = serverClass.getMethod("createTcpServer", String[].class);
-        String[] args = config.isAllowRemote()
-                ? new String[] {"-tcp", "-tcpPort", String.valueOf(port), "-tcpAllowOthers"}
-                : new String[] {"-tcp", "-tcpPort", String.valueOf(port)};
+        String[] args = new String[] {"-tcp", "-tcpPort", String.valueOf(port)};
         Object created = createTcpServer.invoke(null, (Object) args);
         Method start = created.getClass().getMethod("start");
         start.invoke(created);
@@ -153,21 +156,17 @@ public final class H2TcpServerManager {
     public static final class StatusSnapshot {
         private final boolean tcpEnabled;
         private final boolean tcpActive;
-        private final String bindAddress;
         private final int actualPort;
-        private final boolean allowRemote;
         private final String mode;
         private final String lastFailure;
 
         /**
          * 创建 H2 TCP 状态快照。
          */
-        private StatusSnapshot(boolean tcpEnabled, boolean tcpActive, String bindAddress, int actualPort, boolean allowRemote, String mode, String lastFailure) {
+        private StatusSnapshot(boolean tcpEnabled, boolean tcpActive, int actualPort, String mode, String lastFailure) {
             this.tcpEnabled = tcpEnabled;
             this.tcpActive = tcpActive;
-            this.bindAddress = bindAddress;
             this.actualPort = actualPort;
-            this.allowRemote = allowRemote;
             this.mode = mode;
             this.lastFailure = lastFailure;
         }
@@ -178,19 +177,17 @@ public final class H2TcpServerManager {
          * @return 状态快照
          */
         private static StatusSnapshot disabled() {
-            return new StatusSnapshot(false, false, "127.0.0.1", -1, false, "embedded", "");
+            return new StatusSnapshot(false, false, -1, "embedded", "");
         }
 
         /**
-         * 创建 TCP 活跃状态。
+         * 创建 TCP 活跃状态，绑定地址固定为本机回环。
          *
-         * @param bindAddress 绑定地址
          * @param actualPort 实际端口
-         * @param allowRemote 是否允许远程访问
          * @return 状态快照
          */
-        private static StatusSnapshot tcpActive(String bindAddress, int actualPort, boolean allowRemote) {
-            return new StatusSnapshot(true, true, bindAddress, actualPort, allowRemote, "tcp", "");
+        private static StatusSnapshot tcpActive(int actualPort) {
+            return new StatusSnapshot(true, true, actualPort, "tcp", "");
         }
 
         /**
@@ -200,7 +197,7 @@ public final class H2TcpServerManager {
          * @return 状态快照
          */
         private static StatusSnapshot fallback(String lastFailure) {
-            return new StatusSnapshot(true, false, "127.0.0.1", -1, false, "embedded_fallback", lastFailure);
+            return new StatusSnapshot(true, false, -1, "embedded_fallback", lastFailure);
         }
 
         /**
@@ -222,12 +219,12 @@ public final class H2TcpServerManager {
         }
 
         /**
-         * 返回绑定地址。
+         * 返回绑定地址，固定为本机回环地址。
          *
          * @return 绑定地址
          */
         public String getBindAddress() {
-            return bindAddress;
+            return LOOPBACK_BIND_ADDRESS;
         }
 
         /**
@@ -237,15 +234,6 @@ public final class H2TcpServerManager {
          */
         public int getActualPort() {
             return actualPort;
-        }
-
-        /**
-         * 返回是否允许远程访问。
-         *
-         * @return 允许远程访问时返回 true
-         */
-        public boolean isAllowRemote() {
-            return allowRemote;
         }
 
         /**
