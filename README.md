@@ -6,7 +6,7 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.4.0 Capability Overview / 1.4.0 版本能力概览
+### v1.4.1 Capability Overview / 1.4.1 版本能力概览
 - ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
 - ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks, current-project completed-task cleanup, and optional detail auto-save / 游戏内 GUI 任务管理：支持增删改查、优先级、标签、筛选搜索、未完成任务拖拽排序、当前项目一键清理已完成项，以及可选的详情自动保存
 - ✅ Personal and team projects: project hints, member management, join approval, and all-player team mode / 个人与团队项目：支持项目提示、成员管理、加入审批，以及可选的团队全服任务模式
@@ -195,8 +195,8 @@ cd todoList
 
 ### Release / 发布
 
-- Releases are published by pushing a Git tag that starts with `v`, for example `v1.4.0`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.4.0`
-- Release names include the Minecraft version suffix, for example `TodoList-v1.4.0-mc1.21.1-release`. / 发布名称会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.0-mc1.21.1-release`
+- Releases are published by pushing a Git tag that starts with `v`, for example `v1.4.1`. / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.4.1`
+- Release names include the Minecraft version suffix, for example `TodoList-v1.4.1-mc1.21.1-release`. / 发布名称会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.1-mc1.21.1-release`
 - The release workflow extracts notes from `CHANGELOG.md` based on the tag version. / 发布工作流会根据标签版本从 `CHANGELOG.md` 提取发布说明
 
 ### Project Structure / 项目结构
