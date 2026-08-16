@@ -15,7 +15,7 @@
 |---|---|---|---|
 | Stable | `1.20.1` | Fabric + Forge | 当前首要交付基线，优先保证功能闭环与回归稳定 |
 | Stable | `1.21.1` | Fabric + NeoForge | 下一主线基线，作为 1.21 系列扩展起点 |
-| Progressive | `1.20.x` | Fabric + Forge | 按子版本分批纳入，逐批执行差异评估与回归 |
+| Progressive | `1.20.x` | Fabric + Forge（`1.20.5` 仅 Fabric） | 按子版本分批纳入，逐批执行差异评估与回归 |
 | Progressive | `1.21.x` | Fabric + NeoForge | 按子版本分批纳入，并执行阈值评分决定是否拆簇 |
 | Deferred | `1.21.x` | Forge | 同期暂缓，避免与 NeoForge 双轨重复投入 |
 
@@ -25,6 +25,13 @@
 - 阶段 2（`1.20.x` / Fabric + Forge）：已固化“候选筛选 → 差异预扫 → 最小适配 → 回归验证 → 矩阵入库 → 合并发布”流程。
 - 阶段 3（`1.21.1` / Fabric + NeoForge）：已确认迁移边界与退出条件，明确不并行维护 `1.21.x` Forge 轨道。
 - 阶段 4（`1.21.x` / Fabric + NeoForge）：已落地阈值触发与差异簇拆分规则，作为子版本扩展时的默认治理机制。
+
+## 本轮按阶段执行记录（2026-08-16）
+
+- `1.20.x` 集成分支已完成 `1.20.1`~`1.20.6` 全量构建与运行时测试验证，共线维护成立。
+- 差异收口方式：Fabric 网络 payload API、Forge HUD 事件、GUI 初始焦点与测试基建均收敛到平台兼容层，业务协议未做版本分流。
+- `1.20.5` 无 Forge 发布链（官方从 `1.20.4` 的 49.x 直接跳到 `1.20.6` 的 50.x），已定位为 Fabric-only 并落地按矩阵跳过 Forge 的构建路径。
+- 版本矩阵 `gradle/version-matrix.properties` 已作为长期单一事实来源，新增 `forge_supported` 键控制加载器组合。
 
 ## 1.4.0 已完成基线
 
