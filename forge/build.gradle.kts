@@ -7,8 +7,11 @@ plugins {
 }
 
 val archives_name: String by project
-val minecraftVersion = property("minecraft_version") as String
-val loaderVersion = property("loader_version") as String
+val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
+val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
+val forgeVersion = (findProperty("target_forge_version") as String?) ?: "47.2.0"
+val forgeLoaderRange = (findProperty("target_forge_loader_range") as String?) ?: "[47,)"
+val minecraftVersionRange = (findProperty("target_minecraft_version_range") as String?) ?: "[$minecraftVersion]"
 val commonProject = project(":common")
 val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
@@ -26,11 +29,11 @@ repositories {
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
     mappings(loom.officialMojangMappings())
-    forge("net.minecraftforge:forge:$minecraftVersion-47.2.0")
+    forge("net.minecraftforge:forge:$minecraftVersion-$forgeVersion")
     implementation(project(":common", configuration = "namedElements"))
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
-    compileOnly("net.minecraftforge:fmlloader:$minecraftVersion-47.2.0")
-    compileOnly("net.minecraftforge:javafmllanguage:$minecraftVersion-47.2.0")
+    compileOnly("net.minecraftforge:fmlloader:$minecraftVersion-$forgeVersion")
+    compileOnly("net.minecraftforge:javafmllanguage:$minecraftVersion-$forgeVersion")
     compileOnly("net.minecraftforge:eventbus:6.0.5")
 
     compileOnly("org.slf4j:slf4j-api:2.0.7")
@@ -38,8 +41,16 @@ dependencies {
 
 tasks.processResources {
     inputs.property("version", project.version)
+    inputs.property("forge_loader_range", forgeLoaderRange)
+    inputs.property("minecraft_version_range", minecraftVersionRange)
     filesMatching("META-INF/mods.toml") {
-        expand(mapOf("version" to project.version))
+        expand(
+            mapOf(
+                "version" to project.version,
+                "forge_loader_range" to forgeLoaderRange,
+                "minecraft_version_range" to minecraftVersionRange
+            )
+        )
     }
 }
 

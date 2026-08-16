@@ -31,9 +31,9 @@
   ],
   "accessWidener": "todolist.accesswidener",
   "depends": {
-    "fabricloader": ">=0.15.0",
-    "minecraft": "1.20.1",
-    "java": ">=17",
+    "fabricloader": "${fabric_loader_dependency}",
+    "minecraft": "${fabric_minecraft_dependency}",
+    "java": ">=${java_dependency}",
     "fabric-api": "*"
   },
   "suggests": {

@@ -5,13 +5,16 @@ plugins {
     id("maven-publish")
 }
 
+val releaseMinecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
+val releaseJavaVersion = ((findProperty("target_java_version") as String?) ?: "17").toInt()
 val tripletCompareScript = layout.projectDirectory.file("tools/triplet-compare/compare-command-result-triplet.ps1")
 val tripletBaselineSample = layout.projectDirectory.file("tools/triplet-compare/baseline-sample.json")
 val tripletLogSample = layout.projectDirectory.file("tools/triplet-compare/log-sample.txt")
 val tripletReport = layout.buildDirectory.file("reports/triplet-sample-diff.json")
 val h2JarContentReport = layout.buildDirectory.file("reports/h2-driver-content-check.txt")
-val releaseMinecraftVersion = property("minecraft_version") as String
 val releaseModVersion = property("mod_version") as String
+// 与 settings.gradle.kts 保持一致：1.20.5 无 Forge 发布链，Fabric-only 构建时排除 forge 相关任务
+val forgeEnabled = (findProperty("target_forge_supported") as String?)?.trim()?.lowercase() != "false"
 
 subprojects {
     apply(plugin = "java")
@@ -23,8 +26,17 @@ subprojects {
     repositories {
         mavenCentral()
         maven {
+            url = uri(rootProject.layout.projectDirectory.dir(".local-maven"))
+            content {
+                includeModule("net.minecraftforge", "bootstrap-dev")
+            }
+        }
+        maven {
             name = "Modrinth"
             url = uri("https://maven.modrinth.com")
+            content {
+                includeGroup("maven.modrinth")
+            }
         }
         maven {
             name = "Fabric"
@@ -38,12 +50,12 @@ subprojects {
 
     tasks.withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.release.set(17)
+        options.release.set(releaseJavaVersion)
     }
 
     configure<JavaPluginExtension> {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(17))
+            languageVersion.set(JavaLanguageVersion.of(releaseJavaVersion))
         }
         withSourcesJar()
     }
@@ -53,7 +65,11 @@ tasks.register<Copy>("distReleaseJars") {
     group = "distribution"
     description = "Collect release-ready loader jars into root build/dist (exclude sources/dev)."
 
-    dependsOn(":fabric:build", ":forge:build")
+    if (forgeEnabled) {
+        dependsOn(":fabric:build", ":forge:build")
+    } else {
+        dependsOn(":fabric:build")
+    }
 
     into(layout.buildDirectory.dir("libs"))
 
@@ -61,9 +77,11 @@ tasks.register<Copy>("distReleaseJars") {
         include("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
-    from(project(":forge").layout.buildDirectory.dir("libs")) {
-        include("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
-        exclude("*-sources.jar", "*-dev.jar")
+    if (forgeEnabled) {
+        from(project(":forge").layout.buildDirectory.dir("libs")) {
+            include("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
+            exclude("*-sources.jar", "*-dev.jar")
+        }
     }
 }
 
@@ -76,10 +94,12 @@ tasks.register("h2JarContentCheck") {
 
     doLast {
         val distDir = layout.buildDirectory.dir("libs").get().asFile
-        val releaseJars = listOf(
-            "fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"),
-            "forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
-        )
+        val releaseJars = buildList {
+            add("fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"))
+            if (forgeEnabled) {
+                add("forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar"))
+            }
+        }
 
         val reportLines = mutableListOf<String>()
         releaseJars.forEach { (loader, jarFile) ->
