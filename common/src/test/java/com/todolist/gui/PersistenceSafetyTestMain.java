@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.persistence.SafePersistenceHelper;
@@ -13,7 +14,6 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtIo;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -339,7 +339,7 @@ public final class PersistenceSafetyTestMain {
      * @throws Exception 当改写失败时抛出
      */
     private static void corruptTaskPriorityInsideNbt(Path file, String invalidPriority) throws Exception {
-        CompoundTag root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIoCompat.read(file);
         if (root == null || !root.contains("tasks", 9)) {
             throw new IllegalStateException("任务文件缺少 tasks 列表，无法构造部分损坏场景");
         }
@@ -348,7 +348,7 @@ public final class PersistenceSafetyTestMain {
             throw new IllegalStateException("任务文件没有可损坏的任务条目");
         }
         taskList.getCompound(0).putString("priority", invalidPriority);
-        NbtIo.write(root, file.toFile());
+        NbtIoCompat.write(root, file);
     }
 
     /**

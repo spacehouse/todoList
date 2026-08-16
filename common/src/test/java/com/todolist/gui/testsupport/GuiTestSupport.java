@@ -10,12 +10,15 @@ import com.mojang.blaze3d.platform.Window;
 import net.minecraft.DetectedVersion;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.GameNarrator;
+import net.minecraft.client.InputType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.util.FormattedCharSequence;
 import sun.misc.Unsafe;
@@ -142,6 +145,9 @@ public final class GuiTestSupport {
         setObjectField(Minecraft.class, minecraft, "player", player);
         setObjectField(Minecraft.class, minecraft, "window", window);
         setObjectField(Minecraft.class, minecraft, "options", options);
+        // 1.20.5+ 按钮键盘激活会播放音效，注入静默声音管理器避免触发真实声音引擎；
+        // 必须用 Unsafe 分配，因为 SoundManager 构造器会初始化 SoundEngine 并加载 LWJGL 本地库
+        setObjectField(Minecraft.class, minecraft, "soundManager", allocate(FakeSoundManager.class));
         minecraft.setTestFont(font);
         minecraft.setTestPlayer(player);
         minecraft.setTestConnection(connection);
@@ -162,6 +168,8 @@ public final class GuiTestSupport {
     public static void initScreen(FakeMinecraftClient minecraft, Screen screen, int width, int height) {
         Objects.requireNonNull(minecraft, "minecraft");
         Objects.requireNonNull(screen, "screen");
+        // 1.20.5+ 的 Screen.init 会读取 lastInputType 判定初始焦点，测试环境需预设为键盘输入
+        minecraft.setLastInputType(InputType.KEYBOARD_ARROW);
         screen.init(minecraft, width, height);
     }
 
@@ -435,6 +443,28 @@ public final class GuiTestSupport {
             method.invoke(null);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("无法重置 TodoScreen 静态状态", e);
+        }
+    }
+
+    /**
+     * 静默按钮音效的声音管理器，避免测试环境触发真实声音引擎。
+     */
+    private static final class FakeSoundManager extends SoundManager {
+        /**
+         * 创建测试用声音管理器。
+         */
+        private FakeSoundManager() {
+            super(null);
+        }
+
+        /**
+         * 静默处理声音播放请求。
+         *
+         * @param sound 声音实例
+         */
+        @Override
+        public void play(SoundInstance sound) {
+            // 测试环境不播放任何声音
         }
     }
 

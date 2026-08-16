@@ -3479,9 +3479,10 @@ public final class TodoScreenTestMain {
      * @param screen 目标界面
      */
     private static void focusProjectSearchField(TodoScreen screen) {
-        int x = access(screen).getProjectSearchFieldForTest().getX() + 4;
-        int y = access(screen).getProjectSearchFieldForTest().getY() + Math.max(1, access(screen).getProjectSearchFieldForTest().getHeight() / 2);
-        screen.mouseClicked(x, y, 0);
+        // 1.20.5+ EditBox#onClick 会经 InputConstants 触发 LWJGL 本地库加载，
+        // 测试环境改为直接聚焦输入框并打开前缀下拉，效果与用户点击搜索框等价
+        access(screen).getProjectSearchFieldForTest().setFocused(true);
+        access(screen).openProjectSearchDropdownForTest();
     }
 
     /**

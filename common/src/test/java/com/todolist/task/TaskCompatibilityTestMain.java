@@ -1,10 +1,10 @@
 package com.todolist.task;
 
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.platform.DataPathProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtIo;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -157,7 +157,7 @@ public final class TaskCompatibilityTestMain {
         ListTag tasks = new ListTag();
         tasks.add(parent);
         root.put("tasks", tasks);
-        NbtIo.write(root, taskFile.toFile());
+        NbtIoCompat.write(root, taskFile);
     }
 
     /**

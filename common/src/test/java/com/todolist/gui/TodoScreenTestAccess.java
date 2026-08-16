@@ -520,6 +520,14 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 模拟用户点击项目搜索框后打开前缀下拉提示的状态。
+     * 1.20.5+ 的 EditBox#onClick 依赖 LWJGL 本地库，测试环境改用等效状态写入。
+     */
+    void openProjectSearchDropdownForTest() {
+        writeScreenField("projectSearchPrefixDropdownOpen", true);
+    }
+
+    /**
      * 返回项目搜索前缀候选文本。
      *
      * @return 候选文本列表
