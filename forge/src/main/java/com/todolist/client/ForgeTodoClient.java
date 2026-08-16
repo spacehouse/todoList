@@ -17,7 +17,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -79,6 +78,7 @@ public final class ForgeTodoClient {
         Object eventBus = MinecraftForge.EVENT_BUS;
         registerListener(eventBus, "net.minecraftforge.event.TickEvent$ClientTickEvent", ForgeTodoClient::onClientTickEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.RenderGuiOverlayEvent$Post", ForgeTodoClient::onGuiOverlayPostEvent);
+        registerListener(eventBus, "net.minecraftforge.client.event.RenderGuiEvent$Post", ForgeTodoClient::onGuiOverlayPostEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingOut", ForgeTodoClient::onClientLoggingOutEvent);
         registerListener(eventBus, "net.minecraftforge.client.event.ClientPlayerNetworkEvent$LoggingIn", ForgeTodoClient::onClientLoggingInEvent);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(ForgeTodoClient::onRegisterKeyMappingsEvent);
@@ -90,6 +90,8 @@ public final class ForgeTodoClient {
             eventBus.getClass()
                     .getMethod("addListener", EventPriority.class, boolean.class, Class.class, java.util.function.Consumer.class)
                     .invoke(eventBus, EventPriority.NORMAL, false, eventClass, consumer);
+        } catch (ClassNotFoundException ignored) {
+            // 不同 Forge 小版本的 GUI 事件类型存在差异，缺失时静默跳过。
         } catch (Exception e) {
             TodoListForge.LOGGER.warn("Failed to register Forge client listener for {}", eventClassName, e);
         }
@@ -252,12 +254,15 @@ public final class ForgeTodoClient {
         if (hudRenderer == null) {
             return;
         }
-        if (event instanceof net.minecraftforge.client.event.RenderGuiOverlayEvent.Post postEvent) {
-            if (!postEvent.getOverlay().id().equals(VanillaGuiOverlay.HOTBAR.id())) {
-                return;
-            }
-            hudRenderer.render(postEvent.getGuiGraphics(), postEvent.getPartialTick());
+        String eventClassName = event.getClass().getName();
+        if (eventClassName.endsWith("RenderGuiOverlayEvent$Post") && !isHotbarOverlayEvent(event)) {
+            return;
         }
+        Object guiGraphics = invokeNoArg(event, "getGuiGraphics");
+        if (!(guiGraphics instanceof net.minecraft.client.gui.GuiGraphics resolvedGuiGraphics)) {
+            return;
+        }
+        hudRenderer.render(resolvedGuiGraphics, resolvePartialTick(event));
     }
 
     private static void openTodoScreen(Minecraft current) {
@@ -385,5 +390,53 @@ public final class ForgeTodoClient {
      */
     private static boolean isLocalIntegratedServer(Minecraft current) {
         return current != null && (current.isLocalServer() || current.getSingleplayerServer() != null);
+    }
+
+    /**
+     * 判断旧版 Forge overlay 事件当前是否正处于 hotbar 渲染阶段。
+     *
+     * @param event GUI overlay 事件
+     * @return 当前 overlay 为 hotbar 时返回 true
+     */
+    private static boolean isHotbarOverlayEvent(Object event) {
+        Object overlay = invokeNoArg(event, "getOverlay");
+        if (overlay == null) {
+            return false;
+        }
+        Object overlayId = invokeNoArg(overlay, "id");
+        String overlayKey = overlayId == null ? "" : overlayId.toString();
+        return "minecraft:hotbar".equals(overlayKey) || "hotbar".equals(overlayKey);
+    }
+
+    /**
+     * 从不同版本的 Forge GUI 事件中解析 partial tick。
+     *
+     * @param event GUI 渲染事件
+     * @return 可用于 HUD 渲染的 partial tick
+     */
+    private static float resolvePartialTick(Object event) {
+        Object partialTick = invokeNoArg(event, "getPartialTick");
+        if (partialTick instanceof Number number) {
+            return number.floatValue();
+        }
+        return 0.0F;
+    }
+
+    /**
+     * 调用无参反射方法；不存在或调用失败时返回 null。
+     *
+     * @param target 调用对象
+     * @param methodName 方法名
+     * @return 反射调用结果
+     */
+    private static Object invokeNoArg(Object target, String methodName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            return target.getClass().getMethod(methodName).invoke(target);
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
     }
 }

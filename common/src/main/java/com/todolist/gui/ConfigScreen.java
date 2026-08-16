@@ -2,6 +2,7 @@ package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
+import com.todolist.compat.ScreenCompat;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
@@ -360,7 +361,7 @@ public class ConfigScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
         super.render(context, mouseX, mouseY, delta);
 
         int guiWidth = clampInt(this.width - 40, 360, 560);

@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.TodoListCommon;
+import com.todolist.compat.ScreenCompat;
 import com.todolist.client.ClientBridge;
 import com.todolist.project.Project;
 import org.lwjgl.glfw.GLFW;
@@ -289,8 +290,22 @@ public class AddMemberScreen extends Screen {
     /**
      * 处理候选成员列表区域内的滚轮滚动。
      */
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return handleMouseScrolled(mouseX, mouseY, 0.0D, amount);
+    }
+
+    /**
+     * 兼容 1.20.2 及以上版本的四参数滚轮事件。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    /**
+     * 统一处理不同 Minecraft 小版本下的滚轮输入。
+     */
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
         if (dialogLayout != null && dialogLayout.isInsideList(mouseX, mouseY)) {
             if (filteredPlayers != null && !filteredPlayers.isEmpty()) {
                 int totalItems = filteredPlayers.size();
@@ -304,7 +319,7 @@ public class AddMemberScreen extends Screen {
                 }
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, amount);
+        return ScreenCompat.callSuperMouseScrolled(this, mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     /**
@@ -312,7 +327,7 @@ public class AddMemberScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
 
         context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
         context.drawString(font, Component.translatable("gui.todolist.label.member_name"),

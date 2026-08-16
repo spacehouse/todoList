@@ -3,12 +3,12 @@ package com.todolist.client;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListMod;
+import com.todolist.compat.FabricNetworkingCompat;
 import com.todolist.config.ModConfig;
 import com.todolist.network.ProjectPackets;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,16 +27,16 @@ public class ClientProjectPackets {
      */
     public static void registerClientPackets() {
         // SYNC_PROJECTS
-        ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(ProjectPackets.SYNC_PROJECTS_ID, (client, buf) -> {
             List<Project> projects = ProjectPackets.readProjectList(buf);
             client.execute(() -> handleSyncProjects(projects));
         });
-        ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(ProjectPackets.SYNC_HUD_VISIBILITY_ID, (client, buf) -> {
             // HUD 可见性改为客户端本地控制，服务端不再作为权威来源
             boolean visible = buf.readBoolean();
             client.execute(() -> applyHudVisibilitySync(visible));
         });
-        ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_HUD_STARRED_PROJECT_IDS_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(ProjectPackets.SYNC_HUD_STARRED_PROJECT_IDS_ID, (client, buf) -> {
             int count = buf.readInt();
             List<String> projectIds = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
@@ -44,7 +44,7 @@ public class ClientProjectPackets {
             }
             client.execute(() -> ModConfig.getInstance().setHudStarredProjectIds(projectIds));
         });
-        ClientPlayNetworking.registerGlobalReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(ProjectPackets.SYNC_ACTIVE_PROJECT_ID, (client, buf) -> {
             boolean present = buf.readBoolean();
             String projectId = present ? buf.readUtf() : null;
             client.execute(() -> {
@@ -153,7 +153,7 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
-        ClientPlayNetworking.send(ProjectPackets.ADD_PROJECT_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.ADD_PROJECT_ID, buf);
     }
 
     /**
@@ -168,7 +168,7 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         ProjectPackets.writeProject(buf, project);
-        ClientPlayNetworking.send(ProjectPackets.UPDATE_PROJECT_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.UPDATE_PROJECT_ID, buf);
     }
 
     /**
@@ -183,7 +183,7 @@ public class ClientProjectPackets {
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
-        ClientPlayNetworking.send(ProjectPackets.DELETE_PROJECT_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.DELETE_PROJECT_ID, buf);
     }
 
     /**
@@ -194,14 +194,14 @@ public class ClientProjectPackets {
      * @param memberName  成员名称
      */
     public static void sendAddMember(String projectId, String memberUuid, String memberName) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.ADD_MEMBER_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.ADD_MEMBER_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
         buf.writeUtf(memberName);
-        ClientPlayNetworking.send(ProjectPackets.ADD_MEMBER_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.ADD_MEMBER_ID, buf);
     }
 
     /**
@@ -211,13 +211,13 @@ public class ClientProjectPackets {
      * @param memberUuid 成员 UUID
      */
     public static void sendRemoveMember(String projectId, String memberUuid) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.REMOVE_MEMBER_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.REMOVE_MEMBER_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
-        ClientPlayNetworking.send(ProjectPackets.REMOVE_MEMBER_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.REMOVE_MEMBER_ID, buf);
     }
 
     /**
@@ -228,14 +228,14 @@ public class ClientProjectPackets {
      * @param role       新角色
      */
     public static void sendUpdateMemberRole(String projectId, String memberUuid, Project.ProjectRole role) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.UPDATE_MEMBER_ROLE_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
         buf.writeUtf(memberUuid);
         buf.writeUtf(role.name());
-        ClientPlayNetworking.send(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.UPDATE_MEMBER_ROLE_ID, buf);
     }
 
     /**
@@ -244,24 +244,24 @@ public class ClientProjectPackets {
      * @param projectId 项目 ID
      */
     public static void sendRequestJoinProject(String projectId) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.REQUEST_JOIN_PROJECT_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeUtf(projectId);
-        ClientPlayNetworking.send(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.REQUEST_JOIN_PROJECT_ID, buf);
     }
 
     /**
      * 向服务端请求重新同步项目列表。
      */
     public static void sendRequestSyncProjects() {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID)) {
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         writeClientProjectStateSeed(buf);
-        ClientPlayNetworking.send(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.REQUEST_SYNC_PROJECTS_ID, buf);
     }
 
     /**
@@ -270,7 +270,7 @@ public class ClientProjectPackets {
      * @param projectId 项目 ID，null 表示清空
      */
     public static void sendSetActiveProjectId(String projectId) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID)) {
             applyLocalActiveProjectId(projectId);
             return;
         }
@@ -281,11 +281,11 @@ public class ClientProjectPackets {
             buf.writeBoolean(true);
             buf.writeUtf(projectId);
         }
-        ClientPlayNetworking.send(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.SET_ACTIVE_PROJECT_ID, buf);
     }
 
     public static void sendSetHudStarredProjectIds(List<String> projectIds) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID)) {
             applyLocalHudStarredProjectIds(projectIds);
             return;
         }
@@ -295,7 +295,7 @@ public class ClientProjectPackets {
         for (String projectId : ids) {
             buf.writeUtf(projectId == null ? "" : projectId);
         }
-        ClientPlayNetworking.send(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.SET_HUD_STARRED_PROJECT_IDS_ID, buf);
     }
 
     /**
@@ -304,13 +304,13 @@ public class ClientProjectPackets {
      * @param visible HUD 是否可见
      */
     public static void sendSetHudVisibility(boolean visible) {
-        if (!ClientPlayNetworking.canSend(ProjectPackets.SET_HUD_VISIBILITY_ID)) {
+        if (!FabricNetworkingCompat.canSendToServer(ProjectPackets.SET_HUD_VISIBILITY_ID)) {
             applyLocalHudVisibility(visible);
             return;
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         buf.writeBoolean(visible);
-        ClientPlayNetworking.send(ProjectPackets.SET_HUD_VISIBILITY_ID, buf);
+        FabricNetworkingCompat.sendToServer(ProjectPackets.SET_HUD_VISIBILITY_ID, buf);
     }
 
     /**
@@ -455,6 +455,6 @@ public class ClientProjectPackets {
     }
 
     private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
-        return !ClientPlayNetworking.canSend(channelId);
+        return !FabricNetworkingCompat.canSendToServer(channelId);
     }
 }

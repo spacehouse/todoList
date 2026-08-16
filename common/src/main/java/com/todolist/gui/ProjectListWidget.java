@@ -304,8 +304,22 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
     /**
      * 处理项目列表区域内的滚轮滚动。
      */
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return handleMouseScrolled(mouseX, mouseY, amount);
+    }
+
+    /**
+     * 兼容 1.20.2 及以上版本的四参数滚轮事件。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
+        return handleMouseScrolled(mouseX, mouseY, amount);
+    }
+
+    /**
+     * 统一处理项目列表区域内的滚轮滚动。
+     */
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double amount) {
         if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
             if (amount == 0) {
                 return false;

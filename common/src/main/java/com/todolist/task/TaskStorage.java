@@ -1,6 +1,7 @@
 package com.todolist.task;
 
 import com.todolist.TodoConstants;
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2TaskStore;
@@ -310,7 +311,7 @@ public class TaskStorage {
      * @throws IOException 当读取文件失败时抛出
      */
     private List<Task> loadTasksFromFile(Path file) throws IOException {
-        CompoundTag root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIoCompat.read(file);
         if (root == null) {
             throw new IOException("Failed to read task data from " + file);
         }
@@ -423,7 +424,7 @@ public class TaskStorage {
             SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecovery(
                     file,
                     "task timestamp data",
-                    path -> NbtIo.read(path.toFile()),
+                    path -> NbtIoCompat.read(path),
                     root -> root != null
             );
             if (!readResult.isFound()) {

@@ -2,6 +2,7 @@ package com.todolist.network;
 
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
+import com.todolist.compat.GameProfileCacheCompat;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -718,7 +719,7 @@ public class ProjectPackets {
             return;
         }
 
-        server.getProfileCache().getAsync(memberName, optionalProfile -> {
+        GameProfileCacheCompat.getAsync(server, memberName, optionalProfile -> {
             optionalProfile.ifPresent(profile -> {
                 server.execute(() -> {
                     String uuid = profile.getId().toString();
@@ -1563,5 +1564,4 @@ public class ProjectPackets {
         }
     }
 }
-
 

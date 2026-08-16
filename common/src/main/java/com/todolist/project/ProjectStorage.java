@@ -1,6 +1,7 @@
 package com.todolist.project;
 
 import com.todolist.TodoConstants;
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2ProjectStore;
@@ -165,7 +166,7 @@ public class ProjectStorage {
      */
     private List<Project> loadProjectsFromFile(Path file) throws IOException {
         List<Project> projects = new ArrayList<>();
-        CompoundTag root = NbtIo.read(file.toFile());
+        CompoundTag root = NbtIoCompat.read(file);
         if (root == null) {
             throw new IOException("Failed to read project data from " + file);
         }

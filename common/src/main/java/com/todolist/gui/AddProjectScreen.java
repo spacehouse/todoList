@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.client.ClientBridge;
+import com.todolist.compat.ScreenCompat;
 import com.todolist.project.Project;
 import org.lwjgl.glfw.GLFW;
 
@@ -79,7 +80,8 @@ public class AddProjectScreen extends Screen {
                 .bounds(x + w - 95, y + 110, 85, 20).build();
         addRenderableWidget(cancelButton);
 
-        setFocused(nameField);
+        // 1.20.5+ 的 Screen#init 会自动做 Tab 导航设置初始焦点，此处按版本选择是否手动聚焦
+        ScreenCompat.setInitialFocusCompat(this, nameField);
     }
 
     /**
@@ -188,7 +190,7 @@ public class AddProjectScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
 
         int w = Math.max(180, Math.min(320, width - 20));
         int h = Math.max(140, Math.min(180, height - 20));

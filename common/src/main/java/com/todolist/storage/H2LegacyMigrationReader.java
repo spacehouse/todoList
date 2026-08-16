@@ -1,5 +1,6 @@
 package com.todolist.storage;
 
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
@@ -7,7 +8,6 @@ import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.task.Task;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtIo;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -63,7 +63,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy task data",
-                path -> NbtIo.read(path.toFile()),
+                path -> NbtIoCompat.read(path),
                 root -> root != null
         );
         if (!readResult.isFound()) {
@@ -112,7 +112,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy project data",
-                path -> NbtIo.read(path.toFile()),
+                path -> NbtIoCompat.read(path),
                 root -> root != null
         );
         if (!readResult.isFound()) {
@@ -163,7 +163,7 @@ public final class H2LegacyMigrationReader {
         SafePersistenceHelper.ReadResult<CompoundTag> readResult = SafePersistenceHelper.readWithRecoveryReadOnly(
                 file,
                 "legacy project player state",
-                path -> NbtIo.read(path.toFile()),
+                path -> NbtIoCompat.read(path),
                 root -> root != null
         );
         if (!readResult.isFound()) {

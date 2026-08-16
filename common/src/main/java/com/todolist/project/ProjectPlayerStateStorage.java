@@ -1,6 +1,7 @@
 package com.todolist.project;
 
 import com.todolist.TodoConstants;
+import com.todolist.compat.NbtIoCompat;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2ProjectPlayerStateStore;
@@ -160,7 +161,7 @@ public class ProjectPlayerStateStorage {
      * @throws IOException 当读取失败时抛出
      */
     private ProjectPlayerState loadPlayerStateFromFile(Path playerStateFile) throws IOException {
-        CompoundTag root = NbtIo.read(playerStateFile.toFile());
+        CompoundTag root = NbtIoCompat.read(playerStateFile);
         if (root == null) {
             throw new IOException("Failed to read project player state from " + playerStateFile);
         }

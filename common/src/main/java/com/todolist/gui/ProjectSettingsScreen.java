@@ -1,6 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.client.ClientBridge;
+import com.todolist.compat.ScreenCompat;
 import com.todolist.permission.PermissionCenter;
 import com.todolist.permission.PermissionCenter.Context;
 import com.todolist.permission.PermissionCenter.Operation;
@@ -11,20 +12,25 @@ import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ComponentPath;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 import net.minecraft.client.gui.narration.NarratableEntry;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
@@ -336,8 +342,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
             int listTop = layout.memberListY;
             int listBottom = layout.memberListY + layout.memberListHeight;
-            memberList = new MemberListWidget(minecraft, layout.memberListWidth, layout.memberListHeight, listTop, listBottom, 20);
-            memberList.setLeftPos(layout.memberListX);
+            memberList = new MemberListWidget(minecraft, layout.memberListX, listTop, layout.memberListWidth, layout.memberListHeight, 20);
             addRenderableWidget(memberList);
 
             addMemberBtn = Button.builder(Component.translatable("gui.todolist.add_member"), button -> {
@@ -551,7 +556,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         layout = computeResponsiveLayout(isTeam);
         
@@ -569,68 +574,91 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private class MemberListWidget extends ContainerObjectSelectionList<MemberListWidget.MemberEntry> {
-        public MemberListWidget(Minecraft client, int width, int height, int top, int bottom, int itemHeight) {
-            super(client, width, height, top, bottom, itemHeight);
-            
-            this.setRenderBackground(false);
-            this.setRenderHeader(false, 0);
-            
+    private class MemberListWidget implements Renderable, GuiEventListener, NarratableEntry {
+        private final Minecraft client;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
+        private final int itemHeight;
+        private final List<MemberEntry> entries = new ArrayList<>();
+        private int scrollOffset;
+        private boolean focused;
+
+        /**
+         * 创建成员列表组件。
+         */
+        public MemberListWidget(Minecraft client, int x, int y, int width, int height, int itemHeight) {
+            this.client = client;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.itemHeight = itemHeight;
             updateEntries("");
         }
 
+        /**
+         * 按当前搜索词重建成员列表条目。
+         *
+         * @param search 当前搜索词
+         */
         public void updateEntries(String search) {
-            this.clearEntries();
+            this.entries.clear();
             String q = search.toLowerCase().trim();
 
             String ownerUuid = project.getOwnerUuid();
             if (ownerUuid != null && !ownerUuid.isEmpty()) {
                 Project.ProjectRole ownerRole = project.getMemberRole(ownerUuid);
-                if (ownerRole == null) ownerRole = Project.ProjectRole.PROJECT_MANAGER;
-                String name = project.getMemberName(ownerUuid);
-                if (name == null || name.isEmpty()) {
-                    name = ownerUuid;
+                if (ownerRole == null) {
+                    ownerRole = Project.ProjectRole.PROJECT_MANAGER;
                 }
-                try {
-                    UUID id = UUID.fromString(ownerUuid);
-                    if (minecraft.getConnection() != null) {
-                        PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
-                        if (ple != null) {
-                            name = ple.getProfile().getName();
-                            project.setMemberName(ownerUuid, name);
-                        }
-                    }
-                } catch (Exception e) {}
+                String name = resolveMemberName(ownerUuid);
                 if (q.isEmpty() || name.toLowerCase().contains(q)) {
-                    this.addEntry(new MemberEntry(ownerUuid, ownerRole));
+                    this.entries.add(new MemberEntry(ownerUuid, ownerRole));
                 }
             }
 
             for (Map.Entry<String, Project.ProjectRole> entry : project.getMembers().entrySet()) {
                 String uuid = entry.getKey();
-                if (ownerUuid != null && ownerUuid.equals(uuid)) continue;
+                if (ownerUuid != null && ownerUuid.equals(uuid)) {
+                    continue;
+                }
 
                 Project.ProjectRole role = entry.getValue();
-
-                String name = project.getMemberName(uuid);
-                if (name == null || name.isEmpty()) {
-                    name = uuid;
-                }
-                try {
-                    UUID id = UUID.fromString(uuid);
-                    if (minecraft.getConnection() != null) {
-                        PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
-                        if (ple != null) {
-                            name = ple.getProfile().getName();
-                            project.setMemberName(uuid, name);
-                        }
-                    }
-                } catch (Exception e) {}
-
+                String name = resolveMemberName(uuid);
                 if (q.isEmpty() || name.toLowerCase().contains(q)) {
-                    this.addEntry(new MemberEntry(uuid, role));
+                    this.entries.add(new MemberEntry(uuid, role));
                 }
             }
+
+            clampScrollOffset();
+        }
+
+        /**
+         * 解析成员显示名称，并在拿到玩家名后回写项目缓存。
+         *
+         * @param uuid 成员 UUID
+         * @return 成员显示名称
+         */
+        private String resolveMemberName(String uuid) {
+            String name = project.getMemberName(uuid);
+            if (name == null || name.isEmpty()) {
+                name = uuid;
+            }
+            try {
+                UUID id = UUID.fromString(uuid);
+                if (minecraft.getConnection() != null) {
+                    PlayerInfo playerInfo = minecraft.getConnection().getPlayerInfo(id);
+                    if (playerInfo != null) {
+                        name = playerInfo.getProfile().getName();
+                        project.setMemberName(uuid, name);
+                    }
+                }
+            } catch (Exception exception) {
+                // Ignore invalid UUIDs and keep the cached fallback name.
+            }
+            return name;
         }
 
         /**
@@ -638,62 +666,185 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
          *
          * @return 可见成员名称快照
          */
-            public List<String> getVisibleMemberNamesForTest() {
-                return this.children().stream()
-                        .map(MemberEntry::getNameForTest)
-                        .toList();
-            }
-        
-        @Override
-        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-             // Access fields directly. In Yarn/Fabric 1.20.1, these are protected in EntryListWidget
-             // width, height, top, bottom, left, right
-             
-             // Draw background
-             context.fill(this.x0, this.y0, this.x1, this.y1, 0xFF101010);
-             
-             // Scissor
-             double scale = minecraft.getWindow().getGuiScale();
-             com.mojang.blaze3d.systems.RenderSystem.enableScissor(
-                 (int)(this.x0 * scale), 
-                 (int)((minecraft.getWindow().getGuiScaledHeight() - this.y1) * scale), 
-                 (int)(this.width * scale), 
-                 (int)(this.height * scale)
-             );
-             
-             // Render list
-             int itemHeight = this.itemHeight;
-             
-             for (int i = 0; i < this.children().size(); i++) {
-                 int entryTop = this.getRowTop(i);
-                 int entryBottom = entryTop + itemHeight;
-                 
-                 if (entryBottom >= this.y0 && entryTop <= this.y1) {
-                     MemberEntry entry = this.children().get(i);
-                     int rowLeft = this.x0 + (this.width - getRowWidth()) / 2;
-                     entry.render(context, i, entryTop, rowLeft, getRowWidth(), itemHeight, mouseX, mouseY, isMouseOver(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom, delta);
-                 }
-             }
-             
-             com.mojang.blaze3d.systems.RenderSystem.disableScissor();
+        public List<String> getVisibleMemberNamesForTest() {
+            return this.entries.stream()
+                    .map(MemberEntry::getNameForTest)
+                    .toList();
         }
-        
-        @Override
-        protected void renderBackground(GuiGraphics context) {
-            // Do nothing
+
+        /**
+         * 返回当前成员行列表快照，供测试与宿主界面读取。
+         *
+         * @return 当前成员行快照
+         */
+        public List<MemberEntry> children() {
+            return List.copyOf(this.entries);
         }
-        
-        @Override
+
+        /**
+         * 计算指定索引条目的顶部坐标。
+         *
+         * @param index 条目索引
+         * @return 条目顶部 Y 坐标
+         */
+        public int getRowTop(int index) {
+            return this.y + (index - this.scrollOffset) * this.itemHeight;
+        }
+
+        /**
+         * 返回成员行宽度。
+         *
+         * @return 成员行宽度
+         */
         public int getRowWidth() {
             return this.width - 10;
         }
 
-        @Override
-        protected int getScrollbarPosition() {
-            return this.x0 + this.width + 6;
+        /**
+         * 将滚动偏移量裁剪到当前列表可滚动范围内。
+         */
+        private void clampScrollOffset() {
+            int visibleItems = Math.max(1, this.height / this.itemHeight);
+            int maxScroll = Math.max(0, this.entries.size() - visibleItems);
+            if (this.scrollOffset < 0) {
+                this.scrollOffset = 0;
+            } else if (this.scrollOffset > maxScroll) {
+                this.scrollOffset = maxScroll;
+            }
         }
 
-        public class MemberEntry extends ContainerObjectSelectionList.Entry<MemberEntry> {
+        /**
+         * 判断给定坐标是否位于成员列表内。
+         *
+         * @param mouseX 鼠标 X
+         * @param mouseY 鼠标 Y
+         * @return 是否位于成员列表区域
+         */
+        private boolean isWithinBounds(double mouseX, double mouseY) {
+            return mouseX >= this.x && mouseX < this.x + this.width
+                    && mouseY >= this.y && mouseY < this.y + this.height;
+        }
+
+        @Override
+        public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+            context.fill(this.x, this.y, this.x + this.width, this.y + this.height, 0xFF101010);
+
+            double scale = client.getWindow().getGuiScale();
+            com.mojang.blaze3d.systems.RenderSystem.enableScissor(
+                    (int) (this.x * scale),
+                    (int) ((client.getWindow().getGuiScaledHeight() - (this.y + this.height)) * scale),
+                    (int) (this.width * scale),
+                    (int) (this.height * scale)
+            );
+
+            int rowWidth = getRowWidth();
+            int rowLeft = this.x + (this.width - rowWidth) / 2;
+            int visibleItems = Math.max(1, this.height / this.itemHeight + 1);
+            int endIndex = Math.min(this.entries.size(), this.scrollOffset + visibleItems);
+
+            for (int index = this.scrollOffset; index < endIndex; index++) {
+                int entryTop = getRowTop(index);
+                int entryBottom = entryTop + this.itemHeight;
+                if (entryBottom < this.y || entryTop > this.y + this.height) {
+                    continue;
+                }
+                MemberEntry entry = this.entries.get(index);
+                boolean hovered = isWithinBounds(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom;
+                entry.render(context, index, entryTop, rowLeft, rowWidth, this.itemHeight, mouseX, mouseY, hovered, delta);
+            }
+
+            com.mojang.blaze3d.systems.RenderSystem.disableScissor();
+        }
+
+        @Override
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (!isWithinBounds(mouseX, mouseY)) {
+                return false;
+            }
+
+            int rowWidth = getRowWidth();
+            int rowLeft = this.x + (this.width - rowWidth) / 2;
+            int visibleItems = Math.max(1, this.height / this.itemHeight + 1);
+            int endIndex = Math.min(this.entries.size(), this.scrollOffset + visibleItems);
+
+            for (int index = this.scrollOffset; index < endIndex; index++) {
+                int entryTop = getRowTop(index);
+                int entryBottom = entryTop + this.itemHeight;
+                if (mouseY < entryTop || mouseY >= entryBottom) {
+                    continue;
+                }
+                return this.entries.get(index).mouseClicked(mouseX, mouseY, button, index, entryTop, rowLeft, rowWidth, this.itemHeight);
+            }
+
+            return true;
+        }
+
+        /**
+         * 兼容旧版三参数滚轮事件入口。
+         */
+        public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+            return handleMouseScrolled(mouseX, mouseY, amount);
+        }
+
+        /**
+         * 兼容 1.20.2 及以上版本的四参数滚轮事件。
+         * 1.20.1 基线没有此父类方法，故不加 @Override 注解以保持全版本编译。
+         */
+        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            double amount = verticalAmount != 0.0D ? verticalAmount : horizontalAmount;
+            return handleMouseScrolled(mouseX, mouseY, amount);
+        }
+
+        /**
+         * 统一处理成员列表区域内的滚轮输入。
+         */
+        private boolean handleMouseScrolled(double mouseX, double mouseY, double amount) {
+            if (!isWithinBounds(mouseX, mouseY) || amount == 0.0D) {
+                return false;
+            }
+
+            int before = this.scrollOffset;
+            if (amount > 0) {
+                this.scrollOffset--;
+            } else {
+                this.scrollOffset++;
+            }
+            clampScrollOffset();
+            return this.scrollOffset != before;
+        }
+
+        @Override
+        public void setFocused(boolean focused) {
+            this.focused = focused;
+        }
+
+        @Override
+        public boolean isFocused() {
+            return this.focused;
+        }
+
+        @Override
+        public NarrationPriority narrationPriority() {
+            return NarrationPriority.NONE;
+        }
+
+        @Override
+        public void updateNarration(NarrationElementOutput builder) {
+        }
+
+        /**
+         * 返回下一个可聚焦路径；当前成员列表不参与键盘焦点导航。
+         *
+         * @param navigation 焦点导航事件
+         * @return 始终返回 null
+         */
+        @Nullable
+        @Override
+        public ComponentPath nextFocusPath(FocusNavigationEvent navigation) {
+            return null;
+        }
+
+        public class MemberEntry {
             private final String uuid;
             private final Project.ProjectRole role;
             private final Button roleBtn;
@@ -737,12 +888,32 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 this.removeBtn.active = PermissionCenter.canPerform(Operation.REMOVE_MEMBER, actorRole, ctx);
             }
 
-            @Override
             public void render(GuiGraphics context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
                 context.drawString(font, name, x + 2, y + 4, 0xFFFFFFFF, false);
                 syncButtonLayout(x, y, entryWidth, entryHeight);
                 this.removeBtn.render(context, mouseX, mouseY, tickDelta);
                 this.roleBtn.render(context, mouseX, mouseY, tickDelta);
+            }
+
+            /**
+             * 处理当前成员行内按钮点击。
+             *
+             * @param mouseX 鼠标 X
+             * @param mouseY 鼠标 Y
+             * @param button 鼠标按钮
+             * @param index 当前行索引
+             * @param y 行顶部 Y
+             * @param x 行左侧 X
+             * @param entryWidth 行宽度
+             * @param entryHeight 行高度
+             * @return 是否已消费点击
+             */
+            public boolean mouseClicked(double mouseX, double mouseY, int button, int index, int y, int x, int entryWidth, int entryHeight) {
+                syncButtonLayout(x, y, entryWidth, entryHeight);
+                if (this.removeBtn.mouseClicked(mouseX, mouseY, button)) {
+                    return true;
+                }
+                return this.roleBtn.mouseClicked(mouseX, mouseY, button);
             }
 
             /**
@@ -774,7 +945,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
              */
             public void syncButtonLayoutForTest(int index, MemberListWidget owner) {
                 int entryTop = owner.getRowTop(index);
-                int rowLeft = owner.x0 + (owner.width - owner.getRowWidth()) / 2;
+                int rowLeft = owner.x + (owner.width - owner.getRowWidth()) / 2;
                 syncButtonLayout(rowLeft, entryTop, owner.getRowWidth(), owner.itemHeight);
             }
 
@@ -814,16 +985,6 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 }
 
                 ClientBridge.ops().sendUpdateMemberRole(project.getId(), uuid, newRole);
-            }
-
-            @Override
-            public List<? extends GuiEventListener> children() {
-                return List.of(roleBtn, removeBtn);
-            }
-
-            @Override
-            public List<? extends NarratableEntry> narratables() {
-                return List.of(roleBtn, removeBtn);
             }
 
             private Component getRoleText(Project.ProjectRole role) {

@@ -6,6 +6,7 @@ import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.client.TodoHudRenderer;
+import com.todolist.compat.ScreenCompat;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreenLayoutSupport.LayoutRect;
 import com.todolist.gui.TodoScreenLayoutSupport.MainLayoutMetrics;
@@ -1770,8 +1771,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         return handled || cleared;
     }
 
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return handleMouseScrolled(mouseX, mouseY, 0.0D, amount);
+    }
+
+    /**
+     * 兼容 1.20.2 及以上版本的四参数滚轮事件。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    /**
+     * 统一处理待办主界面的滚轮事件。
+     */
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
         boolean handled = false;
         if (taskListWidget != null) {
             handled = taskListWidget.mouseScrolled(mouseX, mouseY, 0, amount);
@@ -1780,7 +1795,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             handled = projectListWidget.mouseScrolled(mouseX, mouseY, amount);
         }
         if (!handled) {
-            handled = super.mouseScrolled(mouseX, mouseY, amount);
+            handled = ScreenCompat.callSuperMouseScrolled(this, mouseX, mouseY, horizontalAmount, verticalAmount);
         }
         return handled;
     }

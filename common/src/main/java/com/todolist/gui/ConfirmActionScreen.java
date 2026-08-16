@@ -1,5 +1,6 @@
 package com.todolist.gui;
 
+import com.todolist.compat.ScreenCompat;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -77,7 +78,7 @@ public class ConfirmActionScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
 
         int dialogWidth = Math.max(220, Math.min(360, width - 20));
         int dialogHeight = Math.max(120, Math.min(180, height - 20));

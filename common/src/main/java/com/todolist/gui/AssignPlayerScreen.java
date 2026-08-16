@@ -1,5 +1,6 @@
 package com.todolist.gui;
 
+import com.todolist.compat.ScreenCompat;
 import com.todolist.project.Project;
 import com.todolist.task.Task;
 
@@ -304,8 +305,28 @@ final class AssignPlayerScreen extends Screen {
      * @param amount 滚轮偏移
      * @return 继续沿用父类结果
      */
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        return handleMouseScrolled(mouseX, mouseY, 0.0D, amount);
+    }
+
+    /**
+     * 兼容 1.20.2 及以上版本的四参数滚轮事件。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    /**
+     * 统一处理成员列表区域的滚轮滚动。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @param horizontalAmount 横向滚动量
+     * @param verticalAmount 纵向滚动量
+     * @return 继续沿用父类结果
+     */
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
         if (dialogLayout != null && dialogLayout.isInsideList(mouseX, mouseY)) {
             if (filteredMembers != null && !filteredMembers.isEmpty()) {
                 int maxOffset = getMaxMemberScrollOffset();
@@ -318,7 +339,7 @@ final class AssignPlayerScreen extends Screen {
                 }
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, amount);
+        return ScreenCompat.callSuperMouseScrolled(this, mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     /**
@@ -331,7 +352,7 @@ final class AssignPlayerScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context);
+        ScreenCompat.renderBackground(this, context, mouseX, mouseY, delta);
         super.render(context, mouseX, mouseY, delta);
     }
 
@@ -398,4 +419,3 @@ final class AssignPlayerScreen extends Screen {
         return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
     }
 }
-
