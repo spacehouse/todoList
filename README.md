@@ -6,7 +6,7 @@ A simple and practical todo list mod for Minecraft, built for single-player, LAN
 
 ## Features / 功能
 
-### v1.4.0 Capability Overview / 1.4.0 版本能力概览
+### v1.4.1 Capability Overview / 1.4.1 版本能力概览
 - In-game GUI task management: create, edit, delete, complete, search, filter, drag-sort unfinished tasks, clean completed tasks per project, and optionally auto-save detail edits / 游戏内 GUI 任务管理：支持创建、编辑、删除、完成、搜索、筛选、拖拽排序未完成任务、按项目一键清理已完成项，并可按需开启详情自动保存
 - Personal and team projects: switch between personal and team workspaces, search projects with hints, manage members, and organize tasks by project / 个人与团队项目：支持在个人与团队工作区之间切换，提供项目搜索提示、成员管理能力，并按项目维度组织任务
 - Expanded command system: `/todo` covers task, project, HUD, join, admin, and H2 maintenance operations for both gameplay and server workflows / 命令系统增强：`/todo` 已覆盖任务、项目、HUD、加入审批、管理项与 H2 运维操作，兼顾日常使用与服主管理
@@ -129,8 +129,8 @@ cd todoList
 
 ### Release / 发布
 
-- Releases are published by pushing a Git tag that starts with `v`, for example `v1.3.0` / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.3.0`
-- Release names now include the Minecraft version suffix, for example `TodoList-v1.4.0-mc1.20.1-release` / 发布名称现在会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.0-mc1.20.1-release`
+- Releases are published by pushing a Git tag that starts with `v`, for example `v1.4.1` / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.4.1`
+- Release names now include the Minecraft version suffix, for example `TodoList-v1.4.1-mc1.20.1-release` / 发布名称现在会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.1-mc1.20.1-release`
 - The release workflow uses the changelog as the main release note source / 发布工作流会以变更日志作为主要发布说明来源
 
 ## Roadmap / 路线图
