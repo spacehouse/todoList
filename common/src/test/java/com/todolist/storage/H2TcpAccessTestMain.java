@@ -35,7 +35,7 @@ public final class H2TcpAccessTestMain {
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldUseTcpUrlAndAccountPermissions", H2TcpAccessTestMain::shouldUseTcpUrlAndAccountPermissions);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldIncrementPortWhenDefaultBusy", H2TcpAccessTestMain::shouldIncrementPortWhenDefaultBusy);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldFallbackWhenAllPortsBusy", H2TcpAccessTestMain::shouldFallbackWhenAllPortsBusy);
-        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldDisableRemoteWeakPasswordConfig", H2TcpAccessTestMain::shouldDisableRemoteWeakPasswordConfig);
+        GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldIgnoreLegacyRemoteFields", H2TcpAccessTestMain::shouldIgnoreLegacyRemoteFields);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldApplyPasswordResetToDatabaseUser", H2TcpAccessTestMain::shouldApplyPasswordResetToDatabaseUser);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldKeepGameWritesAvailableWithExternalTcpSession", H2TcpAccessTestMain::shouldKeepGameWritesAvailableWithExternalTcpSession);
         GuiTestSupport.runTestCase("H2TcpAccessTestMain.shouldRecoverAfterExternalTcpWriteLockIsReleased", H2TcpAccessTestMain::shouldRecoverAfterExternalTcpWriteLockIsReleased);
@@ -53,7 +53,7 @@ public final class H2TcpAccessTestMain {
             tempGameDir = prepareTempGameDir("todolist-h2-tcp-default-");
             H2TcpConfig config = H2TcpConfig.load();
             GuiTestSupport.assertFalse(config.isTcpEnabled(), "H2 TCP 默认应关闭");
-            GuiTestSupport.assertFalse(config.isAllowRemote(), "H2 TCP 默认不允许远程访问");
+            GuiTestSupport.assertEquals("127.0.0.1", H2TcpServerManager.getStatus().getBindAddress(), "H2 TCP 绑定地址应固定为本机回环");
             GuiTestSupport.assertTrue(Files.exists(H2TcpConfig.getConfigPath()), "缺失配置时应创建 todolist-h2.json");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 TCP 默认配置时发生异常", exception);
@@ -163,12 +163,13 @@ public final class H2TcpAccessTestMain {
     }
 
     /**
-     * 验证远程访问弱密码配置会禁用 TCP。
+     * 验证历史配置中的远程访问字段（bindAddress/allowRemote）会被忽略，
+     * TCP 服务器固定仅允许本机回环访问。
      */
-    private static void shouldDisableRemoteWeakPasswordConfig() {
+    private static void shouldIgnoreLegacyRemoteFields() {
         Path tempGameDir = null;
         try {
-            tempGameDir = prepareTempGameDir("todolist-h2-tcp-weak-");
+            tempGameDir = prepareTempGameDir("todolist-h2-tcp-legacy-");
             Files.createDirectories(H2TcpConfig.getConfigPath().getParent());
             Files.writeString(H2TcpConfig.getConfigPath(), """
                     {
@@ -191,10 +192,15 @@ public final class H2TcpAccessTestMain {
 
             H2TcpConfig config = H2TcpConfig.load();
 
-            GuiTestSupport.assertFalse(config.isTcpEnabled(), "远程访问弱密码应禁用 TCP");
-            GuiTestSupport.assertEquals("0.0.0.0", config.getBindAddress(), "远程访问配置应保留绑定地址供服主修正");
+            GuiTestSupport.assertTrue(config.isTcpEnabled(), "历史远程字段被忽略后 TCP 应保持可用");
+            GuiTestSupport.assertTrue(config.getAdminPassword().length() >= 24, "弱密码应在加载时被重新生成为强密码");
+            GuiTestSupport.assertEquals(
+                    "127.0.0.1",
+                    H2TcpServerManager.getStatus().getBindAddress(),
+                    "TCP 服务器绑定地址应固定为本机回环"
+            );
         } catch (Exception exception) {
-            throw new IllegalStateException("验证 H2 TCP 远程弱密码保护时发生异常", exception);
+            throw new IllegalStateException("验证 H2 TCP 历史远程字段忽略逻辑时发生异常", exception);
         } finally {
             cleanup(tempGameDir);
         }
@@ -489,11 +495,9 @@ public final class H2TcpAccessTestMain {
         String json = """
                 {
                   "tcpEnabled": true,
-                  "bindAddress": "127.0.0.1",
                   "port": %s,
                   "autoIncrementPort": true,
                   "maxPortAttempts": %s,
-                  "allowRemote": false,
                   "databasePathOverride": "%s",
                   "accounts": {
                     "adminUser": "todo_admin",
@@ -520,11 +524,9 @@ public final class H2TcpAccessTestMain {
         String json = """
                 {
                   "tcpEnabled": false,
-                  "bindAddress": "127.0.0.1",
                   "port": 19192,
                   "autoIncrementPort": true,
                   "maxPortAttempts": 4,
-                  "allowRemote": false,
                   "databasePathOverride": "%s",
                   "accounts": {
                     "adminUser": "todo_admin",

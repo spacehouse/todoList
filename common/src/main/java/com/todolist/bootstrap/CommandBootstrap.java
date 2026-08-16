@@ -828,7 +828,7 @@ public final class CommandBootstrap {
                     "command.todolist.h2.status.tcp_address",
                     tcpStatus.getBindAddress(),
                     tcpStatus.getActualPort(),
-                    tcpStatus.isAllowRemote() ? "remote" : "local"
+                    "local"
             );
         }
         if (!storageStatus.isAvailable()) {

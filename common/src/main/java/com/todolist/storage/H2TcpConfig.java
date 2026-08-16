@@ -14,7 +14,9 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * H2TcpConfig 负责读写 H2 TCP 外部访问配置，并在配置缺失或损坏时生成安全默认值。
+ * H2TcpConfig 负责读写 H2 TCP 本地回环访问配置，并在配置缺失或损坏时生成安全默认值。
+ * TCP 服务器仅绑定本机回环地址，用作同进程跨 classloader 的内部连接通道，
+ * 不提供任何远程访问能力。
  */
 public final class H2TcpConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -23,11 +25,9 @@ public final class H2TcpConfig {
     private static final int DEFAULT_MAX_PORT_ATTEMPTS = 16;
 
     private boolean tcpEnabled = false;
-    private String bindAddress = "127.0.0.1";
     private int port = DEFAULT_PORT;
     private boolean autoIncrementPort = true;
     private int maxPortAttempts = DEFAULT_MAX_PORT_ATTEMPTS;
-    private boolean allowRemote = false;
     private String databasePathOverride = "";
     private AccountCredentials accounts = AccountCredentials.createDefault();
     private transient boolean recreatedFromCorrupt;
@@ -56,12 +56,7 @@ public final class H2TcpConfig {
             if (config == null) {
                 throw new IOException("H2 TCP config is empty");
             }
-            boolean remoteWeakPassword = config.hasRemoteWeakPasswordBeforeNormalize();
             config.normalize();
-            if (remoteWeakPassword) {
-                TodoConstants.LOGGER.warn("H2 TCP remote access uses weak credentials; disabling TCP until passwords are reset");
-                config.tcpEnabled = false;
-            }
             return config;
         } catch (Exception exception) {
             preserveCorruptConfig(configPath);
@@ -153,15 +148,6 @@ public final class H2TcpConfig {
     }
 
     /**
-     * 返回绑定地址。
-     *
-     * @return TCP 绑定地址
-     */
-    public String getBindAddress() {
-        return bindAddress;
-    }
-
-    /**
      * 返回起始端口。
      *
      * @return TCP 起始端口
@@ -186,15 +172,6 @@ public final class H2TcpConfig {
      */
     public int getMaxPortAttempts() {
         return maxPortAttempts;
-    }
-
-    /**
-     * 返回是否允许远程访问。
-     *
-     * @return 允许远程访问时返回 true
-     */
-    public boolean isAllowRemote() {
-        return allowRemote;
     }
 
     /**
@@ -271,12 +248,10 @@ public final class H2TcpConfig {
 
     /**
      * 规范化配置字段，修正缺失或越界值。
+     * 历史配置中的 bindAddress/allowRemote 字段在读取时被直接忽略，
+     * TCP 服务器始终仅允许本机回环访问。
      */
     private void normalize() {
-        bindAddress = bindAddress == null || bindAddress.isBlank() ? "127.0.0.1" : bindAddress.trim();
-        if (!allowRemote) {
-            bindAddress = "127.0.0.1";
-        }
         if (port <= 0 || port > 65535) {
             port = DEFAULT_PORT;
         }
@@ -288,28 +263,6 @@ public final class H2TcpConfig {
             accounts = AccountCredentials.createDefault();
         }
         accounts.normalize();
-    }
-
-    /**
-     * 判断远程访问配置是否仍使用弱密码。
-     *
-     * @return 存在弱密码时返回 true
-     */
-    private boolean hasRemoteWeakPasswordBeforeNormalize() {
-        return allowRemote && (accounts == null
-                || isWeak(accounts.adminPassword)
-                || isWeak(accounts.readonlyPassword)
-                || isWeak(accounts.readwritePassword));
-    }
-
-    /**
-     * 判断密码是否不满足远程访问最低强度。
-     *
-     * @param password 密码
-     * @return 弱密码时返回 true
-     */
-    private boolean isWeak(String password) {
-        return password == null || password.length() < 24;
     }
 
     /**

@@ -185,11 +185,9 @@ public final class CommandBootstrapH2IntegrationTestMain {
         String json = """
                 {
                   "tcpEnabled": true,
-                  "bindAddress": "127.0.0.1",
                   "port": 19122,
                   "autoIncrementPort": true,
                   "maxPortAttempts": 8,
-                  "allowRemote": false,
                   "databasePathOverride": "%s",
                   "accounts": {
                     "adminUser": "todo_admin",

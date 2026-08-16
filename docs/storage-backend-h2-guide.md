@@ -250,31 +250,27 @@ todo/<namespace>/todolist.mv.db
 首次生成的 `config/todolist-h2.json` 是安全默认值：
 
 - `tcpEnabled=false`
-- `bindAddress=127.0.0.1`
 - `port=9092`
-- `allowRemote=false`
 
-也就是说，默认不会开放外部访问。
+TCP 服务器固定只接受**本机回环（127.0.0.1）**连接，用作同进程内部通道，**不提供任何远程访问能力**。历史配置里的 `bindAddress`、`allowRemote` 字段会被直接忽略。
 
 ### 5.2 本机 TCP 访问
 
-如果你只是想让本机 SQL 工具连接，不需要远程机器访问，推荐这样配：
+如果你只是想让本机 SQL 工具连接，推荐这样配：
 
 ```json
 {
   "tcpEnabled": true,
-  "bindAddress": "127.0.0.1",
   "port": 9092,
   "autoIncrementPort": true,
   "maxPortAttempts": 16,
-  "allowRemote": false,
   "databasePathOverride": ""
 }
 ```
 
 说明：
 
-- `allowRemote=false` 时，程序会强制把绑定地址收敛为 `127.0.0.1`
+- TCP 服务器始终只允许本机回环连接，远程机器无论怎么配置都连不上
 - 如果 `9092` 被占用，且 `autoIncrementPort=true`，会自动尝试后续端口
 
 启动后可执行：
@@ -285,27 +281,15 @@ todo/<namespace>/todolist.mv.db
 
 查看最终实际端口。
 
-### 5.3 远程 TCP 访问
+### 5.3 从其他机器访问数据库（SSH 隧道）
 
-如果你要让其他机器连接，需要显式打开远程访问：
+TCP 服务器不开放远程访问。如果你部署在云主机上，想从自己电脑用 DBeaver/DataGrip 等工具查库，标准做法是走 SSH 隧道：
 
-```json
-{
-  "tcpEnabled": true,
-  "bindAddress": "0.0.0.0",
-  "port": 9092,
-  "autoIncrementPort": true,
-  "maxPortAttempts": 16,
-  "allowRemote": true,
-  "databasePathOverride": ""
-}
+```text
+ssh -L 9092:127.0.0.1:9092 user@云主机IP
 ```
 
-但这里有一个强约束：
-
-当 `allowRemote=true` 时，三组外部账号密码必须足够强。当前实现要求密码长度至少为 `24`。如果配置里还是弱密码，程序会直接关闭 TCP 启用状态，避免把数据库暴露出去。
-
-也就是说，你看到“明明写了 `tcpEnabled=true`，但 TCP 还是没起来”，第一件事就是检查账号密码强度。
+然后在数据库工具里连接 `127.0.0.1:9092`，效果与本机直连完全一致，且流量全程走 SSH 加密，数据库对外零暴露。
 
 ---
 
@@ -445,12 +429,11 @@ tcpEnabled=false
 ```text
 storageBackend=h2
 tcpEnabled=true
-allowRemote=false 或按需 true
 ```
 
-如果只是本机接 DBeaver、DataGrip 之类工具，用 `allowRemote=false` 就够了。
+本机接 DBeaver、DataGrip 之类工具直接连 `127.0.0.1` 即可。
 
-如果要让其他机器连接，再开启 `allowRemote=true`，并认真管理密码和防火墙。
+如果要从其他机器查库，用 SSH 隧道（见 5.3），不要尝试开放远程访问——当前实现从机制上不提供该能力。
 
 ---
 
@@ -488,14 +471,11 @@ allowRemote=false 或按需 true
 
 这不是“自动删配置”，而是“先保留原件，再恢复可启动状态”。
 
-### 5. 远程访问一定要配强密码
+### 5. 账号密码由程序自动管理
 
-尤其是：
-
-- `allowRemote=true`
-- 数据库暴露到局域网或公网端口
-
-这时不要用简单密码，更不要把 `admin` 账号直接交给别人长期使用。
+- 三组账号密码由程序自动生成高强度随机值（首次生成后固定写在 `todolist-h2.json`）
+- 需要重置时执行 `/todo h2 reset-password`
+- 不要把 `admin` 账号交给别人长期使用，日常排查优先用 `readonly` 账号
 
 ---
 
@@ -514,9 +494,8 @@ allowRemote=false 或按需 true
 优先排查：
 
 1. 端口是否被占用
-2. `allowRemote=true` 时密码是否太弱
-3. `bindAddress` 是否写错
-4. 日志里是否有 TCP 启动失败信息
+2. 日志里是否有 TCP 启动失败信息
+3. H2 是否被系统安全软件拦截
 
 ### Q3：为什么切回 NBT 后，后来再切回 H2，看不到我在 NBT 期间新加的数据？
 
