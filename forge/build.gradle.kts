@@ -71,3 +71,16 @@ tasks.jar {
         exclude("META-INF/MANIFEST.MF")
     }
 }
+
+// 网络桥冒烟测试：随 check 一起在所有目标版本上执行，
+// 拦截 Forge 分代 API 适配（47/48+）、版本协商、连接字段解析等实机才暴露的回归
+val networkingSmokeTest = tasks.register<JavaExec>("networkingCompatSmokeTest") {
+    group = "verification"
+    description = "Run the ForgeNetworkBridge smoke tests on the current Forge API generation."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.todolist.forge.network.ForgeNetworkSmokeTestMain")
+}
+
+tasks.named("check") {
+    dependsOn(networkingSmokeTest)
+}

@@ -60,3 +60,16 @@ tasks.jar {
         exclude("META-INF/MANIFEST.MF")
     }
 }
+
+// 网络兼容层冒烟测试：随 check 一起在所有目标版本上执行，
+// 拦截签名发现、codec 注册（cast 语义）等发布环境才暴露的回归
+val networkingSmokeTest = tasks.register<JavaExec>("networkingCompatSmokeTest") {
+    group = "verification"
+    description = "Run the FabricNetworkingCompat registration smoke tests on the current API generation."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.todolist.compat.FabricNetworkingCompatSmokeTestMain")
+}
+
+tasks.named("check") {
+    dependsOn(networkingSmokeTest)
+}

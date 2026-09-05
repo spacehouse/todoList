@@ -356,8 +356,17 @@ tasks.register<JavaExec>("h2TaskQueryServiceTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("networkRoundTripTest") {
+    group = "verification"
+    description = "Run the task/project network payload round-trip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.TaskPacketsRoundTripTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
+    dependsOn("networkRoundTripTest")
     dependsOn("guiSystemTest")
     dependsOn("h2DiagnosticTest")
     dependsOn("storageBackendSelectionTest")
