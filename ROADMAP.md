@@ -33,6 +33,11 @@
 - `1.20.5` 无 Forge 发布链（官方从 `1.20.4` 的 49.x 直接跳到 `1.20.6` 的 50.x），已定位为 Fabric-only 并落地按矩阵跳过 Forge 的构建路径。
 - 版本矩阵 `gradle/version-matrix.properties` 已作为长期单一事实来源，新增 `forge_supported` 键控制加载器组合。
 
+## 本轮按阶段执行记录（2026-09-06）
+
+- 发布工作流 `.github/workflows/release.yml` 已全矩阵化：单标签 `v{mod_version}` 一次构建并发布 `1.20.1~1.20.6` 全部产物到 GitHub Releases、CurseForge 与 Modrinth（每个“mc 版本 × 加载器”组合为独立平台版本）。
+- 发版入口收敛为三步：bump `mod_version`、补充 `CHANGELOG.md` 对应章节、推送 `v{mod_version}` 标签。
+
 ## 1.4.0 已完成基线
 
 - `/todo` 命令已覆盖任务、项目、HUD、加入审批、管理项与 H2 运维入口

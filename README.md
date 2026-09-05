@@ -47,9 +47,9 @@ More details / 更多说明：
 ## Installation / 安装
 
 ### Requirements / 要求
-- Minecraft 1.20.1
-- Fabric Loader 0.15.11+ with Fabric API 0.86.1+1.20.1 / Fabric Loader 0.15.11+ 与 Fabric API 0.86.1+1.20.1
-- Or the matching Forge release package from GitHub Releases / 或使用 GitHub Releases 中对应的 Forge 版本构建
+- Minecraft 1.20.1 ~ 1.20.6 / Minecraft 1.20.1 ~ 1.20.6
+- Download the JAR that matches your Minecraft version and loader; each release covers all supported versions / 下载与你的 Minecraft 版本和加载器对应的 JAR，每个发布都会覆盖全部受支持版本
+- Forge is not available on 1.20.5 (the official Forge line skipped this version) / 1.20.5 没有 Forge 版本（官方 Forge 发布链跳过了该版本）
 
 ### Steps / 步骤
 1. Download the latest mod JAR that matches your loader / 下载与你使用的加载器对应的最新模组 JAR 文件
@@ -119,7 +119,7 @@ The server checks team operations based on role, current view, task assignment, 
 
 ### Build from Source / 从源码构建
 
-Requires Java 17+ / 需要 Java 17+
+Requires Java 17 for 1.20.1 ~ 1.20.4 and Java 21 for 1.20.5 / 1.20.6 / 构建 1.20.1 ~ 1.20.4 需要 Java 17，构建 1.20.5 / 1.20.6 需要 Java 21
 
 ```bash
 git clone https://github.com/spacehouse/todoList.git
@@ -127,11 +127,14 @@ cd todoList
 ./gradlew.bat --offline build
 ```
 
+To build for a specific Minecraft version on the 1.20.x branch, use `.\build-local-120x.bat <mc-version> build` / 在 1.20.x 分支构建指定 Minecraft 版本时，使用 `.\build-local-120x.bat <mc版本> build`
+
 ### Release / 发布
 
-- Releases are published by pushing a Git tag that starts with `v`, for example `v1.4.1` / 发布通过推送以 `v` 开头的 Git 标签触发，例如 `v1.4.1`
-- Release names now include the Minecraft version suffix, for example `TodoList-v1.4.1-mc1.20.1-release` / 发布名称现在会带上 Minecraft 版本后缀，例如 `TodoList-v1.4.1-mc1.20.1-release`
-- The release workflow uses the changelog as the main release note source / 发布工作流会以变更日志作为主要发布说明来源
+- Releases are triggered by pushing a Git tag that matches the mod version, for example `v1.4.2` / 发布通过推送与模组版本一致的 Git 标签触发，例如 `v1.4.2`
+- One tag builds and publishes all supported Minecraft versions (1.20.1 ~ 1.20.6) defined in `gradle/version-matrix.properties` / 一个标签会构建并发布 `gradle/version-matrix.properties` 中定义的全部受支持 Minecraft 版本（1.20.1 ~ 1.20.6）
+- Artifacts go to GitHub Releases, CurseForge, and Modrinth; each (Minecraft version × loader) JAR is a separate platform version, e.g. `1.4.2-mc1.20.3-forge` / 产物会发布到 GitHub Releases、CurseForge 与 Modrinth，每个（Minecraft 版本 × 加载器）的 JAR 都是平台上的独立版本，例如 `1.4.2-mc1.20.3-forge`
+- To cut a release: bump `mod_version` in `gradle.properties`, add a matching `## [version]` section to `CHANGELOG.md` (used as the release notes), then push the tag `v{mod_version}` / 发版步骤：更新 `gradle.properties` 中的 `mod_version`，在 `CHANGELOG.md` 添加对应的 `## [版本]` 章节（作为发布说明），然后推送 `v{mod_version}` 标签
 
 ## Roadmap / 路线图
 
