@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
  * 通用确认操作弹窗。
  * 用于展示标题、说明文案以及确认和取消按钮，承载高风险操作的二次确认。
  */
-public class ConfirmActionScreen extends Screen {
+public class ConfirmActionScreen extends BaseTodoScreen {
     private final Screen parent;
     private final Component message;
     private final Component confirmButtonText;

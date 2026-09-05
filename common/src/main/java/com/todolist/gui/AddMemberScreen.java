@@ -19,7 +19,7 @@ import net.minecraft.network.chat.Component;
 /**
  * 新增成员界面，负责从在线玩家列表中搜索候选成员并提交添加请求。
  */
-public class AddMemberScreen extends Screen {
+public class AddMemberScreen extends BaseTodoScreen {
     private final Screen parent;
     private final String projectId;
     private EditBox searchField;

@@ -1,23 +1,24 @@
 package com.todolist.compat;
 
 import com.todolist.TodoConstants;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.Method;
+import com.todolist.gui.BaseTodoScreen;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
  * 屏幕兼容工具，统一处理 1.20.1 与 1.20.2 之间的 GUI 签名差异。
+ *
+ * <p>所有版本相关调用均委托 {@link BaseTodoScreen} 的构建期注入成员，
+ * 不再使用运行时按名字反射：Fabric/Forge 生产环境中 Minecraft 方法名
+ * 分别为 intermediary/SRG 命名，按名字反射必然失败。</p>
  */
 public final class ScreenCompat {
     private ScreenCompat() {
     }
 
     /**
-     * 调用当前版本可用的屏幕背景渲染方法。
+     * 调用当前版本可用的屏幕背景渲染方法（原版标准背景）。
      *
      * @param screen 当前界面实例
      * @param context 当前绘制上下文
@@ -26,22 +27,11 @@ public final class ScreenCompat {
      * @param delta 渲染插值
      */
     public static void renderBackground(Screen screen, GuiGraphics context, int mouseX, int mouseY, float delta) {
-        try {
-            Method modernMethod = Screen.class.getMethod("renderBackground", GuiGraphics.class, int.class, int.class, float.class);
-            modernMethod.invoke(screen, context, mouseX, mouseY, delta);
+        if (screen instanceof BaseTodoScreen base) {
+            base.renderVanillaBackground(context, mouseX, mouseY, delta);
             return;
-        } catch (NoSuchMethodException ignored) {
-            // Fall through to the 1.20.1 signature.
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Failed to invoke modern Screen#renderBackground", e);
         }
-
-        try {
-            Method legacyMethod = Screen.class.getMethod("renderBackground", GuiGraphics.class);
-            legacyMethod.invoke(screen, context);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Failed to invoke legacy Screen#renderBackground", e);
-        }
+        TodoConstants.LOGGER.warn("renderBackground compat requires BaseTodoScreen, got {}", screen.getClass().getName());
     }
 
     /**
@@ -53,14 +43,12 @@ public final class ScreenCompat {
      * @param target 期望获得初始焦点的组件
      */
     public static void setInitialFocusCompat(Screen screen, GuiEventListener target) {
-        try {
-            Screen.class.getDeclaredMethod("setInitialFocus");
+        if (screen instanceof BaseTodoScreen base && base.supportsAutoInitialFocus()) {
             // 1.20.5+：交给自动 Tab 导航从头聚焦第一个组件
             return;
-        } catch (NoSuchMethodException ignored) {
-            // 1.20.1~1.20.4：无自动初始焦点，需要手动聚焦
-            screen.setFocused(target);
         }
+        // 1.20.1~1.20.4：无自动初始焦点，需要手动聚焦
+        screen.setFocused(target);
     }
 
     /**
@@ -78,29 +66,9 @@ public final class ScreenCompat {
                                                  double mouseY,
                                                  double horizontalAmount,
                                                  double verticalAmount) {
-        try {
-            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(screen.getClass(), MethodHandles.lookup());
-            try {
-                MethodHandle modernHandle = lookup.findSpecial(
-                        Screen.class,
-                        "mouseScrolled",
-                        MethodType.methodType(boolean.class, double.class, double.class, double.class, double.class),
-                        screen.getClass()
-                );
-                return (boolean) modernHandle.bindTo(screen).invokeWithArguments(mouseX, mouseY, horizontalAmount, verticalAmount);
-            } catch (NoSuchMethodException ignored) {
-                double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
-                MethodHandle legacyHandle = lookup.findSpecial(
-                        Screen.class,
-                        "mouseScrolled",
-                        MethodType.methodType(boolean.class, double.class, double.class, double.class),
-                        screen.getClass()
-                );
-                return (boolean) legacyHandle.bindTo(screen).invokeWithArguments(mouseX, mouseY, amount);
-            }
-        } catch (Throwable throwable) {
-            TodoConstants.LOGGER.warn("Failed to call Screen#mouseScrolled compatibly", throwable);
-            return false;
+        if (screen instanceof BaseTodoScreen base) {
+            return base.superMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
         }
+        return false;
     }
 }

@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Component;
 /**
  * 配置界面，提供经典 HUD 配置表单和固定高度的 HUD 预览区域。
  */
-public class ConfigScreen extends Screen {
+public class ConfigScreen extends BaseTodoScreen {
 
     /**
      * 配置界面中 HUD 预览框使用的固定高度，避免真实 HUD 内容过多时撑大拖拽区域。

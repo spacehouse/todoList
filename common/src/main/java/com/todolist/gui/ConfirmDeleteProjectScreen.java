@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
  * 删除项目确认弹窗。
  * 用于展示删除提示信息，并在用户确认后执行对应的删除回调。
  */
-public class ConfirmDeleteProjectScreen extends Screen {
+public class ConfirmDeleteProjectScreen extends BaseTodoScreen {
     private final Screen parent;
     private final Component message;
     private final Runnable onConfirm;

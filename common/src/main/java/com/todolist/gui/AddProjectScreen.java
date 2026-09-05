@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 /**
  * 新建项目界面，负责输入项目名称、切换项目范围并提交创建请求。
  */
-public class AddProjectScreen extends Screen {
+public class AddProjectScreen extends BaseTodoScreen {
     private final Screen parent;
     private EditBox nameField;
     private Project.Scope scope = Project.Scope.PERSONAL;

@@ -35,7 +35,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
  */
-public class ProjectSettingsScreen extends Screen implements ProjectManager.ProjectChangeListener {
+public class ProjectSettingsScreen extends BaseTodoScreen implements ProjectManager.ProjectChangeListener {
     /**
      * 项目设置页布局快照，统一保存弹窗和成员区域的边界信息。
      */

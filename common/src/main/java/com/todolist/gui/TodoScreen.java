@@ -58,7 +58,7 @@ import net.minecraft.sounds.SoundEvents;
 /**
  * 待办主界面，负责项目侧栏、任务列表、详情面板和相关弹窗的交互。
  */
-public class TodoScreen extends Screen implements ProjectManager.ProjectChangeListener {
+public class TodoScreen extends BaseTodoScreen implements ProjectManager.ProjectChangeListener {
     private static final Component TITLE = Component.translatable("gui.todolist.title");
     private static final ExecutorService GUI_STORAGE_LOADER = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "TodoList GUI Storage Loader");

@@ -11,6 +11,8 @@ val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: 
 val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
 val needs1202TestShim = minecraftVersion in setOf("1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6")
 val needs1205TestShim = minecraftVersion in setOf("1.20.5", "1.20.6")
+val needs1202MainShim = minecraftVersion in setOf("1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6")
+val needs1205MainShim = minecraftVersion in setOf("1.20.5", "1.20.6")
 val archives_name: String by project
 base {
     archivesName.set("$archives_name-common")
@@ -49,7 +51,109 @@ tasks.withType<JavaCompile>().configureEach {
 val sourceSets = the<SourceSetContainer>()
 val mainSourceSet = sourceSets["main"]
 val testSourceSet = sourceSets["test"]
+val generatedMainSourcesDir = layout.buildDirectory.dir("generated/sources/versionedMain/java").get().asFile
 val generatedTestSourcesDir = layout.buildDirectory.dir("generated/sources/versionedTest/java").get().asFile
+
+val prepareVersionedMainSources = tasks.register("prepareVersionedMainSources") {
+    group = "build setup"
+    description = "Copy main sources and inject version-specific Screen members into BaseTodoScreen."
+    inputs.dir(layout.projectDirectory.dir("src/main/java"))
+    inputs.property("needs1202MainShim", needs1202MainShim)
+    inputs.property("needs1205MainShim", needs1205MainShim)
+    outputs.dir(generatedMainSourcesDir)
+
+    doLast {
+        val sourceDir = file("src/main/java")
+        delete(generatedMainSourcesDir)
+        generatedMainSourcesDir.mkdirs()
+        sourceDir.copyRecursively(generatedMainSourcesDir, overwrite = true)
+
+        // BaseTodoScreen 的版本相关成员在生成阶段注入：
+        // 1.20.2 起 Screen#render 默认实现会先画 renderBackground，必须覆盖为空实现避免覆盖界面内容；
+        // 1.20.1 与 1.20.2+ 的 renderBackground/mouseScrolled 签名不同，因此按目标版本分别注入。
+        val baseScreenFile = generatedMainSourcesDir.resolve("com/todolist/gui/BaseTodoScreen.java")
+        var baseScreenContent = baseScreenFile.readText(Charsets.UTF_8)
+
+        val backgroundMembers = if (needs1202MainShim) {
+            """
+            |    /**
+            |     * 抑制原版默认背景（1.20.2+：Screen#render 第一行调用 renderBackground，
+            |     * 不覆盖会叠加在界面自绘内容之上导致文字发灰）。
+            |     */
+            |    @Override
+            |    public void renderBackground(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            |    }
+            |
+            |    /**
+            |     * 渲染原版标准屏幕背景（1.20.2+ 四参签名）。
+            |     */
+            |    public void renderVanillaBackground(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            |        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+            |    }
+            |
+            |    /**
+            |     * 按当前版本签名透传父类滚轮处理（1.20.2+ 四参签名）。
+            |     */
+            |    public boolean superMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            |        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+            |    }
+            """.trimMargin()
+        } else {
+            """
+            |    /**
+            |     * 抑制原版默认背景（1.20.1：renderBackground 由原版在 render 之前调用）。
+            |     */
+            |    @Override
+            |    public void renderBackground(net.minecraft.client.gui.GuiGraphics guiGraphics) {
+            |    }
+            |
+            |    /**
+            |     * 渲染原版标准屏幕背景（1.20.1 单参签名）。
+            |     */
+            |    public void renderVanillaBackground(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            |        super.renderBackground(guiGraphics);
+            |    }
+            |
+            |    /**
+            |     * 按当前版本签名透传父类滚轮处理（1.20.1 三参签名）。
+            |     */
+            |    public boolean superMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            |        double amount = verticalAmount != 0 ? verticalAmount : horizontalAmount;
+            |        return super.mouseScrolled(mouseX, mouseY, amount);
+            |    }
+            """.trimMargin()
+        }
+        val focusFlag = if (needs1205MainShim) "true" else "false"
+        val injectedMembers = backgroundMembers + "\n\n" + """
+            |    /**
+            |     * 当前版本是否支持 Screen 自动初始焦点（1.20.5+ 为 true）。
+            |     */
+            |    public boolean supportsAutoInitialFocus() {
+            |        return $focusFlag;
+            |    }
+        """.trimMargin()
+
+        val anchor = "// __VERSION_INJECTED_MEMBERS__\n" +
+            "    public abstract void renderVanillaBackground(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick);\n" +
+            "\n" +
+            "    public abstract boolean superMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount);\n" +
+            "\n" +
+            "    public abstract boolean supportsAutoInitialFocus();"
+        if (!baseScreenContent.contains(anchor)) {
+            throw GradleException("BaseTodoScreen.java version-injection anchor not found; source layout changed?")
+        }
+        baseScreenContent = baseScreenContent.replace(anchor, injectedMembers)
+        baseScreenFile.writeText(baseScreenContent, Charsets.UTF_8)
+    }
+}
+
+mainSourceSet.java.setSrcDirs(listOf(generatedMainSourcesDir))
+tasks.named(mainSourceSet.compileJavaTaskName) {
+    dependsOn(prepareVersionedMainSources)
+}
+tasks.named("sourcesJar") {
+    dependsOn(prepareVersionedMainSources)
+}
 
 val prepareVersionedTestSources = tasks.register("prepareVersionedTestSources") {
     group = "build setup"

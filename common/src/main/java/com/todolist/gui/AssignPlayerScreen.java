@@ -19,7 +19,7 @@ import net.minecraft.network.chat.Component;
 /**
  * 任务指派弹窗，负责展示当前项目成员、执行搜索过滤并完成成员指派。
  */
-final class AssignPlayerScreen extends Screen {
+final class AssignPlayerScreen extends BaseTodoScreen {
     /**
      * 表示一个可被指派的成员。
      */
