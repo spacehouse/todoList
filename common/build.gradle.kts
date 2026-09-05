@@ -123,22 +123,38 @@ val prepareVersionedMainSources = tasks.register("prepareVersionedMainSources") 
             |    }
             """.trimMargin()
         }
-        val focusFlag = if (needs1205MainShim) "true" else "false"
-        val injectedMembers = backgroundMembers + "\n\n" + """
+        val focusMembers = if (needs1205MainShim) {
+            """
             |    /**
-            |     * 当前版本是否支持 Screen 自动初始焦点（1.20.5+ 为 true）。
+            |     * 按输入设备分流初始焦点（1.20.5+）：原版仅在最后输入为键盘时执行自动 Tab 初始焦点，
+            |     * 且该逻辑会从当前焦点前进一位，手动聚焦会被推到下一个组件；
+            |     * 鼠标输入时原版不设置初始焦点，需手动聚焦目标组件。
             |     */
-            |    public boolean supportsAutoInitialFocus() {
-            |        return $focusFlag;
+            |    public void setInitialFocusOrDelegate(net.minecraft.client.gui.components.events.GuiEventListener target) {
+            |        if (minecraft.getLastInputType().isKeyboard()) {
+            |            return;
+            |        }
+            |        setFocused(target);
             |    }
-        """.trimMargin()
+            """.trimMargin()
+        } else {
+            """
+            |    /**
+            |     * 设置初始焦点（1.20.1~1.20.4）：无自动初始焦点机制，直接手动聚焦目标组件。
+            |     */
+            |    public void setInitialFocusOrDelegate(net.minecraft.client.gui.components.events.GuiEventListener target) {
+            |        setFocused(target);
+            |    }
+            """.trimMargin()
+        }
+        val injectedMembers = backgroundMembers + "\n\n" + focusMembers
 
         val anchor = "// __VERSION_INJECTED_MEMBERS__\n" +
             "    public abstract void renderVanillaBackground(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick);\n" +
             "\n" +
             "    public abstract boolean superMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount);\n" +
             "\n" +
-            "    public abstract boolean supportsAutoInitialFocus();"
+            "    public abstract void setInitialFocusOrDelegate(net.minecraft.client.gui.components.events.GuiEventListener target);"
         if (!baseScreenContent.contains(anchor)) {
             throw GradleException("BaseTodoScreen.java version-injection anchor not found; source layout changed?")
         }

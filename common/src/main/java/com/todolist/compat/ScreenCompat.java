@@ -3,7 +3,6 @@ package com.todolist.compat;
 import com.todolist.TodoConstants;
 import com.todolist.gui.BaseTodoScreen;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
@@ -32,23 +31,6 @@ public final class ScreenCompat {
             return;
         }
         TodoConstants.LOGGER.warn("renderBackground compat requires BaseTodoScreen, got {}", screen.getClass().getName());
-    }
-
-    /**
-     * 设置屏幕初始焦点，兼容 1.20.1~1.20.4 与 1.20.5+ 的差异。
-     * 1.20.5 起 Screen#init 会自动执行一次 Tab 导航设置初始焦点；
-     * 若在此之前手动聚焦目标，导航会把焦点移动到下一个组件，因此新版跳过手动设置。
-     *
-     * @param screen 当前界面实例
-     * @param target 期望获得初始焦点的组件
-     */
-    public static void setInitialFocusCompat(Screen screen, GuiEventListener target) {
-        if (screen instanceof BaseTodoScreen base && base.supportsAutoInitialFocus()) {
-            // 1.20.5+：交给自动 Tab 导航从头聚焦第一个组件
-            return;
-        }
-        // 1.20.1~1.20.4：无自动初始焦点，需要手动聚焦
-        screen.setFocused(target);
     }
 
     /**

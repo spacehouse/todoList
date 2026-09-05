@@ -33,5 +33,5 @@ public abstract class BaseTodoScreen extends Screen {
 
     public abstract boolean superMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount);
 
-    public abstract boolean supportsAutoInitialFocus();
+    public abstract void setInitialFocusOrDelegate(net.minecraft.client.gui.components.events.GuiEventListener target);
 }

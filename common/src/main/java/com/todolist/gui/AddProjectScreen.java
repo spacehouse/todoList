@@ -80,8 +80,9 @@ public class AddProjectScreen extends BaseTodoScreen {
                 .bounds(x + w - 95, y + 110, 85, 20).build();
         addRenderableWidget(cancelButton);
 
-        // 1.20.5+ 的 Screen#init 会自动做 Tab 导航设置初始焦点，此处按版本选择是否手动聚焦
-        ScreenCompat.setInitialFocusCompat(this, nameField);
+        // 初始焦点按输入设备分流：键盘输入交给 1.20.5+ 原版自动 Tab 初始焦点（手动聚焦会被
+        // 推进到下一个组件），鼠标点击"添加"打开本界面时原版不聚焦，需手动聚焦名称输入框
+        setInitialFocusOrDelegate(nameField);
     }
 
     /**
