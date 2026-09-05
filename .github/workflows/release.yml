@@ -5,60 +5,103 @@ on:
     tags:
       - 'v*'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+permissions:
+  contents: write
 
+jobs:
+  # 解析发布矩阵：校验 tag 与 mod_version 一致，读取 version-matrix.properties
+  # 生成构建矩阵（含 Java 版本与 Forge 支持标记）与发布矩阵（mc 版本 × 加载器）
+  matrix:
+    name: Resolve Release Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      mod_version: ${{ steps.meta.outputs.mod_version }}
+      build_versions: ${{ steps.meta.outputs.build_versions }}
+      publish_targets: ${{ steps.meta.outputs.publish_targets }}
+      artifact_count: ${{ steps.meta.outputs.artifact_count }}
+      release_notes: ${{ steps.extract_changelog.outputs.release_notes }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build with Gradle
-        run: ./gradlew build --stacktrace
 
       - name: Prepare Release Metadata
         id: meta
         shell: bash
         run: |
           MOD_VERSION="$(sed -n 's/^mod_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
-          GAME_VERSION="$(sed -n 's/^minecraft_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
-          EXPECTED_TAG="v${MOD_VERSION}-mc${GAME_VERSION}"
           if [ -z "$MOD_VERSION" ]; then
             echo "Failed to resolve mod_version from gradle.properties" >&2
             exit 1
           fi
-          if [ -z "$GAME_VERSION" ]; then
-            echo "Failed to resolve minecraft_version from gradle.properties" >&2
+          if [ "${GITHUB_REF_NAME}" != "v${MOD_VERSION}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match expected release tag v${MOD_VERSION}" >&2
             exit 1
           fi
-          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match expected release tag ${EXPECTED_TAG}" >&2
+          echo "mod_version=${MOD_VERSION}" >> "$GITHUB_OUTPUT"
+
+          {
+            IFS= read -r BUILD_JSON
+            IFS= read -r PUBLISH_JSON
+            IFS= read -r ARTIFACT_COUNT
+          } < <(python3 - <<'PY'
+          import json
+          import re
+
+          profiles = {}
+          with open('gradle/version-matrix.properties', encoding='utf-8') as matrix_file:
+              for raw_line in matrix_file:
+                  line = raw_line.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  key, _, value = line.partition('=')
+                  match = re.match(r'^(1\.\d+\.\d+)\.(.+)$', key.strip())
+                  if match:
+                      profiles.setdefault(match.group(1), {})[match.group(2)] = value.strip()
+
+          build_versions = []
+          publish_targets = []
+          for mc_version in sorted(profiles):
+              profile = profiles[mc_version]
+              if profile.get('build_supported') != 'true':
+                  continue
+              forge_supported = profile.get('forge_supported') == 'true'
+              build_versions.append({
+                  'mc_version': mc_version,
+                  'java_version': profile.get('java_version', '17'),
+                  'forge_supported': 'true' if forge_supported else 'false',
+              })
+              publish_targets.append({
+                  'mc_version': mc_version,
+                  'loader': 'fabric',
+                  'display_loader': 'Fabric',
+              })
+              if forge_supported:
+                  publish_targets.append({
+                      'mc_version': mc_version,
+                      'loader': 'forge',
+                      'display_loader': 'Forge',
+                  })
+
+          print(json.dumps(build_versions))
+          print(json.dumps(publish_targets))
+          print(len(publish_targets))
+          PY
+          )
+
+          if [ -z "$BUILD_JSON" ] || [ "$BUILD_JSON" = "[]" ]; then
+            echo "No build_supported=true versions found in version-matrix.properties" >&2
             exit 1
           fi
-          echo "version=${MOD_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "game_version=${GAME_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-release" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Fabric" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-fabric" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Forge" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-forge" >> "$GITHUB_OUTPUT"
+
+          echo "build_versions=${BUILD_JSON}" >> "$GITHUB_OUTPUT"
+          echo "publish_targets=${PUBLISH_JSON}" >> "$GITHUB_OUTPUT"
+          echo "artifact_count=${ARTIFACT_COUNT}" >> "$GITHUB_OUTPUT"
 
       - name: Extract Release Notes
         id: extract_changelog
         shell: bash
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
+          VERSION="${{ steps.meta.outputs.mod_version }}"
           NOTES="$(awk -v v="$VERSION" '
             BEGIN { in_section = 0 }
             $0 ~ "^## \\\\?\\[" v "\\]([[:space:]]*-.*)?$" { in_section = 1; next }
@@ -75,26 +118,127 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+  # 按矩阵并行构建：每个 Minecraft 版本一次 Gradle 调用，
+  # 参数与 build-local-120x.bat 对等（由 version-matrix.properties 注入）
+  build:
+    name: Build ${{ matrix.mc_version }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.build_versions) }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java_version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java_version }}
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle
+        shell: bash
+        run: |
+          MC_VERSION="${{ matrix.mc_version }}"
+          matrix_value() {
+            sed -n "s/^${MC_VERSION}\.$1=//p" gradle/version-matrix.properties | head -n 1 | tr -d '\r'
+          }
+          ./gradlew build --stacktrace \
+            "-Ptarget_matrix_profile=${MC_VERSION}" \
+            "-Ptarget_minecraft_version=$(matrix_value minecraft_version)" \
+            "-Ptarget_java_version=$(matrix_value java_version)" \
+            "-Ptarget_loader_version=$(matrix_value loader_version)" \
+            "-Ptarget_fabric_api_version=$(matrix_value fabric_api_version)" \
+            "-Ptarget_forge_version=$(matrix_value forge_version)" \
+            "-Ptarget_fabric_loader_dependency=$(matrix_value fabric_loader_dependency)" \
+            "-Ptarget_fabric_minecraft_dependency=$(matrix_value fabric_minecraft_dependency)" \
+            "-Ptarget_minecraft_version_range=$(matrix_value minecraft_version_range)" \
+            "-Ptarget_forge_loader_range=$(matrix_value forge_loader_range)" \
+            "-Ptarget_forge_supported=$(matrix_value forge_supported)"
+
+      - name: Verify Release Jars
+        shell: bash
+        run: |
+          MOD_VERSION="${{ needs.matrix.outputs.mod_version }}"
+          MC_VERSION="${{ matrix.mc_version }}"
+          if [ ! -f "build/libs/todolist-fabric-${MC_VERSION}-${MOD_VERSION}.jar" ]; then
+            echo "Missing fabric release jar for ${MC_VERSION}" >&2
+            exit 1
+          fi
+          if [ "${{ matrix.forge_supported }}" = "true" ] && [ ! -f "build/libs/todolist-forge-${MC_VERSION}-${MOD_VERSION}.jar" ]; then
+            echo "Missing forge release jar for ${MC_VERSION}" >&2
+            exit 1
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ matrix.mc_version }}
+          path: build/libs/todolist-*.jar
+          if-no-files-found: error
+
+  # 汇总全部版本产物，创建单个 GitHub Release
+  github-release:
+    name: Publish GitHub Release
+    needs: [matrix, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-artifacts-*
+          merge-multiple: true
+
+      - name: Verify Artifact Count
+        shell: bash
+        run: |
+          EXPECTED="${{ needs.matrix.outputs.artifact_count }}"
+          ACTUAL="$(find dist -maxdepth 1 -name 'todolist-*.jar' | wc -l)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "Expected ${EXPECTED} release jars, found ${ACTUAL}" >&2
+            find dist -type f -print >&2
+            exit 1
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.meta.outputs.release_name }}
+          name: TodoList-v${{ needs.matrix.outputs.mod_version }}-release
           tag_name: ${{ github.ref_name }}
-          body: ${{ steps.extract_changelog.outputs.release_notes }}
-          files: |
-            build/libs/*.jar
-            !build/libs/*-sources.jar
-            !build/libs/*-javadoc.jar
-            !build/libs/*-dev.jar
+          body: ${{ needs.matrix.outputs.release_notes }}
+          files: dist/*.jar
 
-      - name: Publish Fabric Version
+  # 按（mc 版本 × 加载器）逐条发布到 CurseForge 与 Modrinth，
+  # 每个 jar 是平台上的独立 version 条目；1.20.5 无 Forge 由矩阵自动排除
+  publish:
+    name: Publish ${{ matrix.mc_version }} (${{ matrix.loader }})
+    needs: [matrix, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.publish_targets) }}
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts-${{ matrix.mc_version }}
+          path: dist
+
+      - name: Publish to CurseForge & Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          name: ${{ steps.meta.outputs.fabric_publish_name }}
-          version: ${{ steps.meta.outputs.fabric_publish_version }}
-          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
+          name: TodoList-v${{ needs.matrix.outputs.mod_version }}-mc${{ matrix.mc_version }}-${{ matrix.display_loader }}
+          version: ${{ needs.matrix.outputs.mod_version }}-mc${{ matrix.mc_version }}-${{ matrix.loader }}
+          changelog: "${{ needs.matrix.outputs.release_notes }}"
 
-          files: build/libs/*-fabric-*!(*-dev|*-sources|*-javadoc).jar
+          files: dist/todolist-${{ matrix.loader }}-${{ matrix.mc_version }}-*.jar
 
           curseforge-id: 1476043
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
@@ -102,23 +246,5 @@ jobs:
           modrinth-id: RcGBxDyt
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
-          loaders: fabric
-          game-versions: ${{ steps.meta.outputs.game_version }}
-
-      - name: Publish Forge Version
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: ${{ steps.meta.outputs.forge_publish_name }}
-          version: ${{ steps.meta.outputs.forge_publish_version }}
-          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
-
-          files: build/libs/*-forge-*!(*-dev|*-sources|*-javadoc).jar
-
-          curseforge-id: 1476043
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-
-          modrinth-id: RcGBxDyt
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-
-          loaders: forge
-          game-versions: ${{ steps.meta.outputs.game_version }}
+          loaders: ${{ matrix.loader }}
+          game-versions: ${{ matrix.mc_version }}
