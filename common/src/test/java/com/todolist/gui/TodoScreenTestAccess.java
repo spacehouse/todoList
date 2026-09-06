@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TodoScreen 的测试访问器，集中承载界面自测所需的读取与操作入口。
@@ -77,6 +78,23 @@ final class TodoScreenTestAccess {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    /**
+     * 等待后台任务保存执行器排空既有保存任务，避免用例间清理临时目录时与后台写入竞态。
+     */
+    static void awaitTaskSaveExecutorIdleForTest() {
+        ExecutorService executor = readStaticScreenField("TASK_SAVE_EXECUTOR", ExecutorService.class);
+        CountDownLatch idle = new CountDownLatch(1);
+        executor.execute(idle::countDown);
+        try {
+            if (!idle.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("等待后台任务保存执行器空闲超时");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("等待后台任务保存执行器时被中断", exception);
+        }
     }
 
     /**
