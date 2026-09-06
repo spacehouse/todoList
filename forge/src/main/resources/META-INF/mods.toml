@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[52,)"
+loaderVersion = "${forge_loader_range}"
 license = "MIT"
 
 [[mods]]
@@ -14,13 +14,13 @@ description = "todolist.description"
 [[dependencies.todolist]]
 modId = "forge"
 mandatory = true
-versionRange = "[52,)"
+versionRange = "${forge_loader_range}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.todolist]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.21.1]"
+versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"

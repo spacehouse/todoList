@@ -13,8 +13,9 @@ base {
 }
 
 dependencies {
-    val minecraftVersion = property("minecraft_version") as String
-    val loaderVersion = property("loader_version") as String
+    // 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties
+    val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
+    val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
     val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
     minecraft("com.mojang:minecraft:$minecraftVersion")
@@ -47,6 +48,28 @@ tasks.withType<JavaCompile>().configureEach {
 val sourceSets = the<SourceSetContainer>()
 val mainSourceSet = sourceSets["main"]
 val testSourceSet = sourceSets["test"]
+
+// 兼容组覆盖源集：api_group != v1_21_1 时，src/<sourceSet>/<api_group>/java 中的同名类
+// 覆盖基线源码（main 与 test 同步覆盖），用于隔离 1.21.2+ 的编译期 API 差异；
+// 目录不存在时跳过，v1_21_1 走原生 srcDir，行为与现状完全一致。
+val apiGroup = (findProperty("target_api_group") as String?) ?: "v1_21_1"
+if (apiGroup != "v1_21_1") {
+    fun applyOverrideSourceSet(sourceSetName: String) {
+        val overrideDir = layout.projectDirectory.dir("src/$sourceSetName/$apiGroup/java")
+        if (!overrideDir.asFile.exists()) return
+        val overriddenPaths = overrideDir.asFileTree.files.map {
+            it.relativeTo(overrideDir.asFile).path.replace('\\', '/')
+        }
+        sourceSets.named(sourceSetName) {
+            java.setSrcDirs(listOf(
+                fileTree("src/$sourceSetName/java") { exclude(overriddenPaths) },
+                overrideDir
+            ))
+        }
+    }
+    applyOverrideSourceSet("main")
+    applyOverrideSourceSet("test")
+}
 
 tasks.register<JavaExec>("commandSystemTest") {
     group = "verification"

@@ -13,13 +13,13 @@ description = "todolist.description"
 [[dependencies.todolist]]
 modId = "neoforge"
 type = "required"
-versionRange = "[21.1,)"
+versionRange = "${neoforge_loader_range}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.todolist]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.1]"
+versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"

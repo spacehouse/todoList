@@ -10,8 +10,12 @@ val tripletBaselineSample = layout.projectDirectory.file("tools/triplet-compare/
 val tripletLogSample = layout.projectDirectory.file("tools/triplet-compare/log-sample.txt")
 val tripletReport = layout.buildDirectory.file("reports/triplet-sample-diff.json")
 val h2JarContentReport = layout.buildDirectory.file("reports/h2-driver-content-check.txt")
-val releaseMinecraftVersion = property("minecraft_version") as String
+// 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties，
+// 保证直接执行 gradlew 的旧行为完全不变。
+val releaseMinecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
 val releaseModVersion = property("mod_version") as String
+// 与 settings.gradle.kts 保持一致：forge_supported=false 时排除 forge 产物相关任务
+val forgeEnabled = (findProperty("target_forge_supported") as String?)?.trim()?.lowercase() != "false"
 
 subprojects {
     apply(plugin = "java")
@@ -84,11 +88,13 @@ tasks.register("h2JarContentCheck") {
 
     doLast {
         val distDir = layout.buildDirectory.dir("libs").get().asFile
-        val releaseJars = listOf(
-            "fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"),
-            "forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar"),
-            "neoforge" to distDir.resolve("todolist-neoforge-$releaseMinecraftVersion-$releaseModVersion.jar")
-        )
+        val releaseJars = buildList {
+            add("fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"))
+            if (forgeEnabled) {
+                add("forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar"))
+            }
+            add("neoforge" to distDir.resolve("todolist-neoforge-$releaseMinecraftVersion-$releaseModVersion.jar"))
+        }
 
         val reportLines = mutableListOf<String>()
         releaseJars.forEach { (loader, jarFile) ->

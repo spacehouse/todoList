@@ -19,7 +19,14 @@ pluginManagement {
     }
 }
 
+// Forge 冻结在 1.21.1：1.21.2+ 官方发布链停更，矩阵通过 target_forge_supported=false
+// 声明该版本为 Fabric + NeoForge-only，构建时排除 forge 子项目；
+// 未传属性时默认包含，保持 IDE 同步与旧行为不变。
+val forgeEnabled = (startParameter.projectProperties["target_forge_supported"])?.trim()?.lowercase() != "false"
+
 include("common")
 include("fabric")
-include("forge")
+if (forgeEnabled) {
+    include("forge")
+}
 include("neoforge")

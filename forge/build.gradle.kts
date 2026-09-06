@@ -7,10 +7,13 @@ plugins {
 }
 
 val archives_name: String by project
-val minecraftVersion = property("minecraft_version") as String
-val loaderVersion = property("loader_version") as String
+// 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties
+val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
+val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
 val commonProject = project(":common")
-val forgeVersion = property("forge_version") as String
+val forgeVersion = (findProperty("target_forge_version") as String?) ?: (property("forge_version") as String)
+val forgeLoaderRange = (findProperty("target_forge_loader_range") as String?) ?: "[52,)"
+val minecraftVersionRange = (findProperty("target_minecraft_version_range") as String?) ?: "[1.21.1]"
 val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
 base {
@@ -39,8 +42,14 @@ dependencies {
 
 tasks.processResources {
     inputs.property("version", project.version)
+    inputs.property("forge_loader_range", forgeLoaderRange)
+    inputs.property("minecraft_version_range", minecraftVersionRange)
     filesMatching("META-INF/mods.toml") {
-        expand(mapOf("version" to project.version))
+        expand(mapOf(
+            "version" to project.version,
+            "forge_loader_range" to forgeLoaderRange,
+            "minecraft_version_range" to minecraftVersionRange
+        ))
     }
 }
 
