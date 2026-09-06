@@ -22,6 +22,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -50,7 +51,7 @@ public final class NeoForgeTodoClient {
     /**
      * 初始化客户端。
      */
-    // v1_21_2 覆盖：事件统一到 mod bus，配置工厂改由 ModContainer 注册
+    // v1_21_2 覆盖：配置工厂改由 ModContainer 注册；tick/GUI/网络等游戏事件走 game bus
     public static void initialize(IEventBus modEventBus, ModContainer modContainer) {
         client = Minecraft.getInstance();
         registerConfigScreenFactory(modContainer);
@@ -84,10 +85,11 @@ public final class NeoForgeTodoClient {
      * 注册客户端事件监听器。
      */
     private static void registerClientListeners(IEventBus modEventBus) {
-        modEventBus.addListener(NeoForgeTodoClient::onClientTickEvent);
-        modEventBus.addListener(NeoForgeTodoClient::onRenderGuiPostEvent);
-        modEventBus.addListener(NeoForgeTodoClient::onClientLoggingOutEvent);
-        modEventBus.addListener(NeoForgeTodoClient::onClientLoggingInEvent);
+        // 游戏/运行时事件必须注册到 game bus；RegisterKeyMappingsEvent 是 mod bus 注册类事件
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientTickEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onRenderGuiPostEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingOutEvent);
+        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingInEvent);
         modEventBus.addListener(NeoForgeTodoClient::onRegisterKeyMappingsEvent);
     }
 

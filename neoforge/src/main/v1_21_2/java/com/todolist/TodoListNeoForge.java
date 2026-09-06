@@ -23,6 +23,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -49,7 +50,7 @@ public class TodoListNeoForge {
     /**
      * NeoForge 妯″潡鏋勯€犲嚱鏁帮紝鎵ц骞冲彴鍒濆鍖栦笌娉ㄥ唽銆?
      */
-    // v1_21_2 覆盖：NeoForge 21.2 事件总线统一到 mod bus，改为构造器注入并向下传递
+    // v1_21_2 覆盖：构造器注入 mod bus 仅用于注册类事件；本类 @SubscribeEvent 全为游戏事件，仍注册 game bus
     public TodoListNeoForge(IEventBus modEventBus, ModContainer modContainer) {
         LOGGER.info("Initializing Todo List Mod (NeoForge)...");
         registerDisplayTest();
@@ -87,7 +88,7 @@ public class TodoListNeoForge {
         NeoForgeProjectPacketRegistrar.register();
         runClientInitIfNeeded(modEventBus, modContainer);
 
-        modEventBus.register(this);
+        NeoForge.EVENT_BUS.register(this);
 
         LOGGER.info("Todo List Mod (NeoForge) initialized!");
     }

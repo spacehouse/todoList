@@ -11,6 +11,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.extensions.ICommonPacketListener;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -93,14 +94,15 @@ public final class NeoForgeNetworkBridge {
     /**
      * 鍒濆鍖栫綉缁滄ˉ鎺ュ苟娉ㄥ唽杞借嵎澶勭悊鍣ㄣ€?
      */
-    // v1_21_2 覆盖：21.2 事件统一到 mod bus，注册入口需要显式传入构造器注入的事件总线
+    // v1_21_2 覆盖：仅注册类/生命周期事件走 mod bus（构造器注入），
+    // 游戏事件（玩家登录等）仍注册到 game bus（NeoForge.EVENT_BUS），与基线一致
     public static synchronized void init(IEventBus modEventBus) {
         if (initialized) {
             return;
         }
         initialized = true;
         registerPayloadHandlers(modEventBus);
-        registerPlayerLoginHook(modEventBus);
+        registerPlayerLoginHook();
     }
 
     /**
@@ -269,9 +271,9 @@ public final class NeoForgeNetworkBridge {
     /**
      * 娉ㄥ唽鐜╁鐧诲綍鐩戝惉锛岀敤浜庤Е鍙戝姞鍏ュ洖璋冦€?
      */
-    private static void registerPlayerLoginHook(IEventBus modEventBus) {
+    private static void registerPlayerLoginHook() {
         try {
-            modEventBus.addListener(NeoForgeNetworkBridge::onPlayerLoggedIn);
+            NeoForge.EVENT_BUS.addListener(NeoForgeNetworkBridge::onPlayerLoggedIn);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to register NeoForge player login hook", e);
         }
