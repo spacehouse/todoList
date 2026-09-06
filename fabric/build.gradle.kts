@@ -74,13 +74,28 @@ sourceSets {
             if (apiGroup != "v1_21_1") {
                 val overrideDir = layout.projectDirectory.dir("src/main/$apiGroup/java")
                 if (overrideDir.asFile.exists()) {
+                    val baselineDir = file("src/main/java")
                     val overriddenPaths = overrideDir.asFileTree.files.map {
                         it.relativeTo(overrideDir.asFile).path.replace('\\', '/')
+                    }.toSet()
+                    // srcDirs 只放目录（loom 会校验 srcDirs 必须为目录），基线中被覆盖的同名文件改由 filter 按绝对路径排除
+                    setSrcDirs(listOf(baselineDir, overrideDir))
+                    filter.exclude { element ->
+                        val f = element.file
+                        f.absolutePath.startsWith(baselineDir.absolutePath + File.separator) &&
+                            overriddenPaths.contains(
+                                baselineDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                            )
                     }
-                    setSrcDirs(listOf(
-                        fileTree("src/main/java") { exclude(overriddenPaths) },
-                        overrideDir
-                    ))
+                    // allSource 的 filter 独立于 java（source() 仅复制 srcDirs 不复制 filter），
+                    // sourcesJar 等消费 allSource 的任务需重复同样排除，避免同名文件重复打包
+                    allSource.filter.exclude { element ->
+                        val f = element.file
+                        f.absolutePath.startsWith(baselineDir.absolutePath + File.separator) &&
+                            overriddenPaths.contains(
+                                baselineDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                            )
+                    }
                 }
             }
         }

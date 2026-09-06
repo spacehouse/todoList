@@ -61,7 +61,10 @@ tasks.register<Copy>("distReleaseJars") {
     group = "distribution"
     description = "Collect release-ready loader jars into root build/dist (exclude sources/dev)."
 
-    dependsOn(":fabric:build", ":forge:build", ":neoforge:build")
+    // forge 仅在矩阵 profile 启用时参与分发（否则项目未被 include，硬引用会导致 build 失败）
+    val distDepends = mutableListOf<String>(":fabric:build", ":neoforge:build")
+    if (forgeEnabled) distDepends.add(":forge:build")
+    dependsOn(distDepends)
 
     into(layout.buildDirectory.dir("libs"))
 
@@ -69,7 +72,7 @@ tasks.register<Copy>("distReleaseJars") {
         include("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
-    from(project(":forge").layout.buildDirectory.dir("libs")) {
+    if (forgeEnabled) from(project(":forge").layout.buildDirectory.dir("libs")) {
         include("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
