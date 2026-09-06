@@ -83,6 +83,9 @@ public final class GuiTestSupport {
     public static RecordingClientOps resetState() {
         RecordingClientOps ops = resetStateKeepDefaultBackend();
         ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
+        // GUI 交互用例默认关闭“新增即自动保存”，避免异步保存回调覆盖用例内存态；
+        // 自动保存行为由显式 setAutoSave(true) 的专门用例覆盖
+        ModConfig.getInstance().setAutoSave(false);
         return ops;
     }
 
@@ -94,6 +97,7 @@ public final class GuiTestSupport {
      */
     public static RecordingClientOps resetStateKeepDefaultBackend() {
         bootstrapEnvironment();
+        invokeTodoScreenAwaitSaveIdle();
         cleanTestGameDir();
         DataPathProvider.setGameDirSupplier(() -> TEST_GAME_DIR);
         DataPathProvider.resetStorageNamespace();
@@ -435,6 +439,21 @@ public final class GuiTestSupport {
             method.invoke(null);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("无法重置 TodoScreen 静态状态", e);
+        }
+    }
+
+    /**
+     * 反射调用 TodoScreenTestAccess 的保存执行器空闲等待方法，
+     * 确保上一用例的后台保存全部落盘后再清理临时目录。
+     */
+    private static void invokeTodoScreenAwaitSaveIdle() {
+        try {
+            Class<?> accessClass = Class.forName("com.todolist.gui.TodoScreenTestAccess");
+            java.lang.reflect.Method method = accessClass.getDeclaredMethod("awaitTaskSaveExecutorIdleForTest");
+            method.setAccessible(true);
+            method.invoke(null);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("等待后台任务保存执行器空闲失败", e);
         }
     }
 

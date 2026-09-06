@@ -123,7 +123,8 @@ public class ModConfig {
     private boolean enableTaskBook = true;
     private boolean enableSoundEffects = true;
     private int maxTasksPerPlayer = 100;
-    private boolean autoSave = false;
+    // GUI 编辑自动保存默认开启：关闭界面时自动保存编辑结果，降低玩家忘存丢数据的风险
+    private boolean autoSave = true;
     private int autoSaveIntervalMinutes = 5;
     private String defaultPriority = "MEDIUM";
     private boolean enableTaskRewards = false;
