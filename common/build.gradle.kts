@@ -102,6 +102,18 @@ tasks.register<JavaExec>("guiSystemTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+// GUI 场景测试走真实事件路径：EditBox.onClick/keyPressed → Screen.hasShiftDown →
+// InputConstants/GLFW 会加载 LWJGL native 库（glfwGetKey 在 GLFW 未初始化时安全返回
+// RELEASE，不会创建窗口）。LWJGL 3.3 支持从 classpath 上的 natives jar 提取共享库，
+// 因此把 loom 提供的 minecraftNatives 配置追加进测试 JVM classpath 即可离线通过；
+// 配置不存在时（loom 版本变化）跳过，测试用例会显式失败提醒。
+val guiTestNatives = configurations.findByName("minecraftNatives")
+if (guiTestNatives != null) {
+    tasks.named<JavaExec>("guiSystemTest") {
+        classpath(guiTestNatives)
+    }
+}
+
 tasks.register<JavaExec>("h2DiagnosticTest") {
     group = "verification"
     description = "Run the H2 M1-0 driver, temporary database, DDL, backup, script, and TCP API diagnostics."

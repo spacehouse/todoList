@@ -38,6 +38,7 @@ public final class GuiSystemTestMain {
         GuiTestSupport.runTestGroup("AddMemberScreenTestMain", () -> AddMemberScreenTestMain.main(args));
         GuiTestSupport.runTestGroup("ProjectSettingsScreenTestMain", () -> ProjectSettingsScreenTestMain.main(args));
         GuiTestSupport.runTestGroup("TodoScreenTestMain", () -> TodoScreenTestMain.main(args));
+        GuiTestSupport.runTestGroup("GuiScenarioTestMain", () -> GuiScenarioTestMain.main(args));
         GuiTestSupport.runTestGroup("TodoHudRendererTestMain", () -> TodoHudRendererTestMain.main(args));
     }
 }

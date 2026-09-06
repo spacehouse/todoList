@@ -143,6 +143,11 @@ public final class GuiTestSupport {
         setIntField(Window.class, window, "guiScaledWidth", 320);
         setIntField(Window.class, window, "guiScaledHeight", 240);
         setDoubleField(Window.class, window, "guiScale", 1.0D);
+        // 真实事件路径（EditBox.onClick/keyPressed → Screen.hasShiftDown）会经
+        // InputConstants.isKeyDown → GLFW.glfwGetKey(windowHandle, key) 查询按键状态；
+        // 句柄为 0 会被 LWJGL Checks.check 视为空指针抛 NPE，故注入非零假句柄。
+        // GLFW 未初始化时 glfwGetKey 在 C 层安全返回 RELEASE，不会真正使用该句柄。
+        setLongField(Window.class, window, "window", 1L);
         options.hideGui = false;
         setObjectField(Minecraft.class, minecraft, "font", font);
         setObjectField(Minecraft.class, minecraft, "player", player);
@@ -309,6 +314,25 @@ public final class GuiTestSupport {
             return field.get(target);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("无法读取字段: " + fieldName, e);
+        }
+    }
+
+    /**
+     * 使用 Unsafe 为目标对象写入 long 字段。
+     *
+     * @param owner 字段所属类型
+     * @param target 目标对象
+     * @param fieldName 字段名称
+     * @param value 字段值
+     */
+    public static void setLongField(Class<?> owner, Object target, String fieldName, long value) {
+        try {
+            Field field = owner.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            long offset = UNSAFE.objectFieldOffset(field);
+            UNSAFE.putLong(target, offset, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("无法写入 long 字段: " + fieldName, e);
         }
     }
 
