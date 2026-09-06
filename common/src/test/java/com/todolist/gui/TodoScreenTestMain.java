@@ -3697,6 +3697,8 @@ public final class TodoScreenTestMain {
     private static void shouldKeepPersonalTasksAfterPublishedLocalWorldReentryFlow() {
         GuiTestSupport.resetState();
         TodoScreenTestAccess.resetGuiStateForTest();
+        // 本用例断言新增任务后先保留未保存标记再手动保存，需关闭“新增即自动保存”
+        ModConfig.getInstance().setAutoSave(false);
 
         FakeMinecraftClient lanHostMinecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         lanHostMinecraft.setLocalServer(true);
@@ -4146,6 +4148,8 @@ public final class TodoScreenTestMain {
      */
     private static void shouldAllowMemberAddTaskInTeamAllViewWhenProjectSettingEnabledUtf8() {
         GuiTestSupport.resetState();
+        // 本用例断言新增任务后保留未保存标记，需关闭“新增即自动保存”避免标记被立即清除
+        ModConfig.getInstance().setAutoSave(false);
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
         createDefaultTeamProject();
