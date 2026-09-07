@@ -27,10 +27,6 @@ subprojects {
     repositories {
         mavenCentral()
         maven {
-            name = "Modrinth"
-            url = uri("https://maven.modrinth.com")
-        }
-        maven {
             name = "Fabric"
             url = uri("https://maven.fabricmc.net/")
         }
