@@ -2,6 +2,8 @@ package com.todolist.gui.testsupport;
 
 import net.minecraft.client.Options;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.MusicManager;
+import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 
 /**
@@ -12,7 +14,8 @@ public final class FakeSoundManager extends SoundManager {
      * 构造方法仅用于满足继承要求，测试中通过 Unsafe 分配实例，不会真正执行。
      */
     private FakeSoundManager() {
-        super((Options) null);
+        // v1_21_6 覆盖：SoundManager 构造新增 MusicManager 参数
+        super((Options) null, (MusicManager) null);
         throw new UnsupportedOperationException("请通过 FakeSoundManager.create 创建测试音效管理器");
     }
 
@@ -29,9 +32,12 @@ public final class FakeSoundManager extends SoundManager {
      * 吞掉按钮点击等即时音效播放请求，避免 GUI 测试依赖底层音频设备。
      *
      * @param sound 待播放的声音实例
+     * @return 固定返回 NOT_STARTED，表示桩实现未真正播放
      */
     @Override
-    public void play(SoundInstance sound) {
+    public SoundEngine.PlayResult play(SoundInstance sound) {
+        // v1_21_6 覆盖：play 返回类型由 void 改为 SoundEngine.PlayResult
+        return SoundEngine.PlayResult.NOT_STARTED;
     }
 
     /**

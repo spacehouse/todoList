@@ -165,12 +165,12 @@ public class ProjectPlayerStateStorage {
             throw new IOException("Failed to read project player state from " + playerStateFile);
         }
         String activeProjectId = readOptionalTrimmedString(root, ACTIVE_PROJECT_ID_KEY);
-        boolean hudVisible = !root.contains(HUD_VISIBLE_KEY) || root.getBoolean(HUD_VISIBLE_KEY);
+        boolean hudVisible = !root.contains(HUD_VISIBLE_KEY) || root.getBooleanOr(HUD_VISIBLE_KEY, false);
         List<String> hudStarredProjectIds = new ArrayList<>();
-        if (root.contains(HUD_STARRED_PROJECT_IDS_KEY, 9)) {
-            ListTag starredProjectList = root.getList(HUD_STARRED_PROJECT_IDS_KEY, NBT_COMPOUND_TYPE);
+        if (root.contains(HUD_STARRED_PROJECT_IDS_KEY)) {
+            ListTag starredProjectList = root.getListOrEmpty(HUD_STARRED_PROJECT_IDS_KEY);
             for (int index = 0; index < starredProjectList.size(); index++) {
-                String projectId = readOptionalTrimmedString(starredProjectList.getCompound(index), PROJECT_ID_KEY);
+                String projectId = readOptionalTrimmedString(starredProjectList.getCompoundOrEmpty(index), PROJECT_ID_KEY);
                 if (projectId == null || hudStarredProjectIds.contains(projectId)) {
                     continue;
                 }
@@ -191,7 +191,7 @@ public class ProjectPlayerStateStorage {
         if (root == null || key == null || !root.contains(key)) {
             return null;
         }
-        String value = root.getString(key);
+        String value = root.getStringOr(key, "");
         if (value == null) {
             return null;
         }

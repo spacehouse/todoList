@@ -1422,10 +1422,9 @@ public final class CommandBootstrap {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.AQUA)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command))
-                        .withHoverEvent(new HoverEvent(
-                                HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable(hoverKey)
+                        .withClickEvent(new ClickEvent.RunCommand(command))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                                                                Component.translatable(hoverKey)
                         )));
     }
 
@@ -1934,10 +1933,9 @@ public final class CommandBootstrap {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.RED)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/todo task clean confirm"))
-                        .withHoverEvent(new HoverEvent(
-                                HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("command.todolist.task.clean.confirm_hover")
+                        .withClickEvent(new ClickEvent.RunCommand("/todo task clean confirm"))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                                                                Component.translatable("command.todolist.task.clean.confirm_hover")
                         )));
         sendFeedback(source, () -> Component.translatable(
                 "command.todolist.task.clean.confirm_hint",
@@ -2479,10 +2477,9 @@ public final class CommandBootstrap {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.RED)
                         .withBold(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/todo project remove confirm"))
-                        .withHoverEvent(new HoverEvent(
-                                HoverEvent.Action.SHOW_TEXT,
-                                Component.translatable("command.todolist.project.remove.confirm_hover")
+                        .withClickEvent(new ClickEvent.RunCommand("/todo project remove confirm"))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                                                                Component.translatable("command.todolist.project.remove.confirm_hover")
                         )));
         sendFeedback(source, () -> Component.translatable(
                 "command.todolist.project.remove.confirm_hint",
@@ -2987,9 +2984,9 @@ public final class CommandBootstrap {
     private static MutableComponent applyCopyStyle(MutableComponent component, String copyValue, Component hoverText) {
         String safeCopyValue = copyValue == null ? "" : copyValue;
         return component.withStyle(style -> style
-                .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, safeCopyValue))
+                .withClickEvent(new ClickEvent.CopyToClipboard(safeCopyValue))
                 .withInsertion(safeCopyValue)
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText)));
+                .withHoverEvent(new HoverEvent.ShowText(hoverText)));
     }
 
     private static int executeTaskDone(CommandSourceStack source, String taskId) {

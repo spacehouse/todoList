@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,64 +18,66 @@ import net.neoforged.neoforge.common.extensions.ICommonPacketListener;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.neoforged.neoforge.network.handling.IPayloadHandler;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * NeoForge 缃戠粶妗ユ帴绫汇€?
- * 璐熻矗灏佽鑷畾涔夎浇鑽风殑娉ㄥ唽銆佸彂閫佷笌鍒嗗彂閫昏緫銆?
+ * NeoForge 网络桥接类。
+ * 负责封装自定义载荷的注册、发送与分发逻辑。
  */
 public final class NeoForgeNetworkBridge {
     /**
-     * 鏈嶅姟绔帴鏀跺櫒鍥炶皟銆?
+     * 服务端接收器回调。
      */
     @FunctionalInterface
     public interface ServerReceiver {
         /**
-         * 澶勭悊鏈嶅姟绔敹鍒扮殑鏁版嵁鍖呫€?
+         * 处理服务端收到的数据包。
          *
-         * @param server 褰撳墠鏈嶅姟绔?
-         * @param player 鍙戦€佺帺瀹?
-         * @param handler 缃戠粶澶勭悊鍣?
-         * @param buf 鏁版嵁缂撳啿
-         * @param responseSender 鍥炲寘鍙戦€佸櫒
+         * @param server 当前服务端
+         * @param player 发送玩家
+         * @param handler 网络处理器
+         * @param buf 数据缓冲
+         * @param responseSender 回包发送器
          */
         void receive(MinecraftServer server, ServerPlayer player, ServerGamePacketListenerImpl handler,
                      FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
-     * 瀹㈡埛绔帴鏀跺櫒鍥炶皟銆?
+     * 客户端接收器回调。
      */
     @FunctionalInterface
     public interface ClientReceiver {
         /**
-         * 澶勭悊瀹㈡埛绔敹鍒扮殑鏁版嵁鍖呫€?
+         * 处理客户端收到的数据包。
          *
-         * @param client 褰撳墠瀹㈡埛绔?
-         * @param handler 缃戠粶澶勭悊鍣?
-         * @param buf 鏁版嵁缂撳啿
-         * @param responseSender 鍥炲寘鍙戦€佸櫒
+         * @param client 当前客户端
+         * @param handler 网络处理器
+         * @param buf 数据缓冲
+         * @param responseSender 回包发送器
          */
         void receive(Minecraft client, Object handler, FriendlyByteBuf buf, NeoForgePacketSender responseSender);
     }
 
     /**
-     * 鐜╁鍔犲叆鐩戝惉鍣ㄣ€?
+     * 玩家加入监听器。
      */
     @FunctionalInterface
     public interface JoinListener {
         /**
-         * 澶勭悊鐜╁鍔犲叆浜嬩欢銆?
+         * 处理玩家加入事件。
          *
-         * @param player 鍔犲叆鐜╁
-         * @param sender 鍥炲寘鍙戦€佸櫒
-         * @param server 褰撳墠鏈嶅姟绔?
+         * @param player 加入玩家
+         * @param sender 回包发送器
+         * @param server 当前服务端
          */
         void onJoin(ServerPlayer player, NeoForgePacketSender sender, MinecraftServer server);
     }
@@ -87,13 +90,13 @@ public final class NeoForgeNetworkBridge {
     private static volatile boolean initialized;
 
     /**
-     * 绉佹湁鏋勯€犲嚱鏁帮紝閬垮厤澶栭儴瀹炰緥鍖栥€?
+     * 私有构造函数，避免外部实例化。
      */
     private NeoForgeNetworkBridge() {
     }
 
     /**
-     * 鍒濆鍖栫綉缁滄ˉ鎺ュ苟娉ㄥ唽杞借嵎澶勭悊鍣ㄣ€?
+     * 初始化网络桥接并注册载荷处理器。
      */
     public static synchronized void init() {
         if (initialized) {
@@ -105,10 +108,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽鏈嶅姟绔帴鏀跺櫒銆?
+     * 注册服务端接收器。
      *
-     * @param channelId 閫氶亾 ID
-     * @param receiver 鎺ユ敹鍣?
+     * @param channelId 通道 ID
+     * @param receiver 接收器
      */
     public static void registerServerReceiver(ResourceLocation channelId, ServerReceiver receiver) {
         init();
@@ -116,10 +119,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽瀹㈡埛绔帴鏀跺櫒銆?
+     * 注册客户端接收器。
      *
-     * @param channelId 閫氶亾 ID
-     * @param receiver 鎺ユ敹鍣?
+     * @param channelId 通道 ID
+     * @param receiver 接收器
      */
     public static void registerClientReceiver(ResourceLocation channelId, ClientReceiver receiver) {
         init();
@@ -127,9 +130,9 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽鐜╁鍔犲叆鐩戝惉鍣ㄣ€?
+     * 注册玩家加入监听器。
      *
-     * @param listener 鐩戝惉鍣?
+     * @param listener 监听器
      */
     public static void registerJoinListener(JoinListener listener) {
         init();
@@ -137,10 +140,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 妫€鏌ユ槸鍚﹀彲浠ュ彂閫佹秷鎭埌鎸囧畾閫氶亾銆?
+     * 检查是否可以发送消息到指定通道。
      *
-     * @param channelId 閫氶亾 ID
-     * @return 鏄惁鍙彂閫?
+     * @param channelId 通道 ID
+     * @return 是否可发送
      */
     public static boolean canSend(ResourceLocation channelId) {
         init();
@@ -164,22 +167,28 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 鍙戦€佹暟鎹寘鍒版湇鍔＄銆?
+     * 发送数据包到服务端。
      *
-     * @param channelId 閫氶亾 ID
-     * @param buf 鏁版嵁缂撳啿
+     * @param channelId 通道 ID
+     * @param buf 数据缓冲
      */
     public static void sendToServer(ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
-        PacketDistributor.sendToServer(new NeoForgeDispatchPayload(channelId.toString(), toByteArray(buf)));
+        // v1_21_6 覆盖：NeoForge 21.7 起 PacketDistributor 移除 sendToServer，
+        // 改为经客户端连接监听器直接发送 ServerboundCustomPayloadPacket（21.6 与 21.7+ 通用）
+        var clientConnection = Minecraft.getInstance().getConnection();
+        if (clientConnection != null) {
+            clientConnection.send(new ServerboundCustomPayloadPacket(
+                    new NeoForgeDispatchPayload(channelId.toString(), toByteArray(buf))));
+        }
     }
 
     /**
-     * 鍙戦€佹暟鎹寘鍒板鎴风锛堟寚瀹氱帺瀹讹級銆?
+     * 发送数据包到客户端（指定玩家）。
      *
-     * @param player 鐩爣鐜╁
-     * @param channelId 閫氶亾 ID
-     * @param buf 鏁版嵁缂撳啿
+     * @param player 目标玩家
+     * @param channelId 通道 ID
+     * @param buf 数据缓冲
      */
     public static void sendToPlayer(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf) {
         init();
@@ -187,7 +196,7 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽杞借嵎澶勭悊鍣ㄤ簨浠剁洃鍚€?
+     * 注册载荷处理器事件监听。
      */
     private static void registerPayloadHandlers() {
         try {
@@ -199,30 +208,67 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽杞借嵎缂栬В鐮佷笌澶勭悊閫昏緫銆?
+     * 注册双向载荷 todolist:bridge 的编解码与处理逻辑。
      *
-     * @param event 杞借嵎娉ㄥ唽浜嬩欢
+     * <p>v1_21_6 覆盖（21.6/21.7/21.8 共用源码）：NeoForge 21.7 起三参 playBidirectional
+     * 仅注册服务端侧 handler，且客户端启动期会校验 clientbound 载荷必须持有客户端
+     * handler；21.6 仅有三参形态且 handler 双侧生效。因此运行时反射探测四参重载，
+     * 21.7/21.8 显式传双 handler，21.6 回退三参旧行为。
+     *
+     * @param event 载荷注册事件
      */
     private static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(TodoConstants.MOD_ID).versioned(PROTOCOL);
-        registrar.playBidirectional(NeoForgeDispatchPayload.TYPE, NeoForgeDispatchPayload.CODEC, NeoForgeNetworkBridge::handleDispatchPayload);
+        // v1_21_6 覆盖（21.6/21.7/21.8 共用源码）：NeoForge 21.7 起 playBidirectional
+        // 三参重载的 handler 仅注册为服务端侧（客户端 handler 置 null），且客户端启动时
+        // ClientNetworkRegistry.setup 校验 clientbound 载荷必须有客户端 handler，缺失即抛
+        // IllegalStateException 导致游戏无法启动；21.6 仅有三参形态（handler 双侧生效、
+        // 无启动校验）。运行时按四参方法存在性选择调用形态：21.7/21.8 走四参显式传双
+        // handler，21.6 走三参保持旧行为。
+        Method fourArgBidirectional = findFourArgPlayBidirectional();
+        IPayloadHandler<NeoForgeDispatchPayload> dispatchHandler = NeoForgeNetworkBridge::handleDispatchPayload;
+        try {
+            if (fourArgBidirectional != null) {
+                fourArgBidirectional.invoke(registrar, NeoForgeDispatchPayload.TYPE, NeoForgeDispatchPayload.CODEC,
+                        dispatchHandler, dispatchHandler);
+            } else {
+                registrar.playBidirectional(NeoForgeDispatchPayload.TYPE, NeoForgeDispatchPayload.CODEC,
+                        dispatchHandler);
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("注册双向载荷 todolist:bridge 失败", e);
+        }
     }
 
     /**
-     * 澶勭悊杞借嵎骞跺垎娲惧埌瀵瑰簲渚с€?
+     * 查找四参形态的 playBidirectional（type, codec, serverHandler, clientHandler）。
      *
-     * @param payload 杞借嵎
-     * @param context 杞借嵎涓婁笅鏂?
+     * @return 四参方法；不存在（NeoForge 21.6 及以下仅有三参形态）时返回 null
+     */
+    private static Method findFourArgPlayBidirectional() {
+        for (Method method : PayloadRegistrar.class.getMethods()) {
+            if ("playBidirectional".equals(method.getName()) && method.getParameterCount() == 4) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 处理载荷并分派到对应侧。
+     *
+     * @param payload 载荷
+     * @param context 载荷上下文
      */
     private static void handleDispatchPayload(NeoForgeDispatchPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> dispatchPacketBySide(payload, context));
     }
 
     /**
-     * 鎸変晶鍒嗗彂杞借嵎銆?
+     * 按侧分发载荷。
      *
-     * @param payload 杞借嵎
-     * @param context 杞借嵎涓婁笅鏂?
+     * @param payload 载荷
+     * @param context 载荷上下文
      */
     private static void dispatchPacketBySide(NeoForgeDispatchPayload payload, IPayloadContext context) {
         if (context.flow() == PacketFlow.SERVERBOUND) {
@@ -233,10 +279,10 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 澶勭悊鏈嶅姟绔浇鑽枫€?
+     * 处理服务端载荷。
      *
-     * @param payload 杞借嵎
-     * @param context 杞借嵎涓婁笅鏂?
+     * @param payload 载荷
+     * @param context 载荷上下文
      */
     private static void dispatchServerPacket(NeoForgeDispatchPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) {
@@ -256,9 +302,9 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 澶勭悊瀹㈡埛绔浇鑽枫€?
+     * 处理客户端载荷。
      *
-     * @param payload 杞借嵎
+     * @param payload 载荷
      */
     private static void dispatchClientPacket(NeoForgeDispatchPayload payload) {
         Minecraft client = Minecraft.getInstance();
@@ -275,7 +321,7 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 娉ㄥ唽鐜╁鐧诲綍鐩戝惉锛岀敤浜庤Е鍙戝姞鍏ュ洖璋冦€?
+     * 注册玩家登录监听，用于触发加入回调。
      */
     private static void registerPlayerLoginHook() {
         try {
@@ -304,20 +350,20 @@ public final class NeoForgeNetworkBridge {
     }
 
     /**
-     * 鑾峰彇鏈嶅姟绔綉缁滃鐞嗗櫒銆?
+     * 获取服务端网络处理器。
      *
-     * @param player 鐩爣鐜╁
-     * @return 鏈嶅姟绔綉缁滃鐞嗗櫒
+     * @param player 目标玩家
+     * @return 服务端网络处理器
      */
     private static ServerGamePacketListenerImpl getServerNetworkHandler(ServerPlayer player) {
         return player.connection;
     }
 
     /**
-     * 灏嗙紦鍐插尯鍐呭澶嶅埗涓哄瓧鑺傛暟缁勩€?
+     * 将缓冲区内容复制为字节数组。
      *
-     * @param source 鍘熷缂撳啿
-     * @return 瀛楄妭鏁扮粍
+     * @param source 原始缓冲
+     * @return 字节数组
      */
     private static byte[] toByteArray(FriendlyByteBuf source) {
         FriendlyByteBuf copy = new FriendlyByteBuf(source.copy());

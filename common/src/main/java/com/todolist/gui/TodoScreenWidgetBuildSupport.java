@@ -424,15 +424,18 @@ final class TodoScreenWidgetBuildSupport {
         int descFieldBottom = tagFieldY - rightSectionGap - textH - 2;
         int descFieldHeight = Math.max(28, descFieldBottom - descFieldY);
 
-        MultiLineEditBox descField = new MultiLineEditBox(
-                font,
-                assignsX,
-                descFieldY,
-                rightFieldWidth,
-                descFieldHeight,
-                Component.translatable("gui.todolist.input.description.placeholder"),
-                Component.translatable("gui.todolist.input.description.placeholder")
-        );
+        // v1_21_6 覆盖：MultiLineEditBox 构造器收窄为包私有，改用 Builder 构建，
+        // 尺寸与旁白组件经 build(font, width, height, narration) 传入
+        MultiLineEditBox descField = MultiLineEditBox.builder()
+                .setX(assignsX)
+                .setY(descFieldY)
+                .setPlaceholder(Component.translatable("gui.todolist.input.description.placeholder"))
+                .build(
+                        font,
+                        rightFieldWidth,
+                        descFieldHeight,
+                        Component.translatable("gui.todolist.input.description.placeholder")
+                );
         descField.setValue("");
         descField.setCharacterLimit(2000);
 

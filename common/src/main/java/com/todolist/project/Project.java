@@ -259,7 +259,7 @@ public class Project {
     public static Project fromNbt(CompoundTag nbt) {
         Project project = new Project();
         if (nbt.contains("id")) {
-            String id = nbt.getString("id");
+            String id = nbt.getStringOr("id", "");
             if (id != null) {
                 id = id.trim();
             }
@@ -267,10 +267,10 @@ public class Project {
                 project.setId(id);
             }
         }
-        if (nbt.contains("name")) project.setName(nbt.getString("name"));
-        if (nbt.contains("color")) project.setColor(nbt.getInt("color"));
+        if (nbt.contains("name")) project.setName(nbt.getStringOr("name", ""));
+        if (nbt.contains("color")) project.setColor(nbt.getIntOr("color", 0));
         if (nbt.contains("scope")) {
-            String scope = nbt.getString("scope");
+            String scope = nbt.getStringOr("scope", "");
             if (scope != null) {
                 scope = scope.trim();
             }
@@ -280,19 +280,19 @@ public class Project {
                 project.setScope(Scope.PERSONAL);
             }
         }
-        if (nbt.contains("ownerUuid")) project.setOwnerUuid(nbt.getString("ownerUuid"));
-        if (nbt.contains("createdAt")) project.setCreatedAt(nbt.getLong("createdAt"));
-        if (nbt.contains("allowMemberCreate")) project.setAllowMemberCreate(nbt.getBoolean("allowMemberCreate"));
+        if (nbt.contains("ownerUuid")) project.setOwnerUuid(nbt.getStringOr("ownerUuid", ""));
+        if (nbt.contains("createdAt")) project.setCreatedAt(nbt.getLongOr("createdAt", 0L));
+        if (nbt.contains("allowMemberCreate")) project.setAllowMemberCreate(nbt.getBooleanOr("allowMemberCreate", false));
         if (nbt.contains("allowAllPlayersClaimComplete")) {
-            project.setAllowAllPlayersClaimComplete(nbt.getBoolean("allowAllPlayersClaimComplete"));
+            project.setAllowAllPlayersClaimComplete(nbt.getBooleanOr("allowAllPlayersClaimComplete", false));
         }
         
         if (nbt.contains("members")) {
-            ListTag memberList = nbt.getList("members", NBT_COMPOUND_TYPE);
+            ListTag memberList = nbt.getListOrEmpty("members");
             for (int i = 0; i < memberList.size(); i++) {
-                CompoundTag memberTag = memberList.getCompound(i);
-                String uuid = memberTag.getString("uuid");
-                String roleStr = memberTag.getString("role");
+                CompoundTag memberTag = memberList.getCompoundOrEmpty(i);
+                String uuid = memberTag.getStringOr("uuid", "");
+                String roleStr = memberTag.getStringOr("role", "");
                 ProjectRole role;
                 if ("OWNER".equals(roleStr) || "PROJECT_MANAGER".equals(roleStr)) {
                     role = ProjectRole.PROJECT_MANAGER;
@@ -303,7 +303,7 @@ public class Project {
                 }
                 project.addMember(uuid, role);
                 if (memberTag.contains("name")) {
-                    String name = memberTag.getString("name");
+                    String name = memberTag.getStringOr("name", "");
                     if (name != null && !name.isEmpty()) {
                         project.setMemberName(uuid, name);
                     }

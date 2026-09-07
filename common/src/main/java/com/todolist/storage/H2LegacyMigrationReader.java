@@ -71,13 +71,13 @@ public final class H2LegacyMigrationReader {
         }
         CompoundTag root = readResult.getValue();
         List<Task> tasks = new ArrayList<>();
-        if (root.contains("tasks", NBT_LIST_TYPE)) {
-            ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
+        if (root.contains("tasks")) {
+            ListTag taskList = root.getListOrEmpty("tasks");
             for (int index = 0; index < taskList.size(); index++) {
-                tasks.add(Task.fromNbt(taskList.getCompound(index)));
+                tasks.add(Task.fromNbt(taskList.getCompoundOrEmpty(index)));
             }
         }
-        output.add(new LegacyTaskBucket(bucketType, ownerUuid, root.getLong("lastSaved"), tasks));
+        output.add(new LegacyTaskBucket(bucketType, ownerUuid, root.getLongOr("lastSaved", 0L), tasks));
     }
 
     /**
@@ -120,10 +120,10 @@ public final class H2LegacyMigrationReader {
         }
         CompoundTag root = readResult.getValue();
         List<Project> projects = new ArrayList<>();
-        if (root.contains("projects", NBT_LIST_TYPE)) {
-            ListTag list = root.getList("projects", NBT_COMPOUND_TYPE);
+        if (root.contains("projects")) {
+            ListTag list = root.getListOrEmpty("projects");
             for (int index = 0; index < list.size(); index++) {
-                projects.add(Project.fromNbt(list.getCompound(index)));
+                projects.add(Project.fromNbt(list.getCompoundOrEmpty(index)));
             }
         }
         output.add(new LegacyProjectBucket(bucketType, projects));
@@ -171,19 +171,19 @@ public final class H2LegacyMigrationReader {
         }
         CompoundTag root = readResult.getValue();
         String activeProjectId = readOptionalTrimmedString(root, "activeProjectId");
-        boolean hudVisible = !root.contains("hudVisible") || root.getBoolean("hudVisible");
+        boolean hudVisible = !root.contains("hudVisible") || root.getBooleanOr("hudVisible", false);
         List<String> starredProjectIds = new ArrayList<>();
-        if (root.contains("hudStarredProjectIds", NBT_LIST_TYPE)) {
-            ListTag starredList = root.getList("hudStarredProjectIds", NBT_COMPOUND_TYPE);
+        if (root.contains("hudStarredProjectIds")) {
+            ListTag starredList = root.getListOrEmpty("hudStarredProjectIds");
             for (int index = 0; index < starredList.size(); index++) {
-                String projectId = readOptionalTrimmedString(starredList.getCompound(index), "projectId");
+                String projectId = readOptionalTrimmedString(starredList.getCompoundOrEmpty(index), "projectId");
                 if (projectId != null && !starredProjectIds.contains(projectId)) {
                     starredProjectIds.add(projectId);
                 }
             }
         }
         ProjectPlayerStateStorage.ProjectPlayerState state = new ProjectPlayerStateStorage.ProjectPlayerState(activeProjectId, starredProjectIds, hudVisible);
-        output.add(new LegacyPlayerProjectStateRecord(playerUuid, root.contains("lastSaved") ? root.getLong("lastSaved") : 0L, state));
+        output.add(new LegacyPlayerProjectStateRecord(playerUuid, root.contains("lastSaved") ? root.getLongOr("lastSaved", 0L) : 0L, state));
     }
 
     /**
@@ -197,7 +197,7 @@ public final class H2LegacyMigrationReader {
         if (root == null || key == null || !root.contains(key)) {
             return null;
         }
-        String value = root.getString(key);
+        String value = root.getStringOr(key, "");
         if (value == null || value.trim().isEmpty()) {
             return null;
         }

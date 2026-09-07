@@ -650,10 +650,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             return this.getWidth() - 10;
         }
 
-        @Override
-        protected int getScrollbarPosition() {
-            return this.getX() + this.getWidth() + 6;
-        }
+        // v1_21_6 覆盖：延续 v1_21_4 处理——AbstractSelectionList#getScrollbarPosition() 扩展点已移除，
+        // 滚动条位置由原版 renderScrollbar 内部计算，基线的覆盖方法在此不保留
 
         public class MemberEntry extends ContainerObjectSelectionList.Entry<MemberEntry> {
             private final String uuid;

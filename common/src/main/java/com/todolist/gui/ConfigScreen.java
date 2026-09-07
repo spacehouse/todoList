@@ -15,6 +15,11 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 配置界面，提供经典 HUD 配置表单和固定高度的 HUD 预览区域。
+ *
+ * <p>v1_21_6 覆盖：1.21.6 起 Screen.renderWithTooltip 框架层默认实现已先调用
+ * renderBackground（含模糊背景），render 内再手动调用会触发第二次 blur，
+ * 导致 "Can only blur once per frame" 崩溃，因此本覆盖版删除该手动调用，
+ * 其余逻辑与基线一致。适用于 1.21.6/1.21.7/1.21.8。
  */
 public class ConfigScreen extends Screen {
 
@@ -360,7 +365,9 @@ public class ConfigScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        // v1_21_6 覆盖：1.21.6 起 Screen.renderWithTooltip 框架层默认实现已先渲染
+        // renderBackground（含模糊背景），此处再手动调用会触发第二次 blur，
+        // 抛出 "Can only blur once per frame"，故省略该调用。
         super.render(context, mouseX, mouseY, delta);
 
         int guiWidth = clampInt(this.width - 40, 360, 560);
@@ -402,8 +409,10 @@ public class ConfigScreen extends Screen {
         int centerY = previewHudY + previewHudHeight / 2;
         int totalTextHeight = textHeight * 2 + 2;
         int startY = centerY - totalTextHeight / 2;
-        context.drawString(this.font, previewTitle, centerX - this.font.width(previewTitle) / 2, startY, 0xFFFFFF, false);
-        context.drawString(this.font, previewHint, centerX - this.font.width(previewHint) / 2, startY + textHeight + 2, 0xFFFFFF, false);
+        // v1_21_6 覆盖：1.21.6 起 GuiGraphics.drawString 对 alpha==0 的颜色直接跳过渲染，
+        // 颜色字面量必须显式携带 alpha（旧版本对 RGB 颜色默认补齐 alpha=255 的兜底已移除）。
+        context.drawString(this.font, previewTitle, centerX - this.font.width(previewTitle) / 2, startY, 0xFFFFFFFF, false);
+        context.drawString(this.font, previewHint, centerX - this.font.width(previewHint) / 2, startY + textHeight + 2, 0xFFFFFFFF, false);
     }
 
     /**
@@ -792,7 +801,8 @@ public class ConfigScreen extends Screen {
         }
         int labelY = widget.getY() + (widget.getHeight() - textHeight) / 2;
         int labelX = Math.max(8, widget.getX() - this.font.width(label) - 8);
-        context.drawString(this.font, label, labelX, labelY, 0xFFFFFF, false);
+        // v1_21_6 覆盖：颜色必须显式携带 alpha，否则 1.21.6 起 drawString 直接跳过渲染
+        context.drawString(this.font, label, labelX, labelY, 0xFFFFFFFF, false);
     }
 
     /**

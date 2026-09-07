@@ -123,10 +123,12 @@ final class TodoScreenRenderSupport {
         }
         int textHeight = Math.max(1, Math.round(font.lineHeight * scale));
         int drawY = configButton.getY() + Math.max(0, (configButton.getHeight() - textHeight) / 2);
-        context.pose().pushPose();
-        context.pose().scale(scale, scale, 1.0F);
+        // v1_21_6 覆盖：GuiGraphics.pose() 返回 joml Matrix3x2fStack，
+        // pushPose/popPose 改为 pushMatrix/popMatrix，scale 收敛为二维参数
+        context.pose().pushMatrix();
+        context.pose().scale(scale, scale);
         context.drawString(font, displayText, Math.round(startX / scale), Math.round(drawY / scale), 0xFFFFFFFF, false);
-        context.pose().popPose();
+        context.pose().popMatrix();
     }
 
     /**

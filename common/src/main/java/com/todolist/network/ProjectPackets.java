@@ -821,12 +821,12 @@ public class ProjectPackets {
 
         MutableComponent acceptBtn = Component.translatable("message.todolist.project.join.accept_button")
                 .withStyle(s -> s.withColor(ChatFormatting.GREEN)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmdAccept))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(cmdAccept))));
+                        .withClickEvent(new ClickEvent.RunCommand(cmdAccept))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(cmdAccept))));
         MutableComponent denyBtn = Component.translatable("message.todolist.project.join.deny_button")
                 .withStyle(s -> s.withColor(ChatFormatting.RED)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmdDeny))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(cmdDeny))));
+                        .withClickEvent(new ClickEvent.RunCommand(cmdDeny))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal(cmdDeny))));
 
         MutableComponent msg = Component.translatable("message.todolist.project.join.request_received", player.getName().getString(), projectName)
                 .append(" ")
@@ -1030,9 +1030,9 @@ public class ProjectPackets {
     private static MutableComponent applyCopyStyle(MutableComponent component, String copyValue, Component hoverText) {
         String safeCopyValue = copyValue == null ? "" : copyValue;
         return component.withStyle(style -> style
-                .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, safeCopyValue))
+                .withClickEvent(new ClickEvent.CopyToClipboard(safeCopyValue))
                 .withInsertion(safeCopyValue)
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText)));
+                .withHoverEvent(new HoverEvent.ShowText(hoverText)));
     }
 
     private static Role getRole(ServerPlayer player, Project project) {

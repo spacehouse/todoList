@@ -170,17 +170,17 @@ public class ProjectStorage {
             throw new IOException("Failed to read project data from " + file);
         }
         boolean dirty = false;
-        if (root.contains("projects", 9)) {
-            ListTag list = root.getList("projects", 10);
+        if (root.contains("projects")) {
+            ListTag list = root.getListOrEmpty("projects");
             for (int i = 0; i < list.size(); i++) {
-                CompoundTag projectNbt = list.getCompound(i);
-                boolean hadValidId = projectNbt.contains("id") && !projectNbt.getString("id").trim().isEmpty();
+                CompoundTag projectNbt = list.getCompoundOrEmpty(i);
+                boolean hadValidId = projectNbt.contains("id") && !projectNbt.getStringOr("id", "").trim().isEmpty();
                 boolean scopeDirty = false;
                 if (!projectNbt.contains("scope")) {
                     scopeDirty = true;
                 } else {
                     try {
-                        Project.Scope.valueOf(projectNbt.getString("scope").trim());
+                        Project.Scope.valueOf(projectNbt.getStringOr("scope", "").trim());
                     } catch (IllegalArgumentException e) {
                         scopeDirty = true;
                     }

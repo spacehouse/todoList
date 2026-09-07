@@ -307,15 +307,15 @@ public class TaskStorage {
             throw new IOException("Failed to read task data from " + file);
         }
 
-        long lastSaved = root.getLong("lastSaved");
-        int version = root.getInt("version");
+        long lastSaved = root.getLongOr("lastSaved", 0L);
+        int version = root.getIntOr("version", 0);
 
-        ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
+        ListTag taskList = root.getListOrEmpty("tasks");
         List<Task> tasks = new ArrayList<>();
         IOException malformedTaskException = null;
 
         for (int i = 0; i < taskList.size(); i++) {
-            CompoundTag taskNbt = taskList.getCompound(i);
+            CompoundTag taskNbt = taskList.getCompoundOrEmpty(i);
             try {
                 Task task = Task.fromNbt(taskNbt);
                 tasks.add(task);
@@ -422,7 +422,7 @@ public class TaskStorage {
                 return 0L;
             }
             CompoundTag root = readResult.getValue();
-            return root.getLong("lastSaved");
+            return root.getLongOr("lastSaved", 0L);
         } catch (Exception e) {
             return 0L;
         }

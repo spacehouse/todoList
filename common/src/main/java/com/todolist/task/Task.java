@@ -146,40 +146,40 @@ public class Task {
      * @return 还原后的任务对象
      */
     public static Task fromNbt(CompoundTag nbt) {
-        String title = nbt.getString("title");
-        String description = nbt.getString("description");
+        String title = nbt.getStringOr("title", "");
+        String description = nbt.getStringOr("description", "");
         Task task = new Task(title, description);
 
         // Load ID
         if (nbt.contains("id")) {
-            task.id = nbt.getString("id"); // Note: would need to make id non-final or use reflection
+            task.id = nbt.getStringOr("id", ""); // Note: would need to make id non-final or use reflection
         }
 
-        task.completed = nbt.getBoolean("completed");
+        task.completed = nbt.getBooleanOr("completed", false);
 
         // Priority
-        String priorityStr = nbt.getString("priority");
+        String priorityStr = nbt.getStringOr("priority", "");
         task.priority = Priority.valueOf(priorityStr);
 
-        task.createdAt = nbt.getLong("createdAt");
+        task.createdAt = nbt.getLongOr("createdAt", 0L);
 
         // Tags
-        if (nbt.contains("tags", NBT_LIST_TYPE)) {
-            ListTag tagsList = nbt.getList("tags", NBT_COMPOUND_TYPE);
+        if (nbt.contains("tags")) {
+            ListTag tagsList = nbt.getListOrEmpty("tags");
             for (int i = 0; i < tagsList.size(); i++) {
-                CompoundTag tagNbt = tagsList.getCompound(i);
-                task.tags.add(tagNbt.getString("tag"));
+                CompoundTag tagNbt = tagsList.getCompoundOrEmpty(i);
+                task.tags.add(tagNbt.getStringOr("tag", ""));
             }
         }
 
         // Due date
         if (nbt.contains("dueDate")) {
-            task.dueDate = nbt.getLong("dueDate");
+            task.dueDate = nbt.getLongOr("dueDate", 0L);
         }
 
         if (nbt.contains("scope")) {
             try {
-                task.scope = Scope.valueOf(nbt.getString("scope"));
+                task.scope = Scope.valueOf(nbt.getStringOr("scope", ""));
             } catch (IllegalArgumentException e) {
                 task.scope = Scope.PERSONAL;
             }
@@ -187,29 +187,29 @@ public class Task {
             task.scope = Scope.PERSONAL;
         }
         if (nbt.contains("creatorUuid")) {
-            task.creatorUuid = nbt.getString("creatorUuid");
+            task.creatorUuid = nbt.getStringOr("creatorUuid", "");
         }
         if (nbt.contains("assigneeUuid")) {
-            task.assigneeUuid = nbt.getString("assigneeUuid");
+            task.assigneeUuid = nbt.getStringOr("assigneeUuid", "");
         }
         if (nbt.contains("assigneeName")) {
-            task.assigneeName = nbt.getString("assigneeName");
+            task.assigneeName = nbt.getStringOr("assigneeName", "");
         }
         if (nbt.contains("projectId")) {
-            task.projectId = nbt.getString("projectId");
+            task.projectId = nbt.getStringOr("projectId", "");
         }
         if (nbt.contains(PARENT_TASK_ID_KEY)) {
-            task.parentTaskId = normalizeOptionalText(nbt.getString(PARENT_TASK_ID_KEY));
+            task.parentTaskId = normalizeOptionalText(nbt.getStringOr(PARENT_TASK_ID_KEY, ""));
         }
         if (nbt.contains(SUBTASK_SORT_ORDER_KEY)) {
-            task.subtaskSortOrder = nbt.getLong(SUBTASK_SORT_ORDER_KEY);
+            task.subtaskSortOrder = nbt.getLongOr(SUBTASK_SORT_ORDER_KEY, 0L);
         }
 
         // Subtasks
-        if (nbt.contains("subtasks", NBT_LIST_TYPE)) {
-            ListTag subtasksList = nbt.getList("subtasks", NBT_COMPOUND_TYPE);
+        if (nbt.contains("subtasks")) {
+            ListTag subtasksList = nbt.getListOrEmpty("subtasks");
             for (int i = 0; i < subtasksList.size(); i++) {
-                task.subtasks.add(Task.fromNbt(subtasksList.getCompound(i)));
+                task.subtasks.add(Task.fromNbt(subtasksList.getCompoundOrEmpty(i)));
             }
         }
 

@@ -1,6 +1,5 @@
 package com.todolist.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
@@ -905,9 +904,9 @@ public class TodoHudRenderer {
         int rowHeight = 12;
         int headerHeight = 14;
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        // v1_21_6 覆盖：1.21.5 渲染管线重构移除 RenderSystem.enableBlend/defaultBlendFunc，
+        // 1.21.6 进一步移除 RenderSystem.setShaderColor，着色器颜色由 GuiGraphics 统一管理，
+        // 此处均省略原调用，fill/drawString 自带透明度合成，保持基线绘制表现
 
         Component title = buildHeaderTitle(viewMode);
 
@@ -919,7 +918,7 @@ public class TodoHudRenderer {
         if (!expanded) {
             Component summary = buildCollapsedSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xDDDDDD));
+            context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xFFDDDDDD));
             return;
         }
 
@@ -930,7 +929,7 @@ public class TodoHudRenderer {
 
         if (renderPlan.showDoneSection) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xAAAAAA));
+            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xFFAAAAAA));
             currentY += rowHeight;
             for (int i = 0; i < renderPlan.shownDone; i++) {
                 drawTaskRow(context, x, currentY, width, rowHeight, done.get(i));
@@ -945,7 +944,7 @@ public class TodoHudRenderer {
                     buildExpandedFooterSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount),
                     x + 4,
                     moreY,
-                    toOpaqueColor(0xAAAAAA));
+                    toOpaqueColor(0xFFAAAAAA));
         }
     }
 
@@ -968,8 +967,8 @@ public class TodoHudRenderer {
         int titleTextY = y + (rowHeight - client.font.lineHeight) / 2;
         int labelLineHeight = Math.max(1, Math.round(client.font.lineHeight * HUD_LABEL_SCALE));
         int labelTextY = y + (rowHeight - labelLineHeight) / 2;
-        int textColor = toOpaqueColor(0xFFFFFF);
-        int labelColor = toOpaqueColor(0x55FFFF);
+        int textColor = toOpaqueColor(0xFFFFFFFF);
+        int labelColor = toOpaqueColor(0xFF55FFFF);
 
         HudRowVisual rowVisual = rowCache.rowVisual;
         if (rowVisual.prefixText != null) {
@@ -1326,11 +1325,13 @@ public class TodoHudRenderer {
         if (text == null || text.isEmpty()) {
             return;
         }
-        context.pose().pushPose();
-        context.pose().translate(x, y, 0.0F);
-        context.pose().scale(scale, scale, 1.0F);
+        // v1_21_6 覆盖：GuiGraphics.pose() 返回 joml Matrix3x2fStack，
+        // pushPose/popPose 改为 pushMatrix/popMatrix，translate/scale 收敛为二维参数
+        context.pose().pushMatrix();
+        context.pose().translate(x, y);
+        context.pose().scale(scale, scale);
         context.drawString(client.font, text, 0, 0, color, false);
-        context.pose().popPose();
+        context.pose().popMatrix();
     }
 
     /**
@@ -1735,7 +1736,7 @@ public class TodoHudRenderer {
      * @return HUD 任务文字颜色
      */
     int getTaskTextColorForTest() {
-        return toOpaqueColor(0xFFFFFF);
+        return toOpaqueColor(0xFFFFFFFF);
     }
 
     /**

@@ -25,6 +25,8 @@ import java.util.stream.Stream;
 /**
  * 持久化安全测试入口。
  * 负责覆盖安全写盘、备份恢复和损坏文件兜底等核心回归场景。
+ * v1_21_6 覆盖：沿用 v1_21_5 的 CompoundTag.contains/getList 与 ListTag.getCompound 签名变更，
+ * 仅调整 corruptTaskPriorityInsideNbt 中三处 NBT 调用以匹配新 API，用例逻辑不变。
  */
 public final class PersistenceSafetyTestMain {
     private static final UUID TEST_PLAYER_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
@@ -340,14 +342,14 @@ public final class PersistenceSafetyTestMain {
      */
     private static void corruptTaskPriorityInsideNbt(Path file, String invalidPriority) throws Exception {
         CompoundTag root = NbtIo.read(file);
-        if (root == null || !root.contains("tasks", 9)) {
+        if (root == null || !root.contains("tasks")) {
             throw new IllegalStateException("任务文件缺少 tasks 列表，无法构造部分损坏场景");
         }
-        ListTag taskList = root.getList("tasks", 10);
+        ListTag taskList = root.getListOrEmpty("tasks");
         if (taskList.size() <= 0) {
             throw new IllegalStateException("任务文件没有可损坏的任务条目");
         }
-        taskList.getCompound(0).putString("priority", invalidPriority);
+        taskList.getCompoundOrEmpty(0).putString("priority", invalidPriority);
         NbtIo.write(root, file);
     }
 

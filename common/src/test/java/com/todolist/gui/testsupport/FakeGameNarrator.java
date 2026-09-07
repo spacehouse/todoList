@@ -35,14 +35,8 @@ public class FakeGameNarrator extends GameNarrator {
         return false;
     }
 
-    /**
-     * 忽略普通旁白输出，避免离线测试依赖真实 TTS。
-     *
-     * @param component 待旁白文本
-     */
-    @Override
-    public void say(Component component) {
-    }
+    // v1_21_6 覆盖：GameNarrator 的 say/sayChat/sayNow 在 1.21.6 被重命名拆分为
+    // sayChatQueued/saySystemChatQueued/saySystemQueued/saySystemNow，此处全部覆写为空实现
 
     /**
      * 忽略聊天旁白输出，避免离线测试依赖真实 TTS。
@@ -50,16 +44,34 @@ public class FakeGameNarrator extends GameNarrator {
      * @param component 待旁白文本
      */
     @Override
-    public void sayChat(Component component) {
+    public void sayChatQueued(Component component) {
     }
 
     /**
-     * 忽略立即旁白输出，避免离线测试依赖真实 TTS。
+     * 忽略系统聊天旁白输出，避免离线测试依赖真实 TTS。
      *
      * @param component 待旁白文本
      */
     @Override
-    public void sayNow(Component component) {
+    public void saySystemChatQueued(Component component) {
+    }
+
+    /**
+     * 忽略系统旁白输出，避免离线测试依赖真实 TTS。
+     *
+     * @param component 待旁白文本
+     */
+    @Override
+    public void saySystemQueued(Component component) {
+    }
+
+    /**
+     * 忽略立即系统旁白输出，避免离线测试依赖真实 TTS。
+     *
+     * @param component 待旁白文本
+     */
+    @Override
+    public void saySystemNow(Component component) {
     }
 
     /**

@@ -7,6 +7,7 @@ import net.minecraft.client.ClientRecipeBook;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.stats.StatsCounter;
+import net.minecraft.world.entity.player.Input;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +27,8 @@ public class FakeClientPlayer extends LocalPlayer {
      * 构造方法仅用于满足编译要求，测试运行时通过 Unsafe 绕过。
      */
     protected FakeClientPlayer() {
-        super(null, (ClientLevel) null, (ClientPacketListener) null, (StatsCounter) null, (ClientRecipeBook) null, false, false);
+        // v1_21_6 覆盖：LocalPlayer 构造第 6 参由 boolean 改为 Input
+        super(null, (ClientLevel) null, (ClientPacketListener) null, (StatsCounter) null, (ClientRecipeBook) null, (Input) null, false);
         throw new UnsupportedOperationException("请通过 FakeClientPlayer.create 创建测试玩家");
     }
 

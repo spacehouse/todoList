@@ -1,5 +1,6 @@
 package com.todolist.client;
 
+import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.TodoListNeoForge;
 import com.todolist.config.ModConfig;
@@ -12,21 +13,30 @@ import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 /**
  * NeoForge 平台客户端主类，负责客户端初始化、HUD 集成与状态同步。
+ *
+ * <p>v1_21_6 覆盖：1.21.6 起 NeoForge HUD 渲染重构为 GuiLayer 层体系，
+ * 本覆盖改用 RegisterGuiLayersEvent 注册模组 HUD 层（替代基线的
+ * RenderGuiEvent.Post 事件路径），并在层首次渲染时输出 info 日志，
+ * 便于实机排查 HUD 未显示问题；其余逻辑与基线一致。
+ * 适用于 1.21.6/1.21.7/1.21.8。
  */
 public final class NeoForgeTodoClient {
     private static Minecraft client;
@@ -41,6 +51,9 @@ public final class NeoForgeTodoClient {
     private static boolean pendingRemoteResync;
     private static boolean pendingLocalWorldInitialization;
     private static Boolean lastLocalPublishedState;
+    private static final ResourceLocation HUD_LAYER_ID =
+            ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "todo_hud");
+    private static boolean hudLayerFirstRenderLogged;
 
     /**
      * 私有构造方法，避免工具类被实例化。
@@ -85,11 +98,12 @@ public final class NeoForgeTodoClient {
      */
     private static void registerClientListeners() {
         NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientTickEvent);
-        NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onRenderGuiPostEvent);
         NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingOutEvent);
         NeoForge.EVENT_BUS.addListener(NeoForgeTodoClient::onClientLoggingInEvent);
         IEventBus modEventBus = ModLoadingContext.get().getActiveContainer().getEventBus();
         modEventBus.addListener(NeoForgeTodoClient::onRegisterKeyMappingsEvent);
+        // v1_21_6 覆盖：HUD 改走 mod 总线的 GUI 层注册事件，不再监听 RenderGuiEvent.Post
+        modEventBus.addListener(NeoForgeTodoClient::onRegisterGuiLayersEvent);
     }
 
     /**
@@ -101,6 +115,35 @@ public final class NeoForgeTodoClient {
         event.register(OPEN_TODO_KEY);
         event.register(TOGGLE_HUD_KEY);
         event.register(TOGGLE_HUD_VISIBILITY_KEY);
+    }
+
+    /**
+     * 注册模组 HUD 渲染层（v1_21_6 覆盖：对齐 21.6 GUI 层体系）。
+     *
+     * @param event GUI 层注册事件
+     */
+    private static void onRegisterGuiLayersEvent(RegisterGuiLayersEvent event) {
+        event.registerAboveAll(HUD_LAYER_ID, NeoForgeTodoClient::renderHudLayer);
+    }
+
+    /**
+     * 渲染 HUD 层，首次渲染时输出诊断日志。
+     *
+     * @param guiGraphics 绘制上下文
+     * @param deltaTracker 帧间插值跟踪器
+     */
+    private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+        if (hudRenderer == null) {
+            return;
+        }
+        if (!hudLayerFirstRenderLogged) {
+            hudLayerFirstRenderLogged = true;
+            TodoListNeoForge.LOGGER.info("Todo List HUD layer first render triggered (NeoForge gui layer)");
+        }
+        float partialTick = deltaTracker != null
+                ? deltaTracker.getGameTimeDeltaPartialTick(true)
+                : 0.0f;
+        hudRenderer.render(guiGraphics, partialTick);
     }
 
     /**
@@ -270,21 +313,6 @@ public final class NeoForgeTodoClient {
                 NeoForgeClientProjectPackets.sendSetActiveProjectId(project.getId());
             }
         }
-    }
-
-    /**
-     * 渲染 HUD 图层。
-     *
-     * @param event GUI 渲染事件
-     */
-    private static void onRenderGuiPostEvent(RenderGuiEvent.Post event) {
-        if (hudRenderer == null) {
-            return;
-        }
-        float partialTick = event.getPartialTick() != null
-                ? event.getPartialTick().getGameTimeDeltaPartialTick(true)
-                : 0.0f;
-        hudRenderer.render(event.getGuiGraphics(), partialTick);
     }
 
     /**
