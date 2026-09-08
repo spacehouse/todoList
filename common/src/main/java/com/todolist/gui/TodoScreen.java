@@ -48,6 +48,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
@@ -1698,7 +1700,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
+        // 1.21.9：按键事件改为 KeyEvent 记录，解构键码保持原逻辑不变
+        int keyCode = event.key();
         if (keyCode == GLFW.GLFW_KEY_ESCAPE
                 && TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             closeTaskContextMenu();
@@ -1714,7 +1718,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             onAddTask();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     /**
@@ -1748,7 +1752,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         syncTaskListReorderState();
         if (handleContextMenuClick(mouseX, mouseY, button)) {
             return true;
@@ -1835,7 +1843,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && clearCompletedButton.visible
                 && clearCompletedButton.active
                 && clearCompletedButton.isMouseOver(mouseX, mouseY)) {
-            clearCompletedButton.onPress();
+            clearCompletedButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
         if (button == 0
@@ -1843,7 +1851,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && saveButton.visible
                 && saveButton.active
                 && saveButton.isMouseOver(mouseX, mouseY)) {
-            saveButton.onPress();
+            saveButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
         if (button == 0
@@ -1851,7 +1859,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && cancelButton.visible
                 && cancelButton.active
                 && cancelButton.isMouseOver(mouseX, mouseY)) {
-            cancelButton.onPress();
+            cancelButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
         if (button == 0
@@ -1859,7 +1867,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && addSubtaskButton.visible
                 && addSubtaskButton.active
                 && addSubtaskButton.isMouseOver(mouseX, mouseY)) {
-            addSubtaskButton.onPress();
+            addSubtaskButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
         boolean clickInsideVisibleDetailPanel = layoutMetrics != null
@@ -1879,7 +1887,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (!clickInsideVisibleDetailPanel
                 && projectListWidget != null
                 && isSidebarPanelVisible()
-                && projectListWidget.mouseClicked(mouseX, mouseY, button)) {
+                && projectListWidget.mouseClicked(event, doubleClick)) {
             resetTaskRowDragState();
             closeTaskContextMenu();
             return true;
@@ -1994,7 +2002,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (this.minecraft == null || Minecraft.getInstance() == null) {
             return cleared;
         }
-        boolean handled = super.mouseClicked(mouseX, mouseY, button);
+        boolean handled = super.mouseClicked(event, doubleClick);
         return handled || cleared;
     }
 
@@ -2014,17 +2022,25 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
             pendingClickSelectionTask = null;
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(event, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         syncTaskListReorderState();
         if (taskListWidget != null && taskListWidget.mouseReleased(mouseX, mouseY, button)) {
             resetTaskRowDragState();
@@ -2035,7 +2051,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             resetTaskRowDragState();
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
     @Override
     public void onClose() {

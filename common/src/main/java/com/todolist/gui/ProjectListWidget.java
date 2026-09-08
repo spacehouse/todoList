@@ -17,6 +17,7 @@ import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 
 /**
  * 项目侧栏列表组件，负责展示项目、处理选择、星标切换与滚动交互。
@@ -233,7 +234,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
 
         context.fill(x, y, x + width, y + height, 0xFF0D1115);
         context.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF111820);
-        context.renderOutline(x, y, width, height, config.getBorderColor());
+        context.submitOutline(x, y, width, height, config.getBorderColor());
 
         int visibleItems = height / itemHeight;
         for (int i = 0; i < visibleItems; i++) {
@@ -301,7 +302,11 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
      * @return 是否已消费事件
      */
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height) {
             int index = (int) ((mouseY - y) / itemHeight) + scrollOffset;
             if (index >= 0 && index < projects.size()) {

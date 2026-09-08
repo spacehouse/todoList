@@ -14,6 +14,11 @@ import net.minecraft.client.InputType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GlyphSource;
+import net.minecraft.client.gui.font.glyphs.EffectGlyph;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.network.chat.FontDescription;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -147,7 +152,7 @@ public final class GuiTestSupport {
         // InputConstants.isKeyDown → GLFW.glfwGetKey(windowHandle, key) 查询按键状态；
         // 句柄为 0 会被 LWJGL Checks.check 视为空指针抛 NPE，故注入非零假句柄。
         // GLFW 未初始化时 glfwGetKey 在 C 层安全返回 RELEASE，不会真正使用该句柄。
-        setLongField(Window.class, window, "window", 1L);
+        setLongField(Window.class, window, "handle", 1L);
         options.hideGui = false;
         setObjectField(Minecraft.class, minecraft, "font", font);
         setObjectField(Minecraft.class, minecraft, "player", player);
@@ -491,6 +496,17 @@ public final class GuiTestSupport {
     }
 
     /**
+     * 构造测试用鼠标左键事件（无修饰键），供 1.21.9 输入事件签名下的 GUI 用例复用。
+     *
+     * @param x 事件 X 坐标
+     * @param y 事件 Y 坐标
+     * @return 鼠标左键事件实例
+     */
+    public static MouseButtonEvent mouseEvent(double x, double y) {
+        return new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0));
+    }
+
+    /**
      * 简化 GUI 测试所需文本测量行为的字体实现。
      */
     private static final class FakeFont extends Font {
@@ -498,7 +514,18 @@ public final class GuiTestSupport {
          * 创建测试字体实例。
          */
         private FakeFont() {
-            super(id -> null, false);
+            // 1.21.9：Font 构造器改为单参 Provider 接口（非函数式），以匿名实现提供空字形源。
+            super(new Font.Provider() {
+                @Override
+                public GlyphSource glyphs(FontDescription description) {
+                    return null;
+                }
+
+                @Override
+                public EffectGlyph effect() {
+                    return null;
+                }
+            });
         }
 
         /**

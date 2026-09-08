@@ -7,6 +7,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Field;
@@ -919,7 +920,7 @@ final class TodoScreenTestAccess {
     void clickDetailCloseButtonForTest() {
         Button button = readScreenField("detailCloseButton", Button.class);
         if (button != null) {
-            button.onPress();
+            button.onPress(new KeyEvent(0, 0, 0));
         }
     }
 
@@ -936,7 +937,7 @@ final class TodoScreenTestAccess {
     void clickAddSubtaskButtonForTest() {
         Button button = readScreenField("addSubtaskButton", Button.class);
         if (button != null) {
-            button.onPress();
+            button.onPress(new KeyEvent(0, 0, 0));
         }
     }
 

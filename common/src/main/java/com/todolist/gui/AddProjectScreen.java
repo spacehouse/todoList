@@ -10,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -174,14 +175,16 @@ public class AddProjectScreen extends Screen {
      * 处理回车快捷创建逻辑。
      */
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
+        // 1.21.9：按键事件改为 KeyEvent 记录，解构键码保持原逻辑不变
+        int keyCode = event.key();
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
             if (nameField.isFocused()) {
                 createProject();
                 return true;
             }
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     /**
@@ -201,7 +204,7 @@ public class AddProjectScreen extends Screen {
         int y = (height - h) / 2;
 
         context.fill(x, y, x + w, y + h, 0xFF202020);
-        context.renderOutline(x, y, w, h, 0xFFFFFFFF);
+        context.submitOutline(x, y, w, h, 0xFFFFFFFF);
 
         context.drawString(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
         context.drawString(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);

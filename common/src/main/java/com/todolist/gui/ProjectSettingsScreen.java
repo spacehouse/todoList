@@ -24,6 +24,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 
@@ -337,7 +338,10 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
 
             int listTop = layout.memberListY;
             memberList = new MemberListWidget(minecraft, layout.memberListWidth, layout.memberListHeight, listTop, 20);
-            memberList.setX(layout.memberListX);
+            // 1.21.9：构造器内部 updateEntries 已按 x=0 给 entry 绑定了行坐标，
+            // setX 只改控件自身不重算 entry；改用 updateSizeAndPosition 定位可触发
+            // repositionEntries 纠正已有 entry 的行坐标，避免成员行整体向左偏移
+            memberList.updateSizeAndPosition(layout.memberListWidth, layout.memberListHeight, layout.memberListX, listTop);
             addRenderableWidget(memberList);
 
             addMemberBtn = Button.builder(Component.translatable("gui.todolist.add_member"), button -> {
@@ -400,7 +404,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 : Component.translatable("gui.todolist.scope.personal");
         context.fill(layout.scopeBadgeX, layout.scopeBadgeY,
                 layout.scopeBadgeX + layout.scopeBadgeWidth, layout.scopeBadgeY + layout.scopeBadgeHeight, 0xFF303030);
-        context.renderOutline(layout.scopeBadgeX, layout.scopeBadgeY, layout.scopeBadgeWidth, layout.scopeBadgeHeight, 0xFF888888);
+        context.submitOutline(layout.scopeBadgeX, layout.scopeBadgeY, layout.scopeBadgeWidth, layout.scopeBadgeHeight, 0xFF888888);
         context.drawCenteredString(font, badgeText,
                 layout.scopeBadgeX + layout.scopeBadgeWidth / 2,
                 layout.scopeBadgeY + 3, 0xFFFFFFFF);
@@ -561,7 +565,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         layout = computeResponsiveLayout(isTeam);
         
         context.fill(layout.dialogX, layout.dialogY, layout.dialogX + layout.dialogWidth, layout.dialogY + layout.dialogHeight, 0xFF202020);
-        context.renderOutline(layout.dialogX, layout.dialogY, layout.dialogWidth, layout.dialogHeight, 0xFFFFFFFF);
+        context.submitOutline(layout.dialogX, layout.dialogY, layout.dialogWidth, layout.dialogHeight, 0xFFFFFFFF);
         
         context.drawString(font, title, layout.dialogX + 10, layout.dialogY + 10, 0xFFFFFFFF, false);
         context.drawString(font, Component.translatable("gui.todolist.label.name"), layout.dialogX + 10, layout.dialogY + 25, 0xFFAAAAAA, false);
@@ -597,7 +601,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                     if (minecraft.getConnection() != null) {
                         PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
                         if (ple != null) {
-                            name = ple.getProfile().getName();
+                            name = ple.getProfile().name();
                             project.setMemberName(ownerUuid, name);
                         }
                     }
@@ -622,7 +626,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                     if (minecraft.getConnection() != null) {
                         PlayerInfo ple = minecraft.getConnection().getPlayerInfo(id);
                         if (ple != null) {
-                            name = ple.getProfile().getName();
+                            name = ple.getProfile().name();
                             project.setMemberName(uuid, name);
                         }
                     }
@@ -674,7 +678,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                     if (minecraft.getConnection() != null) {
                          PlayerInfo entry = minecraft.getConnection().getPlayerInfo(id);
                          if (entry != null) {
-                             name = entry.getProfile().getName();
+                             name = entry.getProfile().name();
                              project.setMemberName(uuid, name);
                          }
                     }
@@ -698,7 +702,12 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }
 
             @Override
-            public void render(GuiGraphics context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+            public void renderContent(GuiGraphics context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+                // 1.21.9：列表项渲染基类签名改为 renderContent，行位置改由 Entry 布局接口获取
+                int x = this.getContentX();
+                int y = this.getContentY();
+                int entryWidth = this.getContentWidth();
+                int entryHeight = this.getContentHeight();
                 context.drawString(font, name, x + 2, y + 4, 0xFFFFFFFF, false);
                 syncButtonLayout(x, y, entryWidth, entryHeight);
                 this.removeBtn.render(context, mouseX, mouseY, tickDelta);
@@ -735,7 +744,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             public void syncButtonLayoutForTest(int index, MemberListWidget owner) {
                 int entryTop = owner.getRowTop(index);
                 int rowLeft = owner.getX() + (owner.getWidth() - owner.getRowWidth()) / 2;
-                syncButtonLayout(rowLeft, entryTop, owner.getRowWidth(), owner.itemHeight);
+                syncButtonLayout(rowLeft, entryTop, owner.getRowWidth(), owner.defaultEntryHeight);
             }
 
             private boolean canEditRole() {
@@ -827,14 +836,14 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
              * 点击角色按钮，供测试驱动角色切换行为。
              */
             public void clickRoleButtonForTest() {
-                roleBtn.onPress();
+                roleBtn.onPress(new KeyEvent(0, 0, 0));
             }
 
             /**
              * 点击移出按钮，供测试驱动移出成员行为。
              */
             public void clickRemoveButtonForTest() {
-                removeBtn.onPress();
+                removeBtn.onPress(new KeyEvent(0, 0, 0));
             }
         }
     }

@@ -70,7 +70,7 @@ final class TodoScreenContextMenuSupport {
         }
         int menuHeight = resolveMenuHeight(items.size(), itemHeight);
         context.fill(contextMenuX, contextMenuY, contextMenuX + contextMenuWidth, contextMenuY + menuHeight, 0xEE111111);
-        context.renderOutline(contextMenuX, contextMenuY, contextMenuWidth, menuHeight, 0xFFFFFFFF);
+        context.submitOutline(contextMenuX, contextMenuY, contextMenuWidth, menuHeight, 0xFFFFFFFF);
         for (int i = 0; i < items.size(); i++) {
             ContextMenuItem item = items.get(i);
             if (item == null) {

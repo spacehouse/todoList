@@ -379,7 +379,7 @@ public class TaskListWidget implements Renderable {
 
         // 绘制背景
         context.fill(x, y, x + width, y + height, config.getBackgroundColor());
-        context.renderOutline(x, y, width, height, config.getBorderColor());
+        context.submitOutline(x, y, width, height, config.getBorderColor());
 
         // 将任务内容限制在列表矩形内部，避免末行覆盖到底部输入区域。
         context.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
@@ -485,7 +485,7 @@ public class TaskListWidget implements Renderable {
         int checkboxX = getCheckboxLeft(row);
         int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
         context.fill(checkboxX, checkboxY, checkboxX + TASK_CHECKBOX_SIZE, checkboxY + TASK_CHECKBOX_SIZE, 0xFF000000);
-        context.renderOutline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
+        context.submitOutline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
 
         if (task.isCompleted()) {
             context.fill(checkboxX + 3, checkboxY + 5, checkboxX + 5, checkboxY + 7, 0xFF00FF00);

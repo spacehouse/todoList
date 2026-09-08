@@ -8,6 +8,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.CharacterEvent;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Method;
@@ -83,20 +85,20 @@ public final class GuiScenarioTestMain {
         EditBox field = screen.getHudWidthFieldForTest();
         int fieldX = field.getX() + 4;
         int fieldY = field.getY() + field.getHeight() / 2;
-        screen.mouseClicked(fieldX, fieldY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(fieldX, fieldY), false);
         GuiTestSupport.assertTrue(field.isFocused(), "点击输入框后应获得焦点");
 
         field.setValue("");
         typeText(screen, "18");
         GuiTestSupport.assertEquals("18", field.getValue(), "键盘输入路径应把字符追加到输入框");
 
-        screen.keyPressed(GLFW.GLFW_KEY_BACKSPACE, 0, 0);
+        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_BACKSPACE, 0, 0));
         GuiTestSupport.assertEquals("1", field.getValue(), "退格键应删除末尾字符");
 
         typeText(screen, "80");
         GuiTestSupport.assertEquals("180", field.getValue(), "追加输入应保留已有内容");
 
-        screen.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0);
+        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
         GuiTestSupport.assertEquals("180", field.getValue(), "回车不应破坏输入框内容");
     }
 
@@ -109,7 +111,7 @@ public final class GuiScenarioTestMain {
      */
     private static void shouldGuardScreensAgainstDoubleBlurBackground() {
         boolean frameworkRendersBackground = ClassFileMethodScanner
-                .findInvokes(Screen.class, "renderWithTooltip").stream()
+                .findInvokes(Screen.class, "renderWithTooltipAndSubtitles").stream()
                 .anyMatch(ref -> "renderBackground".equals(ref.name()));
 
         boolean configCallsRenderBackground = ClassFileMethodScanner
@@ -227,8 +229,8 @@ public final class GuiScenarioTestMain {
     private static void clickAt(Screen screen, Button button) {
         int x = button.getX() + Math.max(1, button.getWidth() / 2);
         int y = button.getY() + Math.max(1, button.getHeight() / 2);
-        screen.mouseClicked(x, y, 0);
-        screen.mouseReleased(x, y, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(x, y), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(x, y));
     }
 
     /**
@@ -239,7 +241,7 @@ public final class GuiScenarioTestMain {
      */
     private static void typeText(Screen screen, String text) {
         for (int i = 0; i < text.length(); i++) {
-            screen.charTyped(text.charAt(i), 0);
+            screen.charTyped(new CharacterEvent(text.charAt(i), 0));
         }
     }
 

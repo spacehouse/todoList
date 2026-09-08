@@ -78,7 +78,7 @@ public final class ProjectListWidgetTestMain {
         widget.setProjects(List.of(alpha, beta));
         widget.setOnProjectSelected(project -> selectedId.set(project.getId()));
 
-        boolean handled = widget.mouseClicked(10, 10, 0);
+        boolean handled = widget.mouseClicked(GuiTestSupport.mouseEvent(10, 10), false);
 
         GuiTestSupport.assertTrue(handled, "点击项目区域应被组件处理");
         GuiTestSupport.assertEquals(alpha.getId(), selectedId.get(), "点击项目区域应触发对应项目的选中回调");
@@ -97,7 +97,7 @@ public final class ProjectListWidgetTestMain {
         widget.setProjects(List.of(alpha, beta));
         widget.setOnProjectSelected(project -> selectedId.set(project.getId()));
 
-        boolean handled = widget.mouseClicked(110, 30, 0);
+        boolean handled = widget.mouseClicked(GuiTestSupport.mouseEvent(110, 30), false);
 
         GuiTestSupport.assertTrue(handled, "点击星标区域应被组件处理");
         GuiTestSupport.assertTrue(ModConfig.getInstance().isHudProjectStarred(beta.getId()), "点击星标区域后应切换项目星标状态");

@@ -53,7 +53,7 @@ final class TodoScreenRenderSupport {
             return;
         }
         context.fill(bounds[0], bounds[1], bounds[0] + bounds[2], bounds[1] + bounds[3], 0xEE0F141B);
-        context.renderOutline(bounds[0], bounds[1], bounds[2], bounds[3], 0xFF506070);
+        context.submitOutline(bounds[0], bounds[1], bounds[2], bounds[3], 0xFF506070);
 
         List<TodoScreenProjectSearchSupport.ProjectSearchPrefixOption> options =
                 TodoScreenProjectSearchSupport.getProjectSearchPrefixOptions();
@@ -160,7 +160,7 @@ final class TodoScreenRenderSupport {
         int fillColor = overlay ? 0xD91A1A1A : 0x8C111111;
         int outlineColor = overlay ? 0xCCB8B8B8 : 0x66888888;
         context.fill(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, fillColor);
-        context.renderOutline(bounds.x, bounds.y, bounds.width, bounds.height, outlineColor);
+        context.submitOutline(bounds.x, bounds.y, bounds.width, bounds.height, outlineColor);
     }
 
     /**
@@ -193,7 +193,7 @@ final class TodoScreenRenderSupport {
             int bx2 = bx1 + boxWidth;
             int by2 = by1 + boxHeight;
             context.fill(bx1, by1, bx2, by2, TodoScreenNotificationSupport.BOX_BG_COLOR);
-            context.renderOutline(bx1, by1, boxWidth, boxHeight, TodoScreenNotificationSupport.BOX_OUTLINE_COLOR);
+            context.submitOutline(bx1, by1, boxWidth, boxHeight, TodoScreenNotificationSupport.BOX_OUTLINE_COLOR);
             int tx = bx1 + TodoScreenNotificationSupport.TEXT_LEFT_PADDING;
             int ty = by1 + (boxHeight - font.lineHeight) / 2;
             context.drawString(font, Component.nullToEmpty(notification.text), tx, ty, TodoScreenNotificationSupport.TEXT_COLOR, false);

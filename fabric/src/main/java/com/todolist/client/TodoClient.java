@@ -19,6 +19,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -30,6 +31,10 @@ import org.lwjgl.glfw.GLFW;
  * - Network event handling
  */
 public class TodoClient implements ClientModInitializer {
+    // 1.21.9：按键类目由字符串改为 KeyMapping.Category 记录，注册模组自定义类目；
+    // 显示名走翻译键 key.category.todolist.main（语言文件已同步补键）。
+    private static final KeyMapping.Category KEY_CATEGORY =
+            KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("todolist", "main"));
     private static KeyMapping openTodoKeyBinding;
     private static KeyMapping toggleHudKeyBinding;
     private static KeyMapping toggleHudVisibilityKeyBinding;
@@ -80,7 +85,7 @@ public class TodoClient implements ClientModInitializer {
                 "key.todolist.open",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
-                "category.todolist"
+                KEY_CATEGORY
         ));
 
         // Key: H key to toggle HUD expanded state
@@ -88,14 +93,14 @@ public class TodoClient implements ClientModInitializer {
                 "key.todolist.togglehud",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_H,
-                "category.todolist"
+                KEY_CATEGORY
         ));
 
         toggleHudVisibilityKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.todolist.togglehudvisibility",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_J,
-                "category.todolist"
+                KEY_CATEGORY
         ));
 
         // Register key press handler

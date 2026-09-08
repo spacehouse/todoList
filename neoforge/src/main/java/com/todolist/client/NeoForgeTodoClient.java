@@ -39,12 +39,16 @@ import org.lwjgl.glfw.GLFW;
  * 适用于 1.21.6/1.21.7/1.21.8。
  */
 public final class NeoForgeTodoClient {
+    // 1.21.9：按键类目由字符串改为 KeyMapping.Category 记录，注册模组自定义类目；
+    // 显示名走翻译键 key.category.todolist.main（语言文件已同步补键）。
+    private static final KeyMapping.Category KEY_CATEGORY =
+            KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("todolist", "main"));
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
-    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", GLFW.GLFW_KEY_K, "category.todolist");
-    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", GLFW.GLFW_KEY_H, "category.todolist");
-    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", GLFW.GLFW_KEY_J, "category.todolist");
+    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", GLFW.GLFW_KEY_K, KEY_CATEGORY);
+    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", GLFW.GLFW_KEY_H, KEY_CATEGORY);
+    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", GLFW.GLFW_KEY_J, KEY_CATEGORY);
     private static String activeProjectId;
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;
@@ -54,6 +58,7 @@ public final class NeoForgeTodoClient {
     private static final ResourceLocation HUD_LAYER_ID =
             ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "todo_hud");
     private static boolean hudLayerFirstRenderLogged;
+    private static boolean hudRendererInitFailed;
 
     /**
      * 私有构造方法，避免工具类被实例化。
@@ -134,7 +139,19 @@ public final class NeoForgeTodoClient {
      */
     private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (hudRenderer == null) {
-            return;
+            // FML 10（21.9+）下 mod 构造期 Minecraft 实例可能尚未就绪，
+            // initialize 阶段的 registerHudRenderer 可能静默跳过；渲染层兜底惰性创建
+            if (hudRendererInitFailed || Minecraft.getInstance() == null) {
+                return;
+            }
+            try {
+                hudRenderer = new TodoHudRenderer(Minecraft.getInstance());
+                ClientPlatformAdapter.setHudRendererSupplier(() -> hudRenderer);
+            } catch (Exception e) {
+                hudRendererInitFailed = true;
+                TodoListNeoForge.LOGGER.warn("Failed to initialize NeoForge HUD renderer", e);
+                return;
+            }
         }
         if (!hudLayerFirstRenderLogged) {
             hudLayerFirstRenderLogged = true;

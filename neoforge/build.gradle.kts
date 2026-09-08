@@ -92,6 +92,31 @@ tasks.named("build") {
     dependsOn("remapJar")
 }
 
+// NeoForge 网络反射探测离线自测（方案 8.2-1）：直调四参 playBidirectional 探测，
+// 离线验证当前 NeoForge 依赖下客户端 handler 注册形态可用，覆盖 21.7 缺陷④盲区
+tasks.register<JavaExec>("networkProbeTest") {
+    group = "verification"
+    description = "Run the NeoForge network reflection probe self-test offline."
+    classpath = files(
+        sourceSets["main"].output,
+        sourceSets["test"].output,
+        sourceSets["main"].compileClasspath,
+        sourceSets["test"].compileClasspath
+    )
+    mainClass.set("com.todolist.neoforge.network.NeoForgeNetworkProbeTestMain")
+    dependsOn(sourceSets["test"].classesTaskName)
+}
+
+tasks.named("check").configure {
+    dependsOn("networkProbeTest")
+}
+
+// 无 JUnit 测试用例：自测统一走 networkProbeTest（JavaExec）。禁用空的 Gradle test
+// 任务，避免其 testRuntimeClasspath 在离线模式下解析 neoforge 运行时依赖而失败
+tasks.named("test") {
+    enabled = false
+}
+
 val commonMainOutput = commonProject.extensions
     .getByType(JavaPluginExtension::class.java)
     .sourceSets

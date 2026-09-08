@@ -245,7 +245,8 @@ public final class NeoForgeNetworkBridge {
      *
      * @return 四参方法；不存在（NeoForge 21.6 及以下仅有三参形态）时返回 null
      */
-    private static Method findFourArgPlayBidirectional() {
+    // 1.21.9 分支起降为包级可见，供 NeoForgeNetworkProbeTestMain 离线直调（方案 8.2-1）
+    static Method findFourArgPlayBidirectional() {
         for (Method method : PayloadRegistrar.class.getMethods()) {
             if ("playBidirectional".equals(method.getName()) && method.getParameterCount() == 4) {
                 return method;
@@ -288,7 +289,7 @@ public final class NeoForgeNetworkBridge {
         if (!(context.player() instanceof ServerPlayer player)) {
             return;
         }
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = player.level().getServer();
         if (server == null) {
             return;
         }
@@ -340,7 +341,7 @@ public final class NeoForgeNetworkBridge {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = player.level().getServer();
         if (server == null) {
             return;
         }

@@ -199,7 +199,7 @@ public final class ClientTaskStorageHelper {
         if (serverPlayer != null) {
             return serverPlayer;
         }
-        String playerName = client.player.getGameProfile() == null ? null : client.player.getGameProfile().getName();
+        String playerName = client.player.getGameProfile() == null ? null : client.player.getGameProfile().name();
         if (playerName != null && !playerName.isBlank()) {
             serverPlayer = playerList.getPlayerByName(playerName);
             if (serverPlayer != null) {

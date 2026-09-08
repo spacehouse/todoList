@@ -22,6 +22,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.util.debugchart.SampleLogger;
@@ -956,6 +957,29 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
+     * 创建绑定指定服务端的测试层级实例，供 fake 玩家的 level().getServer() 通道使用。
+     *
+     * @param server 目标服务端
+     * @return 已绑定服务端的层级实例
+     */
+    private static ServerLevel createBoundServerLevel(MinecraftServer server) {
+        try {
+            ServerLevel level = (ServerLevel) UNSAFE.allocateInstance(ServerLevel.class);
+            for (Class<?> c = ServerLevel.class; c != null; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.getType() == MinecraftServer.class) {
+                        f.setAccessible(true);
+                        f.set(level, server);
+                    }
+                }
+            }
+            return level;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("无法创建测试服务端层级", e);
+        }
+    }
+
+    /**
      * 反射读取 Unsafe，用于无构造创建假玩家实例。
      *
      * @return Unsafe 单例
@@ -1202,6 +1226,7 @@ public final class CommandBootstrapIntegrationTestMain {
         private boolean testOperator;
         private List<Component> testClientMessages;
         private MinecraftServer testServer;
+    private ServerLevel testLevel;
 
         /**
          * 构造方法仅用于满足编译要求，运行时通过 Unsafe 绕过。
@@ -1232,6 +1257,20 @@ public final class CommandBootstrapIntegrationTestMain {
         }
 
         /**
+         * 返回测试玩家绑定的服务端层级；1.21.9 移除 Entity.getServer() 后，
+         * 主源集改经 level().getServer() 获取服务端，fake 玩家需提供绑定层级。
+         *
+         * @return 绑定了测试服务端的层级实例
+         */
+        @Override
+        public ServerLevel level() {
+            if (testLevel == null) {
+                testLevel = createBoundServerLevel(testServer);
+            }
+            return testLevel;
+        }
+
+        /**
          * 返回测试玩家显示名称。
          *
          * @return 玩家名称组件
@@ -1246,7 +1285,6 @@ public final class CommandBootstrapIntegrationTestMain {
          *
          * @return 测试服务端对象
          */
-        @Override
         public MinecraftServer getServer() {
             return testServer;
         }
@@ -1401,7 +1439,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * @return 固定返回 4
          */
         @Override
-        public int getOperatorUserPermissionLevel() {
+        public int operatorUserPermissionLevel() {
             return 4;
         }
 
@@ -1441,6 +1479,16 @@ public final class CommandBootstrapIntegrationTestMain {
          *
          * @return 固定返回 0
          */
+        /**
+         * 返回最大玩家数，测试环境固定返回 20。
+         *
+         * @return 最大玩家数
+         */
+        @Override
+        public int getMaxPlayers() {
+            return 20;
+        }
+
         @Override
         public int getRateLimitPacketsPerSecond() {
             return 0;
@@ -1483,7 +1531,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * @return 始终返回 false
          */
         @Override
-        public boolean isSingleplayerOwner(com.mojang.authlib.GameProfile profile) {
+        public boolean isSingleplayerOwner(net.minecraft.server.players.NameAndId profile) {
             return false;
         }
     }
@@ -1500,7 +1548,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * 构造方法仅用于满足编译要求，运行时通过 Unsafe 绕过。
          */
         private TestPlayerList() {
-            super(null, null, null, 0);
+            super(null, null, null, null);
             throw new UnsupportedOperationException("请通过 createServer 创建测试玩家列表");
         }
 

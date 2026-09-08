@@ -81,7 +81,7 @@ public class ConfirmDeleteProjectScreen extends Screen {
         int y = (height - h) / 2;
 
         context.fill(x, y, x + w, y + h, 0xFF202020);
-        context.renderOutline(x, y, w, h, 0xFFFFFFFF);
+        context.submitOutline(x, y, w, h, 0xFFFFFFFF);
 
         context.drawString(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
         context.drawWordWrap(font, message, x + 10, y + 35, w - 20, 0xFFDDDDDD);

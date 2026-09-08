@@ -11,6 +11,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -401,7 +402,7 @@ public class ConfigScreen extends Screen {
         double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
         int alpha = (int) Math.round(clampRatio(opacity) * 255.0D);
         context.fill(previewHudX, previewHudY, previewHudX + previewHudWidth, previewHudY + previewHudHeight, alpha << 24);
-        context.renderOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
+        context.submitOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
 
         Component previewTitle = Component.translatable("gui.todolist.config.hud_preview.title");
         Component previewHint = Component.translatable("gui.todolist.config.hud_preview.hint");
@@ -424,7 +425,11 @@ public class ConfigScreen extends Screen {
      * @return 命中预览框时返回 true
      */
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button == 0) {
             int x = (int) mouseX;
             int y = (int) mouseY;
@@ -440,7 +445,7 @@ public class ConfigScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     /**
@@ -452,12 +457,16 @@ public class ConfigScreen extends Screen {
      * @return 本次释放结束了拖拽时返回 true
      */
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button == 0 && draggingHud) {
             draggingHud = false;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     /**
@@ -471,7 +480,11 @@ public class ConfigScreen extends Screen {
      * @return 处理了拖拽时返回 true
      */
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        // 1.21.9：鼠标事件改为 MouseButtonEvent 记录，解构坐标与按键保持原逻辑不变
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button == 0 && draggingHud) {
             int newX = (int) mouseX - dragOffsetX;
             int newY = (int) mouseY - dragOffsetY;
@@ -480,7 +493,7 @@ public class ConfigScreen extends Screen {
             updatePreviewAnchorsFromAbsolutePosition();
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(event, deltaX, deltaY);
     }
 
     /**

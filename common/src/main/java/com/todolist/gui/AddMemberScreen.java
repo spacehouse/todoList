@@ -177,10 +177,10 @@ public class AddMemberScreen extends Screen {
         }
         String q = query.trim().toLowerCase();
         for (net.minecraft.client.multiplayer.PlayerInfo entry : allPlayers) {
-            if (isAlreadyMember(project, entry.getProfile().getId())) {
+            if (isAlreadyMember(project, entry.getProfile().id())) {
                 continue;
             }
-            String name = entry.getProfile().getName();
+            String name = entry.getProfile().name();
             if (name == null) {
                 continue;
             }
@@ -249,7 +249,7 @@ public class AddMemberScreen extends Screen {
                 btn.active = false;
                 btn.setMessage(Component.empty());
             } else {
-                String name = entry.getProfile().getName();
+                String name = entry.getProfile().name();
                 btn.visible = true;
                 btn.active = true;
                 btn.setMessage(Component.nullToEmpty(name));
@@ -271,10 +271,10 @@ public class AddMemberScreen extends Screen {
      * 发送新增成员请求，并在项目设置界面中做乐观更新。
      */
     private void addMember(net.minecraft.client.multiplayer.PlayerInfo entry) {
-        String name = entry.getProfile().getName();
-        ClientBridge.ops().sendAddMember(projectId, entry.getProfile().getId().toString(), name);
+        String name = entry.getProfile().name();
+        ClientBridge.ops().sendAddMember(projectId, entry.getProfile().id().toString(), name);
         if (parent instanceof ProjectSettingsScreen) {
-            ((ProjectSettingsScreen) parent).optimisticAddMember(entry.getProfile().getId().toString(), name);
+            ((ProjectSettingsScreen) parent).optimisticAddMember(entry.getProfile().id().toString(), name);
         }
         onClose();
     }

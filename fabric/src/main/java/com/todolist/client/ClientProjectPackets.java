@@ -439,7 +439,7 @@ public class ClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }
@@ -456,7 +456,7 @@ public class ClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }
@@ -474,7 +474,7 @@ public class ClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }

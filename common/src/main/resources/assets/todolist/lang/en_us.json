@@ -5,6 +5,7 @@
   "key.todolist.togglehud": "Toggle HUD",
   "key.todolist.togglehudvisibility": "Toggle HUD visibility",
   "category.todolist": "TodoList",
+  "key.category.todolist.main": "TodoList",
   "gui.todolist.title": "TodoList",
   "gui.todolist.title.unsaved": "TodoList - Unsaved*",
   "gui.todolist.add": "Add",

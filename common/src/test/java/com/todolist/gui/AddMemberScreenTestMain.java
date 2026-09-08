@@ -65,7 +65,7 @@ public final class AddMemberScreenTestMain {
         ScreenDriver.init(minecraft, screen);
 
         List<String> names = screen.getFilteredPlayersForTest().stream()
-                .map(info -> info.getProfile().getName())
+                .map(info -> info.getProfile().name())
                 .toList();
         GuiTestSupport.assertEquals(List.of("alice", "bob"), names, "候选列表应排除拥有者和已存在成员");
     }
@@ -100,7 +100,7 @@ public final class AddMemberScreenTestMain {
         ScreenDriver.setText(screen.getSearchFieldForTest(), "gr");
 
         List<String> names = screen.getFilteredPlayersForTest().stream()
-                .map(info -> info.getProfile().getName())
+                .map(info -> info.getProfile().name())
                 .toList();
         GuiTestSupport.assertEquals(List.of("grace"), names, "搜索后应只保留匹配的候选成员");
         GuiTestSupport.assertEquals(0, screen.getScrollOffsetForTest(), "搜索刷新后应把滚动偏移重置到顶部");

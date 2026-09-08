@@ -6,6 +6,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -66,7 +67,7 @@ public final class ScreenDriver {
      */
     public static void click(Button button) {
         if (button != null) {
-            button.onPress();
+            button.onPress(new KeyEvent(0, 0, 0));
         }
     }
 
@@ -88,7 +89,7 @@ public final class ScreenDriver {
      * @param screen 目标界面
      */
     public static void pressEnter(Screen screen) {
-        screen.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0);
+        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
     }
 
     /**
@@ -102,9 +103,9 @@ public final class ScreenDriver {
         screen.syncPreviewRectForTest();
         int startX = screen.getPreviewHudXForTest() + Math.max(1, screen.getPreviewHudWidthForTest() / 2);
         int startY = screen.getPreviewHudYForTest() + Math.max(1, screen.getPreviewHudHeightForTest() / 2);
-        screen.mouseClicked(startX, startY, 0);
-        screen.mouseDragged(endX, endY, 0, endX - startX, endY - startY);
-        screen.mouseReleased(endX, endY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(startX, startY), false);
+        screen.mouseDragged(GuiTestSupport.mouseEvent(endX, endY), endX - startX, endY - startY);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(endX, endY));
     }
 
     /**

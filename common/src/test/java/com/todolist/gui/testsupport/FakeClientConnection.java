@@ -66,7 +66,7 @@ public class FakeClientConnection extends ClientPacketListener {
             return null;
         }
         for (PlayerInfo info : onlinePlayers) {
-            if (info != null && info.getProfile() != null && uuid.equals(info.getProfile().getId())) {
+            if (info != null && info.getProfile() != null && uuid.equals(info.getProfile().id())) {
                 return info;
             }
         }

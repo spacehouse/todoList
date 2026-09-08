@@ -101,7 +101,7 @@ public class TodoListNeoForge {
      * 在客户端环境下初始化客户端逻辑。
      */
     private void runClientInitIfNeeded() {
-        if (FMLEnvironment.dist != Dist.CLIENT) {
+        if (FMLEnvironment.getDist() != Dist.CLIENT) {
             return;
         }
         NeoForgeTodoClient.initialize();

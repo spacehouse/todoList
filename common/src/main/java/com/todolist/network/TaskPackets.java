@@ -118,7 +118,7 @@ public class TaskPackets {
         }
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
-            MinecraftServer server = player.getServer();
+            MinecraftServer server = player.level().getServer();
             java.util.UUID playerUuid = player.getUUID();
             List<Task> tasks = storage.loadPersonalTasks(server, playerUuid);
             if (!storage.shouldUseLocalPersonalStorage(server)) {
@@ -172,7 +172,7 @@ public class TaskPackets {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
-            storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
+            storage.savePersonalTasks(player.level().getServer(), player.getUUID(), tasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
             StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");

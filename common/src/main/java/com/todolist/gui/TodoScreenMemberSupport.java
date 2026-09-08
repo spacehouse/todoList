@@ -37,7 +37,7 @@ final class TodoScreenMemberSupport {
                 net.minecraft.client.multiplayer.PlayerInfo playerInfo =
                         minecraft.getConnection().getPlayerInfo(UUID.fromString(memberUuid));
                 if (playerInfo != null && playerInfo.getProfile() != null) {
-                    String onlineName = playerInfo.getProfile().getName();
+                    String onlineName = playerInfo.getProfile().name();
                     if (onlineName != null && !onlineName.isBlank()) {
                         displayName = onlineName;
                         project.setMemberName(memberUuid, onlineName);

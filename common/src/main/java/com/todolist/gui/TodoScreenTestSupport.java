@@ -7,6 +7,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -265,7 +266,7 @@ final class TodoScreenTestSupport {
         }
         Button button = playerButtons[rowIndex];
         if (button != null && button.active && button.visible) {
-            button.onPress();
+            button.onPress(new KeyEvent(0, 0, 0));
         }
     }
 }

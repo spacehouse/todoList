@@ -448,7 +448,7 @@ public final class NeoForgeClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }
@@ -465,7 +465,7 @@ public final class NeoForgeClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }
@@ -483,7 +483,7 @@ public final class NeoForgeClientProjectPackets {
         if (serverPlayer == null) {
             return;
         }
-        var server = serverPlayer.getServer();
+        var server = serverPlayer.level().getServer();
         if (server == null) {
             return;
         }

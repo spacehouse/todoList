@@ -99,7 +99,7 @@ public class ConfirmActionScreen extends Screen {
         int dialogY = (height - dialogHeight) / 2;
 
         context.fill(dialogX, dialogY, dialogX + dialogWidth, dialogY + dialogHeight, 0xFF202020);
-        context.renderOutline(dialogX, dialogY, dialogWidth, dialogHeight, 0xFFFFFFFF);
+        context.submitOutline(dialogX, dialogY, dialogWidth, dialogHeight, 0xFFFFFFFF);
 
         context.drawString(font, title, dialogX + 10, dialogY + 10, 0xFFFFFFFF, false);
         context.drawWordWrap(font, message, dialogX + 10, dialogY + 35, dialogWidth - 20, 0xFFDDDDDD);

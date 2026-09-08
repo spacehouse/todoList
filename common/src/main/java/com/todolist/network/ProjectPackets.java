@@ -18,6 +18,7 @@ import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.ChatFormatting;
+import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.ClickEvent;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -283,7 +285,7 @@ public class ProjectPackets {
             syncActiveProjectIdToPlayer(player, null);
             return;
         }
-        if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(player.getServer())) {
+        if (project.getScope() == Project.Scope.TEAM && isSingleplayerServer(player.level().getServer())) {
             playerActiveProjectIdMap.remove(uuid);
             persistPlayerProjectState(player);
             syncActiveProjectIdToPlayer(player, null);
@@ -718,21 +720,25 @@ public class ProjectPackets {
             return;
         }
 
-        server.getProfileCache().getAsync(memberName).thenAccept(optionalProfile -> {
-            optionalProfile.ifPresent(profile -> server.execute(() -> {
-                String uuid = profile.getId().toString();
-                if (project.getMembers().containsKey(uuid)) return;
-                if (!ensureWritableBeforeMutation(player)) return;
+        // 1.21.9：MinecraftServer.getProfileCache().getAsync() 已移除，
+        // 改用 Services.profileResolver().fetchByName()（同步查询，可能含网络 IO），
+        // 通过 Util.ioPool() 保持原异步语义，结果仍回跳服务器主线程执行。
+        CompletableFuture.supplyAsync(() -> server.services().profileResolver().fetchByName(memberName), Util.ioPool())
+            .thenAccept(optionalProfile -> {
+                optionalProfile.ifPresent(profile -> server.execute(() -> {
+                    String uuid = profile.id().toString();
+                    if (project.getMembers().containsKey(uuid)) return;
+                    if (!ensureWritableBeforeMutation(player)) return;
 
-                project.addMember(uuid, Project.ProjectRole.MEMBER, profile.getName());
-                manager.updateProject(project);
-                saveProjects(server, project.getScope());
-                broadcastProjects(server);
-                clearPendingJoinRequest(projectId, uuid);
+                    project.addMember(uuid, Project.ProjectRole.MEMBER, profile.name());
+                    manager.updateProject(project);
+                    saveProjects(server, project.getScope());
+                    broadcastProjects(server);
+                    clearPendingJoinRequest(projectId, uuid);
 
-                TodoConstants.LOGGER.info("Added member {} to project {}", memberName, project.getName());
-            }));
-        });
+                    TodoConstants.LOGGER.info("Added member {} to project {}", memberName, project.getName());
+                }));
+            });
     }
 
     private static void handleRemoveMember(MinecraftServer server, ServerPlayer player, String projectId, String memberUuid) {
@@ -1242,7 +1248,9 @@ public class ProjectPackets {
         ProjectPlayerStateStorage.ProjectPlayerState safeState = state == null
                 ? ProjectPlayerStateStorage.ProjectPlayerState.empty()
                 : state;
-        MinecraftServer server = player.getServer();
+        // 1.21.9：Entity.getServer() 移除改走 level().getServer()；离线测试桩的 level 可能为 null，
+        // 与旧版 player.getServer() 可返回 null 的语义保持一致，由 isSingleplayerServer(null) 短路。
+        MinecraftServer server = player.level() == null ? null : player.level().getServer();
         if (!isSingleplayerServer(server)) {
             return safeState;
         }

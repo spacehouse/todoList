@@ -13,6 +13,7 @@ import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.task.Task;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
@@ -689,7 +690,7 @@ public final class TodoScreenTestMain {
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeComplete = ops.getReplaceAllTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         Task completedTask = requireTaskByTitle(screen, "Complete Toggle Personal Task");
         GuiTestSupport.assertTrue(completedTask.isCompleted(), "个人任务勾选完成后应立即写入已完成状态");
@@ -701,7 +702,7 @@ public final class TodoScreenTestMain {
         access(screen).toggleCompletedSectionForTest();
         widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeUncomplete = ops.getReplaceAllTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         Task reopenedTask = requireTaskByTitle(screen, "Complete Toggle Personal Task");
         GuiTestSupport.assertFalse(reopenedTask.isCompleted(), "个人任务取消完成后应立即恢复为未完成");
@@ -736,7 +737,7 @@ public final class TodoScreenTestMain {
         addTaskViaInput(screen, "Feedback Team Task 2");
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         GuiTestSupport.assertEquals(1, access(screen).getNotificationCountForTest(), "第一个团队任务完成后应新增一条通知");
         GuiTestSupport.assertEquals(
@@ -747,7 +748,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertEquals(1, minecraft.getPlayedSoundCount(), "第一个团队任务完成后应播放一次提示音");
 
         widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         GuiTestSupport.assertEquals(2, access(screen).getNotificationCountForTest(), "第二个团队任务完成后也应新增通知");
         GuiTestSupport.assertEquals(
@@ -777,7 +778,7 @@ public final class TodoScreenTestMain {
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeComplete = ops.getReplaceTeamTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         Task completedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
         GuiTestSupport.assertTrue(completedTask.isCompleted(), "团队任务勾选完成后应立即写入已完成状态");
@@ -788,7 +789,7 @@ public final class TodoScreenTestMain {
         access(screen).toggleCompletedSectionForTest();
         widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeUncomplete = ops.getReplaceTeamTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         Task reopenedTask = requireTaskByTitle(screen, "Complete Toggle Persist Task");
         GuiTestSupport.assertFalse(reopenedTask.isCompleted(), "团队任务取消完成后应立即恢复为未完成");
@@ -828,7 +829,7 @@ public final class TodoScreenTestMain {
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeComplete = ops.getReplaceTeamTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         GuiTestSupport.assertTrue(requireTaskByTitle(screen, "Parent Complete Toggle Child A").isCompleted(), "父任务勾选完成后应补齐未完成直属子任务");
         GuiTestSupport.assertTrue(requireTaskByTitle(screen, "Parent Complete Toggle Child B").isCompleted(), "父任务勾选完成后应保持已完成直属子任务");
@@ -840,7 +841,7 @@ public final class TodoScreenTestMain {
         access(screen).toggleCompletedSectionForTest();
         widget = access(screen).getTaskListWidgetForTest();
         int syncCallsBeforeUncomplete = ops.getReplaceTeamTaskCalls().size();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         GuiTestSupport.assertFalse(requireTaskByTitle(screen, "Parent Complete Toggle Child A").isCompleted(), "父任务取消完成后应批量恢复直属子任务为未完成");
         GuiTestSupport.assertFalse(requireTaskByTitle(screen, "Parent Complete Toggle Child B").isCompleted(), "父任务取消完成后应批量恢复直属子任务为未完成");
@@ -1219,7 +1220,7 @@ public final class TodoScreenTestMain {
         int checkboxX = widget.getCheckboxCenterXForTest(myChildId);
         int checkboxY = widget.getTaskRowCenterYForTest(myChildId);
         GuiTestSupport.assertTrue(checkboxY >= 0, "已完成子任务应在组件中可见可点击");
-        screen.mouseClicked(checkboxX, checkboxY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(checkboxX, checkboxY), false);
         waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertFalse(
@@ -1258,7 +1259,7 @@ public final class TodoScreenTestMain {
         int checkboxX = widget.getCheckboxCenterXForTest(parent.getId());
         int checkboxY = widget.getTaskRowCenterYForTest(parent.getId());
         GuiTestSupport.assertTrue(checkboxY >= 0, "父任务应在组件中可见");
-        screen.mouseClicked(checkboxX, checkboxY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(checkboxX, checkboxY), false);
         waitForTaskSaveToFinish(screen);
 
         // 当前玩家的子任务应完成
@@ -1741,7 +1742,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertTrue(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "团队空间下拉应先显示");
 
         int[] contentBounds = access(screen).getContentAreaBoundsForTest();
-        screen.mouseClicked(contentBounds[0] + 8, contentBounds[1] + 8, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(contentBounds[0] + 8, contentBounds[1] + 8), false);
         GuiTestSupport.assertFalse(access(screen).isProjectSearchPrefixDropdownVisibleForTest(), "点击搜索框外部后应关闭前缀下拉");
 
         access(screen).switchProjectForTest(personalProject);
@@ -1884,7 +1885,7 @@ public final class TodoScreenTestMain {
             blankY = descBounds[1] - 4;
         }
 
-        screen.mouseClicked(blankX, blankY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(blankX, blankY), false);
         waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals("Blur Save Task Updated", task.getTitle(), "失焦后应保留当前编辑结果");
@@ -1955,9 +1956,9 @@ public final class TodoScreenTestMain {
         int startY = widget.getTaskRowCenterYForTest(gamma.getId());
         int targetY = widget.getTaskRowCenterYForTest(alpha.getId()) - widget.getTaskItemHeightForTest() / 2;
 
-        screen.mouseClicked(interactX, startY, 0);
-        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
-        screen.mouseReleased(interactX, targetY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(interactX, startY), false);
+        screen.mouseDragged(GuiTestSupport.mouseEvent(interactX, targetY), 0, targetY - startY);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(interactX, targetY));
 
         GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "手动拖拽排序后应重新标记为未保存");
         GuiTestSupport.assertEquals(
@@ -2020,16 +2021,16 @@ public final class TodoScreenTestMain {
         GuiTestSupport.assertFalse(access(screen).hasUnsavedChangesForTest(), "拖拽前应先处于已保存状态");
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId())), false);
 
         int interactX = widget.getInteractXForTest(childB.getId());
         int startY = widget.getTaskRowCenterYForTest(childB.getId());
         int targetY = widget.getTaskRowCenterYForTest(childA.getId()) - widget.getTaskItemHeightForTest() / 2;
 
         widget.armPendingTaskDrag(childB, "active", interactX, startY);
-        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
+        screen.mouseDragged(GuiTestSupport.mouseEvent(interactX, targetY), 0, targetY - startY);
         GuiTestSupport.assertTrue(widget.isTaskDraggingForTest(), "拖拽子任务时应进入列表拖拽态");
-        screen.mouseReleased(interactX, targetY, 0);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(interactX, targetY));
 
         Task refreshedParent = requireTaskByTitle(screen, "Parent Reorder");
         Task refreshedTopAlpha = requireTaskByTitle(screen, "Top Alpha");
@@ -2109,8 +2110,8 @@ public final class TodoScreenTestMain {
         int clickX = widget.getInteractXForTest();
         int clickY = widget.getTaskRowCenterYForTest(targetTask.getId());
 
-        screen.mouseClicked(clickX, clickY, 0);
-        screen.mouseReleased(clickX, clickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(clickX, clickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(clickX, clickY));
 
         GuiTestSupport.assertEquals(previousOffset, access(screen).getTaskListWidgetForTest().getScrollOffsetForTest(), "点击任务后应保持原有滚动偏移");
         GuiTestSupport.assertEquals(targetTask.getId(), access(screen).getSelectedTaskForTest().getId(), "点击任务后仍应正确选中目标任务");
@@ -2139,7 +2140,7 @@ public final class TodoScreenTestMain {
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId())), false);
 
         Task targetTask = requireTaskByTitle(screen, "Tail Task 7");
         widget.ensureVisible(targetTask);
@@ -2152,8 +2153,8 @@ public final class TodoScreenTestMain {
         int[] listBounds = widget.getBoundsForTest();
         GuiTestSupport.assertTrue(clickY >= listBounds[1] && clickY < listBounds[1] + listBounds[3], "目标任务在点击前应位于当前可视区域内");
 
-        screen.mouseClicked(clickX, clickY, 0);
-        screen.mouseReleased(clickX, clickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(clickX, clickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(clickX, clickY));
 
         GuiTestSupport.assertEquals(previousOffset, access(screen).getTaskListWidgetForTest().getScrollOffsetForTest(), "展开父任务后点击其他任务应保持原有滚动偏移");
         GuiTestSupport.assertEquals(targetTask.getId(), access(screen).getSelectedTaskForTest().getId(), "展开父任务后点击其他任务仍应正确选中目标任务");
@@ -2354,11 +2355,11 @@ public final class TodoScreenTestMain {
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId()), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getExpandToggleCenterXForTest(parent.getId()), widget.getTaskRowCenterYForTest(parent.getId())), false);
         int childRowCenterY = widget.getTaskRowCenterYForTest(child.getId());
         int childInteractX = widget.getInteractXForTest(child.getId());
-        screen.mouseClicked(childInteractX, childRowCenterY, 0);
-        screen.mouseReleased(childInteractX, childRowCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(childInteractX, childRowCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(childInteractX, childRowCenterY));
 
         GuiTestSupport.assertEquals(child.getId(), access(screen).getSelectedTaskForTest().getId(), "点击子任务行后应切换为子任务选中态");
         GuiTestSupport.assertEquals("Child Panel", access(screen).getTitleFieldForTest().getValue(), "选中子任务后详情标题应切换为子任务标题");
@@ -2413,15 +2414,15 @@ public final class TodoScreenTestMain {
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int clickX = widget.getInteractXForTest(parent.getId());
         int clickY = widget.getTaskRowCenterYForTest(parent.getId());
-        screen.mouseClicked(clickX, clickY, 0);
-        screen.mouseReleased(clickX, clickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(clickX, clickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(clickX, clickY));
 
         GuiTestSupport.assertTrue(access(screen).isAddSubtaskButtonVisibleForTest(), "选中父任务后详情区应显示添加子任务入口");
         int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
         int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
         int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
-        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
-        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY));
 
         Task selected = access(screen).getSelectedTaskForTest();
         GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "点击添加子任务后应选中新建的子任务");
@@ -2460,14 +2461,14 @@ public final class TodoScreenTestMain {
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int clickX = widget.getInteractXForTest(parent.getId());
         int clickY = widget.getTaskRowCenterYForTest(parent.getId());
-        screen.mouseClicked(clickX, clickY, 0);
-        screen.mouseReleased(clickX, clickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(clickX, clickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(clickX, clickY));
 
         int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
         int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
         int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
-        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
-        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY));
         waitForTaskSaveToFinish(screen);
 
         Task selected = access(screen).getSelectedTaskForTest();
@@ -2500,7 +2501,7 @@ public final class TodoScreenTestMain {
             blankY = descBounds[1] - 4;
         }
 
-        screen.mouseClicked(blankX, blankY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(blankX, blankY), false);
 
         assertOnlyParentTaskRemains(screen, parent, "详情区失焦后应直接丢弃空白子任务");
         GuiTestSupport.assertEquals(parent.getId(), access(screen).getSelectedTaskForTest().getId(), "失焦后详情区应回退到父任务");
@@ -2522,8 +2523,8 @@ public final class TodoScreenTestMain {
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int parentClickX = widget.getInteractXForTest(parent.getId());
         int parentClickY = widget.getTaskRowCenterYForTest(parent.getId());
-        screen.mouseClicked(parentClickX, parentClickY, 0);
-        screen.mouseReleased(parentClickX, parentClickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(parentClickX, parentClickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(parentClickX, parentClickY));
 
         assertOnlyParentTaskRemains(screen, parent, "点击父任务后应先清理当前空白子任务");
         GuiTestSupport.assertEquals(parent.getId(), access(screen).getSelectedTaskForTest().getId(), "点击父任务后应选中父任务");
@@ -2547,8 +2548,8 @@ public final class TodoScreenTestMain {
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int siblingClickX = widget.getInteractXForTest(sibling.getId());
         int siblingClickY = widget.getTaskRowCenterYForTest(sibling.getId());
-        screen.mouseClicked(siblingClickX, siblingClickY, 0);
-        screen.mouseReleased(siblingClickX, siblingClickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(siblingClickX, siblingClickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(siblingClickX, siblingClickY));
 
         GuiTestSupport.assertEquals(2, access(screen).getManagedTasksForTest().size(), "点击其他任务后应只保留父任务和目标任务");
         GuiTestSupport.assertTrue(
@@ -2572,7 +2573,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(minecraft, screen);
         Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Empty Child");
 
-        screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "按 Esc 后应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -2595,7 +2596,7 @@ public final class TodoScreenTestMain {
         Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Persisted Empty Child");
         waitForTaskSaveToFinish(screen);
 
-        screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "自动保存窗口结束后按 Esc 也应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -2641,8 +2642,8 @@ public final class TodoScreenTestMain {
         int[] saveBounds = access(screen).getSaveButtonBoundsForTest();
         int saveCenterX = saveBounds[0] + saveBounds[2] / 2;
         int saveCenterY = saveBounds[1] + saveBounds[3] / 2;
-        screen.mouseClicked(saveCenterX, saveCenterY, 0);
-        screen.mouseReleased(saveCenterX, saveCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(saveCenterX, saveCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(saveCenterX, saveCenterY));
         waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部保存按钮后应关闭当前待办界面");
@@ -2688,8 +2689,8 @@ public final class TodoScreenTestMain {
         int[] cancelBounds = access(screen).getCancelButtonBoundsForTest();
         int cancelCenterX = cancelBounds[0] + cancelBounds[2] / 2;
         int cancelCenterY = cancelBounds[1] + cancelBounds[3] / 2;
-        screen.mouseClicked(cancelCenterX, cancelCenterY, 0);
-        screen.mouseReleased(cancelCenterX, cancelCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(cancelCenterX, cancelCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(cancelCenterX, cancelCenterY));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部取消按钮后应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -2715,8 +2716,8 @@ public final class TodoScreenTestMain {
         int[] cancelBounds = access(screen).getCancelButtonBoundsForTest();
         int cancelCenterX = cancelBounds[0] + cancelBounds[2] / 2;
         int cancelCenterY = cancelBounds[1] + cancelBounds[3] / 2;
-        screen.mouseClicked(cancelCenterX, cancelCenterY, 0);
-        screen.mouseReleased(cancelCenterX, cancelCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(cancelCenterX, cancelCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(cancelCenterX, cancelCenterY));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "点击底部取消按钮后应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -2792,7 +2793,7 @@ public final class TodoScreenTestMain {
         access(screen).toggleCompletedSectionForTest();
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         GuiTestSupport.assertFalse(access(screen).getCurrentManagerTasksForTest().get(0).isCompleted(), "个人视图下点击已完成任务的复选框后应恢复为未完成");
         waitForTaskSaveToFinish(screen);
@@ -2816,7 +2817,7 @@ public final class TodoScreenTestMain {
         access(screen).toggleCompletedSectionForTest();
 
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
-        screen.mouseClicked(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest(), 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(widget.getCheckboxCenterXForTest(), widget.getCheckboxCenterYForTest()), false);
 
         List<String> rows = access(screen).getTaskListWidgetForTest().getRowDebugSnapshotForTest();
         GuiTestSupport.assertEquals(1, access(screen).getFilteredTasksForTest().size(), "取消已完成后应立即重新进入未完成任务列表");
@@ -2920,8 +2921,8 @@ public final class TodoScreenTestMain {
         int[] saveBounds = access(screen).getSaveButtonBoundsForTest();
         int saveCenterX = saveBounds[0] + saveBounds[2] / 2;
         int saveCenterY = saveBounds[1] + saveBounds[3] / 2;
-        screen.mouseClicked(saveCenterX, saveCenterY, 0);
-        screen.mouseReleased(saveCenterX, saveCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(saveCenterX, saveCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(saveCenterX, saveCenterY));
         waitForTaskSaveToFinish(screen);
 
         GuiTestSupport.assertEquals(1, ops.getReplaceAllTaskCalls().size(), "点击底部保存按钮后应向桥接层发送整表替换");
@@ -3492,7 +3493,7 @@ public final class TodoScreenTestMain {
         int[] bounds = access(screen).getProjectSearchPrefixSuggestionBoundsForTest(index);
         int x = bounds[0] + Math.max(1, bounds[2] / 2);
         int y = bounds[1] + Math.max(1, bounds[3] / 2);
-        screen.mouseClicked(x, y, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(x, y), false);
     }
 
     /**
@@ -3544,9 +3545,9 @@ public final class TodoScreenTestMain {
         int startY = widget.getTaskRowCenterYForTest(sourceTask.getId());
         int targetY = widget.getTaskRowCenterYForTest(targetTask.getId()) - widget.getTaskItemHeightForTest() / 2;
 
-        screen.mouseClicked(interactX, startY, 0);
-        screen.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
-        screen.mouseReleased(interactX, targetY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(interactX, startY), false);
+        screen.mouseDragged(GuiTestSupport.mouseEvent(interactX, targetY), 0, targetY - startY);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(interactX, targetY));
     }
 
     /**
@@ -4196,7 +4197,7 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertTrue(access(screen).isActiveSectionExpandedForTest(), "默认情况下未完成分组应处于展开状态");
 
-        screen.mouseClicked(headerClickX, activeHeaderClickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(headerClickX, activeHeaderClickY), false);
 
         GuiTestSupport.assertFalse(access(screen).isActiveSectionExpandedForTest(), "切换后未完成分组应收起");
         GuiTestSupport.assertEquals(originalSpaceMode, access(screen).getCurrentSpaceModeNameForTest(), "切换未完成分组不应改变当前空间");
@@ -4287,13 +4288,13 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertTrue(access(screen).getTitleFieldForTest().isFocused(), "开始编辑后标题输入框应获取焦点");
 
-        screen.mouseClicked(blankX, blankY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(blankX, blankY), false);
 
         GuiTestSupport.assertFalse(access(screen).getTitleFieldForTest().isFocused(), "点击标题框外后标题输入框应失焦");
         GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "点击详情区空白时不应清空当前选中任务");
 
         access(screen).getDescFieldForTest().setFocused(true);
-        screen.mouseClicked(blankX, blankY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(blankX, blankY), false);
 
         GuiTestSupport.assertFalse(access(screen).getDescFieldForTest().isFocused(), "点击描述框外后描述输入框应失焦");
         GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "描述框失焦时也不应清空当前选中任务");
@@ -4320,14 +4321,14 @@ public final class TodoScreenTestMain {
         TaskListWidget widget = access(screen).getTaskListWidgetForTest();
         int clickX = widget.getInteractXForTest(parent.getId());
         int clickY = widget.getTaskRowCenterYForTest(parent.getId());
-        screen.mouseClicked(clickX, clickY, 0);
-        screen.mouseReleased(clickX, clickY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(clickX, clickY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(clickX, clickY));
 
         int[] addSubtaskButtonBounds = access(screen).getAddSubtaskButtonBoundsForTest();
         int buttonCenterX = addSubtaskButtonBounds[0] + addSubtaskButtonBounds[2] / 2;
         int buttonCenterY = addSubtaskButtonBounds[1] + addSubtaskButtonBounds[3] / 2;
-        screen.mouseClicked(buttonCenterX, buttonCenterY, 0);
-        screen.mouseReleased(buttonCenterX, buttonCenterY, 0);
+        screen.mouseClicked(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY), false);
+        screen.mouseReleased(GuiTestSupport.mouseEvent(buttonCenterX, buttonCenterY));
 
         Task selected = access(screen).getSelectedTaskForTest();
         GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "创建空白子任务后应先进入子任务详情编辑态");
