@@ -40,6 +40,7 @@ public final class ProjectSettingsScreenTestMain {
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldToggleAllowAllPlayersClaimCompleteFromButton", ProjectSettingsScreenTestMain::shouldToggleAllowAllPlayersClaimCompleteFromButton);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldRenderRoleAndRemoveActionsOnRightSide", ProjectSettingsScreenTestMain::shouldRenderRoleAndRemoveActionsOnRightSide);
         GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldFilterMemberListWithSearchBar", ProjectSettingsScreenTestMain::shouldFilterMemberListWithSearchBar);
+        GuiTestSupport.runTestCase("ProjectSettingsScreenTestMain.shouldKeepMemberEntryRowCoordinatesAlignedWithList", ProjectSettingsScreenTestMain::shouldKeepMemberEntryRowCoordinatesAlignedWithList);
     }
 
     /**
@@ -227,6 +228,41 @@ public final class ProjectSettingsScreenTestMain {
         ScreenDriver.setText(screen.getMemberSearchFieldForTest(), "bo");
 
         GuiTestSupport.assertEquals(List.of("bob"), screen.getVisibleMemberNamesForTest(), "成员搜索应只保留匹配项");
+    }
+
+    /**
+     * 校验成员行绑定的行坐标在控件定位后与列表控件对齐（1.21.9 实机缺陷回归守卫）。
+     *
+     * <p>1.21.9 起 AbstractSelectionList 在 addEntry 时把行坐标绑定到 Entry
+     * （x 取当时的 getRowLeft()），而构造器内先填充成员、之后才定位控件的顺序下，
+     * 必须由 updateSizeAndPosition 触发 repositionEntries 纠正行坐标；
+     * 否则行坐标停留在构造期 x=0 的计算结果，实机表现为成员行整体向左偏移、
+     * 仅最右侧按钮可见。本用例走与实机渲染一致的 Entry 坐标链断言对齐。
+     */
+    private static void shouldKeepMemberEntryRowCoordinatesAlignedWithList() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        Project project = createTeamProject();
+        installOnlinePlayers(minecraft,
+                createPlayerInfo(OWNER_ID, "owner"),
+                createPlayerInfo(MEMBER_ID, "alice"));
+        ProjectSettingsScreen screen = new ProjectSettingsScreen(ScreenDriver.createParentScreen("parent"), project);
+
+        GuiTestSupport.initScreen(minecraft, screen, 360, 240);
+
+        List<int[]> entryBounds = screen.getMemberEntryBoundsForTest();
+        int[] listBounds = screen.getMemberListBoundsForTest();
+        GuiTestSupport.assertFalse(entryBounds.isEmpty(), "成员列表应包含成员行");
+        // 行宽覆写为列表宽-10 并居中，行左缘应等于列表左缘+5
+        int expectedRowLeft = listBounds[0] + 5;
+        int expectedRowRight = listBounds[0] + listBounds[2] - 5;
+        for (int i = 0; i < entryBounds.size(); i++) {
+            int[] row = entryBounds.get(i);
+            GuiTestSupport.assertEquals(expectedRowLeft, row[0], "成员行左缘应与列表控件对齐（第 " + i + " 行）");
+            GuiTestSupport.assertEquals(expectedRowRight, row[0] + row[2], "成员行右缘应与列表控件对齐（第 " + i + " 行）");
+            GuiTestSupport.assertTrue(row[1] >= listBounds[1], "成员行顶部不应超出列表区域（第 " + i + " 行）");
+            GuiTestSupport.assertTrue(row[1] + row[3] <= listBounds[1] + listBounds[3], "成员行底部不应超出列表区域（第 " + i + " 行）");
+        }
     }
 
     private static Project createTeamProject() {

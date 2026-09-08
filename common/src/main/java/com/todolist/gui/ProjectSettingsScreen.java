@@ -241,6 +241,24 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     /**
+     * 返回成员列表各成员行当前绑定的行坐标快照（x, y, width, height），
+     * 供测试断言行坐标与列表控件定位对齐。
+     *
+     * <p>1.21.9 起 AbstractSelectionList 在 addEntry 时把行坐标绑定到 Entry，
+     * 且 setX 不重算已绑定坐标；本访问器返回的就是渲染管线实际使用的坐标。
+     *
+     * @return 每行一个 int[4] 的列表
+     */
+    List<int[]> getMemberEntryBoundsForTest() {
+        if (memberList == null) {
+            return List.of();
+        }
+        return memberList.children().stream()
+                .map(entry -> new int[] {entry.getX(), entry.getY(), entry.getWidth(), entry.getHeight()})
+                .toList();
+    }
+
+    /**
      * 返回指定成员行的角色按钮边界。
      *
      * @param rowIndex 行索引
