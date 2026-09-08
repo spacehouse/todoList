@@ -97,6 +97,14 @@ public final class TaskPacketsPermissionTestMain {
         incomingTask.setTags(currentTask.getTags());
         incomingTask.setDueDate(currentTask.getDueDate());
         incomingTask.setCreatorUuid(currentTask.getCreatorUuid());
+        // createdAt 无 setter，反射复制以避免时序差异导致 hasEditableFieldChanges 误判
+        try {
+            java.lang.reflect.Field f = Task.class.getDeclaredField("createdAt");
+            f.setAccessible(true);
+            f.setLong(incomingTask, currentTask.getCreatedAt());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
         incomingTask.setAssigneeUuid(claimant.getStringUUID());
         incomingTask.setAssigneeName(claimant.getName().getString());
         return incomingTask;
