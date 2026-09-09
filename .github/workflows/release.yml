@@ -1,16 +1,69 @@
 name: release
 
+# 1.21.9-1.21.11 分支发布工作流：单 tag 齐发矩阵内全部 build_supported=true 的
+# MC 版本（各 fabric + neoforge 双端），同步推送 GitHub Release / CurseForge / Modrinth。
+# tag 形态：v<mod_version>-mc<版本1>-<版本2>-...（如 v1.4.1-mc1.21.9-1.21.10-1.21.11），
+# 版本清单以 gradle/version-matrix.properties 为唯一事实源，禁止漏发或手写清单。
+
 on:
   push:
     tags:
       - 'v*'
 
 jobs:
+  # 阶段一：解析版本矩阵并校验 tag，输出待构建 profile 清单
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      mod_version: ${{ steps.meta.outputs.mod_version }}
+      profiles: ${{ steps.meta.outputs.profiles }}
+      profiles_csv: ${{ steps.meta.outputs.profiles_csv }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Release Metadata
+        id: meta
+        shell: bash
+        run: |
+          set -eu
+          MOD_VERSION="$(sed -n 's/^mod_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
+          if [ -z "$MOD_VERSION" ]; then
+            echo "Failed to resolve mod_version from gradle.properties" >&2
+            exit 1
+          fi
+          # 从版本矩阵提取全部开闸 profile（build_supported=true），按版本序排列
+          mapfile -t PROFILE_LIST < <(sed -n 's/^\([0-9][0-9.]*\)\.build_supported[[:space:]]*=[[:space:]]*true[[:space:]]*$/\1/p' gradle/version-matrix.properties | sort -V)
+          if [ "${#PROFILE_LIST[@]}" -eq 0 ]; then
+            echo "No profile with build_supported=true in gradle/version-matrix.properties" >&2
+            exit 1
+          fi
+          PROFILES_CSV="$(IFS=-; echo "${PROFILE_LIST[*]}")"
+          EXPECTED_TAG="v${MOD_VERSION}-mc${PROFILES_CSV}"
+          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match expected release tag ${EXPECTED_TAG}" >&2
+            exit 1
+          fi
+          PROFILES_JSON="$(printf '%s\n' "${PROFILE_LIST[@]}" | jq -R . | jq -sc .)"
+          {
+            echo "mod_version=${MOD_VERSION}"
+            echo "profiles=${PROFILES_JSON}"
+            echo "profiles_csv=${PROFILES_CSV}"
+            echo "release_name=TodoList-v${MOD_VERSION}-mc${PROFILES_CSV}-release"
+          } >> "$GITHUB_OUTPUT"
+
+  # 阶段二：逐 profile 构建（等价 build-local-121x.bat 的矩阵属性注入），
+  # distReleaseJars 聚合双端 jar 至根 build/libs，h2JarContentCheck 做 jar 内容守卫
   build:
+    needs: resolve
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.resolve.outputs.profiles) }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -24,41 +77,65 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build with Gradle
-        run: ./gradlew build --stacktrace
-
-      - name: Prepare Release Metadata
-        id: meta
+      - name: Build Profile ${{ matrix.profile }}
         shell: bash
         run: |
-          MOD_VERSION="$(sed -n 's/^mod_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
-          GAME_VERSION="$(sed -n 's/^minecraft_version[[:space:]]*=[[:space:]]*//p' gradle.properties | head -n 1 | tr -d '\r' | xargs)"
-          EXPECTED_TAG="v${MOD_VERSION}-mc${GAME_VERSION}"
-          if [ -z "$MOD_VERSION" ]; then
-            echo "Failed to resolve mod_version from gradle.properties" >&2
-            exit 1
-          fi
-          if [ -z "$GAME_VERSION" ]; then
-            echo "Failed to resolve minecraft_version from gradle.properties" >&2
-            exit 1
-          fi
-          if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match expected release tag ${EXPECTED_TAG}" >&2
-            exit 1
-          fi
-          echo "version=${MOD_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "game_version=${GAME_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "release_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-release" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Fabric" >> "$GITHUB_OUTPUT"
-          echo "fabric_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-fabric" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_name=TodoList-v${MOD_VERSION}-mc${GAME_VERSION}-Forge" >> "$GITHUB_OUTPUT"
-          echo "forge_publish_version=${MOD_VERSION}-mc${GAME_VERSION}-forge" >> "$GITHUB_OUTPUT"
+          set -eu
+          PROFILE="${{ matrix.profile }}"
+          MATRIX_FILE=gradle/version-matrix.properties
+          # profile 键含点号，sed 模式需转义后再拼前缀
+          ESC_PROFILE="$(printf '%s' "$PROFILE" | sed 's/[.]/\\./g')"
+          field() {
+            sed -n "s/^${ESC_PROFILE}\.$1[[:space:]]*=[[:space:]]*//p" "$MATRIX_FILE" | head -n 1 | tr -d '\r' | xargs
+          }
+          # 根 build 聚合全子项目（含 :common:check 全量自测），distReleaseJars
+          # 聚合双端 jar 至根 build/libs，h2JarContentCheck 做 jar 内容守卫
+          ./gradlew build distReleaseJars h2JarContentCheck --stacktrace --no-daemon \
+            "-Ptarget_matrix_profile=${PROFILE}" \
+            "-Ptarget_minecraft_version=$(field minecraft_version)" \
+            "-Ptarget_loader_version=$(field loader_version)" \
+            "-Ptarget_fabric_api_version=$(field fabric_api_version)" \
+            "-Ptarget_neoforge_version=$(field neoforge_version)" \
+            "-Ptarget_forge_version=$(field forge_version)" \
+            "-Ptarget_modmenu_version=$(field modmenu_version)" \
+            "-Ptarget_fabric_loader_dependency=$(field fabric_loader_dependency)" \
+            "-Ptarget_fabric_minecraft_dependency=$(field fabric_minecraft_dependency)" \
+            "-Ptarget_minecraft_version_range=$(field minecraft_version_range)" \
+            "-Ptarget_forge_loader_range=$(field forge_loader_range)" \
+            "-Ptarget_neoforge_loader_range=$(field neoforge_loader_range)" \
+            "-Ptarget_forge_supported=$(field forge_supported)" \
+            "-Ptarget_api_group=$(field api_group)"
+          ls -l build/libs
+
+      - name: Upload Release Jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars-${{ matrix.profile }}
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+  # 阶段三：GitHub Release（单 release 挂全部 jar，发布说明取 CHANGELOG 对应版本节）
+  github-release:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Release Jars
+        uses: actions/download-artifact@v4
+        with:
+          path: jars
+          pattern: jars-*
+          merge-multiple: true
 
       - name: Extract Release Notes
         id: extract_changelog
         shell: bash
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
+          VERSION="${{ needs.resolve.outputs.mod_version }}"
           NOTES="$(awk -v v="$VERSION" '
             BEGIN { in_section = 0 }
             $0 ~ "^## \\\\?\\[" v "\\]([[:space:]]*-.*)?$" { in_section = 1; next }
@@ -78,23 +155,41 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.meta.outputs.release_name }}
+          name: ${{ needs.resolve.outputs.release_name }}
           tag_name: ${{ github.ref_name }}
           body: ${{ steps.extract_changelog.outputs.release_notes }}
-          files: |
-            build/libs/*.jar
-            !build/libs/*-sources.jar
-            !build/libs/*-javadoc.jar
-            !build/libs/*-dev.jar
+          files: jars/*.jar
 
-      - name: Publish Fabric Version
+  # 阶段四：CurseForge + Modrinth（profile × loader 矩阵，共 2N 条版本记录同步推送）
+  publish-mod:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.resolve.outputs.profiles) }}
+        loader: [fabric, neoforge]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Release Jars
+        uses: actions/download-artifact@v4
+        with:
+          path: jars
+          pattern: jars-*
+          merge-multiple: true
+
+      - name: Publish ${{ matrix.loader }} Version for ${{ matrix.profile }}
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          name: ${{ steps.meta.outputs.fabric_publish_name }}
-          version: ${{ steps.meta.outputs.fabric_publish_version }}
-          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
+          name: TodoList-v${{ needs.resolve.outputs.mod_version }}-mc${{ matrix.profile }}-${{ matrix.loader }}
+          version: ${{ needs.resolve.outputs.mod_version }}-mc${{ matrix.profile }}-${{ matrix.loader }}
+          changelog: "Released by tag ${{ github.ref_name }}; see GitHub Release notes."
 
-          files: build/libs/*-fabric-*!(*-dev|*-sources|*-javadoc).jar
+          files: jars/todolist-${{ matrix.loader }}-${{ matrix.profile }}-*.jar
 
           curseforge-id: 1476043
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
@@ -102,41 +197,5 @@ jobs:
           modrinth-id: RcGBxDyt
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
-          loaders: fabric
-          game-versions: ${{ steps.meta.outputs.game_version }}
-
-      - name: Publish Forge Version
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: ${{ steps.meta.outputs.forge_publish_name }}
-          version: ${{ steps.meta.outputs.forge_publish_version }}
-          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
-
-          files: build/libs/*-forge-*!(*-dev|*-sources|*-javadoc).jar
-
-          curseforge-id: 1476043
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-
-          modrinth-id: RcGBxDyt
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-
-          loaders: forge
-          game-versions: ${{ steps.meta.outputs.game_version }}
-
-      - name: Publish NeoForge Version
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          name: "TodoList-v${{ steps.meta.outputs.version }}-mc${{ steps.meta.outputs.game_version }}-NeoForge"
-          version: "${{ steps.meta.outputs.version }}-mc${{ steps.meta.outputs.game_version }}-neoforge"
-          changelog: "${{ steps.extract_changelog.outputs.release_notes }}"
-
-          files: build/libs/*-neoforge-*!(*-dev|*-sources|*-javadoc).jar
-
-          curseforge-id: 1476043
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-
-          modrinth-id: RcGBxDyt
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-
-          loaders: neoforge
-          game-versions: ${{ steps.meta.outputs.game_version }}
+          loaders: ${{ matrix.loader }}
+          game-versions: ${{ matrix.profile }}
