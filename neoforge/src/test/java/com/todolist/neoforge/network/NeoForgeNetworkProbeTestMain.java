@@ -42,5 +42,23 @@ public final class NeoForgeNetworkProbeTestMain {
         }
         System.out.println("[NET-PROBE][PASS] playBidirectional(" + signature + ") -> "
                 + fourArg.getReturnType().getName());
+        assertDispatchChannelIdStable();
+    }
+
+    /**
+     * 断言通用桥接载荷的通道 id 字符串仍为 todolist:bridge（适配方案 8.2-2）。
+     *
+     * <p>1.21.11 将 ResourceLocation 重命名为 Identifier，只允许类型名变化，
+     * 不得改变通道字符串字面量；该 id 是 NeoForgeDispatchPayload 的网络注册
+     * 标识，与既有联机对端保持兼容的连续性锚点。经 TYPE.id().toString() 取值，
+     * 不点名具体 id 类型，v1_21_1 基线与 v1_21_11 覆盖组下均可编译运行。
+     */
+    private static void assertDispatchChannelIdStable() {
+        String channelId = NeoForgeDispatchPayload.TYPE.id().toString();
+        if (!"todolist:bridge".equals(channelId)) {
+            System.out.println("[NET-PROBE][FAIL] dispatch channel id drifted: " + channelId);
+            System.exit(1);
+        }
+        System.out.println("[NET-PROBE][PASS] dispatch channel id = " + channelId);
     }
 }
