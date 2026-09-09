@@ -14,8 +14,6 @@ val h2JarContentReport = layout.buildDirectory.file("reports/h2-driver-content-c
 // 保证直接执行 gradlew 的旧行为完全不变。
 val releaseMinecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
 val releaseModVersion = property("mod_version") as String
-// 与 settings.gradle.kts 保持一致：forge_supported=false 时排除 forge 产物相关任务
-val forgeEnabled = (findProperty("target_forge_supported") as String?)?.trim()?.lowercase() != "false"
 
 subprojects {
     apply(plugin = "java")
@@ -57,19 +55,12 @@ tasks.register<Copy>("distReleaseJars") {
     group = "distribution"
     description = "Collect release-ready loader jars into root build/dist (exclude sources/dev)."
 
-    // forge 仅在矩阵 profile 启用时参与分发（否则项目未被 include，硬引用会导致 build 失败）
-    val distDepends = mutableListOf<String>(":fabric:build", ":neoforge:build")
-    if (forgeEnabled) distDepends.add(":forge:build")
-    dependsOn(distDepends)
+    dependsOn(":fabric:build", ":neoforge:build")
 
     into(layout.buildDirectory.dir("libs"))
 
     from(project(":fabric").layout.buildDirectory.dir("libs")) {
         include("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar")
-        exclude("*-sources.jar", "*-dev.jar")
-    }
-    if (forgeEnabled) from(project(":forge").layout.buildDirectory.dir("libs")) {
-        include("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar")
         exclude("*-sources.jar", "*-dev.jar")
     }
     from(project(":neoforge").layout.buildDirectory.dir("libs")) {
@@ -80,7 +71,7 @@ tasks.register<Copy>("distReleaseJars") {
 
 tasks.register("h2JarContentCheck") {
     group = "verification"
-    description = "Check Fabric, Forge, and NeoForge release jars contain exactly one org/h2/Driver.class entry."
+    description = "Check Fabric and NeoForge release jars contain exactly one org/h2/Driver.class entry."
 
     dependsOn("distReleaseJars")
     outputs.file(h2JarContentReport)
@@ -89,9 +80,6 @@ tasks.register("h2JarContentCheck") {
         val distDir = layout.buildDirectory.dir("libs").get().asFile
         val releaseJars = buildList {
             add("fabric" to distDir.resolve("todolist-fabric-$releaseMinecraftVersion-$releaseModVersion.jar"))
-            if (forgeEnabled) {
-                add("forge" to distDir.resolve("todolist-forge-$releaseMinecraftVersion-$releaseModVersion.jar"))
-            }
             add("neoforge" to distDir.resolve("todolist-neoforge-$releaseMinecraftVersion-$releaseModVersion.jar"))
         }
 
