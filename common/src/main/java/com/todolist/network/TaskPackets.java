@@ -6,7 +6,6 @@ import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
-import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -110,19 +109,7 @@ public class TaskPackets {
         server.execute(() -> {
             syncTasksToPlayer(player);
             syncTeamTasksToPlayer(player);
-            sendStorageModeNoticeToOperator(player);
         });
-    }
-
-    /**
-     * 向有管理权限的玩家（OP level >= 2）发送 H2 存储模式说明及常用命令提示。
-     * 纯客户端连接远程服务端的普通玩家不会收到此提示，因为存储模式由服务端决定。
-     */
-    private static void sendStorageModeNoticeToOperator(ServerPlayer player) {
-        if (player.hasPermissions(2)) {
-            player.sendSystemMessage(Component.translatable("todolist.notice.h2_default")
-                    .withStyle(ChatFormatting.YELLOW));
-        }
     }
 
     /**
