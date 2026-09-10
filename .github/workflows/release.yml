@@ -20,6 +20,7 @@ jobs:
       profiles: ${{ steps.meta.outputs.profiles }}
       profiles_csv: ${{ steps.meta.outputs.profiles_csv }}
       release_name: ${{ steps.meta.outputs.release_name }}
+      publish_combos: ${{ steps.meta.outputs.publish_combos }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -59,12 +60,24 @@ jobs:
               exit 1
             fi
           done
+          # 发布组合：fabric/neoforge 恒推，forge 按矩阵 forge_supported 动态追加
+          COMBO_ITEMS=""
+          for V in "${PROFILE_LIST[@]}"; do
+            ESC_V="$(printf '%s' "${V}" | sed 's/[.]/\\./g')"
+            for L in fabric neoforge; do
+              COMBO_ITEMS+="${COMBO_ITEMS:+,}{\"profile\":\"${V}\",\"loader\":\"${L}\"}"
+            done
+            if grep -qE "^${ESC_V}\.forge_supported[[:space:]]*=[[:space:]]*true[[:space:]]*$" gradle/version-matrix.properties; then
+              COMBO_ITEMS+=",{\"profile\":\"${V}\",\"loader\":\"forge\"}"
+            fi
+          done
           PROFILES_JSON="$(printf '%s\n' "${PROFILE_LIST[@]}" | jq -R . | jq -sc .)"
           {
             echo "mod_version=${MOD_VERSION}"
             echo "profiles=${PROFILES_JSON}"
             echo "profiles_csv=${VERSIONS_CSV}"
             echo "release_name=TodoList-v${MOD_VERSION}-mc${VERSIONS_CSV}-release"
+            echo "publish_combos={\"include\":[${COMBO_ITEMS}]}"
           } >> "$GITHUB_OUTPUT"
 
   # 阶段二：逐 profile 构建（等价 build-local-121x.bat 的矩阵属性注入），
@@ -182,9 +195,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        profile: ${{ fromJSON(needs.resolve.outputs.profiles) }}
-        loader: [fabric, neoforge]
+      matrix: ${{ fromJSON(needs.resolve.outputs.publish_combos) }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
