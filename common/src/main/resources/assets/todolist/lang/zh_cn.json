@@ -472,6 +472,5 @@
   "h2.schema.comment.column.storage_meta.value": "元数据值。",
   "h2.schema.comment.column.storage_meta.updated_at": "元数据最后更新时间戳。",
   "command.todolist.status.incomplete": "未完成",
-  "command.todolist.status.completed": "已完成",
-  "todolist.notice.h2_default": "[TodoList] 当前使用 H2 数据库存储模式。常用管理命令：/todolist h2 status 查看存储状态，/todolist h2 backup [名称] 手动备份，/todolist h2 reload-db 重载数据库，/todolist h2 health 健康检查。"
+  "command.todolist.status.completed": "已完成"
 }

@@ -472,6 +472,5 @@
   "h2.schema.comment.column.storage_meta.value": "Metadata value.",
   "h2.schema.comment.column.storage_meta.updated_at": "Metadata last update timestamp.",
   "command.todolist.status.incomplete": "incomplete",
-  "command.todolist.status.completed": "completed",
-  "todolist.notice.h2_default": "[TodoList] Using H2 database storage. Admin commands: /todolist h2 status, /todolist h2 backup [name], /todolist h2 reload-db, /todolist h2 health."
+  "command.todolist.status.completed": "completed"
 }
