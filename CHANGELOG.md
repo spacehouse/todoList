@@ -4,6 +4,12 @@
 
 日期格式：`YYYY-MM-DD`
 
+## [1.4.2] - 2026-09-11
+
+### 优化与修复
+
+- **移除进入世界的系统提示**：不再在进入世界后向管理员推送 H2 存储模式与管理命令提示；相关命令仍可通过 `/todolist h2 status`、`/todolist h2 backup`、`/todolist h2 reload-db`、`/todolist h2 health` 使用。
+
 ## [1.4.1] - 2026-08-16
 
 ### 新增功能
