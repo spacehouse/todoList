@@ -126,6 +126,7 @@ public class TodoClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
             if (client.player != null) {
                 hudRenderer.render(drawContext, 0.0F);
+                TodoToastRenderer.render(drawContext, client.font, drawContext.guiWidth());
             }
         });
 
