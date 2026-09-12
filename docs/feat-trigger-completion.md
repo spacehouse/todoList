@@ -60,7 +60,7 @@ TaskTrigger {
 | 规则 | 说明 |
 |---|---|
 | 个人任务 | 仅任务归属玩家本人的事件推进 |
-| 团队任务 | 仅 assignee == 事件玩家，或无 assignee 的任务可推进；其他成员行为不计入 |
+| 团队任务 | **必须已指派**：仅 assignee == 事件玩家可推进；未指派（待领取）任务不参与任何事件触发；**领取人变更时进度清零**（取消领取、改派他人后由新领取者从头开始）；其他成员行为不计入 |
 | ITEM_COLLECT | **绝对持有量语义**：progress = 当前库存持有数（主背包+快捷栏+副手），达到 targetCount 即完成。天然防"丢出再捡回"刷进度，且合成/漏斗/奖励箱获得的物品同样有效 |
 | KILL/BREAK/CRAFT/ADVANCEMENT | 累加语义：事件发生一次加一次（CRAFT 按合成产物数量加） |
 | 已完成任务 | 不再参与事件匹配（防止取消勾选后又被事件自动勾回需重新计入） |
@@ -119,13 +119,14 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | Phase R | 合成事件覆盖 Shift+左键取走（配方反查回退）；触发器编辑器显示目标本地化名称 | ✅ 完成 |
 | Phase S | 引擎落库增量化（只 UPDATE 推进过的行）+ 缓存失效收口到存储保存出口，修复「新任务不触发/被旧缓存覆盖消失/触发卡顿」 | ✅ 完成 |
 | Phase T | 进度推送轻量化：250ms 推送由「全量任务快照（发网络包 + 客户端全量落库）」改为「只发进度变化的任务 ID + 进度 + 完成态」，客户端就地更新不落库，消除每次事件触发的卡顿 | ✅ 完成 |
+| Phase U | 团队任务语义收口：未指派（待领取）任务不再被事件推进，必须「领取/指派」后才参与触发，回归「创建 → 领取/指派 → 完成」流程 | ✅ 完成 |
 
 ## 4. 边界（本期不做什么）
 
 - 不做 datapack JSON 谓词（biome/工具/附魔限定等），留 v2；
 - ~~不做 GUI 触发器可视化编辑器（含物品选择器），留 v2~~ 已提前实施（Phase H/I），见 §2.6 补充；仍不做 datapack 谓词式的复杂条件编辑器；
-- 不做团队任务的"多人合计计数"（所有人进度加在一起），v1 按 assignee 各自独立；
-- 不处理离线玩家（事件来源必须在线）；
+- 不做团队任务的"多人合计计数"（所有人进度加在一起），v1 按 assignee 各自独立；团队任务必须**已指派**才可被事件推进，未指派（待领取）任务不参与任何触发事件（见 §2.4 与难点 17）；
+- 不处理离线玩家（事件来源必须在线，离线 assignee 的团队任务不会推进）；
 - 不做触发器达成的历史记录 / 撤销 / 回滚；
 - 投影、机械动力附属 mod 不在本期（等本底座验证通过）；
 - 不为已废弃的 NBT 文件存储模式做任何适配（H2-only 硬约束）。
@@ -156,6 +157,10 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
     - **客户端就地更新、零落库**：`TodoScreen.applyTriggerProgress` 按任务 ID 直接改内存中 `cachedPersonalTasks`/`cachedTeamTasks` 的 `trigger.progress` 与 `completed`，命中后刷新 HUD/打开中的 GUI（并置父任务完成态为脏以触发重新聚合）；单人模式下本地 H2 由 GUI 保存与引擎增量落库各自负责，轻量推送不再触发任何全量写；
     - **两条推送路径统一**：除 250ms 短节流外，3 秒防抖落库后的 `flushBucket(pushSync=true)` 原先也走 `syncTasksToPlayer`/`broadcastTeamTasks` 全量快照（服务端多读一次库 + 客户端全量写本地 H2），现已一并改为发送同一批脏任务的轻量增量包；`completeTask` 也改为 `flushBucket(..., true)`（立即增量落库 + 同一批变化的轻量推送 + 完成提示包），全链路不再有全量快照。
 16. **完成任务的那一刻仍卡顿（Phase T 收尾）**：进度更新已经不卡后，玩家实测「达标完成的瞬间」仍会顿一下。根因是达标路径单独保留了全量同步：`completeTask` 调 `flushBucket(..., false)` 落库后，仍调 `TaskPackets.syncTasksToPlayer` / `broadcastTeamTasks` 发送全量任务快照（服务端 `loadPersonalTasks` 读库 + 全量序列化，客户端整桶重写本地 H2），且该开销与任务总量成正比。→ 对策：`completeTask` 改调 `flushBucket(server, bucket.key, true)`，由 `flushBucket` 统一完成「增量 UPDATE + 同一批脏任务的轻量进度推送」，再补一个轻量的完成提示包（`TRIGGER_COMPLETED_ID`，只带标题）；至此 250ms 节流、3 秒防抖落库、达标完成三条路径的推送全部为增量。
+17. **未指派（待领取）团队任务被事件推进（Phase U）**：初版 `canPlayerAdvanceByUuid` 把「未指派」视为「谁都可以推进」（`assignee == null || assignee.isEmpty() || assignee.equals(playerUuid)`）。这直接架空了团队任务的「创建 → 领取/指派 → 完成」流程——待领取的任务会被任何人顺手做的一个动作推进共享进度，待领取状态失去意义。→ 对策：团队任务必须**已指派**，即 `assignee != null && !assignee.isEmpty() && assignee == 事件玩家` 才可推进；未指派任务不参与累加推进、不参与 ITEM_COLLECT 重算，也不再让 `hasItemCollectWork` 为其开启库存扫描（避免无意义扫描）。有权限的玩家仍可在 GUI/命令中**手动完成**任务，该路径不经过引擎判定，不受本约束影响。
+18. **领取人变更后进度被下一位领取者继承（Phase U）**：配合上一条，团队任务取消领取（回到待领取）或改派给他人时，原领取者已累计的进度会留给下一个人，等于"别人替你做完一半"。→ 对策：`TaskTriggerService.resetTriggerProgressOnAssigneeChange(previous, incoming)` 按任务 ID 比对领取人，凡「从无到有」「从有到无」「A → B」都清零 `trigger.progress` 并撤销 `completed`，个人任务与未变更任务不受影响。落点上必须覆盖两条保存路径，且重置要发生在引擎进度合并**之后**（否则会被合并结果覆盖）：
+    - **服务端保存入口**（防线）：`TaskPackets.handleTeamReplaceTasks` 按库里已存状态比对；命令路径 `CommandBootstrap.saveProjectTasksForCommand` 的团队分支也是「先 `mergeTeamTriggerStateInto` 保留引擎进度、再比对领取人清零」，与网络包路径一致（此前该分支缺合并，命令保存会覆盖尚未落库的进度）；
+    - **GUI 变更点**（`TodoScreen.assignAssigneeWithTriggerReset`）：局域网主机「已发布局域网」模式下的 GUI 保存会**直接写入本地 H2、不经过服务端保存包**（`shouldUsePublishedLocalPlayerStorage`），因此必须在点击领取/取消领取时就地清零，否则该路径会漏掉。
 
 ## 6. 备选方案对比
 
@@ -213,6 +218,9 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 - [x] 缓存失效收口：`H2TaskStore` 四个全量保存出口统一失效引擎缓存（含单人模式客户端直写路径）
 - [x] 增量落库失败恢复脏集合，进度不丢
 - [x] 进度推送轻量化：`todolist:trigger_progress` 只发变化任务（ID + 进度 + 完成态），客户端就地更新内存、不再全量写本地 H2；`peekDirtyTasks` 只读不消费脏集合；250ms 节流、3 秒防抖落库后、达标完成三条路径的推送统一为增量（Phase T）
+- [x] 团队任务必须已指派才可被事件推进：未指派（待领取）任务不参与累加推进与 ITEM_COLLECT 重算，也不触发库存扫描；手动完成不受影响（Phase U）
+- [x] 团队任务领取人变更时进度清零：取消领取/改派他人后由新领取者从头开始；覆盖服务端保存入口（网络包 + 命令）与 GUI 变更点（已发布局域网的客户端直写路径）（Phase U）
+- [x] 命令的团队保存分支补齐 `mergeTeamTriggerStateInto`，与网络包/个人命令路径一致，避免命令保存覆盖引擎尚未落库的进度（Phase U 顺带修复）
 - [x] `build-local-17.bat build --offline` 双平台 jar 产出（fabric/forge 1.20.1-1.4.2）并归档 `dist/`
 - [ ] 游戏内手工验证清单（见 §8，待用户在游戏环境执行）
 
@@ -255,6 +263,8 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 27. **（Phase S 重点回归）** 先触发任一事件任务（如挖方块）→ 保持世界不退出 → 新建一个事件任务 → 触发对应事件：新任务应正常推进并完成、**不消失**；整个过程中事件触发不再有明显卡顿；GUI 中新任务在旧任务推进/完成后依然在列表中。
 28. **（Phase T 重点回归）** 收集物品 / 获得成就 / 击杀实体 / 破坏方块四类任务，每次事件触发时**不再卡顿**；HUD 与 GUI 中的进度数字仍在约 250ms 内刷新；多人（团队）任务由负责人触发时，其他在线成员看到的进度也同步更新；触发大量任务（上百个）时帧率不出现尖刺。
 29. **（Phase T 收尾回归）** 任务**达标完成的那一刻**不再卡顿：完成瞬间应同时出现「完成浮动提示」+ 列表中该任务立即移入已完成区；连续完成多个任务（如一次破坏让多个任务同时达标）也不出现卡顿或进度丢失。
+30. **（Phase U 重点回归，联机双端）** 团队项目里新建带触发器的任务但**不领取/不指派**：任何玩家做对应动作（击杀/破坏/合成/收集/达成进度）都不推进进度、不自动完成、也不弹完成提示；由任一玩家**领取**（或指派给某玩家）后，该玩家再做对应动作即可正常推进与完成；其他玩家做同样动作仍不推进。有权限的玩家手动点击完成不受影响。
+31. **（Phase U 进度清零回归）** 团队任务进行到一半（进度 > 0）时执行**取消领取**：进度应立即回到 0、完成态撤销，任务回到待领取；随后由另一名玩家**领取或被指派**，进度从 0 重新开始。分别验证三条路径：远程联机（服务端保存包）、局域网主机 GUI（已发布局域网的客户端直写）、`/todo task claim|abandon|assign` 命令。
 
 ## 9. 问题回归记录（实机验证轮次）
 
@@ -276,6 +286,8 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | R11 | 每次事件触发都卡顿一下 | 达标与防抖落库均为全量替换式保存（上千行 DELETE+INSERT）在服务端主线程执行 | 增量 UPDATE 消除写放大（Phase S） | `TaskTriggerServiceTestMain.shouldTrackDirtyTasksForIncrementalFlush`（脏集合仅含被推进任务）；性能靠 §8-27 感知验证 |
 | R12 | Phase S 后新任务已能触发，但收集/成就/击杀/破坏触发时仍卡顿 | 推送链路仍是全量：250ms 节流推送全量任务快照（~1100 任务 / ~34KB 网络包），3 秒防抖落库后也再发一次全量快照；客户端每次收到都全量写本地 H2 双桶，开销与实际变化任务数无关 | 轻量包 `todolist:trigger_progress` 只发变化任务 + 客户端就地更新内存不落库；`peekDirtyTasks` 只读不消费脏集合；`flushBucket` 的推送同样改为增量（Phase T） | `TaskTriggerServiceTestMain.shouldPeekDirtyTasksWithoutConsumingForLightPush`（推送不消费脏集合，落库不丢进度）；性能靠 §8-28 感知验证 |
 | R13 | 进度更新不卡了，但「完成任务的那一刻」仍卡顿 | 达标路径 `completeTask` 单独保留了全量同步（`syncTasksToPlayer` / `broadcastTeamTasks`）：服务端读库 + 全量序列化，客户端整桶重写本地 H2 | `completeTask` 改调 `flushBucket(..., true)`，由 `flushBucket` 统一做增量落库 + 同一批脏任务的轻量推送；完成提示保持轻量包（Phase T 收尾） | 同 R12（脏集合/推送语义用例）；性能靠 §8-29 感知验证 |
+| R14 | 团队任务未指派（待领取）时也会被事件推进，待领取状态失去意义 | `canPlayerAdvanceByUuid` 把「未指派」当成「谁都可以推进」（`assignee == null \|\| isEmpty()` 分支） | 团队任务必须已指派给事件玩家才可推进；未指派任务不参与累加推进/收集重算/库存扫描（Phase U） | `TaskTriggerServiceTestMain.shouldIgnoreUnassignedTeamTaskForAllPlayers`（累加型 + 收集型）；联机链路靠 §8-30 |
+| R15 | 团队任务取消领取/改派后，进度被下一位领取者继承（等于别人替你做一半） | 领取人变更时没有任何进度归属处理，共享进度照旧保留 | `resetTriggerProgressOnAssigneeChange` / `resetTriggerProgressIfAssigneeChanged` 在领取人变更时清零进度并撤销完成态；服务端保存入口（网络包 + 命令）与 GUI 变更点（已发布局域网的客户端直写）各设一道（Phase U） | `TaskTriggerServiceTestMain.shouldResetTriggerProgressWhenTeamAssigneeChanges`（取消领取/改派/未变更/新任务/个人任务五种情形）；三条保存路径靠 §8-31 |
 
 ### 新增测试任务索引
 
@@ -298,5 +310,7 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | `shouldAdvanceCraftItemByCraftedBatchAmount` | CRAFT_ITEM | 按本次合成批量数累加（一次 ×4 直接计入） |
 | `shouldTrackCollectProgressByAbsoluteHeldCount` | ITEM_COLLECT | 绝对持有量语义：进度=持有数、clamp 上限、完成后不回退 |
 | `shouldCompleteAdvancementOnFirstAward` | ADVANCEMENT | 单次达标；重复上报不再匹配 |
+| `shouldIgnoreUnassignedTeamTaskForAllPlayers` | 团队边界（Phase U） | 未指派团队任务：累加型与收集型都不推进、不置脏；必须领取/指派后才参与触发 |
+| `shouldResetTriggerProgressWhenTeamAssigneeChanges` | 领取人变更（Phase U） | 取消领取/改派清零进度与完成态；未变更、新任务、个人任务均不受影响 |
 | `shouldIgnoreNonAssigneeEventsForTeamTask` | 团队边界 | 非负责人事件不计入，负责人正常推进 |
 | `shouldSkipCompletedTasksInIndex` | 完成态边界 | 已完成任务不进索引、不被事件匹配 |

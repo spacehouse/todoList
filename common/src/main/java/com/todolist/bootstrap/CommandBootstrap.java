@@ -1626,6 +1626,11 @@ public final class CommandBootstrap {
             List<Task> tasks
     ) throws IOException {
         if (project.getScope() == Project.Scope.TEAM) {
+            // 先合并引擎内存中的触发器进度，避免命令保存旧快照覆盖尚未落库的进度
+            TaskTriggerService.mergeTeamTriggerStateInto(tasks);
+            // 领取/放弃/改派命令后，领取人发生变化的团队任务需要清零触发器进度
+            // （必须在合并之后，否则重置会被引擎进度覆盖）
+            TaskTriggerService.resetTriggerProgressOnAssigneeChange(storage.loadTeamTasks(), tasks);
             storage.saveTeamTasks(tasks);
             TaskPackets.broadcastTeamTasks(source.getServer());
             return;
