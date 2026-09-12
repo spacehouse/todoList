@@ -42,6 +42,8 @@ public final class TaskTriggerServiceTestMain {
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldSkipCompletedTasksInIndex", TaskTriggerServiceTestMain::shouldSkipCompletedTasksInIndex);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldTrackDirtyTasksForIncrementalFlush", TaskTriggerServiceTestMain::shouldTrackDirtyTasksForIncrementalFlush);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldPeekDirtyTasksWithoutConsumingForLightPush", TaskTriggerServiceTestMain::shouldPeekDirtyTasksWithoutConsumingForLightPush);
+        GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldIgnoreUnassignedTeamTaskForAllPlayers", TaskTriggerServiceTestMain::shouldIgnoreUnassignedTeamTaskForAllPlayers);
+        GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldResetTriggerProgressWhenTeamAssigneeChanges", TaskTriggerServiceTestMain::shouldResetTriggerProgressWhenTeamAssigneeChanges);
     }
 
     /**
@@ -227,6 +229,94 @@ public final class TaskTriggerServiceTestMain {
         List<Task> taken = bucket.takeDirtyTasks();
         GuiTestSupport.assertEquals(1, taken.size(), "推送后增量落库仍应拿到该任务");
         GuiTestSupport.assertTrue(bucket.peekDirtyTasks().isEmpty(), "落库取出后推送不应再读到脏任务");
+    }
+
+    /**
+     * 未指派（待领取）的团队任务不参与任何事件触发。
+     *
+     * 团队任务遵循「创建 → 领取/指派 → 完成」流程：未指派时任何人做对应动作都不应
+     * 推进共享进度，否则待领取状态失去意义；累加型与收集型都适用。
+     */
+    private static void shouldIgnoreUnassignedTeamTaskForAllPlayers() {
+        Task unassigned = newTask(TaskTrigger.Type.KILL_ENTITY, "minecraft:pig", 1);
+        unassigned.setScope(Task.Scope.TEAM);
+        TaskTriggerService.CachedBucket bucket = new TaskTriggerService.CachedBucket("T", null, List.of(unassigned));
+
+        List<Task> completed = TaskTriggerService.advanceMatchingTasksByUuid(
+                PLAYER_A, bucket, TaskTrigger.Type.KILL_ENTITY, "minecraft:pig", 1);
+        GuiTestSupport.assertTrue(completed.isEmpty(), "未指派团队任务不应被事件完成");
+        GuiTestSupport.assertEquals(0, unassigned.getTrigger().getProgress(), "未指派团队任务进度应保持 0");
+        GuiTestSupport.assertFalse(unassigned.isCompleted(), "未指派团队任务不应完成");
+        GuiTestSupport.assertFalse(bucket.isDirty(), "未指派团队任务被跳过时不应置脏");
+
+        Task unassignedCollect = newTask(TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 8);
+        unassignedCollect.setScope(Task.Scope.TEAM);
+        TaskTriggerService.CachedBucket collectBucket =
+                new TaskTriggerService.CachedBucket("T", null, List.of(unassignedCollect));
+
+        List<Task> collectCompleted = TaskTriggerService.recalculateItemCollectByUuid(
+                PLAYER_A, held("minecraft:iron_ingot", 8), collectBucket);
+        GuiTestSupport.assertTrue(collectCompleted.isEmpty(), "未指派团队收集任务不应被库存重算完成");
+        GuiTestSupport.assertEquals(0, unassignedCollect.getTrigger().getProgress(),
+                "未指派团队收集任务进度应保持 0");
+        GuiTestSupport.assertFalse(collectBucket.isDirty(), "未指派团队收集任务被跳过时不应置脏");
+    }
+
+    /**
+     * 团队任务领取人变化时清零触发器进度：取消领取清零、改派重新开始；
+     * 领取人未变、以及新加入的任务不受影响。
+     */
+    private static void shouldResetTriggerProgressWhenTeamAssigneeChanges() {
+        Task previousAbandon = teamTaskWithTrigger("team-abandon", PLAYER_A, 2, 1);
+        Task incomingAbandon = teamTaskWithTrigger("team-abandon", null, 2, 1);
+        Task previousReassign = teamTaskWithTrigger("team-reassign", PLAYER_A, 2, 1);
+        Task incomingReassign = teamTaskWithTrigger("team-reassign", PLAYER_B, 2, 1);
+        Task previousKeep = teamTaskWithTrigger("team-keep", PLAYER_A, 2, 1);
+        Task incomingKeep = teamTaskWithTrigger("team-keep", PLAYER_A, 2, 1);
+        Task incomingNew = teamTaskWithTrigger("team-new", PLAYER_B, 2, 1);
+
+        TaskTriggerService.resetTriggerProgressOnAssigneeChange(
+                List.of(previousAbandon, previousReassign, previousKeep),
+                List.of(incomingAbandon, incomingReassign, incomingKeep, incomingNew));
+
+        GuiTestSupport.assertEquals(0, incomingAbandon.getTrigger().getProgress(), "取消领取后进度应清零");
+        GuiTestSupport.assertFalse(incomingAbandon.isCompleted(), "取消领取后不应保持完成态");
+        GuiTestSupport.assertEquals(0, incomingReassign.getTrigger().getProgress(), "改派给他人后进度应清零");
+        GuiTestSupport.assertFalse(incomingReassign.isCompleted(), "改派后不应保持完成态");
+        GuiTestSupport.assertEquals(1, incomingKeep.getTrigger().getProgress(), "领取人未变时进度应保留");
+        GuiTestSupport.assertEquals(1, incomingNew.getTrigger().getProgress(), "新加入的任务不应被重置");
+
+        // GUI 就地变更领取人（局域网主机直写本地存储路径）走单任务入口
+        Task guiTask = teamTaskWithTrigger("team-gui", PLAYER_A, 2, 1);
+        String guiPreviousAssignee = guiTask.getAssigneeUuid();
+        guiTask.setAssigneeUuid(null);
+        TaskTriggerService.resetTriggerProgressIfAssigneeChanged(guiPreviousAssignee, guiTask);
+        GuiTestSupport.assertEquals(0, guiTask.getTrigger().getProgress(), "取消领取时 GUI 就地重置应生效");
+        GuiTestSupport.assertFalse(guiTask.isCompleted(), "GUI 就地重置应清除完成态");
+
+        // 个人任务不受领取人变更规则影响
+        Task personalTask = newTask(TaskTrigger.Type.KILL_ENTITY, "minecraft:pig", 2);
+        personalTask.getTrigger().setProgress(1);
+        TaskTriggerService.resetTriggerProgressIfAssigneeChanged(PLAYER_A, personalTask);
+        GuiTestSupport.assertEquals(1, personalTask.getTrigger().getProgress(), "个人任务不应被重置");
+    }
+
+    /**
+     * 构造带触发器的团队任务，并指定任务 ID、领取人与当前进度。
+     *
+     * @param id           任务 ID（用于前后两份列表按 ID 配对）
+     * @param assigneeUuid 领取人 UUID，null 表示未领取
+     * @param count        目标数量
+     * @param progress     当前进度
+     * @return 团队任务
+     */
+    private static Task teamTaskWithTrigger(String id, String assigneeUuid, int count, int progress) {
+        Task task = newTask(TaskTrigger.Type.KILL_ENTITY, "minecraft:pig", count);
+        task.setId(id);
+        task.setScope(Task.Scope.TEAM);
+        task.setAssigneeUuid(assigneeUuid);
+        task.getTrigger().setProgress(progress);
+        return task;
     }
 
     /**

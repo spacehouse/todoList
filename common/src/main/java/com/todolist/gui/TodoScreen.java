@@ -33,6 +33,7 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
 import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -3862,8 +3863,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private int assignPendingTaskTargets(Task task, List<Task> managedTasks, String assigneeUuid, String assigneeName) {
         List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
         if (directSubtasks.isEmpty()) {
-            task.setAssigneeUuid(assigneeUuid);
-            task.setAssigneeName(assigneeName);
+            assignAssigneeWithTriggerReset(task, assigneeUuid, assigneeName);
             return 1;
         }
         int changedCount = 0;
@@ -3871,8 +3871,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
                 continue;
             }
-            subtask.setAssigneeUuid(assigneeUuid);
-            subtask.setAssigneeName(assigneeName);
+            assignAssigneeWithTriggerReset(subtask, assigneeUuid, assigneeName);
             changedCount++;
         }
         return changedCount;
@@ -3892,8 +3891,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
         if (directSubtasks.isEmpty()) {
             boolean wasAssigned = TaskAssignmentSupport.isDirectlyAssigned(task);
-            task.setAssigneeUuid(null);
-            task.setAssigneeName(null);
+            assignAssigneeWithTriggerReset(task, null, null);
             return wasAssigned ? 1 : 0;
         }
         boolean scopeToPlayer = "TEAM_ASSIGNED".equals(viewModeName)
@@ -3907,11 +3905,30 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (scopeToPlayer && !currentPlayerUuid.equals(subtask.getAssigneeUuid())) {
                 continue;
             }
-            subtask.setAssigneeUuid(null);
-            subtask.setAssigneeName(null);
+            assignAssigneeWithTriggerReset(subtask, null, null);
             changedCount++;
         }
         return changedCount;
+    }
+
+    /**
+     * 变更任务领取人，并在领取人发生变化时清零团队任务的触发器进度。
+     *
+     * 局域网主机（已发布局域网）下 GUI 保存会直接写入本地存储、不经过服务端保存包，
+     * 因此必须在变更领取人的当口就地清零，否则进度会延续给下一位领取者。
+     *
+     * @param task         目标任务
+     * @param assigneeUuid 新领取人 UUID，null 表示取消领取
+     * @param assigneeName 新领取人名称，null 表示取消领取
+     */
+    private void assignAssigneeWithTriggerReset(Task task, String assigneeUuid, String assigneeName) {
+        if (task == null) {
+            return;
+        }
+        String previousAssignee = task.getAssigneeUuid();
+        task.setAssigneeUuid(assigneeUuid);
+        task.setAssigneeName(assigneeName);
+        TaskTriggerService.resetTriggerProgressIfAssigneeChanged(previousAssignee, task);
     }
 
     private void onClaimTask() {
