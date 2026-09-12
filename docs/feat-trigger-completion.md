@@ -65,6 +65,7 @@ TaskTrigger {
 | KILL/BREAK/CRAFT/ADVANCEMENT | 累加语义：事件发生一次加一次（CRAFT 按合成产物数量加） |
 | 已完成任务 | 不再参与事件匹配（防止取消勾选后又被事件自动勾回需重新计入） |
 | 子任务触发器 | 达标只置子任务 completed；父任务完成态由现有展示层聚合逻辑处理，引擎不越权 |
+| 父任务（已有直属子任务） | **不允许设置触发器**：完成态由子任务聚合决定，事件驱动完成没有意义；引擎侧也不把这类任务收录进倒排索引（历史残留触发器同样不生效）；为它新增第一个子任务时自动清除已有触发器并提示 |
 
 ### 2.5 平台事件接入
 
@@ -120,6 +121,8 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | Phase S | 引擎落库增量化（只 UPDATE 推进过的行）+ 缓存失效收口到存储保存出口，修复「新任务不触发/被旧缓存覆盖消失/触发卡顿」 | ✅ 完成 |
 | Phase T | 进度推送轻量化：250ms 推送由「全量任务快照（发网络包 + 客户端全量落库）」改为「只发进度变化的任务 ID + 进度 + 完成态」，客户端就地更新不落库，消除每次事件触发的卡顿 | ✅ 完成 |
 | Phase U | 团队任务语义收口：未指派（待领取）任务不再被事件推进，必须「领取/指派」后才参与触发，回归「创建 → 领取/指派 → 完成」流程 | ✅ 完成 |
+| Phase V | 子触发任务与展示优化：快速新增「触发」按钮跟随选中任务（选中父任务时建子任务）；禁止为父任务设置触发器并在新增子任务时自动清除；任务列表右侧展示触发器进度与目标图标 | ✅ 完成 |
+| Phase W | 进度选择器数据源收口：新增服务端权威进度目录包（`todolist:advancement_catalog`），「选择进度」改用服务端全量目录并每次打开重建；Forge 侧改为只监听 `AdvancementEarnEvent`，修复同一条进度弹两次完成提示 | ✅ 完成 |
 
 ## 4. 边界（本期不做什么）
 
@@ -161,6 +164,17 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 18. **领取人变更后进度被下一位领取者继承（Phase U）**：配合上一条，团队任务取消领取（回到待领取）或改派给他人时，原领取者已累计的进度会留给下一个人，等于"别人替你做完一半"。→ 对策：`TaskTriggerService.resetTriggerProgressOnAssigneeChange(previous, incoming)` 按任务 ID 比对领取人，凡「从无到有」「从有到无」「A → B」都清零 `trigger.progress` 并撤销 `completed`，个人任务与未变更任务不受影响。落点上必须覆盖两条保存路径，且重置要发生在引擎进度合并**之后**（否则会被合并结果覆盖）：
     - **服务端保存入口**（防线）：`TaskPackets.handleTeamReplaceTasks` 按库里已存状态比对；命令路径 `CommandBootstrap.saveProjectTasksForCommand` 的团队分支也是「先 `mergeTeamTriggerStateInto` 保留引擎进度、再比对领取人清零」，与网络包路径一致（此前该分支缺合并，命令保存会覆盖尚未落库的进度）；
     - **GUI 变更点**（`TodoScreen.assignAssigneeWithTriggerReset`）：局域网主机「已发布局域网」模式下的 GUI 保存会**直接写入本地 H2、不经过服务端保存包**（`shouldUsePublishedLocalPlayerStorage`），因此必须在点击领取/取消领取时就地清零，否则该路径会漏掉。
+19. **父任务挂触发器与子触发任务入口不便（Phase V）**：两个相关交互问题。① 子任务加触发器要「建子任务 → 输入名称 → 双击 → 点按钮」四步，且空白子任务会被自动保存/丢弃逻辑删掉，实际很难走通；② 已有子任务的父任务也能设触发器，而父任务完成态由子任务聚合，触发器语义冲突。→ 对策：
+    - **入口跟随选中任务**：顶部快速新增行的「触发」按钮复用同一套流程，但会读取当前选中项——选中可承载子任务的顶层任务时，按钮文案变为「子触发」并把新建任务挂到该父任务下（自动生成标题 + 直接进行内重命名）；未选中时行为不变（建顶层任务）。按钮语义在点击前可见，避免层级歧义；
+    - **父任务禁止设触发器**：右键菜单对已有直属子任务的父任务不再显示「设置/编辑触发器」，`openTriggerEditScreen`/`applyTriggerFromEditor` 与命令 `todo task trigger set` 各加一道守卫，引擎 `rebuildIndex` 也不收录此类任务（历史残留触发器同样不生效）；
+    - **新增子任务时自动清除父任务触发器**：父任务一旦有了子任务，其触发器不再有意义，创建第一个子任务时清除并弹出提示，避免留下「已设置但无效」的困惑状态。
+20. **点击顶部快速新增「触发」按钮会丢失选中态（Phase V）**：`TodoScreen.mouseClicked` 的自定义命中判定（`TodoScreenHitTestSupport.isClickInEditArea`）只登记了输入框与详情面板按钮，**没有登记快速新增行的两个按钮**，于是点击「触发」被判定为「点了空白处」→ 先执行 `auto_clear_selection` 自动保存并关闭详情区，按钮语义尚未生效选中任务就没了（入口本就依赖选中项，等于直接失效）。→ 对策：把 `quickAddItemButton`/`quickAddTriggerButton` 纳入编辑区命中集合，点击它们不再清空选中；该修复同时消除了「插入物品」按钮的同类问题。
+21. **「选择进度」在新存档下恒为空（Phase W）**：两个原因叠加。① 客户端 `ClientAdvancements` **不是全量目录**——服务端按 `AdvancementVisibilityEvaluator` 的可见性规则增量下发（完成态 + 祖先完成度 + `hidden` 标记，可见深度仅 2 层），新存档下客户端只有个位数进度，且已解锁的配方进度还没有展示信息；② `ItemSelectorScreen.CACHE` 是 `static final`，首次打开时若目录为空就把空列表**永久缓存**，之后即便达成进度、重新打开也仍为空。→ 对策：
+    - **服务端权威目录**：服务端从 `MinecraftServer#getAdvancements()` 全量导出「带展示信息」的进度（ID + 展示名），随登录后的任务同步一并下发新包 `todolist:advancement_catalog`；客户端缓存在 `AdvancementCatalog`；
+    - **不做空结果缓存**：进度类型的选择列表每次打开都重建（物品/方块/实体仍沿用注册表静态缓存，与存档无关）；
+    - **缓存与存储域绑定**：`AdvancementCatalog` 记录下发时的 `DataPathProvider.getStorageNamespace()`，切换存档/服务器后旧目录立即失效，并在客户端断开时清空，避免跨存档串数据；
+    - **任务标题回退**：`TriggerTargetSupport.resolveAdvancementTitle` 先取客户端已加载进度（客户端语言），未覆盖时回退到服务端目录的展示名，避免标题回退成资源 ID。
+22. **Forge 下同一条进度弹出两个完成提示（Phase W）**：`AdvancementEvent` 是基类，Forge 在 `PlayerAdvancements#award` 中会为同一次达成投递**两个**子类事件——先 `AdvancementProgressEvent`（GRANT，条件递增），进度真正完成时再 `AdvancementEarnEvent`。监听基类会把两个事件都收进来，于是同一条进度被推进两次、播放两个完成提示（Fabric 侧走 Mixin 注入，天然只有一次）。→ 对策：`ForgeGameEventBridge.onAdvancement` 的参数类型改为 `AdvancementEvent.AdvancementEarnEvent`，只处理「真正达成」的那一次。
 
 ## 6. 备选方案对比
 
@@ -221,6 +235,10 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 - [x] 团队任务必须已指派才可被事件推进：未指派（待领取）任务不参与累加推进与 ITEM_COLLECT 重算，也不触发库存扫描；手动完成不受影响（Phase U）
 - [x] 团队任务领取人变更时进度清零：取消领取/改派他人后由新领取者从头开始；覆盖服务端保存入口（网络包 + 命令）与 GUI 变更点（已发布局域网的客户端直写路径）（Phase U）
 - [x] 命令的团队保存分支补齐 `mergeTeamTriggerStateInto`，与网络包/个人命令路径一致，避免命令保存覆盖引擎尚未落库的进度（Phase U 顺带修复）
+- [x] 快速新增「触发」按钮跟随选中任务：选中父任务时创建为其子任务（文案变「子触发」），未选中时仍建顶层任务（Phase V）
+- [x] 修复快速新增行按钮点击被误判为空白点击、导致选中态丢失与详情区关闭（`isClickInEditArea` 登记两个按钮）（Phase V）
+- [x] 禁止为已有子任务的父任务设置触发器（右键菜单 + 编辑器 + 命令 + 引擎索引四道），新增首个子任务时自动清除父任务触发器并提示（Phase V）
+- [x] 任务列表右侧展示触发器进度与目标物品图标（父任务子任务进度优先；与负责人并存时形如 `@名字 12/64`）（Phase V）
 - [x] `build-local-17.bat build --offline` 双平台 jar 产出（fabric/forge 1.20.1-1.4.2）并归档 `dist/`
 - [ ] 游戏内手工验证清单（见 §8，待用户在游戏环境执行）
 
@@ -265,6 +283,11 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 29. **（Phase T 收尾回归）** 任务**达标完成的那一刻**不再卡顿：完成瞬间应同时出现「完成浮动提示」+ 列表中该任务立即移入已完成区；连续完成多个任务（如一次破坏让多个任务同时达标）也不出现卡顿或进度丢失。
 30. **（Phase U 重点回归，联机双端）** 团队项目里新建带触发器的任务但**不领取/不指派**：任何玩家做对应动作（击杀/破坏/合成/收集/达成进度）都不推进进度、不自动完成、也不弹完成提示；由任一玩家**领取**（或指派给某玩家）后，该玩家再做对应动作即可正常推进与完成；其他玩家做同样动作仍不推进。有权限的玩家手动点击完成不受影响。
 31. **（Phase U 进度清零回归）** 团队任务进行到一半（进度 > 0）时执行**取消领取**：进度应立即回到 0、完成态撤销，任务回到待领取；随后由另一名玩家**领取或被指派**，进度从 0 重新开始。分别验证三条路径：远程联机（服务端保存包）、局域网主机 GUI（已发布局域网的客户端直写）、`/todo task claim|abandon|assign` 命令。
+32. **（Phase V 重点回归）** 选中一个顶层任务后点击顶部「触发」按钮：按钮文案应为「子触发」，点击时**不应**丢失选中态或关闭右侧详情区；完成触发器编辑后应自动在该父任务下生成子任务（标题已按触发器生成并处于行内重命名态）。
+33. **（Phase V 重点回归）** 对**已有子任务的父任务**右键：菜单中不应出现「设置/编辑触发器」；`/todo task trigger set` 也应被拒绝并给出提示；给带触发器的父任务新增第一个子任务时，父任务触发器应自动清除并弹出提示。
+34. **（Phase V 重点回归）** 任务列表中，挂有触发器的任务右侧显示「目标图标 + 进度」（如铁锭图标 + `12/64`）；同时有负责人时显示 `@名字 12/64`；父任务仍显示子任务进度 `1/3`；无触发器的任务维持原有负责人展示。
+35. **（Phase W 重点回归，Fabric + Forge 各测一遍）** 新建一个**全新存档**，不达成任何进度时直接打开触发器编辑器并把类型切到「获得进度」→ 点「选择进度」：列表应能列出全部带展示信息的进度（不再为空）；达成第一个进度后重新打开，列表内容不变（不是靠玩家已解锁进度撑起来的）；再回到主菜单进入另一个存档，列表内容应刷新为新存档的目录，不残留上一个存档的数据。
+36. **（Phase W 重点回归，仅 Forge）** 新建一个「获得进度」触发任务并选中一个**单条件**进度（例如「石器时代」`minecraft:story/mine_stone`）：达成时只弹出**一个**完成提示，任务只完成一次；再用一个**多条件**进度（例如「探索的时光」）验证：条件逐个达成过程中不误触发，真正达成时同样只弹一个提示。
 
 ## 9. 问题回归记录（实机验证轮次）
 
@@ -288,6 +311,12 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | R13 | 进度更新不卡了，但「完成任务的那一刻」仍卡顿 | 达标路径 `completeTask` 单独保留了全量同步（`syncTasksToPlayer` / `broadcastTeamTasks`）：服务端读库 + 全量序列化，客户端整桶重写本地 H2 | `completeTask` 改调 `flushBucket(..., true)`，由 `flushBucket` 统一做增量落库 + 同一批脏任务的轻量推送；完成提示保持轻量包（Phase T 收尾） | 同 R12（脏集合/推送语义用例）；性能靠 §8-29 感知验证 |
 | R14 | 团队任务未指派（待领取）时也会被事件推进，待领取状态失去意义 | `canPlayerAdvanceByUuid` 把「未指派」当成「谁都可以推进」（`assignee == null \|\| isEmpty()` 分支） | 团队任务必须已指派给事件玩家才可推进；未指派任务不参与累加推进/收集重算/库存扫描（Phase U） | `TaskTriggerServiceTestMain.shouldIgnoreUnassignedTeamTaskForAllPlayers`（累加型 + 收集型）；联机链路靠 §8-30 |
 | R15 | 团队任务取消领取/改派后，进度被下一位领取者继承（等于别人替你做一半） | 领取人变更时没有任何进度归属处理，共享进度照旧保留 | `resetTriggerProgressOnAssigneeChange` / `resetTriggerProgressIfAssigneeChanged` 在领取人变更时清零进度并撤销完成态；服务端保存入口（网络包 + 命令）与 GUI 变更点（已发布局域网的客户端直写）各设一道（Phase U） | `TaskTriggerServiceTestMain.shouldResetTriggerProgressWhenTeamAssigneeChanges`（取消领取/改派/未变更/新任务/个人任务五种情形）；三条保存路径靠 §8-31 |
+| R16 | 给子任务加触发器要先建子任务、输入名称、双击、再点按钮，且空白子任务会被丢弃，实际很难走通 | 快速新增「触发」按钮只建顶层任务，子任务侧没有任何触发器入口 | 按钮跟随选中任务：选中顶层任务时建为其子任务（文案「子触发」），未选中时行为不变（Phase V） | `TaskListWidgetTestMain`/GUI 用例覆盖展示层；交互链路靠 §8-32 |
+| R17 | 点击顶部「触发」按钮时选中任务失焦、右侧详情区关闭，入口实际不可用 | `isClickInEditArea` 未登记快速新增行按钮，点击被判为空白点击 → 触发 `auto_clear_selection` 并关闭详情 | 把 `quickAddItemButton`/`quickAddTriggerButton` 纳入编辑区命中集合（Phase V） | 无直接离线用例（依赖鼠标事件链），靠 §8-32 实机验证 |
+| R18 | 已有子任务的父任务也能设置触发器 | 编辑器/命令/引擎都没有「父任务不可挂触发器」的约束 | 右键菜单、`openTriggerEditScreen`/`applyTriggerFromEditor`、命令 `trigger set`、引擎 `rebuildIndex` 四道守卫；新增首个子任务时自动清除并提示（Phase V） | `TaskTriggerServiceTestMain.shouldIgnoreParentTaskWithSubtasks`；GUI/命令守卫靠 §8-33 |
+| R19 | GUI 列表分不清哪些任务挂了触发器，也看不到触发进度 | 列表右侧只渲染子任务进度或负责人，完全没有触发器信息 | 右侧追加触发器进度与目标物品图标，与负责人并存时形如 `@名字 12/64`（Phase V） | `TaskListWidgetTestMain.shouldShowTriggerProgressAndTargetIconInTrailingMeta` |
+| R20 | 新存档下「选择进度」列表一直是空的，达成第一个进度后重开仍为空 | ① `ClientAdvancements` 只含服务端按可见性下发的少量进度；② `ItemSelectorScreen.CACHE` 把首次打开时的空结果永久缓存 | 新增服务端权威进度目录包 `todolist:advancement_catalog`，`AdvancementCatalog` 客户端缓存并与存储域绑定；进度类型每次打开重建，不再缓存空结果（Phase W） | `AdvancementCatalogTestMain`（同域读缓存、切换域失效、编解码往返）；在线列表靠 §8-35 |
+| R21 | Forge 下同一条进度弹两个完成提示 | `AdvancementEvent` 为基类，`award` 会先投递 `AdvancementProgressEvent`（GRANT）再投递 `AdvancementEarnEvent`，监听基类把两次都收了 | `ForgeGameEventBridge.onAdvancement` 改为只监听 `AdvancementEvent.AdvancementEarnEvent`（Phase W） | 无法离线复现（需真实 Forge 事件）；靠 §8-36 |
 
 ### 新增测试任务索引
 
@@ -295,6 +324,7 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 - `:common:guiSystemTest` → `TriggerEditScreenTestMain`（含 R3 固化用例）
 - `:common:taskTriggerServiceTest` → `TaskTriggerServiceTestMain`（五种事件类型的引擎判定语义 + 增量落库脏集合，已挂 `:common:check`）
 - `:common:h2StorageBackendIntegrationTest` → `H2StorageBackendIntegrationTestMain`（含 R10 增量更新不覆盖新任务用例）
+- `:common:advancementCatalogTest` → `AdvancementCatalogTestMain`（含 R20 进度目录缓存/失效/编解码用例，已挂 `:common:check`）
 - `:fabric:mixinVisibilityTest` → `MixinVisibilityTestMain`（R6 防回归守卫，已挂 `:fabric:check`，`build` 会自动执行）
 
 ### 五种事件类型的引擎测试场景（`TaskTriggerServiceTestMain`）
@@ -312,5 +342,6 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | `shouldCompleteAdvancementOnFirstAward` | ADVANCEMENT | 单次达标；重复上报不再匹配 |
 | `shouldIgnoreUnassignedTeamTaskForAllPlayers` | 团队边界（Phase U） | 未指派团队任务：累加型与收集型都不推进、不置脏；必须领取/指派后才参与触发 |
 | `shouldResetTriggerProgressWhenTeamAssigneeChanges` | 领取人变更（Phase U） | 取消领取/改派清零进度与完成态；未变更、新任务、个人任务均不受影响 |
+| `shouldIgnoreParentTaskWithSubtasks` | 父任务边界（Phase V） | 父任务不进倒排索引、不被事件推进；同桶叶子任务照常完成 |
 | `shouldIgnoreNonAssigneeEventsForTeamTask` | 团队边界 | 非负责人事件不计入，负责人正常推进 |
 | `shouldSkipCompletedTasksInIndex` | 完成态边界 | 已完成任务不进索引、不被事件匹配 |
