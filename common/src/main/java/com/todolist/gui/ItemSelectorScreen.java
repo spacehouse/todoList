@@ -1,15 +1,12 @@
 package com.todolist.gui;
 
+import com.todolist.client.AdvancementCatalog;
 import com.todolist.client.TriggerTargetSupport;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.advancements.Advancement;
-import net.minecraft.advancements.DisplayInfo;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.multiplayer.ClientAdvancements;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -134,12 +131,13 @@ public class ItemSelectorScreen extends Screen {
 
     /**
      * 懒加载当前类型的候选缓存。
+     * 进度目录随存档与服务端数据包变化，且首次打开时可能尚未收到目录，
+     * 因此进度类型每次打开都重建，避免把「空结果」永久缓存住（曾导致新存档下进度列表恒为空）。
      */
     private void ensureCache() {
-        if (CACHE.containsKey(kind)) {
-            return;
+        if (kind == Kind.ADVANCEMENT || !CACHE.containsKey(kind)) {
+            CACHE.put(kind, buildEntries(kind));
         }
-        CACHE.put(kind, buildEntries(kind));
     }
 
     /**
@@ -226,30 +224,19 @@ public class ItemSelectorScreen extends Screen {
     }
 
     /**
-     * 构建客户端已加载的进度候选列表（仅收录有展示信息的进度）。
+     * 构建服务端权威进度目录中的候选列表。
+     * 客户端自带的进度列表只含「已解锁 / 可见」进度，新存档下几乎为空，
+     * 因此这里使用服务端随任务同步下发的完整目录（见 {@link AdvancementCatalog}）。
      *
      * @return 进度条目
      */
     private static List<ItemEntry> buildAdvancementEntries() {
         List<ItemEntry> entries = new ArrayList<>();
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getConnection() == null) {
-            return entries;
-        }
-        ClientAdvancements advancements = client.getConnection().getAdvancements();
-        if (advancements == null || advancements.getAdvancements() == null) {
-            return entries;
-        }
-        for (Advancement advancement : advancements.getAdvancements().getAllAdvancements()) {
-            if (advancement == null) {
+        for (AdvancementCatalog.Entry entry : AdvancementCatalog.getEntries()) {
+            if (entry == null || entry.id() == null) {
                 continue;
             }
-            DisplayInfo display = advancement.getDisplay();
-            if (display == null) {
-                continue;
-            }
-            String id = advancement.getId().toString();
-            entries.add(newItemEntry(id, ItemStack.EMPTY, display.getTitle().getString()));
+            entries.add(newItemEntry(entry.id(), ItemStack.EMPTY, entry.title()));
         }
         return entries;
     }

@@ -86,6 +86,15 @@ public class ClientTaskPackets {
             TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
             client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
         });
+
+        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, handler, buf, responseSender) -> {
+            List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
+            client.execute(() -> {
+                AdvancementCatalog.apply(namespaceAtReceive, entries);
+                TodoListMod.LOGGER.info("Received {} advancements from server catalog", entries.size());
+            });
+        });
     }
 
     /**

@@ -156,29 +156,32 @@ public final class TriggerTargetSupport {
     }
 
     /**
-     * 从客户端已加载的进度中解析进度标题。
+     * 解析进度标题：优先用客户端已加载的进度（客户端语言），
+     * 客户端只持有「已解锁 / 可见」进度，未覆盖时回退到服务端权威目录（见 {@link AdvancementCatalog}）。
      *
      * @param advancementId 进度资源 ID
      * @return 进度标题；无法解析时返回 null
      */
     private static String resolveAdvancementTitle(String advancementId) {
         ResourceLocation location = ResourceLocation.tryParse(advancementId);
-        if (location == null) {
-            return null;
+        if (location != null) {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null && client.getConnection() != null) {
+                ClientAdvancements advancements = client.getConnection().getAdvancements();
+                if (advancements != null && advancements.getAdvancements() != null) {
+                    Advancement advancement = advancements.getAdvancements().get(location);
+                    if (advancement != null && advancement.getDisplay() != null) {
+                        return advancement.getDisplay().getTitle().getString();
+                    }
+                }
+            }
         }
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getConnection() == null) {
-            return null;
+        for (AdvancementCatalog.Entry entry : AdvancementCatalog.getEntries()) {
+            if (entry != null && advancementId.equals(entry.id())) {
+                return entry.title();
+            }
         }
-        ClientAdvancements advancements = client.getConnection().getAdvancements();
-        if (advancements == null || advancements.getAdvancements() == null) {
-            return null;
-        }
-        Advancement advancement = advancements.getAdvancements().get(location);
-        if (advancement == null || advancement.getDisplay() == null) {
-            return null;
-        }
-        return advancement.getDisplay().getTitle().getString();
+        return null;
     }
 
     /**
