@@ -168,6 +168,14 @@ tasks.register<JavaExec>("taskTriggerServiceTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("advancementCatalogTest") {
+    group = "verification"
+    description = "Run the server-authoritative advancement catalog self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.client.AdvancementCatalogTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -184,6 +192,7 @@ tasks.named("check").configure {
     dependsOn("titleMarkupParserTest")
     dependsOn("taskTriggerTest")
     dependsOn("taskTriggerServiceTest")
+    dependsOn("advancementCatalogTest")
 }
 
 tasks.withType<Test>().configureEach {
