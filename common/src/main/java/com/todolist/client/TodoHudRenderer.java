@@ -79,6 +79,10 @@ public class TodoHudRenderer {
     private static final int HUD_PRIORITY_BLOCK_GAP = 4;
     private static final int HUD_SUBTASK_EXTRA_INDENT = 4;
     private static final String HUD_SUBTASK_PREFIX = "- ";
+    /** HUD 行内物品图标尺寸（像素），与 12px 行高和 9px 字高匹配。 */
+    private static final int HUD_TITLE_ICON_SIZE = 9;
+    /** 图标与相邻文本的像素间距。 */
+    private static final int ICON_TEXT_GAP = 1;
     
     // 缓存视图标签
     private static final Component LABEL_SPACE_PERSONAL = Component.translatable("hud.todolist.space_label.personal");
@@ -91,6 +95,7 @@ public class TodoHudRenderer {
 
     /**
      * HUD 行视觉元数据：统一描述优先级色块、前置标签和标题位置。
+     * 标题以分段序列渲染，物品段携带图标；右侧进度可携带目标物品图标。
      */
     private static class HudRowVisual {
         private final int priorityBlockOffset;
@@ -103,28 +108,29 @@ public class TodoHudRenderer {
         private final int assigneeOffset;
         private final int tagOffset;
         private final int titleOffset;
-        private final Component titleText;
+        private final List<ItemTitleRenderer.Part> titleParts;
         private final int progressOffset;
         private final Component progressText;
+        private final String progressIconId;
 
         /**
          * 创建 HUD 行视觉元数据。
          *
-         * @param priorityBlockColor 优先级色块颜色
          * @param priorityText 兼容旧版的优先级文本，新版保持为空字符串
          * @param assigneeText 指派人标签
          * @param tagText 首个标签文本
          * @param assigneeOffset 指派人标签偏移
          * @param tagOffset 标签偏移
          * @param titleOffset 标题起始偏移
-         * @param titleText 行标题文本
+         * @param titleParts 标题分段序列（支持物品图标）
          * @param progressOffset 右侧进度文本起始偏移
          * @param progressText 右侧进度文本
+         * @param progressIconId 右侧进度前置物品图标资源 ID，可为 null
          */
         private HudRowVisual(int priorityBlockOffset, int priorityBlockColor, int prefixOffset, Component prefixText,
                              String priorityText, String assigneeText, String tagText,
-                             int assigneeOffset, int tagOffset, int titleOffset, Component titleText,
-                             int progressOffset, Component progressText) {
+                             int assigneeOffset, int tagOffset, int titleOffset, List<ItemTitleRenderer.Part> titleParts,
+                             int progressOffset, Component progressText, String progressIconId) {
             this.priorityBlockOffset = priorityBlockOffset;
             this.priorityBlockColor = priorityBlockColor;
             this.prefixOffset = prefixOffset;
@@ -135,9 +141,10 @@ public class TodoHudRenderer {
             this.assigneeOffset = assigneeOffset;
             this.tagOffset = tagOffset;
             this.titleOffset = titleOffset;
-            this.titleText = titleText;
+            this.titleParts = titleParts;
             this.progressOffset = progressOffset;
             this.progressText = progressText;
+            this.progressIconId = progressIconId;
         }
     }
 
@@ -983,12 +990,52 @@ public class TodoHudRenderer {
         if (rowVisual.tagText != null && !rowVisual.tagText.isEmpty()) {
             drawScaledString(context, rowVisual.tagText, rowLeft + rowVisual.tagOffset, labelTextY, labelColor, HUD_LABEL_SCALE);
         }
-        if (rowVisual.titleText != null) {
-            context.drawString(client.font, rowVisual.titleText, rowLeft + rowVisual.titleOffset, titleTextY, textColor);
+        int partX = rowLeft + rowVisual.titleOffset;
+        for (ItemTitleRenderer.Part part : rowVisual.titleParts) {
+            if (part.isItem()) {
+                int iconY = y + (rowHeight - part.getIconSize()) / 2;
+                drawMiniItemIcon(context, part.getItemId(), partX, iconY, part.getIconSize());
+                partX += part.getIconSize();
+                if (part.getText() != null) {
+                    context.drawString(client.font, part.getText(), partX + ICON_TEXT_GAP, titleTextY, textColor);
+                    partX += ICON_TEXT_GAP + client.font.width(part.getText());
+                }
+            } else if (part.getText() != null) {
+                context.drawString(client.font, part.getText(), partX, titleTextY, textColor);
+                partX += part.getAdvance();
+            }
         }
         if (rowVisual.progressText != null) {
-            context.drawString(client.font, rowVisual.progressText, rowLeft + rowVisual.progressOffset, titleTextY, textColor);
+            int progressX = rowLeft + rowVisual.progressOffset;
+            if (rowVisual.progressIconId != null) {
+                int iconY = y + (rowHeight - HUD_TITLE_ICON_SIZE) / 2;
+                drawMiniItemIcon(context, rowVisual.progressIconId, progressX, iconY, HUD_TITLE_ICON_SIZE);
+                progressX += HUD_TITLE_ICON_SIZE + 2;
+            }
+            context.drawString(client.font, rowVisual.progressText, progressX, titleTextY, textColor);
         }
+    }
+
+    /**
+     * 绘制缩放物品图标：按目标尺寸等比缩放 16px 原生物品渲染。
+     *
+     * @param context  绘制上下文
+     * @param itemId   物品资源 ID，无法解析时跳过绘制
+     * @param x        图标左上角 x
+     * @param y        图标左上角 y
+     * @param size     目标尺寸（像素）
+     */
+    private void drawMiniItemIcon(GuiGraphics context, String itemId, int x, int y, int size) {
+        net.minecraft.world.item.ItemStack stack = ItemTitleRenderer.resolveItemStack(itemId);
+        if (stack == null) {
+            return;
+        }
+        float scale = size / 16.0f;
+        context.pose().pushPose();
+        context.pose().translate(x, y, 0);
+        context.pose().scale(scale, scale, 1.0f);
+        context.renderItem(stack, 0, 0);
+        context.pose().popPose();
     }
 
     /**
@@ -1044,7 +1091,16 @@ public class TodoHudRenderer {
         String tagToken = buildHudLabelToken(resolveFirstTaskTag(task), maxLabelWidth);
         ParentSubtaskProgress parentProgress = resolveParentSubtaskProgress(task);
         String progressToken = buildParentProgressText(parentProgress);
-        int progressWidth = progressToken.isEmpty() ? 0 : client.font.width(progressToken);
+        String progressIconId = null;
+        if (progressToken.isEmpty()) {
+            String triggerProgress = buildTriggerProgressText(task);
+            if (!triggerProgress.isEmpty()) {
+                progressToken = triggerProgress;
+                progressIconId = resolveTriggerProgressIconId(task);
+            }
+        }
+        int progressIconWidth = progressIconId == null ? 0 : HUD_TITLE_ICON_SIZE + 2;
+        int progressWidth = progressToken.isEmpty() ? 0 : progressIconWidth + client.font.width(progressToken);
 
         int assigneeOffset = 0;
         int tagOffset = 0;
@@ -1055,17 +1111,16 @@ public class TodoHudRenderer {
 
         int titleOffset = currentOffset;
         int titleMaxWidth = Math.max(0, rowWidth - titleOffset - (progressWidth <= 0 ? 0 : progressWidth + 6));
-        String titleCore = trimWithEllipsis(buildHudRowTitle(task), titleMaxWidth);
         boolean rowCompleted = isTaskCompletedInHud(task);
         Component prefixText = null;
         if (subtask) {
             prefixText = Component.literal(HUD_SUBTASK_PREFIX).withStyle(rowCompleted ? ChatFormatting.GRAY : ChatFormatting.WHITE);
         }
-        Component titleText = titleCore.isEmpty()
-                ? null
-                : (rowCompleted
-                ? Component.literal(titleCore).withStyle(ChatFormatting.GRAY, ChatFormatting.STRIKETHROUGH)
-                : Component.literal(titleCore).withStyle(ChatFormatting.WHITE));
+        List<ItemTitleRenderer.Part> titleParts = ItemTitleRenderer.truncate(
+                ItemTitleRenderer.buildParts(buildHudRowTitle(task), client.font, HUD_TITLE_ICON_SIZE, rowCompleted, rowCompleted),
+                titleMaxWidth,
+                client.font
+        );
         int progressOffset = progressWidth <= 0 ? 0 : Math.max(titleOffset, rowWidth - progressWidth);
         Component progressText = progressToken.isEmpty()
                 ? null
@@ -1075,7 +1130,34 @@ public class TodoHudRenderer {
                 subtask ? HUD_SUBTASK_EXTRA_INDENT : 0, prefixText, "",
                 null,
                 tagToken.isEmpty() ? null : tagToken,
-                assigneeOffset, tagOffset, titleOffset, titleText, progressOffset, progressText);
+                assigneeOffset, tagOffset, titleOffset, titleParts, progressOffset, progressText, progressIconId);
+    }
+
+    /**
+     * 构建触发器进度文本；仅叶子任务在未完成时显示。
+     *
+     * @param task 当前任务
+     * @return 进度文本，如 "12/64"；无触发器时返回空串
+     */
+    private String buildTriggerProgressText(Task task) {
+        if (task == null || !task.hasTrigger() || task.isCompleted()) {
+            return "";
+        }
+        return task.getTrigger().getProgress() + "/" + task.getTrigger().getTargetCount();
+    }
+
+    /**
+     * 解析触发器进度前置图标：按触发类型映射到可绘制的物品图标。
+     * 物品/合成类直接用目标物品，破坏方块类用方块物品形态，击杀类按刷怪蛋约定降级解析。
+     *
+     * @param task 当前任务
+     * @return 物品资源 ID；无法解析时返回 null
+     */
+    private String resolveTriggerProgressIconId(Task task) {
+        if (task == null || !task.hasTrigger()) {
+            return null;
+        }
+        return TriggerTargetSupport.resolveIconId(task.getTrigger());
     }
 
     /**
@@ -1093,6 +1175,7 @@ public class TodoHudRenderer {
                 + task.getPriority().name() + '|'
                 + isTaskCompletedInHud(task) + '|'
                 + buildParentProgressText(resolveParentSubtaskProgress(task)) + '|'
+                + buildTriggerProgressText(task) + '|'
                 + resolveFirstTaskTag(task) + '|'
                 + hudWidth + '|'
                 + guiScale;
@@ -1450,6 +1533,46 @@ public class TodoHudRenderer {
     }
 
     /**
+     * 就地应用服务端下发的触发器进度增量。
+     * 只更新命中的任务对象（进度 + 完成态）并失效派生模型缓存，
+     * 不重建全量任务列表、不触发本地存储写入，避免每次事件触发都卡顿。
+     *
+     * @param entries 进度变化条目
+     * @param team    是否为团队任务桶
+     * @return 是否有任务被更新
+     */
+    public boolean applyTriggerProgress(List<com.todolist.network.TaskPackets.TriggerProgress> entries, boolean team) {
+        if (entries == null || entries.isEmpty()) {
+            return false;
+        }
+        java.util.Map<String, com.todolist.network.TaskPackets.TriggerProgress> byId = new java.util.HashMap<>();
+        for (com.todolist.network.TaskPackets.TriggerProgress entry : entries) {
+            if (entry != null && entry.taskId() != null) {
+                byId.put(entry.taskId(), entry);
+            }
+        }
+        boolean changed = false;
+        for (Task task : team ? cachedTeamTasks : cachedPersonalTasks) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            com.todolist.network.TaskPackets.TriggerProgress entry = byId.get(task.getId());
+            if (entry == null) {
+                continue;
+            }
+            if (task.getTrigger() != null) {
+                task.getTrigger().setProgress(entry.progress());
+            }
+            task.setCompleted(entry.completed());
+            changed = true;
+        }
+        if (changed) {
+            invalidateHudModelCache();
+        }
+        return changed;
+    }
+
+    /**
      * 用 GUI 中最新的个人任务快照更新 HUD 原始任务缓存。
      *
      * @param tasks GUI 当前个人任务列表
@@ -1625,7 +1748,19 @@ public class TodoHudRenderer {
      */
     String getRowTitleTextForTest(String taskId) {
         RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
-        return cache == null || cache.rowVisual.titleText == null ? "" : cache.rowVisual.titleText.getString();
+        if (cache == null || cache.rowVisual.titleParts == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (ItemTitleRenderer.Part part : cache.rowVisual.titleParts) {
+            if (part.isItem()) {
+                builder.append(part.getItemId());
+            }
+            if (part.getText() != null) {
+                builder.append(part.getText().getString());
+            }
+        }
+        return builder.toString();
     }
 
     String getRowPrefixTextForTest(String taskId) {
@@ -1652,9 +1787,7 @@ public class TodoHudRenderer {
      */
     boolean isRowTitleStrikethroughForTest(String taskId) {
         RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
-        return cache != null
-                && cache.rowVisual.titleText != null
-                && cache.rowVisual.titleText.getStyle().isStrikethrough();
+        return cache != null && hasTitlePartStyle(cache, true);
     }
 
     /**
@@ -1665,10 +1798,31 @@ public class TodoHudRenderer {
      */
     boolean isRowTitleGrayForTest(String taskId) {
         RowRenderCache cache = rowRenderCacheByTaskId.get(taskId);
-        if (cache == null || cache.rowVisual.titleText == null || cache.rowVisual.titleText.getStyle().getColor() == null) {
+        return cache != null && hasTitlePartStyle(cache, false);
+    }
+
+    /**
+     * 判断标题分段中首个文本段是否携带目标样式。
+     *
+     * @param cache          行缓存
+     * @param strikethrough true 判断删除线，false 判断灰色
+     * @return 命中样式时返回 true
+     */
+    private boolean hasTitlePartStyle(RowRenderCache cache, boolean strikethrough) {
+        if (cache.rowVisual.titleParts == null) {
             return false;
         }
-        return cache.rowVisual.titleText.getStyle().getColor().getValue() == ChatFormatting.GRAY.getColor();
+        for (ItemTitleRenderer.Part part : cache.rowVisual.titleParts) {
+            if (part.getText() == null) {
+                continue;
+            }
+            if (strikethrough) {
+                return part.getText().getStyle().isStrikethrough();
+            }
+            return part.getText().getStyle().getColor() != null
+                    && part.getText().getStyle().getColor().getValue() == ChatFormatting.GRAY.getColor();
+        }
+        return false;
     }
 
     int getRowTitleOffsetForTest(String taskId) {

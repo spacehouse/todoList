@@ -91,6 +91,7 @@ public class TodoListForge {
         DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> ForgeTodoClient::initialize);
 
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new com.todolist.forge.ForgeGameEventBridge());
 
         LOGGER.info("Todo List Mod (Forge) initialized!");
     }

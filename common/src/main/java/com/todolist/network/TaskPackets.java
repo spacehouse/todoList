@@ -6,6 +6,8 @@ import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
+import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -40,6 +42,10 @@ public class TaskPackets {
     public static final ResourceLocation TEAM_SYNC_TASKS_CHUNKED_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_sync_tasks_chunked");
     /** 客户端→服务端：分块提交团队任务替换/合并。 */
     public static final ResourceLocation TEAM_REPLACE_TASKS_CHUNKED_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_replace_tasks_chunked");
+    /** 服务端→客户端：事件触发器自动完成任务提示（携带任务标题原文）。 */
+    public static final ResourceLocation TRIGGER_COMPLETED_ID = new ResourceLocation(TodoConstants.MOD_ID, "trigger_completed");
+    /** 服务端→客户端：触发器进度轻量推送（仅变化任务 ID/进度/完成态，避免全量快照的网络与落库开销）。 */
+    public static final ResourceLocation TRIGGER_PROGRESS_ID = new ResourceLocation(TodoConstants.MOD_ID, "trigger_progress");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
 
     /** 服务端分块累积器，用于接收客户端发来的分块团队任务包。 */
@@ -155,6 +161,147 @@ public class TaskPackets {
         }
     }
 
+    /**
+     * 用给定的内存任务快照同步个人任务到客户端，避免再次读取存储。
+     * 供触发器引擎在进度变化时做短节流推送，让 HUD 即时反映进度。
+     *
+     * @param player 目标玩家
+     * @param tasks  任务快照
+     */
+    public static void sendPersonalTasksSnapshot(ServerPlayer player, List<Task> tasks) {
+        if (player == null || tasks == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeTaskList(buf, tasks);
+        serverPacketSender.send(player, SYNC_TASKS_ID, buf);
+    }
+
+    /**
+     * 用给定的内存任务快照广播团队任务到所有在线玩家，避免再次读取存储。
+     *
+     * @param server 当前服务端
+     * @param tasks  团队任务快照
+     */
+    public static void broadcastTeamTasksSnapshot(MinecraftServer server, List<Task> tasks) {
+        if (server == null || tasks == null) {
+            return;
+        }
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            sendTeamTasksToPlayer(player, tasks);
+        }
+    }
+
+    /**
+     * 通知玩家某任务的触发器已自动完成，供客户端绘制带物品图标的浮动提示。
+     *
+     * @param player 目标玩家
+     * @param title  任务标题原文（可能包含物品标记）
+     */
+    public static void notifyTriggerCompleted(ServerPlayer player, String title) {
+        if (player == null || title == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(title);
+        serverPacketSender.send(player, TRIGGER_COMPLETED_ID, buf);
+    }
+
+    /**
+     * 触发器进度推送条目：只承载发生变化的任务 ID、进度与完成态。
+     * 相比全量任务快照，网络负载与客户端处理开销都与「变化任务数」成正比，
+     * 不随任务总量增长，也不会触发客户端把全量任务重新写回本地存储。
+     *
+     * @param taskId    任务 ID
+     * @param progress  触发器当前进度
+     * @param completed 任务是否已完成
+     */
+    public record TriggerProgress(String taskId, int progress, boolean completed) {
+    }
+
+    /**
+     * 触发器进度推送批次：区分个人/团队任务桶 + 变化条目。
+     *
+     * @param team    是否为团队任务桶
+     * @param entries 进度变化条目
+     */
+    public record TriggerProgressBatch(boolean team, List<TriggerProgress> entries) {
+    }
+
+    /**
+     * 向指定玩家推送触发器进度变化（个人任务桶）。
+     *
+     * @param player 目标玩家
+     * @param tasks  进度发生变化的任务集合
+     */
+    public static void sendTriggerProgress(ServerPlayer player, java.util.Collection<Task> tasks) {
+        if (player == null || tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeTriggerProgress(buf, tasks, false);
+        serverPacketSender.send(player, TRIGGER_PROGRESS_ID, buf);
+    }
+
+    /**
+     * 向所有在线玩家广播触发器进度变化（团队任务桶）。
+     *
+     * @param server 当前服务端
+     * @param tasks  进度发生变化的任务集合
+     */
+    public static void broadcastTeamTriggerProgress(MinecraftServer server, java.util.Collection<Task> tasks) {
+        if (server == null || tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeTriggerProgress(buf, tasks, true);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player != null) {
+                serverPacketSender.send(player, TRIGGER_PROGRESS_ID, new FriendlyByteBuf(buf.copy()));
+            }
+        }
+    }
+
+    /**
+     * 写出触发器进度批次。
+     *
+     * @param buf   目标缓冲
+     * @param tasks 进度发生变化的任务集合
+     * @param team  是否为团队任务桶
+     */
+    public static void writeTriggerProgress(FriendlyByteBuf buf, java.util.Collection<Task> tasks, boolean team) {
+        buf.writeBoolean(team);
+        List<Task> valid = new java.util.ArrayList<>(tasks.size());
+        for (Task task : tasks) {
+            if (task != null && task.getId() != null) {
+                valid.add(task);
+            }
+        }
+        buf.writeVarInt(valid.size());
+        for (Task task : valid) {
+            buf.writeUtf(task.getId());
+            TaskTrigger trigger = task.getTrigger();
+            buf.writeVarInt(trigger == null ? 0 : trigger.getProgress());
+            buf.writeBoolean(task.isCompleted());
+        }
+    }
+
+    /**
+     * 读入触发器进度批次。
+     *
+     * @param buf 来源缓冲
+     * @return 进度变化批次
+     */
+    public static TriggerProgressBatch readTriggerProgress(FriendlyByteBuf buf) {
+        boolean team = buf.readBoolean();
+        int size = buf.readVarInt();
+        List<TriggerProgress> entries = new java.util.ArrayList<>(Math.max(0, size));
+        for (int i = 0; i < size; i++) {
+            entries.add(new TriggerProgress(buf.readUtf(), buf.readVarInt(), buf.readBoolean()));
+        }
+        return new TriggerProgressBatch(team, entries);
+    }
+
     private static void syncTeamTasksToPlayer(ServerPlayer player) {
         if (player == null) {
             return;
@@ -207,7 +354,12 @@ public class TaskPackets {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
+            TaskTriggerService.mergeTriggerStateInto(player.getServer(), player.getUUID(), tasks);
             storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
+            TaskTriggerService.invalidatePersonal(player.getServer(), player.getUUID());
+            if (containsPendingItemCollectTrigger(tasks)) {
+                TaskTriggerService.evaluateItemCollectAfterTriggerChange(player);
+            }
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
             StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
@@ -219,7 +371,12 @@ public class TaskPackets {
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
             List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storage.loadTeamTasks(), baseTasks, tasks);
+            TaskTriggerService.mergeTeamTriggerStateInto(tasksToSave);
             storage.saveTeamTasks(tasksToSave);
+            TaskTriggerService.invalidateTeam();
+            if (containsPendingItemCollectTrigger(tasksToSave)) {
+                TaskTriggerService.evaluateItemCollectAfterTriggerChange(player);
+            }
             if (baseTasks == null) {
                 broadcastTeamTasksExcept(server, player);
             } else {
@@ -383,6 +540,29 @@ public class TaskPackets {
     public static Task readTask(FriendlyByteBuf buf) {
         CompoundTag nbt = buf.readNbt();
         return Task.fromNbt(nbt);
+    }
+
+    /**
+     * 判断任务列表中是否存在「未完成的物品收集触发器」。
+     * 仅此时才需要在保存后立即评估一次持有量，避免无谓的存储读取。
+     *
+     * @param tasks 任务列表
+     * @return 存在时返回 true
+     */
+    private static boolean containsPendingItemCollectTrigger(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return false;
+        }
+        for (Task task : tasks) {
+            if (task == null || task.isCompleted() || !task.hasTrigger()) {
+                continue;
+            }
+            com.todolist.task.TaskTrigger trigger = task.getTrigger();
+            if (trigger.isValid() && trigger.getType() == com.todolist.task.TaskTrigger.Type.ITEM_COLLECT) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

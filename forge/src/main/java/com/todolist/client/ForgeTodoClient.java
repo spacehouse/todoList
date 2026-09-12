@@ -263,6 +263,8 @@ public final class ForgeTodoClient {
             return;
         }
         hudRenderer.render(resolvedGuiGraphics, resolvePartialTick(event));
+        TodoToastRenderer.render(resolvedGuiGraphics, Minecraft.getInstance().font,
+                resolvedGuiGraphics.guiWidth());
     }
 
     private static void openTodoScreen(Minecraft current) {

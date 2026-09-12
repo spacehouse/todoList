@@ -2,6 +2,7 @@ package com.todolist.bootstrap;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -22,6 +23,8 @@ import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
+import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2BackupService;
@@ -135,6 +138,9 @@ public final class CommandBootstrap {
     );
     private static final List<String> TASK_CLEAN_STATUS_SUGGESTIONS = List.of(
             "incomplete", "completed"
+    );
+    private static final List<String> TASK_TRIGGER_TYPE_SUGGESTIONS = List.of(
+            "kill_entity", "break_block", "craft_item", "item_collect", "advancement"
     );
     private static final ConcurrentHashMap<String, PendingTaskCleanConfirmation> pendingTaskCleanConfirmMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, PendingProjectRemoveConfirmation> pendingProjectRemoveConfirmMap = new ConcurrentHashMap<>();
@@ -346,6 +352,40 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
+                        .then(Commands.literal("trigger")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .then(Commands.argument("type", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestTaskTriggerTypes)
+                                                        .then(Commands.argument("target", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                                                                .executes(ctx -> executeTaskTriggerSet(
+                                                                        ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "taskId"),
+                                                                        StringArgumentType.getString(ctx, "type"),
+                                                                        net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "target").toString(),
+                                                                        1
+                                                                ))
+                                                                .then(Commands.argument("count", IntegerArgumentType.integer(1))
+                                                                        .executes(ctx -> executeTaskTriggerSet(
+                                                                                ctx.getSource(),
+                                                                                StringArgumentType.getString(ctx, "taskId"),
+                                                                                StringArgumentType.getString(ctx, "type"),
+                                                                                net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "target").toString(),
+                                                                                IntegerArgumentType.getInteger(ctx, "count")
+                                                                        )))))))
+                                .then(Commands.literal("clear")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskTriggerClear(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                ))))
+                                .then(Commands.literal("info")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskTriggerInfo(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
                         .then(Commands.literal("donep")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("projectId", StringArgumentType.word())
@@ -3035,6 +3075,162 @@ public final class CommandBootstrap {
     }
 
     /**
+     * 为当前玩家的个人任务设置事件触发器。
+     */
+    private static int executeTaskTriggerSet(CommandSourceStack source, String taskId, String typeName, String target, int count) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskTrigger.Type type = parseTaskTriggerType(typeName);
+        if (type == null) {
+            return sendCommandFailure(source, "command.todolist.task.trigger.set.invalid_type", typeName);
+        }
+        String normalizedTarget = target == null ? "" : target.trim();
+        if (normalizedTarget.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.task.trigger.set.invalid_target");
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            task.setTrigger(new TaskTrigger(type, normalizedTarget, count));
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            TaskTriggerService.invalidatePersonal(source.getServer(), playerUuid);
+            if (type == TaskTrigger.Type.ITEM_COLLECT) {
+                // 玩家可能已持有足量物品，设置后立即评估一次
+                TaskTriggerService.evaluateItemCollectAfterTriggerChange(player);
+            }
+            syncTasksToPlayer(source.getServer(), player);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.trigger.set.success",
+                    task.getTitle(), type.name().toLowerCase(java.util.Locale.ROOT), normalizedTarget, count
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to set task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.set.failed", e);
+        }
+    }
+
+    /**
+     * 清除当前玩家个人任务的事件触发器。
+     */
+    private static int executeTaskTriggerClear(CommandSourceStack source, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (task.getTrigger() == null) {
+                return sendCommandSuccess(
+                        source,
+                        COMMAND_SUCCESS,
+                        SIDE_EFFECT_NONE,
+                        "command.todolist.task.trigger.clear.not_set",
+                        task.getTitle()
+                );
+            }
+            task.setTrigger(null);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            TaskTriggerService.invalidatePersonal(source.getServer(), playerUuid);
+            syncTasksToPlayer(source.getServer(), player);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.trigger.clear.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to clear task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.clear.failed", e);
+        }
+    }
+
+    /**
+     * 查看当前玩家个人任务的事件触发器配置与进度。
+     */
+    private static int executeTaskTriggerInfo(CommandSourceStack source, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            TaskTrigger trigger = task.getTrigger();
+            if (trigger == null) {
+                return sendCommandSuccess(
+                        source,
+                        COMMAND_SUCCESS,
+                        SIDE_EFFECT_NONE,
+                        "command.todolist.task.trigger.info.none",
+                        task.getTitle()
+                );
+            }
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    "command.todolist.task.trigger.info.format",
+                    task.getTitle(),
+                    trigger.getType().name().toLowerCase(java.util.Locale.ROOT),
+                    trigger.getTarget(),
+                    trigger.getProgress(),
+                    trigger.getTargetCount()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to read task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.info.failed", e);
+        }
+    }
+
+    /**
+     * 解析触发器类型参数，非法输入返回 null。
+     */
+    private static TaskTrigger.Type parseTaskTriggerType(String typeName) {
+        if (typeName == null) {
+            return null;
+        }
+        try {
+            return TaskTrigger.Type.valueOf(typeName.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    /**
      * 将指定项目中的目标任务标记为完成，并依据项目范围执行对应同步。
      */
     private static int executeTaskDoneByProject(CommandSourceStack source, String projectId, String taskId) {
@@ -3590,6 +3786,13 @@ public final class CommandBootstrap {
 
     private static CompletableFuture<Suggestions> suggestTaskCleanStatuses(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(TASK_CLEAN_STATUS_SUGGESTIONS, builder);
+    }
+
+    /**
+     * 为任务触发器类型参数提供候选项。
+     */
+    private static CompletableFuture<Suggestions> suggestTaskTriggerTypes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(TASK_TRIGGER_TYPE_SUGGESTIONS, builder);
     }
 
     private static CompletableFuture<Suggestions> suggestProjectScopes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
