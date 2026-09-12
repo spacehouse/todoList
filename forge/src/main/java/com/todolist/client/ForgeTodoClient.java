@@ -147,6 +147,8 @@ public final class ForgeTodoClient {
         pendingRemoteResync = false;
         pendingLocalWorldInitialization = false;
         lastLocalPublishedState = null;
+        // 进度目录属于当前服务器/存档，断开时立即丢弃，避免带入下一次连接
+        AdvancementCatalog.clear();
         TodoListCommon.closeStorageContext();
         applyStorageNamespace(DataPathProvider.LOCAL_STORAGE_NAMESPACE);
     }

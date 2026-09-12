@@ -2,12 +2,14 @@ package com.todolist.network;
 
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
+import com.todolist.client.AdvancementCatalog;
 import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.task.TaskTrigger;
 import com.todolist.trigger.TaskTriggerService;
+import net.minecraft.advancements.Advancement;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -46,6 +48,8 @@ public class TaskPackets {
     public static final ResourceLocation TRIGGER_COMPLETED_ID = new ResourceLocation(TodoConstants.MOD_ID, "trigger_completed");
     /** 服务端→客户端：触发器进度轻量推送（仅变化任务 ID/进度/完成态，避免全量快照的网络与落库开销）。 */
     public static final ResourceLocation TRIGGER_PROGRESS_ID = new ResourceLocation(TodoConstants.MOD_ID, "trigger_progress");
+    /** 服务端→客户端：服务端权威进度目录（供「选择进度」列出全部进度，而非仅玩家可见进度）。 */
+    public static final ResourceLocation ADVANCEMENT_CATALOG_ID = new ResourceLocation(TodoConstants.MOD_ID, "advancement_catalog");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
 
     /** 服务端分块累积器，用于接收客户端发来的分块团队任务包。 */
@@ -115,7 +119,81 @@ public class TaskPackets {
         server.execute(() -> {
             syncTasksToPlayer(player);
             syncTeamTasksToPlayer(player);
+            sendAdvancementCatalog(player);
         });
+    }
+
+    /**
+     * 向玩家下发服务端权威进度目录。
+     * 客户端自带的进度列表只含「已解锁 / 可见」进度，无法用于选择任意进度作为触发目标，
+     * 因此这里把服务端全部带展示信息的进度（ID + 展示名）一次性下发，由客户端缓存。
+     *
+     * @param player 目标玩家
+     */
+    public static void sendAdvancementCatalog(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        MinecraftServer server = player.getServer();
+        if (server == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeAdvancementCatalog(buf, collectAdvancementCatalog(server));
+        serverPacketSender.send(player, ADVANCEMENT_CATALOG_ID, buf);
+    }
+
+    /**
+     * 汇总服务端全部带展示信息的进度。
+     * 无展示信息的进度（配方解锁等）不作为可选目标，直接跳过。
+     *
+     * @param server 当前服务端
+     * @return 进度目录条目
+     */
+    private static List<AdvancementCatalog.Entry> collectAdvancementCatalog(MinecraftServer server) {
+        List<AdvancementCatalog.Entry> entries = new ArrayList<>();
+        if (server.getAdvancements() == null) {
+            return entries;
+        }
+        for (Advancement advancement : server.getAdvancements().getAllAdvancements()) {
+            if (advancement == null || advancement.getDisplay() == null) {
+                continue;
+            }
+            entries.add(new AdvancementCatalog.Entry(
+                    advancement.getId().toString(),
+                    advancement.getDisplay().getTitle().getString()));
+        }
+        return entries;
+    }
+
+    /**
+     * 写出进度目录。
+     *
+     * @param buf     目标缓冲
+     * @param entries 进度目录条目
+     */
+    public static void writeAdvancementCatalog(FriendlyByteBuf buf, List<AdvancementCatalog.Entry> entries) {
+        List<AdvancementCatalog.Entry> valid = entries == null ? List.of() : entries;
+        buf.writeVarInt(valid.size());
+        for (AdvancementCatalog.Entry entry : valid) {
+            buf.writeUtf(entry.id());
+            buf.writeUtf(entry.title());
+        }
+    }
+
+    /**
+     * 读取进度目录。
+     *
+     * @param buf 来源缓冲
+     * @return 进度目录条目
+     */
+    public static List<AdvancementCatalog.Entry> readAdvancementCatalog(FriendlyByteBuf buf) {
+        int size = buf.readVarInt();
+        List<AdvancementCatalog.Entry> entries = new ArrayList<>(Math.max(0, size));
+        for (int i = 0; i < size; i++) {
+            entries.add(new AdvancementCatalog.Entry(buf.readUtf(), buf.readUtf()));
+        }
+        return entries;
     }
 
     /**

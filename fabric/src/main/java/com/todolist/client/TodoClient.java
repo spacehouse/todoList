@@ -175,6 +175,8 @@ public class TodoClient implements ClientModInitializer {
             TodoListMod.LOGGER.info("Joined server, requesting task sync...");
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            // 进度目录属于当前服务器/存档，断开时立即丢弃，避免带入下一次连接
+            AdvancementCatalog.clear();
             boolean wasRemote = lastConnectionWasRemote;
             lastConnectionWasRemote = false;
             lastLocalPublishedState = null;
