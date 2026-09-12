@@ -774,13 +774,26 @@ public final class TaskTriggerService {
 
         /**
          * 重建触发器倒排索引（仅收录未完成的有效触发任务）。
+         * 父任务（存在直属子任务的顶层任务）不收录：其完成态由子任务聚合决定，
+         * 事件驱动完成没有意义，GUI/命令层也会禁止为其设置触发器。
          */
         private void rebuildIndex() {
             triggerIndex.clear();
+            Set<String> parentTaskIds = new HashSet<>();
             for (Task task : tasks) {
-                if (task.hasTrigger() && !task.isCompleted()) {
-                    triggerIndex.computeIfAbsent(indexKey(task.getTrigger()), ignored -> new ArrayList<>()).add(task);
+                String parentTaskId = task.getParentTaskId();
+                if (parentTaskId != null && !parentTaskId.isEmpty()) {
+                    parentTaskIds.add(parentTaskId);
                 }
+            }
+            for (Task task : tasks) {
+                if (!task.hasTrigger() || task.isCompleted()) {
+                    continue;
+                }
+                if (task.getId() != null && parentTaskIds.contains(task.getId())) {
+                    continue;
+                }
+                triggerIndex.computeIfAbsent(indexKey(task.getTrigger()), ignored -> new ArrayList<>()).add(task);
             }
         }
 

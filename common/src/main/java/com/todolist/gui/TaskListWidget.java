@@ -515,10 +515,13 @@ public class TaskListWidget implements Renderable {
         int textLeft = checkboxX + TASK_CHECKBOX_SIZE + TASK_CONTENT_GAP;
         int rightLimit = scrollBar.getBarX() - TASK_ROW_HORIZONTAL_PADDING;
         String trailingMeta = buildTaskTrailingMetaText(task);
+        String trailingIconId = resolveTrailingTriggerIconId(task);
+        int trailingIconWidth = trailingIconId == null ? 0 : TASK_TITLE_ICON_SIZE + TASK_TITLE_ICON_GAP;
         int trailingMetaWidth = trailingMeta.isEmpty()
                 ? 0
                 : clampInt(textRenderer.width(trailingMeta), TASK_TRAILING_META_MIN_WIDTH, TASK_TRAILING_META_MAX_WIDTH);
-        int contentRight = trailingMetaWidth > 0 ? rightLimit - trailingMetaWidth - TASK_META_GAP : rightLimit;
+        int trailingTotalWidth = trailingMeta.isEmpty() ? 0 : trailingMetaWidth + trailingIconWidth;
+        int contentRight = trailingTotalWidth > 0 ? rightLimit - trailingTotalWidth - TASK_META_GAP : rightLimit;
 
         String leadingMeta = buildTaskLeadingMetaText(task);
         int availableContentWidth = Math.max(TASK_TITLE_MIN_WIDTH, contentRight - textLeft);
@@ -545,10 +548,18 @@ public class TaskListWidget implements Renderable {
         drawTitleParts(context, textRenderer, titleParts, titleX, taskY, rowHeight, textColor);
 
         if (!trailingMeta.isEmpty()) {
-            int trailingTextWidth = Math.min(trailingMetaWidth, Math.max(0, rightLimit - titleX));
+            int trailingRoom = Math.max(0, rightLimit - titleX - trailingIconWidth);
+            int trailingTextWidth = Math.min(trailingMetaWidth, trailingRoom);
             String truncatedTrailingMeta = trimWithEllipsis(textRenderer, trailingMeta, trailingTextWidth);
-            int trailingX = rightLimit - textRenderer.width(truncatedTrailingMeta);
-            context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingX, textBaselineY, TASK_META_TEXT_COLOR, false);
+            int trailingTextX = rightLimit - textRenderer.width(truncatedTrailingMeta);
+            if (trailingIconId != null) {
+                int iconX = trailingTextX - TASK_TITLE_ICON_GAP - TASK_TITLE_ICON_SIZE;
+                if (iconX >= titleX) {
+                    int iconY = taskY + (rowHeight - TASK_TITLE_ICON_SIZE) / 2;
+                    drawMiniItemIcon(context, trailingIconId, iconX, iconY, TASK_TITLE_ICON_SIZE);
+                }
+            }
+            context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingTextX, textBaselineY, TASK_META_TEXT_COLOR, false);
         }
     }
 
@@ -666,18 +677,60 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
-     * 构建任务标题右侧显示的负责人文本。
+     * 构建任务标题右侧显示的元信息文本。
+     *
+     * 优先级：父任务的子任务进度 → 触发器进度（可与负责人并存）→ 负责人。
+     * 触发器进度与负责人并存时形如「@名字 12/64」，便于在列表中直接区分哪些任务
+     * 挂有触发器、以及事件驱动任务的当前进度。
      *
      * @param task 目标任务
-     * @return 负责人文本；无人负责时返回空字符串
+     * @return 右侧元信息文本；无内容时返回空字符串
      */
     private String buildTaskTrailingMetaText(Task task) {
-        String progress = buildSubtaskProgressText(task);
-        if (!progress.isEmpty()) {
-            return progress;
+        if (task == null) {
+            return "";
         }
+        String parentProgress = buildSubtaskProgressText(task);
+        if (!parentProgress.isEmpty()) {
+            return parentProgress;
+        }
+        String triggerProgress = buildTriggerProgressText(task);
         String assigneeName = resolveAssigneeName(task);
-        return assigneeName.isEmpty() ? "" : "@" + assigneeName;
+        String assignee = assigneeName.isEmpty() ? "" : "@" + assigneeName;
+        if (triggerProgress.isEmpty()) {
+            return assignee;
+        }
+        return assignee.isEmpty() ? triggerProgress : assignee + " " + triggerProgress;
+    }
+
+    /**
+     * 构建任务右侧的触发器进度文本。
+     *
+     * @param task 目标任务
+     * @return 形如 "12/64" 的进度文本；无触发器时返回空字符串
+     */
+    private String buildTriggerProgressText(Task task) {
+        if (task == null || !task.hasTrigger()) {
+            return "";
+        }
+        return task.getTrigger().getProgress() + "/" + task.getTrigger().getTargetCount();
+    }
+
+    /**
+     * 解析任务右侧触发器进度前应展示的目标图标。
+     * 仅当该行确实展示触发器进度（非父任务、已挂触发器）时返回，目标无法解析时返回 null。
+     *
+     * @param task 目标任务
+     * @return 物品资源 ID；不展示图标时返回 null
+     */
+    private String resolveTrailingTriggerIconId(Task task) {
+        if (task == null || !task.hasTrigger()) {
+            return null;
+        }
+        if (!buildSubtaskProgressText(task).isEmpty()) {
+            return null;
+        }
+        return com.todolist.client.TriggerTargetSupport.resolveIconId(task.getTrigger());
     }
 
     /**
@@ -1609,6 +1662,17 @@ public class TaskListWidget implements Renderable {
     String getTaskTrailingMetaTextForTest(String taskId) {
         Task task = findTaskById(taskId);
         return buildTaskTrailingMetaText(task);
+    }
+
+    /**
+     * 返回指定任务右侧触发器进度前应展示的目标图标 ID，供测试断言触发器可视化语义。
+     *
+     * @param taskId 任务 ID
+     * @return 物品资源 ID；不展示图标时返回 null
+     */
+    String getTaskTrailingTriggerIconIdForTest(String taskId) {
+        Task task = findTaskById(taskId);
+        return resolveTrailingTriggerIconId(task);
     }
 
     /**
