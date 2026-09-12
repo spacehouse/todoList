@@ -20,6 +20,12 @@ val enableModMenu = (findProperty("enable_modmenu") as String?)?.toBoolean()
 val effectiveModMenu = enableModMenu
 val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
+loom {
+    mixin {
+        defaultRefmapName.set("todolist.mixins.refmap.json")
+    }
+}
+
 base {
     archivesName.set("$archives_name-fabric-$minecraftVersion")
 }
@@ -114,4 +120,25 @@ tasks.jar {
     from(zipTree(h2Jar)) {
         exclude("META-INF/MANIFEST.MF")
     }
+}
+
+val fabricSourceSets = the<SourceSetContainer>()
+val fabricMainSourceSet = fabricSourceSets["main"]
+val fabricTestSourceSet = fabricSourceSets["test"]
+
+tasks.register<JavaExec>("mixinVisibilityTest") {
+    group = "verification"
+    description = "Run the offline Mixin visibility self-tests guarding against InvalidMixinException regressions."
+    classpath = files(
+        fabricMainSourceSet.output,
+        fabricTestSourceSet.output,
+        fabricMainSourceSet.compileClasspath,
+        fabricTestSourceSet.compileClasspath
+    )
+    mainClass.set("com.todolist.mixin.test.MixinVisibilityTestMain")
+    dependsOn(fabricTestSourceSet.classesTaskName)
+}
+
+tasks.named("check") {
+    dependsOn("mixinVisibilityTest")
 }

@@ -27,6 +27,10 @@ public class TaskListWidget implements Renderable {
     private static final int TASK_ROW_VERTICAL_PADDING = 5;
     private static final int TASK_PRIORITY_BAR_WIDTH = 4;
     private static final int TASK_CHECKBOX_SIZE = 12;
+    /** 任务行内物品图标尺寸（像素）。 */
+    private static final int TASK_TITLE_ICON_SIZE = 9;
+    /** 图标与相邻文本的像素间距。 */
+    private static final int TASK_TITLE_ICON_GAP = 1;
     private static final int TASK_CONTENT_GAP = 6;
     private static final int TASK_META_GAP = 6;
     private static final int TASK_DISCLOSURE_WIDTH = 10;
@@ -213,6 +217,18 @@ public class TaskListWidget implements Renderable {
             this.task = task;
             this.taskExpandable = taskExpandable;
             this.taskExpanded = taskExpanded;
+        }
+    }
+
+    /** 任务行在屏幕坐标系中的矩形区域。 */
+    public record RowBounds(int left, int top, int right, int bottom) {
+        /**
+         * 返回行高。
+         *
+         * @return 行高（像素）
+         */
+        public int height() {
+            return bottom - top;
         }
     }
 
@@ -521,8 +537,12 @@ public class TaskListWidget implements Renderable {
 
         int titleX = textLeft + (leadingMetaWidth > 0 ? leadingMetaWidth + TASK_META_GAP : 0);
         int maxTitleWidth = Math.max(TASK_TITLE_MIN_WIDTH, contentRight - titleX);
-        String truncatedTitle = trimWithEllipsis(textRenderer, title, maxTitleWidth);
-        context.drawString(textRenderer, Component.nullToEmpty(truncatedTitle), titleX, textBaselineY, textColor, false);
+        List<com.todolist.client.ItemTitleRenderer.Part> titleParts = com.todolist.client.ItemTitleRenderer.truncate(
+                com.todolist.client.ItemTitleRenderer.buildParts(title, textRenderer, TASK_TITLE_ICON_SIZE, false, false),
+                maxTitleWidth,
+                textRenderer
+        );
+        drawTitleParts(context, textRenderer, titleParts, titleX, taskY, rowHeight, textColor);
 
         if (!trailingMeta.isEmpty()) {
             int trailingTextWidth = Math.min(trailingMetaWidth, Math.max(0, rightLimit - titleX));
@@ -530,6 +550,59 @@ public class TaskListWidget implements Renderable {
             int trailingX = rightLimit - textRenderer.width(truncatedTrailingMeta);
             context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingX, textBaselineY, TASK_META_TEXT_COLOR, false);
         }
+    }
+
+    /**
+     * 按分段绘制任务标题：文本段直接绘制，物品段先画图标再画名称。
+     *
+     * @param context   绘制上下文
+     * @param titleParts 标题分段序列
+     * @param startX    起始 x
+     * @param rowTop    行顶部 y
+     * @param rowHeight 行高
+     * @param textColor 文本颜色
+     */
+    private void drawTitleParts(net.minecraft.client.gui.GuiGraphics context, Font textRenderer,
+                                List<com.todolist.client.ItemTitleRenderer.Part> titleParts,
+                                int startX, int rowTop, int rowHeight, int textColor) {
+        int partX = startX;
+        int textBaselineY = rowTop + (rowHeight - textRenderer.lineHeight) / 2;
+        for (com.todolist.client.ItemTitleRenderer.Part part : titleParts) {
+            if (part.isItem()) {
+                int iconY = rowTop + (rowHeight - part.getIconSize()) / 2;
+                drawMiniItemIcon(context, part.getItemId(), partX, iconY, part.getIconSize());
+                partX += part.getIconSize();
+                if (part.getText() != null) {
+                    context.drawString(textRenderer, part.getText(), partX + TASK_TITLE_ICON_GAP, textBaselineY, textColor, false);
+                    partX += TASK_TITLE_ICON_GAP + textRenderer.width(part.getText());
+                }
+            } else if (part.getText() != null) {
+                context.drawString(textRenderer, part.getText(), partX, textBaselineY, textColor, false);
+                partX += part.getAdvance();
+            }
+        }
+    }
+
+    /**
+     * 绘制缩放物品图标：按目标尺寸等比缩放 16px 原生物品渲染。
+     *
+     * @param context 绘制上下文
+     * @param itemId  物品资源 ID，无法解析时跳过绘制
+     * @param x       图标左上角 x
+     * @param y       图标左上角 y
+     * @param size    目标尺寸（像素）
+     */
+    private void drawMiniItemIcon(net.minecraft.client.gui.GuiGraphics context, String itemId, int x, int y, int size) {
+        net.minecraft.world.item.ItemStack stack = com.todolist.client.ItemTitleRenderer.resolveItemStack(itemId);
+        if (stack == null) {
+            return;
+        }
+        float scale = size / 16.0f;
+        context.pose().pushPose();
+        context.pose().translate(x, y, 0);
+        context.pose().scale(scale, scale, 1.0f);
+        context.renderItem(stack, 0, 0);
+        context.pose().popPose();
     }
 
     private int getTaskBackgroundColor(int taskIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
@@ -922,6 +995,32 @@ public class TaskListWidget implements Renderable {
             }
         }
         return -1;
+    }
+
+    /**
+     * 返回指定任务所在行在屏幕坐标系中的矩形区域，供行内标题编辑定位。
+     *
+     * @param taskId 任务 ID
+     * @return 行区域；任务当前不在可见行中时返回 null
+     */
+    public RowBounds getTaskRowBounds(String taskId) {
+        if (taskId == null || displayRows == null || displayRows.isEmpty()) {
+            return null;
+        }
+        int startIndex = scrollBar.getValue();
+        int endIndex = getVisibleBottomIndex(startIndex);
+        for (int index = startIndex; index <= endIndex && index < displayRows.size(); index++) {
+            DisplayRow row = displayRows.get(index);
+            if (row.rowType != RowType.TASK && row.rowType != RowType.SUBTASK) {
+                continue;
+            }
+            if (row.task == null || row.task.getId() == null || !taskId.equals(row.task.getId())) {
+                continue;
+            }
+            int top = getRowTopForVisibleIndex(index);
+            return new RowBounds(x, top, x + width, top + getRowHeight(index));
+        }
+        return null;
     }
 
     /**

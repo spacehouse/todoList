@@ -128,6 +128,7 @@ public final class ForgeTodoClient {
         }
         float partialTick = deltaTracker != null ? deltaTracker.getGameTimeDeltaPartialTick(true) : 0.0f;
         hudRenderer.render(guiGraphics, partialTick);
+        TodoToastRenderer.render(guiGraphics, Minecraft.getInstance().font, guiGraphics.guiWidth());
     }
 
     /**

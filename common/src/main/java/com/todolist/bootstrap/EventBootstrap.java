@@ -34,6 +34,7 @@ public final class EventBootstrap {
         if (onStopped != null) {
             onStopped.accept(server);
         }
+        com.todolist.trigger.TaskTriggerService.flushAll(server);
         TodoListCommon.closeStorageContext();
     }
 }
