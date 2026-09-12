@@ -64,12 +64,18 @@ public class ForgeGameEventBridge {
     }
 
     /**
-     * 转发进度获得事件，推进 ADVANCEMENT 触发器。
+     * 转发进度达成事件，推进 ADVANCEMENT 触发器。
      *
-     * @param event 进度获得事件
+     * 这里必须只监听 {@link AdvancementEvent.AdvancementEarnEvent} 子类，不能监听基类
+     * {@link AdvancementEvent}：Forge 在 {@code PlayerAdvancements#award} 中会先为本次条件
+     * 投递 {@code AdvancementProgressEvent}（criteria 递增），再在进度真正完成时投递
+     * {@code AdvancementEarnEvent}。监听基类会同时收到两者，导致同一条进度推进两次、
+     * 播放两个完成提示（见 docs/feat-trigger-completion.md 回归 R20）。
+     *
+     * @param event 进度达成事件
      */
     @SubscribeEvent
-    public void onAdvancement(AdvancementEvent event) {
+    public void onAdvancement(AdvancementEvent.AdvancementEarnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             String advancementId = event.getAdvancement().getId().toString();
             TaskTriggerService.handleAdvancementAwarded(player, advancementId);
