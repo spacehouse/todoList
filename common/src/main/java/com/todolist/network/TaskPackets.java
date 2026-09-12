@@ -329,8 +329,11 @@ public class TaskPackets {
             List<Task> submittedTasks = baseTasks == null ? tasks : mergeTeamTasks(currentTasks, baseTasks, tasks);
             List<Task> tasksToSave = mergeTeamTasksWithPermission(player, currentTasks, submittedTasks);
             H2MaintenanceGuard.ensureWritableIfH2();
-            List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storage.loadTeamTasks(), baseTasks, tasks);
+            List<Task> storedTasks = storage.loadTeamTasks();
+            List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storedTasks, baseTasks, tasks);
             TaskTriggerService.mergeTeamTriggerStateInto(tasksToSave);
+            // 领取人变更的团队任务清零进度（必须在合并引擎进度之后，否则重置会被覆盖）
+            TaskTriggerService.resetTriggerProgressOnAssigneeChange(storedTasks, tasksToSave);
             storage.saveTeamTasks(tasksToSave);
             TaskTriggerService.invalidateTeam();
             if (containsPendingItemCollectTrigger(tasksToSave)) {
