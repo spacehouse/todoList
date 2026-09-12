@@ -169,6 +169,21 @@ public class TaskStorage {
     }
 
     /**
+     * 增量更新任务的触发器进度与完成态（只 UPDATE 触发器相关列，不做全量替换）。
+     * 供触发器引擎落库使用，避免覆盖其他保存路径刚写入的任务。
+     * NBT 文件存储模式已废弃，非 H2 模式下为空操作。
+     *
+     * @param tasks 引擎推进过进度的任务集合
+     * @throws IOException 更新失败时抛出
+     */
+    public void updateTriggerStates(java.util.Collection<Task> tasks) throws IOException {
+        if (!StorageBackendFactory.isH2Selected()) {
+            return;
+        }
+        h2TaskStore.updateTriggerStates(tasks);
+    }
+
+    /**
      * 将任务列表写入指定文件。
      *
      * @param tasks 待保存的任务列表

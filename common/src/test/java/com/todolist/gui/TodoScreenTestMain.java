@@ -11,6 +11,7 @@ import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.task.Task;
+import com.todolist.task.TaskTrigger;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -171,6 +172,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldShowNotificationWhenAddingWithoutProject", TodoScreenTestMain::shouldShowNotificationWhenAddingWithoutProject);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldOpenContextMenuAndApplyPriorityAction", TodoScreenTestMain::shouldOpenContextMenuAndApplyPriorityAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCreateSubtaskFromParentContextMenuAction", TodoScreenTestMain::shouldCreateSubtaskFromParentContextMenuAction);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClearTriggerFromContextMenu", TodoScreenTestMain::shouldClearTriggerFromContextMenu);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSearchAndAssignPlayerFromAssignScreen", TodoScreenTestMain::shouldSearchAndAssignPlayerFromAssignScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldListOfflineProjectMembersInAssignScreen", TodoScreenTestMain::shouldListOfflineProjectMembersInAssignScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldClampAssignDialogScrollOffsetWhenMembersOverflow", TodoScreenTestMain::shouldClampAssignDialogScrollOffsetWhenMembersOverflow);
@@ -3126,7 +3128,7 @@ public final class TodoScreenTestMain {
         access(screen).selectTaskForTest(task);
         access(screen).openTaskContextMenuForTest(task);
         GuiTestSupport.assertTrue(access(screen).hasContextMenuForTest(), "打开上下文菜单后应处于菜单打开状态");
-        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含优先级、添加子任务和删除操作");
+        GuiTestSupport.assertEquals(6, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含优先级、触发器、添加子任务和删除操作");
 
         access(screen).clickContextMenuItemForTest(0);
 
@@ -3152,15 +3154,44 @@ public final class TodoScreenTestMain {
 
         access(screen).selectTaskForTest(parent);
         access(screen).openTaskContextMenuForTest(parent);
-        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含添加子任务入口");
+        GuiTestSupport.assertEquals(6, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含添加子任务入口");
 
-        access(screen).clickContextMenuItemForTest(3);
+        access(screen).clickContextMenuItemForTest(4);
 
         Task selected = access(screen).getSelectedTaskForTest();
         GuiTestSupport.assertTrue(selected != null && selected.isSubtask(), "通过上下文菜单添加后应选中新建子任务");
         GuiTestSupport.assertEquals(parent.getId(), selected.getParentTaskId(), "右键新增的子任务应挂到当前父任务下");
         GuiTestSupport.assertTrue(access(screen).isDetailTitleEditableForTest(), "通过上下文菜单创建子任务后应进入标题编辑");
         GuiTestSupport.assertFalse(access(screen).hasContextMenuForTest(), "执行上下文菜单操作后应关闭菜单");
+    }
+
+    /**
+     * 验证带触发器的任务可从右键菜单直接清除触发器并保存。
+     */
+    private static void shouldClearTriggerFromContextMenu() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Trigger Task");
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        task.setTrigger(new TaskTrigger(TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 32));
+
+        access(screen).selectTaskForTest(task);
+        access(screen).openTaskContextMenuForTest(task);
+        GuiTestSupport.assertEquals(7, access(screen).getContextMenuItemTextsForTest().size(),
+                "带触发器任务的右键菜单应包含触发器编辑与清除入口");
+
+        access(screen).clickContextMenuItemForTest(4);
+
+        GuiTestSupport.assertFalse(task.hasTrigger(), "点击清除触发器后任务不应再保留触发器");
+        GuiTestSupport.assertTrue(access(screen).hasUnsavedChangesForTest(), "清除触发器后应标记未保存状态");
+        waitForTaskSaveToFinish(screen);
+        GuiTestSupport.assertTrue(ops.getReplaceAllTaskCalls().size() + ops.getUpdateTaskCalls().size() >= 1,
+                "清除触发器后应向桥接层提交保存请求");
     }
 
     /**

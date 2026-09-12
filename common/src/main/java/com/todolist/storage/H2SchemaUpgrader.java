@@ -173,7 +173,8 @@ public final class H2SchemaUpgrader {
     private static List<SchemaUpgradeStep> defaultUpgradeSteps() {
         return List.of(
                 new NoopUpgradeStep(0, 1),
-                new TaskSubtaskColumnsUpgradeStep(1, 2)
+                new TaskSubtaskColumnsUpgradeStep(1, 2),
+                new TaskTriggerColumnsUpgradeStep(2, 3)
         );
     }
 
@@ -238,6 +239,27 @@ public final class H2SchemaUpgrader {
                 statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_task_id VARCHAR(64)");
                 statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtask_sort_order BIGINT NOT NULL DEFAULT 0");
                 statement.execute("UPDATE tasks SET subtask_sort_order = 0 WHERE subtask_sort_order IS NULL");
+            }
+        }
+    }
+
+    /**
+     * 为 tasks 表补充事件触发器列，支持从 v2 升级到 v3。
+     */
+    private record TaskTriggerColumnsUpgradeStep(int fromVersion, int toVersion) implements SchemaUpgradeStep {
+        /**
+         * 执行 tasks 触发器列升级。
+         *
+         * @param connection H2 连接
+         * @throws SQLException SQL 执行失败时抛出
+         */
+        @Override
+        public void upgrade(Connection connection) throws SQLException {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(32)");
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger_target VARCHAR(256)");
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger_count INT NOT NULL DEFAULT 1");
+                statement.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS trigger_progress INT NOT NULL DEFAULT 0");
             }
         }
     }

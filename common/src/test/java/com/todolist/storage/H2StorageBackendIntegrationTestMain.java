@@ -38,6 +38,7 @@ public final class H2StorageBackendIntegrationTestMain {
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteTaskStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteTaskStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldPreserveSubtaskFieldsThroughH2", H2StorageBackendIntegrationTestMain::shouldPreserveSubtaskFieldsThroughH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldSerializeConcurrentPlayerTaskSavesWithTags", H2StorageBackendIntegrationTestMain::shouldSerializeConcurrentPlayerTaskSavesWithTags);
+        GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldUpdateTriggerStatesWithoutTouchingOtherRows", H2StorageBackendIntegrationTestMain::shouldUpdateTriggerStatesWithoutTouchingOtherRows);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectPlayerStateToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectPlayerStateToH2);
     }
@@ -179,6 +180,64 @@ public final class H2StorageBackendIntegrationTestMain {
             GuiTestSupport.assertFalse(loadedState.isHudVisible(), "H2 HUD 可见性应可读回");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 玩家项目状态门面时发生异常", exception);
+        } finally {
+            selectNbtBackendQuietly();
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证触发器进度的增量更新只改写指定行：
+     * 其他任务的触发器与完成态保持原样，且更新后追加保存的新任务不会被删除。
+     * （固化「引擎增量落库不覆盖其他保存路径新任务」的存储行为）
+     */
+    private static void shouldUpdateTriggerStatesWithoutTouchingOtherRows() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-trigger-update-");
+            selectH2Backend();
+            TaskStorage storage = new TaskStorage();
+
+            com.todolist.task.TaskTrigger advancedTrigger = new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 2);
+            Task advancedTask = createTask("trigger-task");
+            advancedTask.setId("trigger-task-id");
+            advancedTask.setTrigger(advancedTrigger);
+
+            com.todolist.task.TaskTrigger otherTrigger = new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.KILL_ENTITY, "minecraft:zombie", 5);
+            Task otherTask = createTask("other-task");
+            otherTask.setId("other-task-id");
+            otherTask.setTrigger(otherTrigger);
+
+            storage.saveTasks(List.of(advancedTask, otherTask));
+
+            // 模拟引擎推进：进度 2/2 达标并完成
+            advancedTrigger.addProgress(2);
+            advancedTask.setCompleted(true);
+            storage.updateTriggerStates(List.of(advancedTask));
+
+            List<Task> reloaded = storage.loadTasks();
+            GuiTestSupport.assertEquals(2, reloaded.size(), "增量更新不应改变任务总数");
+            Task reloadedAdvanced = reloaded.stream().filter(t -> "trigger-task-id".equals(t.getId())).findFirst().orElseThrow();
+            GuiTestSupport.assertTrue(reloadedAdvanced.isCompleted(), "增量更新应写入完成态");
+            GuiTestSupport.assertEquals(2, reloadedAdvanced.getTrigger().getProgress(), "增量更新应写入触发进度");
+            Task reloadedOther = reloaded.stream().filter(t -> "other-task-id".equals(t.getId())).findFirst().orElseThrow();
+            GuiTestSupport.assertFalse(reloadedOther.isCompleted(), "未更新的任务完成态应保持原样");
+            GuiTestSupport.assertEquals(0, reloadedOther.getTrigger().getProgress(), "未更新的任务进度应保持原样");
+
+            // 模拟其他保存路径追加新任务后再增量更新：新任务必须存活
+            Task newcomer = createTask("newcomer-task");
+            newcomer.setId("newcomer-task-id");
+            storage.saveTasks(List.of(advancedTask, otherTask, newcomer));
+            advancedTrigger.addProgress(0);
+            storage.updateTriggerStates(List.of(advancedTask));
+            List<Task> afterNewcomer = storage.loadTasks();
+            GuiTestSupport.assertEquals(3, afterNewcomer.size(), "增量更新不应删除其他保存路径写入的新任务");
+            GuiTestSupport.assertTrue(afterNewcomer.stream().anyMatch(t -> "newcomer-task-id".equals(t.getId())),
+                    "新任务在增量更新后应仍然存在");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 触发器增量更新时发生异常", exception);
         } finally {
             selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);

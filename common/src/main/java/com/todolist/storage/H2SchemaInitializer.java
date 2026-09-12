@@ -19,7 +19,7 @@ import java.util.Map;
  * H2SchemaInitializer 负责创建和升级 M1 schema v1 的表、索引与元数据。
  */
 public final class H2SchemaInitializer {
-    public static final String SCHEMA_VERSION = "2";
+    public static final String SCHEMA_VERSION = "3";
     private static final String COMMENT_KEY_PREFIX = "h2.schema.comment.";
     private static final String[][] TABLE_COMMENTS = {
             {"tasks"},
@@ -50,6 +50,10 @@ public final class H2SchemaInitializer {
             {"tasks", "assignee_name"},
             {"tasks", "sort_order"},
             {"tasks", "updated_at"},
+            {"tasks", "trigger_type"},
+            {"tasks", "trigger_target"},
+            {"tasks", "trigger_count"},
+            {"tasks", "trigger_progress"},
             {"task_tags", "bucket_type"},
             {"task_tags", "owner_uuid"},
             {"task_tags", "task_id"},
@@ -149,6 +153,10 @@ public final class H2SchemaInitializer {
                     assignee_name VARCHAR(256),
                     sort_order BIGINT NOT NULL,
                     updated_at BIGINT NOT NULL,
+                    trigger_type VARCHAR(32),
+                    trigger_target VARCHAR(256),
+                    trigger_count INT NOT NULL DEFAULT 1,
+                    trigger_progress INT NOT NULL DEFAULT 0,
                     PRIMARY KEY (bucket_type, owner_uuid, id)
                 )
                 """);

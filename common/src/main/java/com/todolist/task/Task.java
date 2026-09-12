@@ -37,6 +37,7 @@ public class Task {
     private String projectId; // New field for project association
     private String parentTaskId;
     private long subtaskSortOrder;
+    private TaskTrigger trigger; // 游戏内事件触发完成条件，可为空
 
     public Task(String title, String description) {
         this.id = UUID.randomUUID().toString();
@@ -55,6 +56,7 @@ public class Task {
         this.projectId = null;
         this.parentTaskId = null;
         this.subtaskSortOrder = 0L;
+        this.trigger = null;
     }
 
     /**
@@ -103,6 +105,9 @@ public class Task {
             nbt.putString(PARENT_TASK_ID_KEY, parentTaskId);
         }
         nbt.putLong(SUBTASK_SORT_ORDER_KEY, subtaskSortOrder);
+        if (trigger != null) {
+            nbt.put("trigger", trigger.toNbt());
+        }
 
         // 新格式不再持久化旧的递归 subtasks 结构，仅保留空列表兼容旧读取方。
         ListTag subtasksList = new ListTag();
@@ -176,6 +181,12 @@ public class Task {
         }
         if (nbt.contains(SUBTASK_SORT_ORDER_KEY)) {
             task.subtaskSortOrder = nbt.getLong(SUBTASK_SORT_ORDER_KEY);
+        }
+        if (nbt.contains("trigger", NBT_COMPOUND_TYPE)) {
+            task.trigger = TaskTrigger.fromNbt(nbt.getCompound("trigger"));
+            if (!task.trigger.isValid()) {
+                task.trigger = null;
+            }
         }
 
         // Subtasks
@@ -268,6 +279,27 @@ public class Task {
      * @param subtaskSortOrder 子任务排序号
      */
     public void setSubtaskSortOrder(long subtaskSortOrder) { this.subtaskSortOrder = subtaskSortOrder; }
+
+    /**
+     * 返回任务的事件触发条件。
+     *
+     * @return 触发器，未设置时返回 null
+     */
+    public TaskTrigger getTrigger() { return trigger; }
+
+    /**
+     * 设置任务的事件触发条件，null 表示清除触发器。
+     *
+     * @param trigger 触发器
+     */
+    public void setTrigger(TaskTrigger trigger) { this.trigger = trigger; }
+
+    /**
+     * 判断任务是否配置了有效的事件触发条件。
+     *
+     * @return 存在有效触发器时返回 true
+     */
+    public boolean hasTrigger() { return trigger != null && trigger.isValid(); }
 
     /**
      * 判断当前任务是否为子任务。

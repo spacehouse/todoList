@@ -85,6 +85,16 @@ public final class ForgeClientTaskPackets {
             boolean success = buf.readBoolean();
             client.execute(() -> TodoListForge.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId));
         });
+
+        ForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
+            String title = buf.readUtf();
+            client.execute(() -> TodoToastRenderer.show(title));
+        });
+
+        ForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
+            TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+            client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
+        });
     }
 
     /**

@@ -144,6 +144,30 @@ tasks.register<JavaExec>("h2TaskQueryServiceTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("titleMarkupParserTest") {
+    group = "verification"
+    description = "Run the title item markup parser self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.task.TitleMarkupParserTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("taskTriggerTest") {
+    group = "verification"
+    description = "Run the task trigger entity and NBT round-trip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.task.TaskTriggerTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("taskTriggerServiceTest") {
+    group = "verification"
+    description = "Run the five event-driven trigger engine semantics self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.trigger.TaskTriggerServiceTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -157,6 +181,9 @@ tasks.named("check").configure {
     dependsOn("h2CommandIntegrationTest")
     dependsOn("h2MaintenanceBackupTest")
     dependsOn("h2TaskQueryServiceTest")
+    dependsOn("titleMarkupParserTest")
+    dependsOn("taskTriggerTest")
+    dependsOn("taskTriggerServiceTest")
 }
 
 tasks.withType<Test>().configureEach {

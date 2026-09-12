@@ -93,6 +93,9 @@ public class TodoListMod implements ModInitializer {
         FabricTaskPacketRegistrar.register();
         FabricProjectPacketRegistrar.register();
 
+        // Register game event bridge for trigger engine
+        com.todolist.fabric.FabricGameEventBridge.register();
+
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register(CommandBootstrap::register);
 
         // Register server lifecycle events

@@ -76,6 +76,16 @@ public class ClientTaskPackets {
                 TodoListMod.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId);
             });
         });
+
+        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
+            String title = buf.readUtf();
+            client.execute(() -> TodoToastRenderer.show(title));
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
+            TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+            client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
+        });
     }
 
     /**

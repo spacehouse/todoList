@@ -257,6 +257,8 @@ public final class ForgeTodoClient {
                 return;
             }
             hudRenderer.render(postEvent.getGuiGraphics(), postEvent.getPartialTick());
+            TodoToastRenderer.render(postEvent.getGuiGraphics(), Minecraft.getInstance().font,
+                    postEvent.getGuiGraphics().guiWidth());
         }
     }
 

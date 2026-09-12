@@ -31,6 +31,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldBlockToggleWhenNonOpTeamAllViewEnabled", TaskListWidgetTestMain::shouldBlockToggleWhenNonOpTeamAllViewEnabled);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView", TaskListWidgetTestMain::shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskByCoordinates", TaskListWidgetTestMain::shouldReturnTaskByCoordinates);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskRowBoundsForInlineEditing", TaskListWidgetTestMain::shouldReturnTaskRowBoundsForInlineEditing);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderPriorityColorBlockInsteadOfPriorityText", TaskListWidgetTestMain::shouldRenderPriorityColorBlockInsteadOfPriorityText);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldPlaceTagsBeforeTaskTitle", TaskListWidgetTestMain::shouldPlaceTagsBeforeTaskTitle);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded", TaskListWidgetTestMain::shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded);
@@ -176,6 +177,25 @@ public final class TaskListWidgetTestMain {
         Task task = widget.getTaskAt(30, 30);
 
         GuiTestSupport.assertEquals(beta.getId(), task.getId(), "坐标命中应返回对应行的任务对象");
+    }
+
+    /**
+     * 校验按任务 ID 返回行区域，供双击任务行内联编辑定位。
+     */
+    private static void shouldReturnTaskRowBoundsForInlineEditing() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        Task alpha = createTask("task-alpha", "Alpha");
+        widget.setTasks(List.of(alpha));
+
+        TaskListWidget.RowBounds bounds = widget.getTaskRowBounds("task-alpha");
+
+        GuiTestSupport.assertNotNull(bounds, "可见任务应返回行区域");
+        GuiTestSupport.assertEquals(0, bounds.left(), "行区域左边界应与列表对齐");
+        GuiTestSupport.assertEquals(220, bounds.right(), "行区域右边界应与列表对齐");
+        GuiTestSupport.assertTrue(bounds.height() > 0, "行区域高度应为正");
+        GuiTestSupport.assertNull(widget.getTaskRowBounds("missing-task"), "不可见任务应返回空行区域");
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.todolist.storage;
 
 import com.todolist.task.Task;
+import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -66,6 +68,7 @@ public final class H2TaskStore {
      */
     public void saveLocalTasks(List<Task> tasks) throws IOException {
         saveBucket(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks);
+        TaskTriggerService.invalidateAllPersonal();
     }
 
     /**
@@ -88,6 +91,7 @@ public final class H2TaskStore {
      */
     public void savePlayerTasks(UUID playerUuid, List<Task> tasks) throws IOException {
         saveBucket(PLAYER_PERSONAL_BUCKET, ownerOf(playerUuid), tasks);
+        TaskTriggerService.invalidateAllPersonal();
     }
 
     /**
@@ -102,21 +106,25 @@ public final class H2TaskStore {
         String localLockKey = bucketLockKey(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER);
         String playerOwner = ownerOf(playerUuid);
         String playerLockKey = bucketLockKey(PLAYER_PERSONAL_BUCKET, playerOwner);
-        if (localLockKey.compareTo(playerLockKey) <= 0) {
-            withBucketLock(localLockKey, () -> withBucketLock(playerLockKey, () -> saveBucketsLocked(
+        try {
+            if (localLockKey.compareTo(playerLockKey) <= 0) {
+                withBucketLock(localLockKey, () -> withBucketLock(playerLockKey, () -> saveBucketsLocked(
+                        List.of(
+                                new BucketSaveRequest(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks),
+                                new BucketSaveRequest(PLAYER_PERSONAL_BUCKET, playerOwner, tasks)
+                        )
+                )));
+                return;
+            }
+            withBucketLock(playerLockKey, () -> withBucketLock(localLockKey, () -> saveBucketsLocked(
                     List.of(
                             new BucketSaveRequest(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks),
                             new BucketSaveRequest(PLAYER_PERSONAL_BUCKET, playerOwner, tasks)
                     )
             )));
-            return;
+        } finally {
+            TaskTriggerService.invalidateAllPersonal();
         }
-        withBucketLock(playerLockKey, () -> withBucketLock(localLockKey, () -> saveBucketsLocked(
-                List.of(
-                        new BucketSaveRequest(LOCAL_PERSONAL_BUCKET, LOCAL_OWNER, tasks),
-                        new BucketSaveRequest(PLAYER_PERSONAL_BUCKET, playerOwner, tasks)
-                )
-        )));
     }
 
     /**
@@ -137,6 +145,52 @@ public final class H2TaskStore {
      */
     public void saveTeamTasks(List<Task> tasks) throws IOException {
         saveBucket(TEAM_BUCKET, TEAM_OWNER, tasks);
+        TaskTriggerService.invalidateTeam();
+    }
+
+    /**
+     * 增量更新任务的触发器进度与完成态（按任务 ID 定位，天然覆盖本地/玩家双桶副本）。
+     * 供触发器引擎落库使用：只 UPDATE 引擎推进过的行，不做全量替换，
+     * 因此不会覆盖其他保存路径刚写入的新任务，也避免上千行的替换式写放大。
+     *
+     * @param tasks 引擎推进过进度的任务集合
+     * @throws IOException 更新失败时抛出
+     */
+    public void updateTriggerStates(java.util.Collection<Task> tasks) throws IOException {
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        H2MaintenanceLock.ensureWritable();
+        bootstrap.ensureReady();
+        try (Connection connection = connectionProvider.openConnection()) {
+            boolean oldAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    UPDATE tasks
+                    SET trigger_type = ?, trigger_target = ?, trigger_count = ?, trigger_progress = ?, completed = ?
+                    WHERE id = ?
+                    """)) {
+                for (Task task : tasks) {
+                    TaskTrigger trigger = task.getTrigger();
+                    setNullableString(statement, 1, trigger == null ? null : trigger.getType().name());
+                    setNullableString(statement, 2, trigger == null ? null : trigger.getTarget());
+                    statement.setInt(3, trigger == null ? 1 : trigger.getTargetCount());
+                    statement.setInt(4, trigger == null ? 0 : trigger.getProgress());
+                    statement.setBoolean(5, task.isCompleted());
+                    statement.setString(6, task.getId());
+                    statement.addBatch();
+                }
+                statement.executeBatch();
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(oldAutoCommit);
+            }
+        } catch (SQLException exception) {
+            throw markUnavailable(H2StorageAvailability.Reason.WRITE_FAILED, "Failed to update trigger states", exception);
+        }
     }
 
     /**
@@ -188,7 +242,8 @@ public final class H2TaskStore {
             java.util.Map<String, ListTag> tagsByTaskId = loadTagsByTaskId(connection, bucketType, ownerUuid);
             try (PreparedStatement statement = connection.prepareStatement("""
                      SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
-                            due_date, creator_uuid, assignee_uuid, assignee_name
+                            due_date, creator_uuid, assignee_uuid, assignee_name,
+                            trigger_type, trigger_target, trigger_count, trigger_progress
                      FROM tasks
                      WHERE bucket_type = ? AND owner_uuid = ?
                      ORDER BY sort_order, created_at, id
@@ -337,8 +392,9 @@ public final class H2TaskStore {
         try (PreparedStatement taskStatement = connection.prepareStatement("""
                 INSERT INTO tasks(bucket_type, owner_uuid, id, scope, project_id, title, description, completed, priority,
                                   created_at, due_date, creator_uuid, assignee_uuid, assignee_name, parent_task_id,
-                                  subtask_sort_order, sort_order, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  subtask_sort_order, sort_order, updated_at,
+                                  trigger_type, trigger_target, trigger_count, trigger_progress)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """);
              PreparedStatement tagStatement = connection.prepareStatement("""
                 MERGE INTO task_tags KEY(bucket_type, owner_uuid, task_id, tag)
@@ -443,6 +499,11 @@ public final class H2TaskStore {
         statement.setLong(16, task.getSubtaskSortOrder());
         statement.setLong(17, sortOrder);
         statement.setLong(18, updatedAt);
+        TaskTrigger trigger = task.getTrigger();
+        setNullableString(statement, 19, trigger == null ? null : trigger.getType().name());
+        setNullableString(statement, 20, trigger == null ? null : trigger.getTarget());
+        statement.setInt(21, trigger == null ? 1 : trigger.getTargetCount());
+        statement.setInt(22, trigger == null ? 0 : trigger.getProgress());
     }
 
     /**
@@ -474,6 +535,15 @@ public final class H2TaskStore {
         putOptionalString(taskTag, "creatorUuid", resultSet.getString("creator_uuid"));
         putOptionalString(taskTag, "assigneeUuid", resultSet.getString("assignee_uuid"));
         putOptionalString(taskTag, "assigneeName", resultSet.getString("assignee_name"));
+        String triggerType = resultSet.getString("trigger_type");
+        if (triggerType != null && !triggerType.isEmpty()) {
+            CompoundTag triggerTag = new CompoundTag();
+            triggerTag.putString("type", triggerType);
+            triggerTag.putString("target", resultSet.getString("trigger_target"));
+            triggerTag.putInt("targetCount", resultSet.getInt("trigger_count"));
+            triggerTag.putInt("progress", resultSet.getInt("trigger_progress"));
+            taskTag.put("trigger", triggerTag);
+        }
         taskTag.put("tags", tagsByTaskId.getOrDefault(resultSet.getString("id"), new ListTag()));
         taskTag.put("subtasks", new ListTag());
         return Task.fromNbt(taskTag);

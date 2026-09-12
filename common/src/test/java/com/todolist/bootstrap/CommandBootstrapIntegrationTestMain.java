@@ -14,6 +14,7 @@ import com.todolist.project.ProjectStorage;
 import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.storage.H2TcpServerManager;
 import com.todolist.task.Task;
+import com.todolist.task.TaskTrigger;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.DetectedVersion;
@@ -76,6 +77,7 @@ public final class CommandBootstrapIntegrationTestMain {
             runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenCompleting", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenCompleting);
             runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalTaskSuccessfully);
+            runCase("CommandBootstrapIntegrationTestMain.shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully", CommandBootstrapIntegrationTestMain::shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
             runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
@@ -255,6 +257,29 @@ public final class CommandBootstrapIntegrationTestMain {
         int result = dispatcher.execute("todo task remove " + task.getId(), createSource(0, player));
         assertEquals(1, result, "task remove 成功时应返回成功");
         assertNull(findPersonalTaskByTitleOrNull(player, "Remove by command"), "task remove 未删除个人任务");
+    }
+
+    /**
+     * 校验 task trigger set 能正确解析带命名空间的物品目标（如 minecraft:iron_ingot）。
+     */
+    private static void shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully() throws Exception {
+        resetState(ModConfig.CommandAccessMode.FULL);
+        TestServerPlayer player = createPlayer("00000000-0000-0000-0000-000000000238", "trigger-set-user", false);
+        Task task = createPersonalTask("Trigger target task", false, Task.Priority.MEDIUM, null);
+        savePersonalTasks(player, task);
+        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
+        CapturingCommandSourceStack source = createSource(0, player);
+
+        int result = dispatcher.execute(
+                "todo task trigger set " + task.getId() + " item_collect minecraft:iron_ingot 32",
+                source);
+        assertEquals(1, result, "带命名空间目标设置触发器应返回成功");
+        assertContainsMessageKey(source.getSuccessMessages(), "command.todolist.task.trigger.set.success", "触发器设置成功消息键不正确");
+        TaskTrigger trigger = findPersonalTaskByTitle(player, "Trigger target task").getTrigger();
+        assertNotNull(trigger, "触发器未写入任务");
+        assertEquals(TaskTrigger.Type.ITEM_COLLECT, trigger.getType(), "触发器类型解析不正确");
+        assertEquals("minecraft:iron_ingot", trigger.getTarget(), "命名空间目标应被完整解析");
+        assertEquals(32, trigger.getTargetCount(), "触发器目标数量解析不正确");
     }
 
     /**

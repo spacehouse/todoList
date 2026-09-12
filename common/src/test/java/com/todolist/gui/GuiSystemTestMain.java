@@ -2,6 +2,8 @@ package com.todolist.gui;
 
 import com.todolist.client.ClientTaskStorageHelperTestMain;
 import com.todolist.client.TodoHudRendererTestMain;
+import com.todolist.client.TodoToastRendererTestMain;
+import com.todolist.client.TriggerTargetSupportTestMain;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.task.TaskCompatibilityTestMain;
 import com.todolist.task.TaskManagerSubtaskTestMain;
@@ -39,5 +41,8 @@ public final class GuiSystemTestMain {
         GuiTestSupport.runTestGroup("ProjectSettingsScreenTestMain", () -> ProjectSettingsScreenTestMain.main(args));
         GuiTestSupport.runTestGroup("TodoScreenTestMain", () -> TodoScreenTestMain.main(args));
         GuiTestSupport.runTestGroup("TodoHudRendererTestMain", () -> TodoHudRendererTestMain.main(args));
+        GuiTestSupport.runTestGroup("TodoToastRendererTestMain", () -> TodoToastRendererTestMain.main(args));
+        GuiTestSupport.runTestGroup("TriggerTargetSupportTestMain", () -> TriggerTargetSupportTestMain.main(args));
+        GuiTestSupport.runTestGroup("TriggerEditScreenTestMain", () -> TriggerEditScreenTestMain.main(args));
     }
 }
