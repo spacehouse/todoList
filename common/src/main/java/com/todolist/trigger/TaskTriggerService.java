@@ -174,6 +174,72 @@ public final class TaskTriggerService {
     }
 
     /**
+     * 团队任务领取人发生变化时重置触发器进度：取消领取（清空领取人）后进度清零，
+     * 之后被重新领取或被指派的人需要从头完成。
+     *
+     * 同一任务 ID 的领取人「从无到有」「从有到无」「从一个成员改派给另一个成员」
+     * 都算变更；领取人未变化的任务保留原进度。只对拥有合法触发器的团队任务生效，
+     * 个人任务与无触发器任务不受影响。
+     *
+     * 必须在把引擎内存进度合并进待保存列表**之后**调用，否则重置会被合并结果覆盖。
+     *
+     * @param previous 变更前的任务列表（服务端已保存状态）
+     * @param incoming 即将保存的任务列表（就地重置）
+     */
+    public static void resetTriggerProgressOnAssigneeChange(List<Task> previous, List<Task> incoming) {
+        if (previous == null || previous.isEmpty() || incoming == null || incoming.isEmpty()) {
+            return;
+        }
+        Map<String, String> previousAssignees = new HashMap<>();
+        for (Task task : previous) {
+            if (task != null && task.getId() != null) {
+                previousAssignees.put(task.getId(), normalizeAssignee(task.getAssigneeUuid()));
+            }
+        }
+        for (Task task : incoming) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            String before = previousAssignees.get(task.getId());
+            if (before == null) {
+                continue;
+            }
+            resetTriggerProgressIfAssigneeChanged(before, task);
+        }
+    }
+
+    /**
+     * 单个团队任务领取人发生变化时清零触发器进度。
+     *
+     * 供 GUI 在变更领取人的当口就地调用：局域网主机（已发布局域网）下 GUI 保存会
+     * 直接写入本地 H2、不经过服务端保存包，不在变更点清零的话进度会延续给下一位
+     * 领取者。服务端保存入口另有一道防线（{@link #resetTriggerProgressOnAssigneeChange}）。
+     *
+     * @param previousAssignee 变更前的领取人 UUID（null/空串表示未领取）
+     * @param task             已写入新领取人的任务
+     */
+    public static void resetTriggerProgressIfAssigneeChanged(String previousAssignee, Task task) {
+        if (task == null || !task.hasTrigger() || task.getScope() != Task.Scope.TEAM) {
+            return;
+        }
+        if (normalizeAssignee(previousAssignee).equals(normalizeAssignee(task.getAssigneeUuid()))) {
+            return;
+        }
+        task.getTrigger().setProgress(0);
+        task.setCompleted(false);
+    }
+
+    /**
+     * 归一化领取人 UUID，把 null 与空串视为同一状态（未领取）。
+     *
+     * @param assigneeUuid 领取人 UUID
+     * @return 归一化后的字符串
+     */
+    private static String normalizeAssignee(String assigneeUuid) {
+        return assigneeUuid == null ? "" : assigneeUuid;
+    }
+
+    /**
      * 判定指定玩家的个人桶或团队桶是否存在未完成的 ITEM_COLLECT 触发任务，
      * 供平台层决定是否执行库存快照扫描。
      *
@@ -528,7 +594,12 @@ public final class TaskTriggerService {
     }
 
     /**
-     * 按 UUID 判断玩家是否可推进任务（个人桶恒真；团队桶要求为负责人或任务未指派）。
+     * 按 UUID 判断玩家是否可推进任务（个人桶恒真；团队桶要求任务已指派给该玩家）。
+     *
+     * 团队任务遵循「创建 → 领取/指派 → 完成」流程：未指派（待领取）的任务不参与
+     * 任何事件触发，否则待领取状态就失去意义（任何人顺手做一个动作就把共享进度推了）。
+     * 需要提前完成时由有权限的玩家在 GUI/命令中手动完成任务，与本判定无关。
+     *
      * 包级可见供同包离线测试直接构造团队/个人场景。
      *
      * @param playerUuid 玩家 UUID
@@ -540,7 +611,7 @@ public final class TaskTriggerService {
             return true;
         }
         String assignee = task.getAssigneeUuid();
-        return assignee == null || assignee.isEmpty() || assignee.equals(playerUuid);
+        return assignee != null && !assignee.isEmpty() && assignee.equals(playerUuid);
     }
 
     /**
