@@ -128,6 +128,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private boolean pendingInlineEditingRestore;
     /** 触发器优先创建流程暂存的触发器，待界面重建后据此创建任务。 */
     private TaskTrigger pendingTriggerTaskToCreate;
+    /** 触发器优先创建流程的目标父任务 ID：非空时创建为子任务（跟随触发时的选中任务）。 */
+    private String pendingTriggerParentTaskId;
     /** 上一次点击任务行的时间戳（毫秒），用于双击判定。 */
     private long lastTaskRowClickTime;
     /** 上一次点击的任务行 ID，用于双击判定。 */
@@ -1415,6 +1417,14 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             boolean quickAddTriggerVisible = TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name());
             quickAddTriggerButton.visible = quickAddTriggerVisible;
             quickAddTriggerButton.active = quickAddTriggerVisible;
+            // 选中可承载子任务的顶层任务时，按钮语义变为「为其新增子触发任务」，让层级意图在点击前可见
+            boolean asSubtask = quickAddTriggerVisible && resolveTriggerCreationParentTaskId() != null;
+            quickAddTriggerButton.setMessage(Component.translatable(asSubtask
+                    ? "gui.todolist.quick_add.trigger.subtask"
+                    : "gui.todolist.quick_add.trigger"));
+            quickAddTriggerButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(asSubtask
+                    ? "gui.todolist.quick_add.trigger.subtask.tooltip"
+                    : "gui.todolist.quick_add.trigger.tooltip")));
         }
         applyDetailWidgetEditability();
         if (claimButton != null) {
@@ -1921,6 +1931,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 descField,
                 tagField,
                 false,
+                quickAddItemButton,
+                quickAddTriggerButton,
                 detailCloseButton,
                 addSubtaskButton,
                 claimButton,
@@ -2130,16 +2142,40 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     /**
      * 打开触发器编辑界面，用「先设触发器、再自动建任务」的方式创建任务。
      * 触发器确认后暂存，等 TodoScreen 重新初始化（任务管理器就绪）时再建任务。
+     *
+     * 当前已选中可承载子任务的顶层任务时，新建的任务会成为该任务的子任务
+     * （无需先建子任务再双击进入编辑器），否则创建为顶层任务。
      */
     private void onCreateTaskFromTrigger() {
         if (minecraft == null || !canCreateTaskInCurrentView()) {
             return;
         }
+        String parentTaskId = resolveTriggerCreationParentTaskId();
         minecraft.setScreen(new TriggerEditScreen(this, null, trigger -> {
             if (trigger != null && trigger.isValid()) {
                 pendingTriggerTaskToCreate = trigger;
+                pendingTriggerParentTaskId = parentTaskId;
             }
         }));
+    }
+
+    /**
+     * 解析「触发优先创建」应挂在哪个父任务下：仅当当前选中项是可新增子任务的顶层任务时返回其 ID。
+     *
+     * @return 目标父任务 ID；不适用时返回 null（表示创建顶层任务）
+     */
+    private String resolveTriggerCreationParentTaskId() {
+        Task selected = selectedTask;
+        if (selected == null || !selected.isTopLevelTask()) {
+            return null;
+        }
+        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
+            return null;
+        }
+        if (!canAddSubtaskToParent(selected)) {
+            return null;
+        }
+        return selected.getId();
     }
 
     /**
@@ -2151,9 +2187,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         TaskTrigger trigger = pendingTriggerTaskToCreate;
+        String parentTaskId = pendingTriggerParentTaskId;
         pendingTriggerTaskToCreate = null;
-        Task task = taskManager.addTask(TriggerTargetSupport.buildDefaultTaskTitle(trigger).getString(), "");
-        applyNewTaskDefaults(task);
+        pendingTriggerParentTaskId = null;
+
+        Task parentTask = parentTaskId == null ? null : findTaskById(parentTaskId);
+        Task task;
+        if (parentTask != null && parentTask.isTopLevelTask()) {
+            task = taskManager.addTask("", "");
+            inheritFieldsFromParentForSubtask(task, parentTask);
+            // 父任务（已有子任务）由子任务聚合完成态，其触发器不再有意义，创建子任务时清除
+            clearParentTriggerWhenAddingSubtask(parentTask);
+        } else {
+            task = taskManager.addTask(TriggerTargetSupport.buildDefaultTaskTitle(trigger).getString(), "");
+            applyNewTaskDefaults(task);
+        }
+        task.setTitle(TriggerTargetSupport.buildDefaultTaskTitle(trigger).getString());
         task.setTrigger(trigger);
 
         selectedPriority = Task.Priority.MEDIUM;
@@ -2213,6 +2262,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         Task subtask = taskManager.addTask("", "");
+        inheritFieldsFromParentForSubtask(subtask, parentTask);
+        clearParentTriggerWhenAddingSubtask(parentTask);
+
+        markUnsaved();
+        applySearchFilter();
+        selectTask(subtask, false);
+        beginDetailTitleEditing();
+        closeTaskContextMenu();
+    }
+
+    /**
+     * 把父任务的作用域、优先级、项目与归属等字段复制到新建的空白子任务。
+     *
+     * @param subtask    新建子任务
+     * @param parentTask 父任务
+     */
+    private void inheritFieldsFromParentForSubtask(Task subtask, Task parentTask) {
         subtask.setPriority(parentTask.getPriority());
         subtask.setProjectId(parentTask.getProjectId());
         subtask.setScope(parentTask.getScope());
@@ -2221,12 +2287,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         subtask.setAssigneeName(parentTask.getAssigneeName());
         subtask.setParentTaskId(parentTask.getId());
         subtask.setSubtaskSortOrder(resolveNextSubtaskSortOrder(parentTask.getId()));
+    }
 
-        markUnsaved();
-        applySearchFilter();
-        selectTask(subtask, false);
-        beginDetailTitleEditing();
-        closeTaskContextMenu();
+    /**
+     * 父任务新增子任务时清除其触发器并提示。
+     *
+     * 父任务的完成态由直属子任务聚合决定，事件驱动完成没有意义；保留触发器会让玩家
+     * 误以为仍在生效，因此在它获得第一个子任务时就清除并告知。
+     *
+     * @param parentTask 父任务
+     */
+    private void clearParentTriggerWhenAddingSubtask(Task parentTask) {
+        if (parentTask == null || !parentTask.hasTrigger()) {
+            return;
+        }
+        parentTask.setTrigger(null);
+        addNotification(Component.translatable("message.todolist.trigger.parent_cleared",
+                parentTask.getTitle() == null ? "" : parentTask.getTitle()).getString());
     }
 
     private void selectTask(Task task) {
@@ -2965,7 +3042,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.high"), canEdit, () -> applyTaskPriority(task, Task.Priority.HIGH)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.medium"), canEdit, () -> applyTaskPriority(task, Task.Priority.MEDIUM)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.low"), canEdit, () -> applyTaskPriority(task, Task.Priority.LOW)));
-        if (canEdit) {
+        if (canEdit && !hasDirectSubtasks(task)) {
             items.add(new ContextMenuItem(
                     Component.translatable(task.hasTrigger()
                             ? "gui.todolist.trigger.edit"
@@ -3002,7 +3079,27 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (minecraft == null || task == null) {
             return;
         }
+        if (hasDirectSubtasks(task)) {
+            addNotification(Component.translatable("message.todolist.trigger.parent_not_allowed",
+                    task.getTitle() == null ? "" : task.getTitle()).getString());
+            return;
+        }
         minecraft.setScreen(new TriggerEditScreen(this, task.getTrigger(), trigger -> applyTriggerFromEditor(task, trigger)));
+    }
+
+    /**
+     * 判断任务当前是否存在直属子任务（即父任务）。
+     * 父任务完成态由子任务聚合决定，禁止为其设置事件触发器。
+     *
+     * @param task 目标任务
+     * @return 存在直属子任务时返回 true
+     */
+    private boolean hasDirectSubtasks(Task task) {
+        if (task == null || task.getId() == null) {
+            return false;
+        }
+        TaskManager manager = resolveManagerForTask(task);
+        return manager != null && manager.hasChildren(task.getId());
     }
 
     /**
@@ -3013,6 +3110,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private void applyTriggerFromEditor(Task task, TaskTrigger trigger) {
         if (task == null) {
+            return;
+        }
+        if (trigger != null && hasDirectSubtasks(task)) {
+            addNotification(Component.translatable("message.todolist.trigger.parent_not_allowed",
+                    task.getTitle() == null ? "" : task.getTitle()).getString());
             return;
         }
         task.setTrigger(trigger);

@@ -290,11 +290,12 @@ public class TaskManager {
 
     /**
      * 判断指定任务是否存在直属子任务。
+     * 供 GUI 与命令层判断"父任务"（完成态由子任务聚合），例如禁止为父任务设置触发器。
      *
      * @param taskId 任务 ID
      * @return 存在直属子任务时返回 true
      */
-    private boolean hasChildren(String taskId) {
+    public boolean hasChildren(String taskId) {
         if (taskId == null || taskId.isEmpty()) {
             return false;
         }

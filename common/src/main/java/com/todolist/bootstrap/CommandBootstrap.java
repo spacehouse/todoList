@@ -1554,6 +1554,26 @@ public final class CommandBootstrap {
     }
 
     /**
+     * 判断给定任务在列表中是否存在直属子任务（即父任务）。
+     * 父任务完成态由子任务聚合决定，禁止为其设置事件触发器。
+     *
+     * @param tasks 任务列表
+     * @param task  目标任务
+     * @return 存在直属子任务时返回 true
+     */
+    private static boolean hasDirectSubtasksInList(List<Task> tasks, Task task) {
+        if (tasks == null || task == null || task.getId() == null) {
+            return false;
+        }
+        for (Task candidate : tasks) {
+            if (candidate != null && task.getId().equals(candidate.getParentTaskId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 按命令执行所在服务端的运行模式保存个人任务，避免单人模式写入到错误的玩家文件。
      */
     private static void savePersonalTasksForCommand(MinecraftServer server, TaskStorage storage, UUID playerUuid, List<Task> tasks) throws IOException {
@@ -3106,6 +3126,9 @@ public final class CommandBootstrap {
             Task task = findTaskById(tasks, taskId);
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (hasDirectSubtasksInList(tasks, task)) {
+                return sendCommandFailure(source, "command.todolist.task.trigger.set.parent_not_allowed", task.getTitle());
             }
             task.setTrigger(new TaskTrigger(type, normalizedTarget, count));
             savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
