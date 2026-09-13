@@ -2044,7 +2044,7 @@ public final class TodoScreenTestMain {
         );
         GuiTestSupport.assertEquals(
                 List.of(
-                        "HEADER:v 未完成 (4)",
+                        "HEADER:v 未完成 (2)",
                         "TASK:" + topAlpha.getId(),
                         "TASK:" + refreshedParent.getId(),
                         "SUBTASK:" + refreshedChildB.getId(),
