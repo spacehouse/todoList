@@ -599,24 +599,9 @@ final class TodoScreenTaskSupport {
         return taskIds;
     }
 
-    static List<TaskListWidget.SectionModel> buildTaskPaneSections(List<Task> activeTasks,
-                                                                    List<Task> completedTasks,
-                                                                    boolean activeExpanded,
-                                                                    boolean completedExpanded) {
-        List<Task> safeActiveTasks = activeTasks == null ? List.of() : List.copyOf(activeTasks);
-        List<Task> safeCompletedTasks = completedTasks == null ? List.of() : List.copyOf(completedTasks);
-        return buildTaskPaneSections(
-                safeActiveTasks,
-                safeActiveTasks.size(),
-                safeCompletedTasks,
-                safeCompletedTasks.size(),
-                activeExpanded,
-                completedExpanded
-        );
-    }
-
     /**
      * 构建任务面板分组模型，并允许标题计数使用 SQL 总数而非已加载行数。
+     * 标题计数只统计顶层任务，子任务不参与统计。
      *
      * @param activeTasks 已加载的未完成任务
      * @param activeTotalCount 未完成任务总数
@@ -637,18 +622,37 @@ final class TodoScreenTaskSupport {
         return List.of(
                 new TaskListWidget.SectionModel(
                         "active",
-                        formatTaskSectionTitle("gui.todolist.active", Math.max(activeTotalCount, safeActiveTasks.size())),
+                        formatTaskSectionTitle("gui.todolist.active",
+                                Math.max(activeTotalCount, countTopLevelTasks(safeActiveTasks))),
                         safeActiveTasks,
                         true,
                         activeExpanded
                 ),
                 new TaskListWidget.SectionModel(
                         "completed",
-                        formatTaskSectionTitle("gui.todolist.completed", Math.max(completedTotalCount, safeCompletedTasks.size())),
+                        formatTaskSectionTitle("gui.todolist.completed",
+                                Math.max(completedTotalCount, countTopLevelTasks(safeCompletedTasks))),
                         safeCompletedTasks,
                         true,
                         completedExpanded
                 )
         );
+    }
+
+    /**
+     * 统计分组行列表中的顶层任务数量。
+     * 分组行列表会附带父任务的直属子任务，标题计数必须只统计顶层任务，避免子任务被计入统计。
+     *
+     * @param tasks 分组行列表
+     * @return 顶层任务数量
+     */
+    private static int countTopLevelTasks(List<Task> tasks) {
+        int count = 0;
+        for (Task task : tasks) {
+            if (task != null && task.isTopLevelTask()) {
+                count++;
+            }
+        }
+        return count;
     }
 }
