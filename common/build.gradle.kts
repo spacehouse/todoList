@@ -176,6 +176,38 @@ tasks.register<JavaExec>("advancementCatalogTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("materialRecipeTest") {
+    group = "verification"
+    description = "Run the material reverse-derivation recipe index and selector self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialRecipeTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialResolverTest") {
+    group = "verification"
+    description = "Run the material reverse-derivation resolver self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialResolverTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialTaskGeneratorTest") {
+    group = "verification"
+    description = "Run the material task generation self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialTaskGeneratorTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialPreviewStateTest") {
+    group = "verification"
+    description = "Run the material preview state self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialPreviewStateTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -193,6 +225,10 @@ tasks.named("check").configure {
     dependsOn("taskTriggerTest")
     dependsOn("taskTriggerServiceTest")
     dependsOn("advancementCatalogTest")
+    dependsOn("materialRecipeTest")
+    dependsOn("materialResolverTest")
+    dependsOn("materialTaskGeneratorTest")
+    dependsOn("materialPreviewStateTest")
 }
 
 tasks.withType<Test>().configureEach {

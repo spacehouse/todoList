@@ -1,13 +1,15 @@
 package com.todolist.task;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -74,13 +76,106 @@ public class TaskManager {
     }
 
     /**
-     * 按任务 ID 删除任务。
+     * 按任务 ID 删除任务，并级联删除其全部后代任务（子任务、孙任务…）。
+     *
+     * <p>层级不限，依赖任务被删除时必须连同其下游一起移除，
+     * 否则会留下 parentTaskId 悬空的孤儿任务。
      *
      * @param taskId 任务 ID
      */
     public void deleteTask(String taskId) {
-        tasks.remove(taskId);
+        if (taskId == null || taskId.isEmpty()) {
+            return;
+        }
+        Set<String> removedIds = collectDescendantIds(taskId);
+        removedIds.add(taskId);
+        for (String id : removedIds) {
+            tasks.remove(id);
+        }
         parentCompletionDirty = true;
+    }
+
+    /**
+     * 收集指定任务的全部后代任务 ID（子任务、孙任务…，不含自身）。
+     *
+     * <p>使用广度优先遍历并记录已访问节点，父子关系成环时也不会死循环。
+     *
+     * @param taskId 任务 ID
+     * @return 后代任务 ID 集合；无后代时返回空集合
+     */
+    public Set<String> collectDescendantIds(String taskId) {
+        Set<String> descendants = new LinkedHashSet<>();
+        if (taskId == null || taskId.isEmpty()) {
+            return descendants;
+        }
+        Map<String, List<Task>> childrenByParent = buildChildrenIndex();
+        Deque<String> pending = new ArrayDeque<>();
+        pending.add(taskId);
+        Set<String> visited = new LinkedHashSet<>();
+        while (!pending.isEmpty()) {
+            String currentId = pending.poll();
+            if (currentId == null || !visited.add(currentId)) {
+                continue;
+            }
+            List<Task> children = childrenByParent.get(currentId);
+            if (children == null) {
+                continue;
+            }
+            for (Task child : children) {
+                if (child == null || child.getId() == null || !descendants.add(child.getId())) {
+                    continue;
+                }
+                pending.add(child.getId());
+            }
+        }
+        return descendants;
+    }
+
+    /**
+     * 判断把 {@code taskId} 挂到 {@code parentTaskId} 下是否会造成父子关系成环。
+     *
+     * @param taskId       待移动的任务 ID
+     * @param parentTaskId 目标父任务 ID
+     * @return 会成环时返回 true
+     */
+    public boolean wouldCreateParentCycle(String taskId, String parentTaskId) {
+        if (taskId == null || taskId.isEmpty() || parentTaskId == null || parentTaskId.isEmpty()) {
+            return false;
+        }
+        if (taskId.equals(parentTaskId)) {
+            return true;
+        }
+        return collectDescendantIds(taskId).contains(parentTaskId);
+    }
+
+    /**
+     * 返回指定父任务下的直属子任务，按父内顺序稳定排序。
+     *
+     * @param parentTaskId 父任务 ID
+     * @return 直属子任务列表；无子任务时返回空列表
+     */
+    public List<Task> getChildTasks(String parentTaskId) {
+        return getSiblingSubtasksInOrder(parentTaskId);
+    }
+
+    /**
+     * 按父任务 ID 归组全部子任务，用于层级遍历。
+     *
+     * @return 父任务 ID → 直属子任务列表
+     */
+    private Map<String, List<Task>> buildChildrenIndex() {
+        Map<String, List<Task>> index = new LinkedHashMap<>();
+        for (Task task : tasks.values()) {
+            if (task == null || !task.isSubtask()) {
+                continue;
+            }
+            String parentId = task.getParentTaskId();
+            if (parentId == null || parentId.isEmpty()) {
+                continue;
+            }
+            index.computeIfAbsent(parentId, key -> new ArrayList<>()).add(task);
+        }
+        return index;
     }
 
     /**
@@ -110,6 +205,10 @@ public class TaskManager {
     /**
      * 切换指定任务的完成状态。
      *
+     * <p>无子任务时切换自身；有子任务时级联切换其全部后代（层级不限）。
+     * 挂有触发器的任务完成态由触发器决定（触发器优先），因此手动勾选时直接切换自身，
+     * 不受子任务聚合覆盖；带触发器的后代则跳过，避免覆盖触发器进度。
+     *
      * @param taskId 任务 ID
      */
     public void toggleTaskCompletion(String taskId) {
@@ -124,15 +223,19 @@ public class TaskManager {
             return;
         }
         boolean targetCompleted = !task.isCompleted();
+        if (task.hasTrigger()) {
+            task.setCompleted(targetCompleted);
+        }
         boolean changed = false;
-        for (Task child : getSiblingSubtasksInOrder(task.getId())) {
-            if (child == null || child.isCompleted() == targetCompleted) {
+        for (String descendantId : collectDescendantIds(task.getId())) {
+            Task descendant = tasks.get(descendantId);
+            if (descendant == null || descendant.hasTrigger() || descendant.isCompleted() == targetCompleted) {
                 continue;
             }
-            child.setCompleted(targetCompleted);
+            descendant.setCompleted(targetCompleted);
             changed = true;
         }
-        if (changed) {
+        if (changed || task.hasTrigger()) {
             parentCompletionDirty = true;
         }
     }
@@ -327,43 +430,51 @@ public class TaskManager {
     }
 
     /**
-     * 根据直属子任务完成状态同步父任务完成状态。
+     * 根据直属子任务完成状态同步父任务完成状态，层级不限（子任务的子任务同样参与聚合）。
      *
-     * <p>采用惰性重建：仅当 {@link #parentCompletionDirty} 为 {@code true} 时执行一次
-     * O(n) 扫描，扫描结束后清标志；后续读路径再次调用时直接返回，避免在
-     * {@code getAllTasks()} / {@code getTask()} 等高频 getter 上反复触发 O(n²) 扫描。
+     * <p>父任务挂有触发器时跳过：其完成态由触发器决定（触发器优先），
+     * 避免聚合结果把触发器刚设置的完成态覆盖回未完成。
+     *
+     * <p>采用惰性重建：仅当 {@link #parentCompletionDirty} 为 {@code true} 时执行；
+     * 内部按"反复全量重算直到不再变化"的方式自底向上收敛，保证深层节点的完成态
+     * 能正确反映到祖先节点。迭代轮数上限为任务总数，父子关系成环时也不会死循环。
      */
     private void syncParentCompletionStates() {
         if (!parentCompletionDirty) {
             return;
         }
         parentCompletionDirty = false;
-        // Pass 1: 一次扫描统计每个父任务的子任务总数与已完成数（O(n)）
-        Map<String, int[]> childrenStats = new HashMap<>();
-        for (Task task : tasks.values()) {
-            if (task == null || !task.isSubtask()) {
-                continue;
-            }
-            String parentId = task.getParentTaskId();
-            if (parentId == null || parentId.isEmpty()) {
-                continue;
-            }
-            int[] stats = childrenStats.computeIfAbsent(parentId, key -> new int[2]);
-            stats[0]++;
-            if (task.isCompleted()) {
-                stats[1]++;
-            }
+        Map<String, List<Task>> childrenByParent = buildChildrenIndex();
+        if (childrenByParent.isEmpty()) {
+            return;
         }
-        // Pass 2: 根据统计结果更新父任务完成态（仅遍历父任务，无内层扫描）
-        for (Task parent : tasks.values()) {
-            if (parent == null || parent.isSubtask()) {
-                continue;
+        int maxRounds = Math.max(1, Math.min(tasks.size(), 32));
+        for (int round = 0; round < maxRounds; round++) {
+            boolean changed = false;
+            for (Map.Entry<String, List<Task>> entry : childrenByParent.entrySet()) {
+                Task parent = tasks.get(entry.getKey());
+                if (parent == null || parent.hasTrigger()) {
+                    continue;
+                }
+                List<Task> children = entry.getValue();
+                if (children == null || children.isEmpty()) {
+                    continue;
+                }
+                boolean allCompleted = true;
+                for (Task child : children) {
+                    if (child == null || !child.isCompleted()) {
+                        allCompleted = false;
+                        break;
+                    }
+                }
+                if (parent.isCompleted() != allCompleted) {
+                    parent.setCompleted(allCompleted);
+                    changed = true;
+                }
             }
-            int[] stats = childrenStats.get(parent.getId());
-            if (stats == null || stats[0] == 0) {
-                continue;
+            if (!changed) {
+                return;
             }
-            parent.setCompleted(stats[0] == stats[1]);
         }
     }
 }

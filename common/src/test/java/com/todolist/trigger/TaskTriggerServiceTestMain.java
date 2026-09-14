@@ -48,7 +48,7 @@ public final class TaskTriggerServiceTestMain {
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldPeekDirtyTasksWithoutConsumingForLightPush", TaskTriggerServiceTestMain::shouldPeekDirtyTasksWithoutConsumingForLightPush);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldIgnoreUnassignedTeamTaskForAllPlayers", TaskTriggerServiceTestMain::shouldIgnoreUnassignedTeamTaskForAllPlayers);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldResetTriggerProgressWhenTeamAssigneeChanges", TaskTriggerServiceTestMain::shouldResetTriggerProgressWhenTeamAssigneeChanges);
-        GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldIgnoreParentTaskWithSubtasks", TaskTriggerServiceTestMain::shouldIgnoreParentTaskWithSubtasks);
+        GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldAdvanceParentTaskWithSubtasks", TaskTriggerServiceTestMain::shouldAdvanceParentTaskWithSubtasks);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldCountHeldItemsInsideContainerItem", TaskTriggerServiceTestMain::shouldCountHeldItemsInsideContainerItem);
     }
 
@@ -326,24 +326,23 @@ public final class TaskTriggerServiceTestMain {
     }
 
     /**
-     * 父任务（已有直属子任务）不参与事件判定：其完成态由子任务聚合决定，
-     * 即使历史上残留触发器也不进倒排索引、不被事件推进；同一桶内的叶子任务不受影响。
+     * 父任务（已有直属子任务）同样参与事件判定：父任务挂触发器时完成态由触发器决定
+     * （触发器优先），倒排索引一并收录父任务与叶子任务。
      */
-    private static void shouldIgnoreParentTaskWithSubtasks() {
+    private static void shouldAdvanceParentTaskWithSubtasks() {
         Task parent = newTask(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 1);
         Task child = newTask(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 1);
         child.setParentTaskId(parent.getId());
         TaskTriggerService.CachedBucket bucket = newPersonalBucket(parent, child);
 
-        GuiTestSupport.assertTrue(bucket.find(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone").size() == 1,
-                "父任务带子任务时不应进入倒排索引，索引中只应剩叶子任务");
+        GuiTestSupport.assertTrue(bucket.find(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone").size() == 2,
+                "父任务与叶子任务都应进入倒排索引");
 
         List<Task> completed = TaskTriggerService.advanceMatchingTasksByUuid(
                 PLAYER_A, bucket, TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 1);
-        GuiTestSupport.assertEquals(1, completed.size(), "一次事件只应完成叶子任务");
+        GuiTestSupport.assertEquals(2, completed.size(), "一次事件应同时完成父任务与叶子任务");
+        GuiTestSupport.assertTrue(parent.isCompleted(), "父任务应被事件完成");
         GuiTestSupport.assertTrue(child.isCompleted(), "叶子任务应正常完成");
-        GuiTestSupport.assertFalse(parent.isCompleted(), "父任务不应被事件完成");
-        GuiTestSupport.assertEquals(0, parent.getTrigger().getProgress(), "父任务进度应保持 0");
     }
 
     /**

@@ -605,7 +605,7 @@ public final class TaskListWidgetTestMain {
     /**
      * 校验任务列表右侧会展示触发器进度与目标图标：
      * 无负责人时仅显示进度；有负责人时「@名字 进度」并存；
-     * 父任务的子任务进度优先于触发器；无触发器时不显示图标。
+     * 父任务挂触发器时触发器进度优先于子任务进度；无触发器时不显示图标。
      */
     private static void shouldShowTriggerProgressAndTargetIconInTrailingMeta() {
         GuiTestSupport.resetState();
@@ -630,8 +630,16 @@ public final class TaskListWidgetTestMain {
         Task child = createSubtask("task-child", "Child", parent.getId(), 0L);
         child.setCompleted(true);
 
+        Task triggeredParent = createTask("task-triggered-parent", "Triggered Parent");
+        triggeredParent.setTrigger(new com.todolist.task.TaskTrigger(
+                com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_block", 3));
+        triggeredParent.getTrigger().setProgress(1);
+        Task triggeredChild = createSubtask("task-triggered-child", "Triggered Child", triggeredParent.getId(), 0L);
+        triggeredChild.setCompleted(true);
+
         widget.setSections(List.of(new TaskListWidget.SectionModel(
-                "active", "未完成（4）", List.of(collect, kill, plain, parent, child), true, true)));
+                "active", "未完成（6）",
+                List.of(collect, kill, plain, parent, child, triggeredParent, triggeredChild), true, true)));
 
         GuiTestSupport.assertEquals("12/64", widget.getTaskTrailingMetaTextForTest(collect.getId()),
                 "有触发器的任务右侧应显示进度");
@@ -644,9 +652,14 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.assertNull(widget.getTaskTrailingTriggerIconIdForTest(plain.getId()),
                 "无触发器的任务不应显示图标");
         GuiTestSupport.assertEquals("1/1", widget.getTaskTrailingMetaTextForTest(parent.getId()),
-                "父任务右侧仍应优先显示子任务进度");
+                "未挂触发器的父任务仍显示子任务进度");
         GuiTestSupport.assertNull(widget.getTaskTrailingTriggerIconIdForTest(parent.getId()),
-                "父任务不展示触发器图标，避免与子任务聚合语义冲突");
+                "无触发器的父任务不展示触发器图标");
+        GuiTestSupport.assertEquals("1/3", widget.getTaskTrailingMetaTextForTest(triggeredParent.getId()),
+                "挂触发器的父任务应优先展示触发器进度，而不是子任务进度 1/1");
+        GuiTestSupport.assertEquals("minecraft:iron_block",
+                widget.getTaskTrailingTriggerIconIdForTest(triggeredParent.getId()),
+                "挂触发器的父任务应展示触发器目标图标");
     }
 
     /**

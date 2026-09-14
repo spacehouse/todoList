@@ -23,6 +23,150 @@ public final class TaskManagerSubtaskTestMain {
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldCountOnlyTopLevelTasksByProject", TaskManagerSubtaskTestMain::shouldCountOnlyTopLevelTasksByProject);
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldAggregateParentCompletionFromChildren", TaskManagerSubtaskTestMain::shouldAggregateParentCompletionFromChildren);
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldToggleAllDirectChildrenWhenParentToggled", TaskManagerSubtaskTestMain::shouldToggleAllDirectChildrenWhenParentToggled);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldKeepTriggeredParentCompletionFromBeingOverwritten", TaskManagerSubtaskTestMain::shouldKeepTriggeredParentCompletionFromBeingOverwritten);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldKeepTriggeredParentIncompleteWhenAllChildrenComplete", TaskManagerSubtaskTestMain::shouldKeepTriggeredParentIncompleteWhenAllChildrenComplete);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldManuallyToggleTriggeredParentWithChildren", TaskManagerSubtaskTestMain::shouldManuallyToggleTriggeredParentWithChildren);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldAggregateThreeLevelCompletionBottomUp", TaskManagerSubtaskTestMain::shouldAggregateThreeLevelCompletionBottomUp);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldCascadeDeleteDescendants", TaskManagerSubtaskTestMain::shouldCascadeDeleteDescendants);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldToggleAllDescendantsWhenParentToggled", TaskManagerSubtaskTestMain::shouldToggleAllDescendantsWhenParentToggled);
+    }
+
+    /**
+     * 验证三层依赖任务的完成态自底向上聚合：叶子全部完成时中间层与顶层都完成，
+     * 任一叶子回退为未完成时整条链同步回退。
+     */
+    private static void shouldAggregateThreeLevelCompletionBottomUp() {
+        TaskManager manager = new TaskManager();
+        Task root = createTask("root", "project-a", false, null);
+        Task middle = createTask("middle", "project-a", false, root.getId());
+        Task leaf = createTask("leaf", "project-a", false, middle.getId());
+        addAll(manager, root, middle, leaf);
+
+        manager.markParentCompletionDirty();
+        GuiTestSupport.assertFalse(manager.getTask(root.getId()).isCompleted(),
+                "叶子未完成时顶层任务应保持未完成");
+        GuiTestSupport.assertFalse(manager.getTask(middle.getId()).isCompleted(),
+                "叶子未完成时中间层任务应保持未完成");
+
+        leaf.setCompleted(true);
+        manager.markParentCompletionDirty();
+        GuiTestSupport.assertTrue(manager.getTask(middle.getId()).isCompleted(),
+                "叶子完成后中间层任务应聚合为已完成");
+        GuiTestSupport.assertTrue(manager.getTask(root.getId()).isCompleted(),
+                "叶子完成后顶层任务应自底向上聚合为已完成");
+
+        leaf.setCompleted(false);
+        manager.markParentCompletionDirty();
+        GuiTestSupport.assertFalse(manager.getTask(root.getId()).isCompleted(),
+                "叶子回退为未完成时顶层任务应同步回退为未完成");
+    }
+
+    /**
+     * 验证勾选多层级父任务时会级联切换其全部后代，而不是只切换直属子任务。
+     */
+    private static void shouldToggleAllDescendantsWhenParentToggled() {
+        TaskManager manager = new TaskManager();
+        Task root = createTask("root", "project-a", false, null);
+        Task middle = createTask("middle", "project-a", false, root.getId());
+        Task leaf = createTask("leaf", "project-a", false, middle.getId());
+        addAll(manager, root, middle, leaf);
+
+        manager.toggleTaskCompletion(root.getId());
+
+        GuiTestSupport.assertTrue(manager.getTask(middle.getId()).isCompleted(),
+                "勾选顶层任务应级联完成中间层任务");
+        GuiTestSupport.assertTrue(manager.getTask(leaf.getId()).isCompleted(),
+                "勾选顶层任务应级联完成孙任务");
+    }
+
+    /**
+     * 验证删除任务会级联删除其全部后代，避免留下孤儿子任务。
+     */
+    private static void shouldCascadeDeleteDescendants() {
+        TaskManager manager = new TaskManager();
+        Task root = createTask("root", "project-a", false, null);
+        Task middle = createTask("middle", "project-a", false, root.getId());
+        Task leaf = createTask("leaf", "project-a", false, middle.getId());
+        Task other = createTask("other", "project-a", false, null);
+        addAll(manager, root, middle, leaf, other);
+
+        manager.deleteTask(root.getId());
+
+        GuiTestSupport.assertNull(manager.getTask(root.getId()), "顶层任务应被删除");
+        GuiTestSupport.assertNull(manager.getTask(middle.getId()), "子任务应随父任务级联删除");
+        GuiTestSupport.assertNull(manager.getTask(leaf.getId()), "孙任务应随父任务级联删除");
+        GuiTestSupport.assertNotNull(manager.getTask(other.getId()), "无关任务不应受影响");
+    }
+
+    /**
+     * 验证父任务挂有触发器时完成态由触发器决定：子任务聚合不再覆盖它（触发器优先），
+     * 未挂触发器的父任务仍维持原有的聚合行为。
+     */
+    private static void shouldKeepTriggeredParentCompletionFromBeingOverwritten() {
+        TaskManager manager = new TaskManager();
+        Task triggeredParent = createTask("triggered-parent", "project-a", false, null);
+        triggeredParent.setTrigger(new TaskTrigger(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 1));
+        Task pendingChild = createTask("pending-child", "project-a", false, triggeredParent.getId());
+        addAll(manager, triggeredParent, pendingChild);
+
+        // 触发器达标：父任务被置为已完成，此时仍有未完成子任务
+        triggeredParent.setCompleted(true);
+        manager.markParentCompletionDirty();
+        GuiTestSupport.assertTrue(manager.getTask(triggeredParent.getId()).isCompleted(),
+                "父任务挂触发器时，未完成子任务不应把父任务完成态改回未完成");
+
+        Task plainParent = createTask("plain-parent", "project-a", false, null);
+        Task plainChild = createTask("plain-child", "project-a", false, plainParent.getId());
+        addAll(manager, plainParent, plainChild);
+        manager.markParentCompletionDirty();
+        GuiTestSupport.assertFalse(manager.getTask(plainParent.getId()).isCompleted(),
+                "未挂触发器的父任务仍应由子任务聚合决定完成态");
+    }
+
+    /**
+     * 验证挂触发器的多层父任务不会因子任务全部完成而被自动完成：
+     * 材料齐了不等于目标物品真的做出来了，必须等触发器达标或手动勾选。
+     */
+    private static void shouldKeepTriggeredParentIncompleteWhenAllChildrenComplete() {
+        TaskManager manager = new TaskManager();
+        Task root = createTask("root", "project-a", false, null);
+        root.setTrigger(new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_block", 3));
+        Task middle = createTask("middle", "project-a", false, root.getId());
+        middle.setTrigger(new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 27));
+        Task leaf = createTask("leaf", "project-a", false, middle.getId());
+        addAll(manager, root, middle, leaf);
+
+        leaf.setCompleted(true);
+        manager.markParentCompletionDirty();
+
+        GuiTestSupport.assertFalse(manager.getTask(root.getId()).isCompleted(),
+                "带触发器的顶层任务不应因子任务全部完成而自动完成");
+        GuiTestSupport.assertFalse(manager.getTask(middle.getId()).isCompleted(),
+                "带触发器的中间层任务同样不应被自动完成");
+        GuiTestSupport.assertTrue(manager.getTask(leaf.getId()).isCompleted(),
+                "无触发器的最终材料任务仍按自身完成态");
+    }
+
+    /**
+     * 验证带触发器的父任务支持手动勾选：直接切换自身完成态（触发器优先），
+     * 且不会被后续的子任务聚合覆盖。
+     */
+    private static void shouldManuallyToggleTriggeredParentWithChildren() {
+        TaskManager manager = new TaskManager();
+        Task parent = createTask("parent", "project-a", false, null);
+        parent.setTrigger(new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_block", 3));
+        Task child = createTask("child", "project-a", false, parent.getId());
+        addAll(manager, parent, child);
+
+        manager.toggleTaskCompletion(parent.getId());
+        GuiTestSupport.assertTrue(manager.getTask(parent.getId()).isCompleted(),
+                "手动勾选带触发器的父任务应直接完成自身");
+        GuiTestSupport.assertTrue(manager.getTask(child.getId()).isCompleted(),
+                "手动勾选父任务时应级联完成无触发器的子任务");
+
+        manager.toggleTaskCompletion(parent.getId());
+        GuiTestSupport.assertFalse(manager.getTask(parent.getId()).isCompleted(),
+                "再次勾选应取消带触发器父任务的完成态");
     }
 
     /**
