@@ -2,7 +2,7 @@
 
 本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成` 四类维护，便于后续排期、分支同步与回归验证。
 
-更新日期：`2026-09-13`
+更新日期：`2026-09-15`
 
 ## 进行中
 
@@ -15,6 +15,7 @@
 
 ## 计划中
 
+- 【feat】同物品任务的额度配额：同一项目内多条任务追踪同一种物品时不再被同一份物品同时完成（方案已定、待实现，见 `docs/feat-trigger-credit-allocation.md`）
 - 【feat】支持根据收集目标反推前置材料并自动生成收集任务（点 1：原版配方反推，见 `docs/feat-material-task-generation.md`）
 - 【feat】支持粘贴 / 导入材料清单生成收集任务（点 2：文本清单导入，见 `docs/feat-material-task-generation.md`）
 - 【feat】支持模组自定义配方类型的材料反推（点 3：通用配方 resolver + 数据驱动适配，见 `docs/feat-material-task-generation.md`）

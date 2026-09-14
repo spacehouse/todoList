@@ -44,5 +44,6 @@ public final class GuiSystemTestMain {
         GuiTestSupport.runTestGroup("TodoToastRendererTestMain", () -> TodoToastRendererTestMain.main(args));
         GuiTestSupport.runTestGroup("TriggerTargetSupportTestMain", () -> TriggerTargetSupportTestMain.main(args));
         GuiTestSupport.runTestGroup("TriggerEditScreenTestMain", () -> TriggerEditScreenTestMain.main(args));
+        GuiTestSupport.runTestGroup("MaterialListScreenTestMain", () -> MaterialListScreenTestMain.main(args));
     }
 }

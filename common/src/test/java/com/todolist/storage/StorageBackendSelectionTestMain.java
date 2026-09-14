@@ -90,21 +90,31 @@ public final class StorageBackendSelectionTestMain {
     }
 
     /**
-     * 验证配置文件会写入 h2BackupOnStart 多语言说明注释。
+     * 验证配置文件会写入 h2BackupOnStart / h2BackupRetentionCount 多语言说明注释，且保留上限会被收敛到最小 1。
      */
     private static void shouldWriteH2BackupOnStartCommentsToConfig() {
         GuiTestSupport.resetState();
         try {
             Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
             ModConfig.getInstance().setH2BackupOnStart(true);
+            ModConfig.getInstance().setH2BackupRetentionCount(0);
+
+            GuiTestSupport.assertEquals(1, ModConfig.getInstance().getH2BackupRetentionCount(),
+                    "备份保留上限小于 1 时应收敛为 1");
 
             String savedConfig = Files.readString(configFile, StandardCharsets.UTF_8);
             assertContainsEither(savedConfig, "// h2BackupOnStart notes:", "// h2BackupOnStart 说明：", "配置文件应写入 h2BackupOnStart 标题注释");
             assertContainsEither(
                     savedConfig,
-                    "// true: create one H2 backup after H2 initializes on startup (only effective when storageBackend is h2)",
-                    "// true：启动初始化 H2 后自动创建一次备份（仅在 storageBackend 为 h2 时生效）",
+                    "// true: create one H2 backup after H2 initializes on startup (default, only effective when storageBackend is h2)",
+                    "// true：启动初始化 H2 后自动创建一次备份（默认；仅在 storageBackend 为 h2 时生效）",
                     "配置文件应写入 h2BackupOnStart 的启用说明注释"
+            );
+            assertContainsEither(
+                    savedConfig,
+                    "// h2BackupRetentionCount notes:",
+                    "// h2BackupRetentionCount 说明：",
+                    "配置文件应写入 h2BackupRetentionCount 标题注释"
             );
         } catch (Exception exception) {
             throw new IllegalStateException("验证 h2BackupOnStart 注释写入时发生异常", exception);

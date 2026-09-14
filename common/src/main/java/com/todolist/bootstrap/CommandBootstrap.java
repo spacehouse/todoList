@@ -30,6 +30,7 @@ import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2BackupService;
 import com.todolist.storage.H2HealthCheckService;
 import com.todolist.storage.H2MaintenanceLock;
+import com.todolist.storage.H2PendingRestore;
 import com.todolist.storage.H2StorageAvailability;
 import com.todolist.storage.H2TcpAccountRole;
 import com.todolist.storage.H2TcpConfig;
@@ -48,9 +49,14 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -594,6 +600,15 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "name")
                                         ))))
+                        .then(Commands.literal("backups")
+                                .executes(ctx -> listH2Backups(ctx.getSource())))
+                        .then(Commands.literal("restore")
+                                .executes(ctx -> stageH2Restore(ctx.getSource(), "latest"))
+                                .then(Commands.argument("version", StringArgumentType.word())
+                                        .executes(ctx -> stageH2Restore(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "version")
+                                        ))))
                         .then(Commands.literal("reload-db")
                                 .executes(ctx -> reloadH2Database(ctx.getSource())))
                         .then(Commands.literal("health")
@@ -936,6 +951,108 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.warn("Failed to create H2 backup", exception);
             return sendCommandFailure(source, "command.todolist.h2.backup.failed");
         }
+    }
+
+    /**
+     * 列出可用 H2 备份，按时间倒序并给出可直接引用的序号。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int listH2Backups(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.backups.requires_h2");
+        }
+        try {
+            List<H2BackupService.BackupEntry> entries = new H2BackupService().listBackups();
+            if (entries.isEmpty()) {
+                return sendCommandFailure(source, "command.todolist.h2.backups.empty");
+            }
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.backups.header",
+                    entries.size(), ModConfig.getInstance().getH2BackupRetentionCount());
+            for (H2BackupService.BackupEntry entry : entries) {
+                sendFeedbackByTranslationKey(source, "command.todolist.h2.backups.entry",
+                        entry.index(),
+                        formatBackupTime(entry.modifiedAtMillis()),
+                        formatBackupSize(entry.sizeBytes()),
+                        entry.path().getFileName().toString());
+            }
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.backups.hint");
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to list H2 backups", exception);
+            return sendCommandFailure(source, "command.todolist.h2.backups.failed");
+        }
+    }
+
+    /**
+     * 暂存一次「恢复到指定备份」。
+     *
+     * <p>数据库正在使用时无法安全替换文件，因此这里只做校验与暂存；
+     * 实际落地发生在下次启动、数据库被打开之前。
+     *
+     * @param source 命令源
+     * @param target 备份序号、latest 或备份文件名
+     * @return 命令执行结果
+     */
+    private static int stageH2Restore(CommandSourceStack source, String target) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.restore.requires_h2");
+        }
+        if (H2PendingRestore.hasPending()) {
+            return sendCommandFailure(source, "command.todolist.h2.restore.pending_exists",
+                    H2PendingRestore.readPendingSource());
+        }
+        try {
+            Path backup = new H2BackupService().resolveBackup(target);
+            if (backup == null) {
+                return sendCommandFailure(source, "command.todolist.h2.restore.unknown", String.valueOf(target));
+            }
+            H2PendingRestore.stageRestore(backup);
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE,
+                    "command.todolist.h2.restore.staged", backup.getFileName().toString());
+        } catch (IOException exception) {
+            TodoConstants.LOGGER.warn("Failed to stage H2 restore from {}", target, exception);
+            return sendCommandFailure(source, "command.todolist.h2.restore.invalid", String.valueOf(target));
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to stage H2 restore", exception);
+            return sendCommandFailure(source, "command.todolist.h2.restore.failed");
+        }
+    }
+
+    /**
+     * 格式化备份时间。
+     *
+     * @param millis 毫秒时间戳
+     * @return 形如 {@code 2026-09-15 00:28:08} 的文本；无效时间返回 {@code -}
+     */
+    private static String formatBackupTime(long millis) {
+        if (millis <= 0L) {
+            return "-";
+        }
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                .format(LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()));
+    }
+
+    /**
+     * 格式化备份文件大小。
+     *
+     * @param bytes 字节数
+     * @return 形如 {@code 4.3 MB} 的文本
+     */
+    private static String formatBackupSize(long bytes) {
+        if (bytes >= 1024L * 1024L) {
+            return String.format(Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0);
+        }
+        if (bytes >= 1024L) {
+            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+        }
+        return bytes + " B";
     }
 
     /**
@@ -1551,26 +1668,6 @@ public final class CommandBootstrap {
      */
     private static List<Task> loadPersonalTasksForCommand(MinecraftServer server, TaskStorage storage, UUID playerUuid) throws IOException {
         return storage.loadPersonalTasks(server, playerUuid);
-    }
-
-    /**
-     * 判断给定任务在列表中是否存在直属子任务（即父任务）。
-     * 父任务完成态由子任务聚合决定，禁止为其设置事件触发器。
-     *
-     * @param tasks 任务列表
-     * @param task  目标任务
-     * @return 存在直属子任务时返回 true
-     */
-    private static boolean hasDirectSubtasksInList(List<Task> tasks, Task task) {
-        if (tasks == null || task == null || task.getId() == null) {
-            return false;
-        }
-        for (Task candidate : tasks) {
-            if (candidate != null && task.getId().equals(candidate.getParentTaskId())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -3127,9 +3224,6 @@ public final class CommandBootstrap {
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
             }
-            if (hasDirectSubtasksInList(tasks, task)) {
-                return sendCommandFailure(source, "command.todolist.task.trigger.set.parent_not_allowed", task.getTitle());
-            }
             task.setTrigger(new TaskTrigger(type, normalizedTarget, count));
             savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
             TaskTriggerService.invalidatePersonal(source.getServer(), playerUuid);
@@ -4224,9 +4318,18 @@ public final class CommandBootstrap {
 
     /**
      * 根据存储异常类型发送命令失败反馈。
+     *
+     * <p>存储不可用时给出具体原因与数据库文件路径，并附上查看/恢复备份的命令提示。
      */
     private static int sendStorageAwareCommandFailure(CommandSourceStack source, String fallbackTranslationKey, Throwable throwable) {
-        return sendCommandFailure(source, StorageFailureNotifier.toCommandMessageKey(throwable, fallbackTranslationKey));
+        StorageUnavailableException unavailable = StorageUnavailableException.find(throwable);
+        if (unavailable != null) {
+            return sendCommandFailure(source,
+                    StorageFailureNotifier.COMMAND_STORAGE_UNAVAILABLE_DETAIL_MESSAGE_KEY,
+                    StorageFailureNotifier.describeReason(unavailable.getReason()),
+                    StorageFailureNotifier.describeDatabaseFile());
+        }
+        return sendCommandFailure(source, fallbackTranslationKey);
     }
 
     /**

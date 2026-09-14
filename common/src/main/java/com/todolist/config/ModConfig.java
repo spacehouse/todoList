@@ -35,6 +35,7 @@ public class ModConfig {
     private static final String COMMAND_ACCESS_MODE_KEY = "\"commandAccessMode\"";
     private static final String STORAGE_BACKEND_KEY = "\"storageBackend\"";
     private static final String H2_BACKUP_ON_START_KEY = "\"h2BackupOnStart\"";
+    private static final String H2_BACKUP_RETENTION_KEY = "\"h2BackupRetentionCount\"";
     private static final String LANG_ASSET_DIR = "assets/todolist/lang/";
     private static final String LANG_ZH_CN = "zh_cn";
     private static final String LANG_EN_US = "en_us";
@@ -68,12 +69,21 @@ public class ModConfig {
     private static final String[] H2_BACKUP_ON_START_COMMENT_FALLBACK_EN = new String[] {
             "h2BackupOnStart notes:",
             "false: do not create a startup backup",
-            "true: create one H2 backup after H2 initializes on startup (only effective when storageBackend is h2)"
+            "true: create one H2 backup after H2 initializes on startup (default, only effective when storageBackend is h2)"
+    };
+    private static final String[] H2_BACKUP_RETENTION_COMMENT_KEYS = new String[] {
+            "config.todolist.h2_backup_retention.comment.title",
+            "config.todolist.h2_backup_retention.comment.value"
+    };
+    private static final String[] H2_BACKUP_RETENTION_COMMENT_FALLBACK_EN = new String[] {
+            "h2BackupRetentionCount notes:",
+            "how many H2 backups to keep; when exceeded, the oldest backups are deleted (minimum 1)"
     };
     private static final ConfigCommentBlock[] CONFIG_COMMENT_BLOCKS = new ConfigCommentBlock[] {
             new ConfigCommentBlock(COMMAND_ACCESS_MODE_KEY, COMMAND_ACCESS_MODE_COMMENT_KEYS, COMMAND_ACCESS_MODE_COMMENT_FALLBACK_EN),
             new ConfigCommentBlock(STORAGE_BACKEND_KEY, STORAGE_BACKEND_COMMENT_KEYS, STORAGE_BACKEND_COMMENT_FALLBACK_EN),
-            new ConfigCommentBlock(H2_BACKUP_ON_START_KEY, H2_BACKUP_ON_START_COMMENT_KEYS, H2_BACKUP_ON_START_COMMENT_FALLBACK_EN)
+            new ConfigCommentBlock(H2_BACKUP_ON_START_KEY, H2_BACKUP_ON_START_COMMENT_KEYS, H2_BACKUP_ON_START_COMMENT_FALLBACK_EN),
+            new ConfigCommentBlock(H2_BACKUP_RETENTION_KEY, H2_BACKUP_RETENTION_COMMENT_KEYS, H2_BACKUP_RETENTION_COMMENT_FALLBACK_EN)
     };
     private static final int GUI_WIDTH_MIN = 300;
     private static final int GUI_WIDTH_MAX = 1600;
@@ -92,6 +102,8 @@ public class ModConfig {
     private static final int PADDING_MAX = 24;
     private static final int ELEMENT_SPACING_MIN = 2;
     private static final int ELEMENT_SPACING_MAX = 16;
+    /** H2 备份数量上限的默认值与最小值（至少保留一份，避免清理后没有任何恢复点）。 */
+    public static final int DEFAULT_H2_BACKUP_RETENTION_COUNT = 10;
 
     private static ModConfig instance;
 
@@ -136,7 +148,9 @@ public class ModConfig {
     private CommandAccessMode commandAccessMode = CommandAccessMode.OP_ONLY;
     private transient boolean commandAccessModeDirty;
     private StorageBackend storageBackend = StorageBackend.H2;
-    private boolean h2BackupOnStart = false;
+    private boolean h2BackupOnStart = true;
+    /** H2 备份保留数量上限，超出后自动删除最早的备份。 */
+    private int h2BackupRetentionCount = DEFAULT_H2_BACKUP_RETENTION_COUNT;
 
     // GUI settings
     private GuiConfig gui = new GuiConfig();
@@ -721,6 +735,25 @@ public class ModConfig {
      */
     public void setH2BackupOnStart(boolean h2BackupOnStart) {
         this.h2BackupOnStart = h2BackupOnStart;
+        save();
+    }
+
+    /**
+     * 获取 H2 备份保留数量上限。
+     *
+     * @return 保留的备份份数，最小为 1
+     */
+    public int getH2BackupRetentionCount() {
+        return Math.max(1, h2BackupRetentionCount);
+    }
+
+    /**
+     * 设置 H2 备份保留数量上限并立即写盘。
+     *
+     * @param h2BackupRetentionCount 保留份数，小于 1 时按 1 处理
+     */
+    public void setH2BackupRetentionCount(int h2BackupRetentionCount) {
+        this.h2BackupRetentionCount = Math.max(1, h2BackupRetentionCount);
         save();
     }
 

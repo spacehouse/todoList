@@ -65,7 +65,11 @@ TaskTrigger {
 | KILL/BREAK/CRAFT/ADVANCEMENT | 累加语义：事件发生一次加一次（CRAFT 按合成产物数量加） |
 | 已完成任务 | 不再参与事件匹配（防止取消勾选后又被事件自动勾回需重新计入） |
 | 子任务触发器 | 达标只置子任务 completed；父任务完成态由现有展示层聚合逻辑处理，引擎不越权 |
-| 父任务（已有直属子任务） | **不允许设置触发器**：完成态由子任务聚合决定，事件驱动完成没有意义；引擎侧也不把这类任务收录进倒排索引（历史残留触发器同样不生效）；为它新增第一个子任务时自动清除已有触发器并提示 |
+| 父任务（已有直属子任务） | **允许设置触发器**（Phase X 放宽）：父任务挂触发器时完成态**触发器优先**，`syncParentCompletionStates` 跳过这类父任务，不再被子任务聚合覆盖；未挂触发器的父任务仍维持「子任务全部完成即完成」的聚合行为 |
+| 挂触发器的父任务手动勾选 | **触发器优先下仍可手动勾选**：勾选/取消直接切换该任务自身完成态（`toggleTaskCompletion` 对带触发器的任务单独处理），不会被聚合逻辑改回；无触发器的后代仍随之级联，「我的」视图的批量子任务切换也跳过带触发器的子任务 |
+| 材料任务生成 | 材料配方预览生成的「合成」任务（目标物与中间产物）挂 `CRAFT_ITEM`（累计合成量语义：必须在任务创建后真的合成出来，背包里已有的旧物品不计入）；「收集」任务（最终材料）挂 `ITEM_COLLECT`（持有量语义，已有即达标）。展开配方材料本意就是"这条链路要从原料开始合出来"，所以合成步骤不该被已有物品直接判达标（Phase E4 定为 `CRAFT_ITEM`，Phase E6 曾改为 `ITEM_COLLECT`，Phase E7 已改回 `CRAFT_ITEM`）。**同种最终材料跨层级/分支重复出现时只生成一条「收集」任务**，挂在首次出现的位置、数量取汇总需求，避免多条任务共享同一份背包物品（Phase E9） |
+| 右侧进度展示 | **触发器进度优先**：挂触发器的任务（含父任务）右侧展示 `目标图标 + 进度`，不再被子任务聚合进度顶掉；未挂触发器的父任务仍显示子任务进度 `1/3`。GUI 任务列表与 HUD 一致（Phase E6） |
+| HUD 多层层级 | 多层子任务不再只靠缩进，按依赖树绘制**树形连线**（祖先层贯穿竖线 + `├ / └` 分支线），与材料配方预览的树形展示一致（Phase E6） |
 
 ### 2.5 平台事件接入
 
@@ -123,6 +127,8 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | Phase U | 团队任务语义收口：未指派（待领取）任务不再被事件推进，必须「领取/指派」后才参与触发，回归「创建 → 领取/指派 → 完成」流程 | ✅ 完成 |
 | Phase V | 子触发任务与展示优化：快速新增「触发」按钮跟随选中任务（选中父任务时建子任务）；禁止为父任务设置触发器并在新增子任务时自动清除；任务列表右侧展示触发器进度与目标图标 | ✅ 完成 |
 | Phase W | 进度选择器数据源收口：新增服务端权威进度目录包（`todolist:advancement_catalog`），「选择进度」改用服务端全量目录并每次打开重建；Forge 侧改为只监听 `AdvancementEarnEvent`，修复同一条进度弹两次完成提示 | ✅ 完成 |
+| Phase X | **放宽父任务触发器限制**：父任务允许挂触发器，完成态改为「触发器优先」（`syncParentCompletionStates` 跳过有触发器的父任务）；移除右键菜单/编辑器/命令/引擎索引四道守卫与「新增子任务时清除父任务触发器」逻辑 | ✅ 完成 |
+| Phase Y | **多层依赖与 HUD 完成态收口**（实机验证第 2 轮）：① 任务域支持任意层级——`syncParentCompletionStates` 改为自底向上多轮收敛、`deleteTask` 级联删除全部后代、放开「子任务不能再挂子任务」的三处守卫；② GUI 任务列表与 HUD 均按真实深度递归渲染并逐层缩进（不再只有 2 层）；③ HUD 完成态改为按**整棵子树**判定并统一走「触发器优先」，与 GUI 一致（子任务全完成后父任务不再被 HUD 误归入已完成）；④ HUD 中父任务被删除后其后代不再残留、第 3 层任务不再完成后消失 | ✅ 完成 |
 
 ## 4. 边界（本期不做什么）
 
@@ -167,8 +173,8 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
     - **GUI 变更点**（`TodoScreen.assignAssigneeWithTriggerReset`）：局域网主机「已发布局域网」模式下的 GUI 保存会**直接写入本地 H2、不经过服务端保存包**（`shouldUsePublishedLocalPlayerStorage`），因此必须在点击领取/取消领取时就地清零，否则该路径会漏掉。
 19. **父任务挂触发器与子触发任务入口不便（Phase V）**：两个相关交互问题。① 子任务加触发器要「建子任务 → 输入名称 → 双击 → 点按钮」四步，且空白子任务会被自动保存/丢弃逻辑删掉，实际很难走通；② 已有子任务的父任务也能设触发器，而父任务完成态由子任务聚合，触发器语义冲突。→ 对策：
     - **入口跟随选中任务**：顶部快速新增行的「触发」按钮复用同一套流程，但会读取当前选中项——选中可承载子任务的顶层任务时，按钮文案变为「子触发」并把新建任务挂到该父任务下（自动生成标题 + 直接进行内重命名）；未选中时行为不变（建顶层任务）。按钮语义在点击前可见，避免层级歧义；
-    - **父任务禁止设触发器**：右键菜单对已有直属子任务的父任务不再显示「设置/编辑触发器」，`openTriggerEditScreen`/`applyTriggerFromEditor` 与命令 `todo task trigger set` 各加一道守卫，引擎 `rebuildIndex` 也不收录此类任务（历史残留触发器同样不生效）；
-    - **新增子任务时自动清除父任务触发器**：父任务一旦有了子任务，其触发器不再有意义，创建第一个子任务时清除并弹出提示，避免留下「已设置但无效」的困惑状态。
+    - ~~**父任务禁止设触发器**：右键菜单对已有直属子任务的父任务不再显示「设置/编辑触发器」，`openTriggerEditScreen`/`applyTriggerFromEditor` 与命令 `todo task trigger set` 各加一道守卫，引擎 `rebuildIndex` 也不收录此类任务（历史残留触发器同样不生效）；~~ **已在 Phase X 撤销**：材料反推需要父任务追踪目标物持有量，改为「父任务可挂触发器 + 完成态触发器优先」；
+    - ~~**新增子任务时自动清除父任务触发器**：父任务一旦有了子任务，其触发器不再有意义，创建第一个子任务时清除并弹出提示，避免留下「已设置但无效」的困惑状态。~~ **已在 Phase X 撤销**：该逻辑已删除，父任务触发器在新增子任务后继续生效。
 20. **点击顶部快速新增「触发」按钮会丢失选中态（Phase V）**：`TodoScreen.mouseClicked` 的自定义命中判定（`TodoScreenHitTestSupport.isClickInEditArea`）只登记了输入框与详情面板按钮，**没有登记快速新增行的两个按钮**，于是点击「触发」被判定为「点了空白处」→ 先执行 `auto_clear_selection` 自动保存并关闭详情区，按钮语义尚未生效选中任务就没了（入口本就依赖选中项，等于直接失效）。→ 对策：把 `quickAddItemButton`/`quickAddTriggerButton` 纳入编辑区命中集合，点击它们不再清空选中；该修复同时消除了「插入物品」按钮的同类问题。
 21. **「选择进度」在新存档下恒为空（Phase W）**：两个原因叠加。① 客户端 `ClientAdvancements` **不是全量目录**——服务端按 `AdvancementVisibilityEvaluator` 的可见性规则增量下发（完成态 + 祖先完成度 + `hidden` 标记，可见深度仅 2 层），新存档下客户端只有个位数进度，且已解锁的配方进度还没有展示信息；② `ItemSelectorScreen.CACHE` 是 `static final`，首次打开时若目录为空就把空列表**永久缓存**，之后即便达成进度、重新打开也仍为空。→ 对策：
     - **服务端权威目录**：服务端从 `MinecraftServer#getAdvancements()` 全量导出「带展示信息」的进度（ID + 展示名），随登录后的任务同步一并下发新包 `todolist:advancement_catalog`；客户端缓存在 `AdvancementCatalog`；
@@ -241,7 +247,18 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 - [x] 禁止为已有子任务的父任务设置触发器（右键菜单 + 编辑器 + 命令 + 引擎索引四道），新增首个子任务时自动清除父任务触发器并提示（Phase V）
 - [x] 任务列表右侧展示触发器进度与目标物品图标（父任务子任务进度优先；与负责人并存时形如 `@名字 12/64`）（Phase V）
 - [x] `build-local-17.bat build --offline` 双平台 jar 产出（fabric/forge 1.20.1-1.4.2）并归档 `dist/`
+- [x] 放宽父任务触发器限制（Phase X）：父任务允许挂触发器、完成态改为触发器优先（`syncParentCompletionStates` 跳过有触发器的父任务）；移除右键菜单/编辑器/命令/引擎索引四道守卫与「新增子任务时清除父任务触发器」逻辑；`TaskTriggerServiceTestMain.shouldAdvanceParentTaskWithSubtasks` 与 `TaskManagerSubtaskTestMain.shouldKeepTriggeredParentCompletionFromBeingOverwritten` 固化
 - [ ] 游戏内手工验证清单（见 §8，待用户在游戏环境执行）
+- [ ] **同物品任务额度配额（Phase Z，方案已定、待实现）**：同一项目内多条任务追踪同一种物品时，不再被同一份物品同时满足；设计稿见 `feat-trigger-credit-allocation.md`
+  - [ ] Z1 `TriggerCreditAllocator` 纯逻辑（分组 = 项目 + 类型 + 物品 + 负责人；台账 = 已完成任务）+ 离线单测
+  - [ ] Z2 接入收集类 `recalculateItemCollectByUuid`（进度展示改为"可用份额"）+ 离线回归 + 实机验证
+  - [ ] Z3 接入合成类 1a：`advanceMatchingTasksByUuid` 改两阶段（先累加、再统一判定）+ 离线回归 + 实机验证
+  - [ ] Z4 （可选）同物品占用提示文案 + 文档同步
+
+### 待定决策（Phase Z）
+
+- 收集类进度语义变化后的提示方式：任务右侧加后缀（如 `0/32（同物品已占用 16）`）还是只做文档说明，实现前需先定文案。
+- 合成类若日后要消除"先后创建"的偏差，需要走 1b：新增"每玩家每物品累计合成量"持久化 + 任务创建基线（动 NBT/H2 表结构）。
 
 ### 实施补充说明
 
@@ -285,10 +302,19 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 30. **（Phase U 重点回归，联机双端）** 团队项目里新建带触发器的任务但**不领取/不指派**：任何玩家做对应动作（击杀/破坏/合成/收集/达成进度）都不推进进度、不自动完成、也不弹完成提示；由任一玩家**领取**（或指派给某玩家）后，该玩家再做对应动作即可正常推进与完成；其他玩家做同样动作仍不推进。有权限的玩家手动点击完成不受影响。
 31. **（Phase U 进度清零回归）** 团队任务进行到一半（进度 > 0）时执行**取消领取**：进度应立即回到 0、完成态撤销，任务回到待领取；随后由另一名玩家**领取或被指派**，进度从 0 重新开始。分别验证三条路径：远程联机（服务端保存包）、局域网主机 GUI（已发布局域网的客户端直写）、`/todo task claim|abandon|assign` 命令。
 32. **（Phase V 重点回归）** 选中一个顶层任务后点击顶部「触发」按钮：按钮文案应为「子触发」，点击时**不应**丢失选中态或关闭右侧详情区；完成触发器编辑后应自动在该父任务下生成子任务（标题已按触发器生成并处于行内重命名态）。
-33. **（Phase V 重点回归）** 对**已有子任务的父任务**右键：菜单中不应出现「设置/编辑触发器」；`/todo task trigger set` 也应被拒绝并给出提示；给带触发器的父任务新增第一个子任务时，父任务触发器应自动清除并弹出提示。
+33. **（Phase X 重点回归）** 对**已有子任务的父任务**右键：菜单中应出现「设置/编辑触发器」；`/todo task trigger set` 应能成功设置（不再被拒绝）；给带触发器的父任务新增子任务时，父任务触发器**应保留**（不再自动清除）。父任务触发达标时父任务立即完成，且不会被未完成的子任务改回未完成；未挂触发器的父任务仍按"子任务全部完成才完成"聚合。
 34. **（Phase V 重点回归）** 任务列表中，挂有触发器的任务右侧显示「目标图标 + 进度」（如铁锭图标 + `12/64`）；同时有负责人时显示 `@名字 12/64`；父任务仍显示子任务进度 `1/3`；无触发器的任务维持原有负责人展示。
 35. **（Phase W 重点回归，Fabric + Forge 各测一遍）** 新建一个**全新存档**，不达成任何进度时直接打开触发器编辑器并把类型切到「获得进度」→ 点「选择进度」：列表应能列出全部带展示信息的进度（不再为空）；达成第一个进度后重新打开，列表内容不变（不是靠玩家已解锁进度撑起来的）；再回到主菜单进入另一个存档，列表内容应刷新为新存档的目录，不残留上一个存档的数据。
 36. **（Phase W 重点回归，仅 Forge）** 新建一个「获得进度」触发任务并选中一个**单条件**进度（例如「石器时代」`minecraft:story/mine_stone`）：达成时只弹出**一个**完成提示，任务只完成一次；再用一个**多条件**进度（例如「探索的时光」）验证：条件逐个达成过程中不误触发，真正达成时同样只弹一个提示。
+37. **（Phase Y 重点回归）** 构造三层依赖任务（顶层父任务 → 子任务 → 孙任务）：① GUI 任务列表应展示到第 3 层并逐层缩进；② HUD 同样展示到第 3 层、层级缩进正确，孙任务完成时**不消失**、仍留在原父任务组内显示删除线；③ 把孙任务与子任务全部勾选完成后，父任务在 GUI 与 HUD 中应**同时**变为已完成（不再出现 GUI 未完成而 HUD 已完成）；④ 删除父任务后，其全部后代子任务应从 GUI 与 HUD 中一并消失；⑤ 选中子任务后点击「新增子任务」/「触发」按钮，应能在子任务下再挂一层（不再被顶层任务守卫拒绝）。
+38. **（Phase Y 材料多层回归，联机与单人各测一遍）** 打开「材料配方预览」：默认应只展示目标物品配方所需的**直接材料**；选中某个中间产物点「继续展开」后展开下一层，再次点击可折叠回去；预览层级用树形连线（`├─` / `└─`）展示而非仅缩进；再次反推时回到依赖链上的同一材料（如 铁块 ↔ 铁锭）不应重复展示。点「生成」后：任务列表按预览展开的层级生成多层依赖任务，中间产物为「合成」任务（挂 `CRAFT_ITEM`）、最终材料为「收集」任务（挂 `ITEM_COLLECT`），右侧展示触发器进度；取消勾选的最终材料不生成任务。
+39. **（Phase E4 / E7 材料触发器回归，联机与单人各测一遍）** 用「材料配方预览」生成一组多层任务（如 合成铁块 ×3 → 收集铁锭 ×27）：① 「合成」任务挂 `CRAFT_ITEM`（累计合成量语义）、「收集」任务挂 `ITEM_COLLECT`（持有量语义），右侧均显示目标图标 + 进度；② **背包里预先已有 3 个铁块**时生成：「合成铁块」任务**不应**被判为已完成（旧物品不计入累计合成量），只能靠真的合成出 3 个铁块或手动勾选完成；③ 把所有材料子任务手动勾选完成后，上层的「合成」任务若尚未真的合成出目标物品，应仍是未完成，不会被自动完成；④ 真的合成出目标数量后，「合成」任务由触发器自动完成；⑤ 手动勾选「合成」任务本身可立即完成、再次勾选可取消，且不会被回退；⑥ 多层链路下中间层与顶层行为一致。
+40. **（Phase E5 多候选材料回归，联机与单人各测一遍）** 找一个输入使用物品标签的配方（如「火把 ← 任意木板」「台阶 ← 任意木板」）：① 预览中该材料行名称后应显示「可选 N 种」；② 默认应选中**背包里已有**的那种木板（背包清空后回退为列表首项）；③ 选中该行后点「选择材料」，列表应只列出该配方的候选材料，点选后预览与生成的任务都应换成新选的材料；④ 切换到另一个候选后重新解析，数量与层级不应错乱。
+41. **（Phase E6 触发器优先回归，联机与单人各测一遍）** ① 先用「材料配方预览」生成一组多层任务（如 合成铁块 ×3 → 收集铁锭 ×27），任务右侧应显示**触发器进度 + 目标物品图标**（如 `铁块 0/3`），而不是子任务进度 `1/2`；GUI 任务列表与 HUD 表现一致；② 未挂触发器的父任务仍显示子任务进度 `1/2`（回归不破）。
+42. **（Phase E7 / E8 背包持有量标注回归）** 打开「材料配方预览」：① 背包里已经攒够某材料（如已有 30 个铁锭、配方需要 27）时，该行数量文本应**标绿并显示「已够」**；② 数量不够时数量保持蓝色，并显示灰色「缺 N」（N = 还差多少个，例：需要 27、已有 12 → 显示「缺 15」）；③ 目标物品自身也参与比较；④ 背包里的**潜影盒内**物品不计入（把材料装进潜影盒后重开预览，标绿应回退为未达标）；⑤ 调整目标数量或切换配方重新解析后，标绿与「缺 N」应随之更新。
+43. **（Phase E8 同种材料跨层级累计回归）** 找一个同一材料出现在两个层级的配方组合（如 目标物 ← 木板 ×8 + 部件，部件 ← 木板 ×8，对「部件」点「继续展开」）：① 背包放 **16** 个木板 → 两行的木板数量都标绿（合计刚够）；② 背包只放 **8** 个木板 → **上一层的木板标绿，下一层的木板不标绿并显示「缺 8」**（靠下的行不能重复使用已被上面占用的数量）；③ 背包放 12 个 → 上面标绿、下面显示「缺 4」；④ 把目标数量翻倍后重新解析，分配结果应整体放大且结论一致。
+44. **（Phase E7 HUD 树形连线回归）** 构造三层依赖任务：HUD 中每条子任务行左侧应能看到「祖先竖线 + 当前层 `├ / └` 横向分支线」；非末位子任务的竖线贯穿整行、末位子任务竖线只画到行中线；横向分支线从竖线延伸到标题文本前，宽度足够、清晰可见（不再出现"只有竖线、没有树形结构"）。
+45. **（Phase E9 材料任务合并回归）** 用「材料配方预览」生成一个同种材料出现在两个层级的方案（如 目标物 ← 木板 ×8 + 部件，部件 ← 木板 ×8，对「部件」点「继续展开」）：① 任务列表中**只应有一条**「收集 橡木木板」任务，数量为**汇总后的 16**（不是两条各 8）；② 该任务挂在首次出现的位置（目标物任务下）；③ 背包只放 8 个木板 → 该任务**仍未完成**（8/16），必须凑满 16 才自动完成；④ 中间产物任务（合成 部件）自身仍按 `CRAFT_ITEM` 正常完成，不因少了这条子任务而出问题。
 
 ## 9. 问题回归记录（实机验证轮次）
 
@@ -318,6 +344,17 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | R19 | GUI 列表分不清哪些任务挂了触发器，也看不到触发进度 | 列表右侧只渲染子任务进度或负责人，完全没有触发器信息 | 右侧追加触发器进度与目标物品图标，与负责人并存时形如 `@名字 12/64`（Phase V） | `TaskListWidgetTestMain.shouldShowTriggerProgressAndTargetIconInTrailingMeta` |
 | R20 | 新存档下「选择进度」列表一直是空的，达成第一个进度后重开仍为空 | ① `ClientAdvancements` 只含服务端按可见性下发的少量进度；② `ItemSelectorScreen.CACHE` 把首次打开时的空结果永久缓存 | 新增服务端权威进度目录包 `todolist:advancement_catalog`，`AdvancementCatalog` 客户端缓存并与存储域绑定；进度类型每次打开重建，不再缓存空结果（Phase W） | `AdvancementCatalogTestMain`（同域读缓存、切换域失效、编解码往返）；在线列表靠 §8-35 |
 | R21 | Forge 下同一条进度弹两个完成提示 | `AdvancementEvent` 为基类，`award` 会先投递 `AdvancementProgressEvent`（GRANT）再投递 `AdvancementEarnEvent`，监听基类把两次都收了 | `ForgeGameEventBridge.onAdvancement` 改为只监听 `AdvancementEvent.AdvancementEarnEvent`（Phase W） | 无法离线复现（需真实 Forge 事件）；靠 §8-36 |
+| R22 | 任务列表与 HUD 只展示 2 层，第 3 层依赖任务在列表里看不到（HUD 里还被压到第 2 层显示） | 层级模型本身是扁平单指父指针（可表达任意深度），但展示链路有硬编码 2 层：GUI 只补一层直属子任务、缩进固定 0/14，HUD 只展开一层；同时 `canAddSubtaskToParent` / `shouldShowAddSubtaskButton` / `resolveTriggerCreationParentTaskId` 三处 `isTopLevelTask()` 守卫禁止子任务再挂子任务 | GUI `buildSectionTasksWithDescendants` 改 BFS 收集全部后代 + `TaskListWidget.appendTaskRows` 递归渲染 + `DisplayRow.depth` 逐层缩进；HUD `appendHudGroup` 按真实深度递归并逐层缩进；三处守卫去掉（Phase Y） | `TaskListWidgetTestMain` 多层渲染用例；`TodoHudRendererTestMain.shouldKeepThirdLevelTaskInsideItsParentGroup` |
+| R23 | HUD 中第 3 层任务完成后直接消失；删除父任务后 HUD 里第 3 层任务仍残留 | ① 第 3 层任务在 HUD 里是孤儿，被平铺追加到全局 pending/done，完成后进 done 区又受 `hudDoneLimit`（默认 5）裁剪而"消失"；② `TaskManager.deleteTask` 只删自身，后代成为孤儿继续被 HUD 渲染 | HUD 改为按 `knownTaskIds` 建 children 索引、父不在范围内按根处理，同组子任务留在原组显示删除线；`TaskManager.deleteTask` 改为级联删除全部后代（BFS + visited），`collectDescendantIds` 供复用（Phase Y） | `TaskManagerSubtaskTestMain.shouldCascadeDeleteDescendants`；`TodoHudRendererTestMain.shouldKeepThirdLevelTaskInsideItsParentGroup` |
+| R24 | 子任务全部完成后，父任务在 GUI 任务列表仍是未完成，但在 HUD 却归到了已完成 | HUD 有独立于 `TaskManager` 的 `isHudGroupCompleted`，按"直属子任务全部完成"判 done，既缺 `hasTrigger()` 保护也没有子树递归；GUI 走 `TaskManager.syncParentCompletionStates` 聚合（跳过有触发器的父任务、且需全部完成） | HUD 完成态统一改为 `isSubtreeCompleted`（触发器优先 + 整棵子树递归），结果写入 `hudCompletedByTaskId`，`isHudGroupCompleted` 只读该表，与 GUI 收敛到同一规则（Phase Y） | `TodoHudRendererTestMain.shouldKeepTriggeredParentInPendingWhenTriggerNotMet`；`TaskManagerSubtaskTestMain.shouldAggregateThreeLevelCompletionBottomUp` |
+| R25 | 材料配方预览生成的「合成」父任务（含中间层）在自己没有触发器时，子任务一做完就被自动完成 —— 材料齐了不等于目标物品真的做出来了；手动给父任务补触发器后行为才正常 | `MaterialTaskGenerator` 的合成任务用 `createDependencyTask` 生成，**不挂触发器**，完成态完全落到 `syncParentCompletionStates` 的子任务聚合上（阶段 3c 的设计前提与"父任务带触发器"语义不一致）；同时带触发器且有子任务的任务在手动勾选时走级联分支，父任务自身完成态不会被切换，等于"手动勾选"这条路径也失效 | 合成任务改为 `createCraftTask`，挂 `CRAFT_ITEM 物品 ×数量`；收集任务保持 `ITEM_COLLECT`。`toggleTaskCompletion` 对带触发器的任务单独处理：手动勾选直接切换自身完成态，无触发器后代仍级联；`TodoScreen` 的「我的」视图批量子任务切换跳过带触发器子任务，且带触发器任务不再走批量分支（Phase E4） | `MaterialTaskGeneratorTestMain.shouldGenerateParentWithMaterialSubtasks`/`shouldGenerateDependencyChainMatchingExpandedLevels`；`TaskManagerSubtaskTestMain.shouldKeepTriggeredParentIncompleteWhenAllChildrenComplete`/`shouldManuallyToggleTriggeredParentWithChildren` |
+| R26 | ①父任务明明已经拥有目标物品（触发器应已达标），却仍在等子任务；②父任务右侧只显示子任务进度（`1/2`），看不到触发器进度；③HUD 里第 2/3 层任务仅靠缩进，层级关系不直观 | ①`CRAFT_ITEM` 只累加"本次会话新合成"的数量，玩家在此之前已有的物品不计数，触发器永远不达标，父任务看起来一直在等子任务；②GUI `buildTaskTrailingMetaText` 与 HUD `buildRowVisual` 均是**先**取子任务进度，只有没有子任务时才回退到触发器进度；③HUD 只用 `HUD_SUBTASK_EXTRA_INDENT` 固定缩进 + `"- "` 前缀，没有任何连线 | ①合成任务触发器改用 `ITEM_COLLECT`（持有量语义），复用 Phase L「设置触发器后立即评估持有量」链路，已有物品即达标；②GUI 与 HUD 的进度取值顺序对调为**触发器优先**（挂触发器的父任务不再显示子任务进度，`resolveTrailingTriggerIconId` 同步放行）；③HUD 新增 `hudTreeLineByTaskId`（末位标记 + 祖先层是否还有后续兄弟）并在行内用 `GuiGraphics.fill` 画树形连线（祖先竖线 + `├ / └` 分支线），层级宽度 `HUD_TREE_LEVEL_WIDTH`（Phase E6） | `MaterialTaskGeneratorTestMain.shouldGenerateParentWithMaterialSubtasks`（断言 ITEM_COLLECT）；`TaskListWidgetTestMain.shouldShowTriggerProgressAndTargetIconInTrailingMeta`（带触发器父任务展示触发器进度与图标）；`TodoHudRendererTestMain.shouldKeepTriggeredParentInPendingWhenTriggerNotMet`（右侧优先展示触发器进度）/`shouldDifferentiateSubtaskRowsInHud`/`shouldKeepThirdLevelTaskInsideItsParentGroup`（树形连线签名） |
+
+| R27 | ①子任务里的「合成」步骤被玩家背包里已有的物品直接判达标，展开配方材料却不需要真的合成（Phase E6 改 `ITEM_COLLECT` 引入的回归）；②材料配方预览看不出"背包里的材料够不够"，需要人工数；③HUD 多层层级只有竖线、看不到 `├ / └` 横向分支线 | ①`ITEM_COLLECT` 是持有量语义，任务创建前已有的物品也计入，与"展开配方材料说明这一步必须自己合成"的意图冲突；②预览界面只渲染材料清单，没有任何"已有/需求"比较；③`HUD_TREE_LEVEL_WIDTH = 6` 时横向分支线的终点 `textStartX - 2` 只剩约 4px，视觉上几乎不可见 | ①撤销 E6 的做法，合成任务（目标物与中间产物）触发器**改回 `CRAFT_ITEM`**（累计合成量语义），收集任务保持 `ITEM_COLLECT`（Phase E7）；②`MaterialListScreen` 新增 `collectHeldItemCounts()`（只统计背包槽位，**不展开潜影盒**）+ `countHeldItems()` / `isRequirementSatisfied()`，行内数量达标标绿（`0xFF55FF55`）、未达标追加灰色「(已有 N)」，同一份快照继续驱动"多候选材料背包优先"（Phase E7）；③`HUD_TREE_LEVEL_WIDTH` 6→10、新增 `HUD_TREE_LINE_OFFSET = 3`，横向分支线终点改为 `textStartX - 1`（Phase E7） | `MaterialTaskGeneratorTestMain.shouldGenerateParentWithMaterialSubtasks`/`shouldGenerateDependencyChainMatchingExpandedLevels`（断言改回 `CRAFT_ITEM`）；`MaterialPreviewStateTestMain.shouldGenerateTasksWithSelection`、`MaterialListScreenTestMain.shouldGenerateTasksAndCloseScreen`（同步断言）；`MaterialListScreenTestMain.shouldMarkCountSufficientWhenHeldItemsReachRequirement`（新增，覆盖达标标绿/未达标不标绿/刚好达线）；HUD 连线靠 §8-43 实机验证 |
+
+| R28 | ①材料配方预览只用颜色区分"数量已达标/未达标"，新手不理解两种颜色含义；②同一材料出现在多个层级时（第 1 层与第 2 层各需 8 个木板），每行都各自与背包总量比较，出现"每行都标绿、实际总量不够"的误导；③不够的项显示的是"已有多少"，玩家还得自己减出"还差多少" | ①上一轮（Phase E7）只在未达标时追加了一个裸数字「(12)」，达标时完全是"裸绿数字"，没有可读文字；②`MaterialListScreen` 逐行独立调用 `heldCountFor(itemId)` 取背包总量，没有任何跨行/跨层级的额度分配；③标注语义停在"现状"而不是"待办" | ①`buildHeldSuffix` 改为输出可读文字：达标 → 绿色「已够」（`gui.todolist.material_preview.held_enough`），不够 → 灰色「缺 N」（`...held_missing`，`N = 需求 − 该行可用持有量`），颜色降为辅助线索（Phase E8）；②新增 `allocateHeldCounts` / `consumeHeld`，在 `refreshPlan` 后按**显示顺序自上而下**为每行分配背包持有量（高层级先占 `min(已有, 需求)`，低层级只用剩余量），行渲染与目标行统一走 `allocatedHeldCount` / `targetHeldCount`；③行宽不足时只隐藏持有量标注，数量本身始终可见 | `MaterialListScreenTestMain.shouldMarkCountSufficientWhenHeldItemsReachRequirement`（「已够」/「缺 N」文字断言）；`MaterialListScreenTestMain.shouldAllocateHeldItemsAcrossRepeatedMaterials`（16 够 / 12 只够上层且下层「缺 4」/ 8 只够上层且下层「缺 8」）；实机靠 §8-42 / §8-43 |
+
+| R29 | 同种材料出现在多个层级/分支时，生成的任务列表里多条同种材料任务**共享同一份数量**：背包只有一半数量，几条任务就全部被判为完成 | `MaterialResolver` 只在 `leafTotals` 里跨分支求和，树里仍是多个独立节点；`MaterialTaskGenerator.appendSubtreeTasks` 是"一个节点一条任务"，于是生成多条「收集 同种材料 ×单层需求」，而 `ITEM_COLLECT` 是绝对持有量语义 → 每条各自拿同一份背包数量比较（Phase E9 前） | 新增 `collectFinalMaterialTotals()` 预汇总每个最终材料的总需求；`appendSubtreeTasks` 对最终材料（叶子 + 退化为最终材料的中间产物）按 itemId 去重，**只在首次出现处生成一条收集任务**、数量取汇总需求（Phase E9） | `MaterialTaskGeneratorTestMain.shouldMergeRepeatedFinalMaterialIntoOneTask`（三个层级各需 1 个原木 → 只生成一条 ×3 的收集任务、挂首次出现位置）；实机靠 §8-45 |
 
 ### 新增测试任务索引
 
@@ -343,6 +380,6 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 | `shouldCompleteAdvancementOnFirstAward` | ADVANCEMENT | 单次达标；重复上报不再匹配 |
 | `shouldIgnoreUnassignedTeamTaskForAllPlayers` | 团队边界（Phase U） | 未指派团队任务：累加型与收集型都不推进、不置脏；必须领取/指派后才参与触发 |
 | `shouldResetTriggerProgressWhenTeamAssigneeChanges` | 领取人变更（Phase U） | 取消领取/改派清零进度与完成态；未变更、新任务、个人任务均不受影响 |
-| `shouldIgnoreParentTaskWithSubtasks` | 父任务边界（Phase V） | 父任务不进倒排索引、不被事件推进；同桶叶子任务照常完成 |
+| `shouldAdvanceParentTaskWithSubtasks` | 父任务边界（Phase X） | 父任务与叶子任务都进倒排索引、都被事件推进；父任务可被触发器完成 |
 | `shouldIgnoreNonAssigneeEventsForTeamTask` | 团队边界 | 非负责人事件不计入，负责人正常推进 |
 | `shouldSkipCompletedTasksInIndex` | 完成态边界 | 已完成任务不进索引、不被事件匹配 |

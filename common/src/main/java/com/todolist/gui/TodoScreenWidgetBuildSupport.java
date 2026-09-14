@@ -27,6 +27,8 @@ final class TodoScreenWidgetBuildSupport {
     private static final int QUICK_ADD_ITEM_BUTTON_GAP = 4;
     /** 快速新增行「触发器建任务」按钮宽度（像素）。 */
     private static final int QUICK_ADD_TRIGGER_BUTTON_WIDTH = 32;
+    /** 快速新增行「材料反推」按钮宽度（像素）。 */
+    private static final int QUICK_ADD_MATERIAL_BUTTON_WIDTH = 32;
 
     /**
      * 工具类不允许实例化。
@@ -109,16 +111,18 @@ final class TodoScreenWidgetBuildSupport {
         final EditBox quickAddField;
         final Button quickAddItemButton;
         final Button quickAddTriggerButton;
+        final Button quickAddMaterialButton;
 
         /**
          * 创建任务区控件集合。
          */
         TaskAreaWidgets(TaskListWidget taskListWidget, EditBox quickAddField, Button quickAddItemButton,
-                        Button quickAddTriggerButton) {
+                        Button quickAddTriggerButton, Button quickAddMaterialButton) {
             this.taskListWidget = taskListWidget;
             this.quickAddField = quickAddField;
             this.quickAddItemButton = quickAddItemButton;
             this.quickAddTriggerButton = quickAddTriggerButton;
+            this.quickAddMaterialButton = quickAddMaterialButton;
         }
     }
 
@@ -352,7 +356,8 @@ final class TodoScreenWidgetBuildSupport {
                                                         int quickAddFieldWidth,
                                                         int inputRowHeight,
                                                         Runnable onInsertItemClick,
-                                                        Runnable onTriggerTaskClick) {
+                                                        Runnable onTriggerTaskClick,
+                                                        Runnable onMaterialPreviewClick) {
         TaskListWidget taskListWidget = new TaskListWidget(minecraft, contentX, listTop, contentWidth, listHeight);
         taskListWidget.setTeamAllViewForNonOp(teamAllViewForNonOp);
         taskListWidget.setTaskReorderEnabled(taskReorderEnabled);
@@ -368,7 +373,9 @@ final class TodoScreenWidgetBuildSupport {
         int quickAddItemButtonX = rightEdge - quickAddItemButtonWidth;
         int quickAddTriggerButtonWidth = QUICK_ADD_TRIGGER_BUTTON_WIDTH;
         int quickAddTriggerButtonX = quickAddItemButtonX - QUICK_ADD_ITEM_BUTTON_GAP - quickAddTriggerButtonWidth;
-        int quickAddItemFieldWidth = Math.max(60, quickAddTriggerButtonX - QUICK_ADD_ITEM_BUTTON_GAP - quickAddFieldX);
+        int quickAddMaterialButtonWidth = QUICK_ADD_MATERIAL_BUTTON_WIDTH;
+        int quickAddMaterialButtonX = quickAddTriggerButtonX - QUICK_ADD_ITEM_BUTTON_GAP - quickAddMaterialButtonWidth;
+        int quickAddItemFieldWidth = Math.max(60, quickAddMaterialButtonX - QUICK_ADD_ITEM_BUTTON_GAP - quickAddFieldX);
 
         EditBox quickAddField = new EditBox(font, quickAddFieldX, inputRowY, quickAddItemFieldWidth, inputRowHeight, Component.empty());
         quickAddField.setHint(Component.translatable("gui.todolist.input.quick_add.placeholder"));
@@ -388,7 +395,15 @@ final class TodoScreenWidgetBuildSupport {
                         Component.translatable("gui.todolist.detail.insert_item.tooltip")))
                 .build();
 
-        return new TaskAreaWidgets(taskListWidget, quickAddField, quickAddItemButton, quickAddTriggerButton);
+        Button quickAddMaterialButton = Button.builder(Component.translatable("gui.todolist.quick_add.material"),
+                        b -> onMaterialPreviewClick.run())
+                .bounds(quickAddMaterialButtonX, inputRowY, quickAddMaterialButtonWidth, inputRowHeight)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(
+                        Component.translatable("gui.todolist.quick_add.material.tooltip")))
+                .build();
+
+        return new TaskAreaWidgets(taskListWidget, quickAddField, quickAddItemButton, quickAddTriggerButton,
+                quickAddMaterialButton);
     }
 
     /**
