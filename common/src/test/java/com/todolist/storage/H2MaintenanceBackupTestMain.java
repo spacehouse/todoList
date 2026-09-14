@@ -5,15 +5,20 @@ import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.task.Task;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Comparator;
 import java.util.List;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * H2MaintenanceBackupTestMain 覆盖 M3-A 的维护锁与 H2 在线备份行为。
@@ -35,6 +40,179 @@ public final class H2MaintenanceBackupTestMain {
         GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldMarkUnavailableWhenSchemaUpgradeFails", H2MaintenanceBackupTestMain::shouldMarkUnavailableWhenSchemaUpgradeFails);
         GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldRejectWritesDuringMaintenance", H2MaintenanceBackupTestMain::shouldRejectWritesDuringMaintenance);
         GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldRejectConcurrentMaintenance", H2MaintenanceBackupTestMain::shouldRejectConcurrentMaintenance);
+        GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldListAndPruneAutomaticBackups", H2MaintenanceBackupTestMain::shouldListAndPruneAutomaticBackups);
+        GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldStageAndApplyPendingRestore", H2MaintenanceBackupTestMain::shouldStageAndApplyPendingRestore);
+        GuiTestSupport.runTestCase("H2MaintenanceBackupTestMain.shouldRejectInvalidBackupWhenStaging", H2MaintenanceBackupTestMain::shouldRejectInvalidBackupWhenStaging);
+    }
+
+    /**
+     * 验证备份列表按时间倒序、序号从 1 开始，并且保留上限只清理自动备份。
+     */
+    private static void shouldListAndPruneAutomaticBackups() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-backup-retention-");
+            ModConfig.getInstance().setH2BackupOnStart(false);
+            Path backupDir = H2BackupService.getBackupDirectory();
+            Files.createDirectories(backupDir);
+            writeDummyBackup(backupDir.resolve("todolist-h2-20260101-000001.zip"), 1_700_000_000_000L);
+            writeDummyBackup(backupDir.resolve("todolist-h2-20260101-000002.zip"), 1_700_000_001_000L);
+            writeDummyBackup(backupDir.resolve("todolist-h2-20260101-000003.zip"), 1_700_000_002_000L);
+            writeDummyBackup(backupDir.resolve("manual-keep.zip"), 1_700_000_003_000L);
+            writeDummyBackup(backupDir.resolve("schema-upgrade-v2-to-v3.zip"), 1_700_000_004_000L);
+
+            H2BackupService service = new H2BackupService();
+            List<H2BackupService.BackupEntry> entries = service.listBackups();
+
+            GuiTestSupport.assertEquals(5, entries.size(), "应列出全部 .zip 备份");
+            GuiTestSupport.assertEquals("schema-upgrade-v2-to-v3.zip",
+                    entries.get(0).path().getFileName().toString(), "最新的备份应排在第 1 位");
+            GuiTestSupport.assertEquals(1, entries.get(0).index(), "序号应从 1 开始");
+            GuiTestSupport.assertEquals("todolist-h2-20260101-000001.zip",
+                    entries.get(entries.size() - 1).path().getFileName().toString(), "最旧的备份应排在最后");
+
+            GuiTestSupport.assertEquals("schema-upgrade-v2-to-v3.zip",
+                    service.resolveBackup("latest").getFileName().toString(), "latest 应解析到最近的备份");
+            GuiTestSupport.assertEquals("todolist-h2-20260101-000003.zip",
+                    service.resolveBackup("3").getFileName().toString(), "序号 3 应解析到第 3 条");
+            GuiTestSupport.assertEquals("manual-keep.zip",
+                    service.resolveBackup("manual-keep").getFileName().toString(), "省略扩展名也应能解析");
+            GuiTestSupport.assertTrue(service.resolveBackup("no-such-backup") == null,
+                    "不存在的备份应解析为 null");
+
+            List<Path> deleted = service.pruneAutomaticBackups(2);
+
+            GuiTestSupport.assertEquals(1, deleted.size(), "保留 2 份自动备份时只应删除 1 份");
+            GuiTestSupport.assertEquals("todolist-h2-20260101-000001.zip",
+                    deleted.get(0).getFileName().toString(), "应删除最早的自动备份");
+            GuiTestSupport.assertTrue(Files.exists(backupDir.resolve("manual-keep.zip")),
+                    "手动命名的备份不应被自动清理");
+            GuiTestSupport.assertTrue(Files.exists(backupDir.resolve("schema-upgrade-v2-to-v3.zip")),
+                    "schema 升级备份不应被自动清理");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 备份列表与保留上限时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证恢复流程：暂存备份 → 数据库关闭后落地 → 数据回到备份时的状态，并留下恢复前安全备份。
+     */
+    private static void shouldStageAndApplyPendingRestore() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-restore-");
+            ModConfig.getInstance().setH2BackupOnStart(false);
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            H2TaskStore store = new H2TaskStore();
+            new H2StorageBootstrap().ensureReady();
+            saveLocalTask(store, "backup-task-id", "snapshot-state");
+            H2BackupService.BackupResult snapshot = new H2BackupService().backup("snapshot");
+            saveLocalTask(store, "backup-task-id", "later-state");
+            GuiTestSupport.assertEquals("later-state", store.loadLocalTasks().get(0).getTitle(),
+                    "覆盖保存后应读到新状态");
+
+            H2PendingRestore.stageRestore(snapshot.getBackupPath());
+
+            GuiTestSupport.assertTrue(H2PendingRestore.hasPending(), "暂存后应存在待恢复");
+            GuiTestSupport.assertEquals("snapshot.zip", H2PendingRestore.readPendingSource(),
+                    "标记文件应记录来源备份名");
+
+            shutdownDatabase(provider);
+            H2StorageBootstrap.resetAllForTests();
+            H2PendingRestore.resetForTests();
+
+            H2PendingRestore.AppliedRestore applied = H2PendingRestore.applyIfPending(provider.getDatabaseBasePath());
+
+            GuiTestSupport.assertTrue(applied != null, "存在待恢复时应完成落地");
+            GuiTestSupport.assertTrue(applied != null && applied.safetyBackup() != null
+                    && Files.exists(applied.safetyBackup()), "落地前应生成 pre-restore 安全备份");
+            GuiTestSupport.assertFalse(H2PendingRestore.hasPending(), "落地后应清理暂存状态");
+
+            new H2StorageBootstrap().ensureReady();
+
+            GuiTestSupport.assertEquals("snapshot-state", new H2TaskStore().loadLocalTasks().get(0).getTitle(),
+                    "恢复后应回到备份时的数据");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 恢复流程时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证暂存恢复时会拒绝不含数据库文件（或无法打开）的备份。
+     */
+    private static void shouldRejectInvalidBackupWhenStaging() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-restore-invalid-");
+            Path backupDir = H2BackupService.getBackupDirectory();
+            Files.createDirectories(backupDir);
+            Path broken = backupDir.resolve("broken.zip");
+            try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(broken))) {
+                output.putNextEntry(new ZipEntry("readme.txt"));
+                output.write("not a database".getBytes(StandardCharsets.UTF_8));
+                output.closeEntry();
+            }
+
+            try {
+                H2PendingRestore.stageRestore(broken);
+                throw new AssertionError("不含数据库文件的备份应被拒绝");
+            } catch (IOException expected) {
+                GuiTestSupport.assertFalse(H2PendingRestore.hasPending(), "校验失败不应留下待恢复状态");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 恢复校验时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 写入指定标题的本地任务。
+     *
+     * @param store H2 任务存储
+     * @param taskId 任务 ID
+     * @param title 任务标题
+     * @throws Exception 保存失败时抛出
+     */
+    private static void saveLocalTask(H2TaskStore store, String taskId, String title) throws Exception {
+        Task task = new Task(title, "");
+        task.setId(taskId);
+        store.saveLocalTasks(List.of(task));
+    }
+
+    /**
+     * 关闭当前 H2 数据库连接，释放数据库文件。
+     *
+     * @param provider H2 连接提供器
+     * @throws Exception 执行失败时抛出
+     */
+    private static void shutdownDatabase(H2ConnectionProvider provider) throws Exception {
+        try (Connection connection = provider.openConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("SHUTDOWN");
+        } catch (SQLException exception) {
+            // SHUTDOWN 会主动断开连接，驱动可能抛出「连接已关闭」，属预期行为
+        }
+    }
+
+    /**
+     * 写入一个用于列表/清理验证的占位备份 zip，并指定修改时间。
+     *
+     * @param path 备份文件路径
+     * @param modifiedAtMillis 期望的最后修改时间
+     * @throws Exception 写入失败时抛出
+     */
+    private static void writeDummyBackup(Path path, long modifiedAtMillis) throws Exception {
+        try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(path))) {
+            output.putNextEntry(new ZipEntry("todolist.mv.db"));
+            output.write(new byte[] {1, 2, 3});
+            output.closeEntry();
+        }
+        Files.setLastModifiedTime(path, java.nio.file.attribute.FileTime.fromMillis(modifiedAtMillis));
     }
 
     /**

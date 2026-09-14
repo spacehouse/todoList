@@ -197,6 +197,8 @@ public class TaskListWidget implements Renderable {
         private final Task task;
         private final boolean taskExpandable;
         private final boolean taskExpanded;
+        /** 任务行在依赖树中的层级：顶层任务为 0，子任务为 1，孙任务为 2，依此类推。 */
+        private final int depth;
 
         /**
          * 创建一行渲染数据。
@@ -205,10 +207,11 @@ public class TaskListWidget implements Renderable {
          * @param sectionId 分段 ID
          * @param sectionTitle 分段标题
          * @param task 当前行任务
+         * @param depth 任务行层级，非任务行传 0
          */
         private DisplayRow(RowType rowType, String sectionId, String sectionTitle,
                            boolean sectionExpandable, boolean sectionExpanded,
-                           Task task, boolean taskExpandable, boolean taskExpanded) {
+                           Task task, boolean taskExpandable, boolean taskExpanded, int depth) {
             this.rowType = rowType;
             this.sectionId = sectionId;
             this.sectionTitle = sectionTitle;
@@ -217,6 +220,7 @@ public class TaskListWidget implements Renderable {
             this.task = task;
             this.taskExpandable = taskExpandable;
             this.taskExpanded = taskExpanded;
+            this.depth = Math.max(0, depth);
         }
     }
 
@@ -679,9 +683,9 @@ public class TaskListWidget implements Renderable {
     /**
      * 构建任务标题右侧显示的元信息文本。
      *
-     * 优先级：父任务的子任务进度 → 触发器进度（可与负责人并存）→ 负责人。
-     * 触发器进度与负责人并存时形如「@名字 12/64」，便于在列表中直接区分哪些任务
-     * 挂有触发器、以及事件驱动任务的当前进度。
+     * 优先级：触发器进度（可与负责人并存）→ 父任务的子任务进度 → 负责人。
+     * 触发器是任务的完成判定依据，挂触发器的父任务应优先展示触发器进度，
+     * 不再被子任务进度顶掉；触发器进度与负责人并存时形如「@名字 12/64」。
      *
      * @param task 目标任务
      * @return 右侧元信息文本；无内容时返回空字符串
@@ -690,17 +694,17 @@ public class TaskListWidget implements Renderable {
         if (task == null) {
             return "";
         }
+        String assigneeName = resolveAssigneeName(task);
+        String assignee = assigneeName.isEmpty() ? "" : "@" + assigneeName;
+        String triggerProgress = buildTriggerProgressText(task);
+        if (!triggerProgress.isEmpty()) {
+            return assignee.isEmpty() ? triggerProgress : assignee + " " + triggerProgress;
+        }
         String parentProgress = buildSubtaskProgressText(task);
         if (!parentProgress.isEmpty()) {
             return parentProgress;
         }
-        String triggerProgress = buildTriggerProgressText(task);
-        String assigneeName = resolveAssigneeName(task);
-        String assignee = assigneeName.isEmpty() ? "" : "@" + assigneeName;
-        if (triggerProgress.isEmpty()) {
-            return assignee;
-        }
-        return assignee.isEmpty() ? triggerProgress : assignee + " " + triggerProgress;
+        return assignee;
     }
 
     /**
@@ -718,16 +722,13 @@ public class TaskListWidget implements Renderable {
 
     /**
      * 解析任务右侧触发器进度前应展示的目标图标。
-     * 仅当该行确实展示触发器进度（非父任务、已挂触发器）时返回，目标无法解析时返回 null。
+     * 只要该行展示了触发器进度（挂触发器）就返回目标图标，目标无法解析时返回 null。
      *
      * @param task 目标任务
      * @return 物品资源 ID；不展示图标时返回 null
      */
     private String resolveTrailingTriggerIconId(Task task) {
         if (task == null || !task.hasTrigger()) {
-            return null;
-        }
-        if (!buildSubtaskProgressText(task).isEmpty()) {
             return null;
         }
         return com.todolist.client.TriggerTargetSupport.resolveIconId(task.getTrigger());
@@ -860,13 +861,13 @@ public class TaskListWidget implements Renderable {
     }
 
     /**
-     * 返回任务行的层级缩进。
+     * 返回任务行的层级缩进，层级不限，按深度逐层递增。
      *
      * @param row 当前任务行
      * @return 层级缩进
      */
     private int getTaskIndent(DisplayRow row) {
-        return row != null && row.rowType == RowType.SUBTASK ? SUBTASK_INDENT : 0;
+        return row == null ? 0 : row.depth * SUBTASK_INDENT;
     }
 
     /**
@@ -1933,7 +1934,8 @@ public class TaskListWidget implements Renderable {
                         section.expanded,
                         null,
                         false,
-                        false));
+                        false,
+                        0));
             }
             if (!section.expandable || section.expanded) {
                 Map<String, Task> sectionTaskIndex = new LinkedHashMap<>();
@@ -1942,36 +1944,11 @@ public class TaskListWidget implements Renderable {
                         sectionTaskIndex.put(task.getId(), task);
                     }
                 }
+                // 同一任务只渲染一次：父子关系成环或数据异常时也不会无限递归
+                Set<String> renderedTaskIds = new LinkedHashSet<>();
                 for (Task task : section.tasks) {
                     if (task != null && isTopLevelTask(task, sectionTaskIndex)) {
-                        List<Task> children = getDirectChildren(task);
-                        boolean expandable = !children.isEmpty();
-                        boolean expanded = expandable
-                                && (expandedParentTaskIds.contains(task.getId())
-                                || forcedExpandedParentTaskIds.contains(task.getId()));
-                        if (expandable) {
-                            expandableTaskIds.add(task.getId());
-                        }
-                        rows.add(new DisplayRow(RowType.TASK,
-                                section.id,
-                                section.title,
-                                section.expandable,
-                                section.expanded,
-                                task,
-                                expandable,
-                                expanded));
-                        if (expanded) {
-                            for (Task child : children) {
-                                rows.add(new DisplayRow(RowType.SUBTASK,
-                                        section.id,
-                                        section.title,
-                                        section.expandable,
-                                        section.expanded,
-                                        child,
-                                        false,
-                                        false));
-                            }
-                        }
+                        appendTaskRows(rows, expandableTaskIds, renderedTaskIds, section, task, 0);
                     }
                 }
             }
@@ -1983,6 +1960,50 @@ public class TaskListWidget implements Renderable {
             heights.add(getRowHeight(row));
         }
         this.rowHeights = heights;
+    }
+
+    /**
+     * 递归追加任务行及其已展开的后代行，层级不限。
+     *
+     * @param rows 输出行列表
+     * @param expandableTaskIds 收集到的可展开任务 ID，用于清理失效的展开状态
+     * @param renderedTaskIds 已渲染任务 ID，防止重复渲染
+     * @param section 当前分段
+     * @param task 当前任务
+     * @param depth 当前任务层级，顶层为 0
+     */
+    private void appendTaskRows(List<DisplayRow> rows,
+                                Set<String> expandableTaskIds,
+                                Set<String> renderedTaskIds,
+                                SectionModel section,
+                                Task task,
+                                int depth) {
+        if (task == null || task.getId() == null || !renderedTaskIds.add(task.getId())) {
+            return;
+        }
+        List<Task> children = getDirectChildren(task);
+        boolean expandable = !children.isEmpty();
+        boolean expanded = expandable
+                && (expandedParentTaskIds.contains(task.getId())
+                || forcedExpandedParentTaskIds.contains(task.getId()));
+        if (expandable) {
+            expandableTaskIds.add(task.getId());
+        }
+        rows.add(new DisplayRow(depth == 0 ? RowType.TASK : RowType.SUBTASK,
+                section.id,
+                section.title,
+                section.expandable,
+                section.expanded,
+                task,
+                expandable,
+                expanded,
+                depth));
+        if (!expanded) {
+            return;
+        }
+        for (Task child : children) {
+            appendTaskRows(rows, expandableTaskIds, renderedTaskIds, section, child, depth + 1);
+        }
     }
 
     /**

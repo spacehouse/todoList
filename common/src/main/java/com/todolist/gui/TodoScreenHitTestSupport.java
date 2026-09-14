@@ -43,6 +43,7 @@ final class TodoScreenHitTestSupport {
                                      boolean quickAddMarkerHit,
                                      Button quickAddItemButton,
                                      Button quickAddTriggerButton,
+                                     Button quickAddMaterialButton,
                                      Button detailCloseButton,
                                      Button addSubtaskButton,
                                      Button claimButton,
@@ -64,6 +65,7 @@ final class TodoScreenHitTestSupport {
         }
         if (quickAddItemButton != null && quickAddItemButton.visible && quickAddItemButton.isMouseOver(mouseX, mouseY)) return true;
         if (quickAddTriggerButton != null && quickAddTriggerButton.visible && quickAddTriggerButton.isMouseOver(mouseX, mouseY)) return true;
+        if (quickAddMaterialButton != null && quickAddMaterialButton.visible && quickAddMaterialButton.isMouseOver(mouseX, mouseY)) return true;
         if (detailCloseButton != null && detailCloseButton.visible && detailCloseButton.isMouseOver(mouseX, mouseY)) return true;
         if (addSubtaskButton != null && addSubtaskButton.visible && addSubtaskButton.isMouseOver(mouseX, mouseY)) return true;
         if (claimButton != null && claimButton.visible && claimButton.isMouseOver(mouseX, mouseY)) return true;

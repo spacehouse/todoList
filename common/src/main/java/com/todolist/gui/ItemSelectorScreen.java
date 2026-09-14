@@ -22,6 +22,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -56,6 +57,8 @@ public class ItemSelectorScreen extends Screen {
     private final Kind kind;
     private final Consumer<String> selectCallback;
     private final boolean includeTagWrap;
+    /** 限定可选项的资源 ID 集合；为 null 表示不限制（如「选择替代材料」只列出该配方的候选物品）。 */
+    private final Set<String> allowedIds;
     private List<ItemEntry> filtered = List.of();
     private EditBox searchField;
     private int listTop;
@@ -84,11 +87,29 @@ public class ItemSelectorScreen extends Screen {
      * @param includeTagWrap 为 true 时回调值带 [item:...] 标记包裹
      */
     public ItemSelectorScreen(Screen parent, Kind kind, Consumer<String> selectCallback, boolean includeTagWrap) {
+        this(parent, kind, selectCallback, includeTagWrap, null);
+    }
+
+    /**
+     * 创建限定候选范围的目标选择器。
+     *
+     * @param parent         父界面，关闭时返回
+     * @param kind           目标类型
+     * @param selectCallback 选中回调，参数为资源 ID
+     * @param includeTagWrap 为 true 时回调值带 [item:...] 标记包裹
+     * @param allowedIds     限定可选项的资源 ID 集合；为 null 或空表示不限制
+     */
+    public ItemSelectorScreen(Screen parent,
+                              Kind kind,
+                              Consumer<String> selectCallback,
+                              boolean includeTagWrap,
+                              Set<String> allowedIds) {
         super(Component.translatable("gui.todolist.item_selector.title." + kind.name().toLowerCase(Locale.ROOT)));
         this.parent = parent;
         this.kind = kind;
         this.selectCallback = selectCallback;
         this.includeTagWrap = includeTagWrap;
+        this.allowedIds = allowedIds == null || allowedIds.isEmpty() ? null : Set.copyOf(allowedIds);
     }
 
     /**
@@ -264,6 +285,9 @@ public class ItemSelectorScreen extends Screen {
         List<ItemEntry> source = CACHE.getOrDefault(kind, List.of());
         List<ItemEntry> result = new ArrayList<>();
         for (ItemEntry entry : source) {
+            if (allowedIds != null && !allowedIds.contains(entry.id())) {
+                continue;
+            }
             if (query.isEmpty() || entry.lowerId().contains(query) || entry.lowerName().contains(query)) {
                 result.add(entry);
                 if (result.size() >= MAX_RESULTS) {
@@ -324,7 +348,10 @@ public class ItemSelectorScreen extends Screen {
         if (selectCallback != null) {
             selectCallback.accept(value);
         }
-        onClose();
+        // 回调可能已经切到别的界面（例如材料反推预览），此时不能再把它覆盖回父界面
+        if (minecraft != null && minecraft.screen == this) {
+            minecraft.setScreen(parent);
+        }
     }
 
     /**

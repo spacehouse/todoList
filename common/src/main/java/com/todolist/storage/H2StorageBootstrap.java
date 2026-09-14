@@ -1,5 +1,6 @@
 package com.todolist.storage;
 
+import com.todolist.TodoConstants;
 import com.todolist.config.ModConfig;
 
 import java.io.IOException;
@@ -59,6 +60,7 @@ public final class H2StorageBootstrap {
      */
     public void ensureReady() throws IOException {
         Path databasePath = connectionProvider.getDatabaseBasePath().toAbsolutePath().normalize();
+        applyPendingRestoreBeforeOpen(databasePath);
         H2StorageAvailability.ensureAvailable(databasePath);
         synchronized (READY_DATABASES) {
             H2TcpConfig tcpConfig = H2TcpConfig.load();
@@ -93,6 +95,33 @@ public final class H2StorageBootstrap {
                 H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.BACKUP_FAILED, exception.getMessage());
                 throw new StorageUnavailableException(H2StorageAvailability.Reason.BACKUP_FAILED, "Failed to backup H2 storage on start", exception);
             }
+        }
+    }
+
+    /**
+     * 在数据库被打开之前应用一次待恢复的备份。
+     *
+     * <p>只在该库尚未完成初始化时执行：同一进程内库已经打开过就说明文件正在被使用，
+     * 此时覆盖文件会损坏数据，因此留给下次启动再落地。
+     *
+     * @param databasePath H2 数据库基础路径
+     */
+    private void applyPendingRestoreBeforeOpen(Path databasePath) {
+        synchronized (READY_DATABASES) {
+            if (READY_DATABASES.contains(databasePath)) {
+                return;
+            }
+        }
+        if (!H2PendingRestore.hasPending()) {
+            return;
+        }
+        try {
+            H2PendingRestore.AppliedRestore applied = H2PendingRestore.applyIfPending(databasePath);
+            if (applied != null) {
+                H2StorageAvailability.markAvailable(databasePath);
+            }
+        } catch (IOException exception) {
+            TodoConstants.LOGGER.error("Failed to apply pending H2 restore for {}", databasePath, exception);
         }
     }
 

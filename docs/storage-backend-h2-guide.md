@@ -369,7 +369,44 @@ ssh -L 9092:127.0.0.1:9092 user@云主机IP
 
 适合在改配置、做升级、做外部维护前先留一个备份。
 
-### 4. 重载数据库上下文
+备份默认开启自动保留（配置项 `h2BackupRetentionCount`，默认 `10`）：
+**启动自动备份**（`todolist-h2-*.zip`）与**恢复前安全备份**（`pre-restore-*.zip`）超过上限时自动删除最早的，
+手动命名备份与 schema 升级备份不会被自动清理。
+
+### 4. 查看备份
+
+```text
+/todo h2 backups
+```
+
+按时间倒序列出 `todo/<命名空间>/backups/` 下的全部备份，并给出可直接引用的序号：
+
+```text
+H2 备份共 3 份（自动备份保留上限 10 份，超出后自动删除最早的）：
+  [1] 2026-09-15 00:28:08  4.3 MB  todolist-h2-20260915-002808.zip
+  [2] 2026-09-12 15:00:54  4.3 MB  schema-upgrade-v2-to-v3.zip
+  [3] 2026-09-11 21:10:03  4.2 MB  todolist-h2-20260911-211003.zip
+用 /todo h2 restore <序号> 恢复到指定备份，/todo h2 restore latest 恢复最近一份；恢复会在下次启动时生效。
+```
+
+### 5. 恢复备份
+
+```text
+/todo h2 restore latest
+/todo h2 restore <序号>
+/todo h2 restore <备份文件名>
+```
+
+恢复分两步，**不会在数据库使用中替换文件**：
+
+1. 执行命令时只做**校验与暂存**：解压备份里的 `todolist.mv.db`，打开确认能读到任务表，
+   然后放到 `backups/restore-pending/`；备份不可读时会直接拒绝，不会改动现有数据；
+2. **下次启动、数据库被打开之前**自动落地：先把当前库打包成 `pre-restore-*.zip` 安全备份，
+   再用暂存的库覆盖，随后照常启动（如备份是旧 schema，会照现有流程自动升级并再备份一次）。
+
+所以命令提示「暂存成功」后，**保存并完全退出游戏再重新打开**即可完成恢复。
+
+### 6. 重载数据库上下文
 
 ```text
 /todo h2 reload-db
@@ -378,7 +415,7 @@ ssh -L 9092:127.0.0.1:9092 user@云主机IP
 
 适合在数据库维护后刷新当前内存上下文。
 
-### 5. 健康检查
+### 7. 健康检查
 
 ```text
 /todo h2 health
@@ -515,6 +552,34 @@ tcpEnabled=true
 这条路径上，程序会主动失效旧上下文里的可复用连接，避免把已经关闭的旧 session 继续拿来写入。
 
 如果你仍遇到“存储当前不可用”，优先查看日志和 `/todo h2 status` 的最近失败信息。
+
+### Q5：进世界后一直提示「存储当前不可用」，日志里刷 `File corrupted while reading record` / `File corrupted in chunk ...`
+
+这是**数据库文件本身损坏**，不是配置或权限问题，程序无法在运行中自行修好。典型日志：
+
+```text
+org.h2.jdbc.JdbcSQLNonTransientConnectionException: File corrupted while reading record:
+  ".../todo/local/todolist.mv.db". Possible solution: use the recovery tool [90030-220]
+```
+
+处理顺序：
+
+1. **先别删库**。`/todo h2 backups` 看有没有可用备份（启动备份、schema 升级备份、手动备份都会列出）；
+2. 有备份就 `/todo h2 restore latest`（或指定序号），然后**退出游戏重新打开**完成恢复；
+3. 没有备份时，只能保留损坏库、让程序重建空库（会丢历史任务）：
+   退出游戏 → 把 `todo/<命名空间>/todolist.mv.db` 改名为 `todolist.mv.db.corrupt-<日期>` → 重新启动。
+
+关于「为什么会损坏」：H2 只在**后续读到坏页时**才发现损坏，日志里不会有"是哪次操作写坏的"，
+所以只能从环境排查。已知的高风险来源：
+
+- 游戏/主机在写库过程中被强杀、断电或休眠（MVStore 写入未落盘）；
+- **用外部工具（DBeaver/DataGrip 等）直接打开 `todolist.mv.db`**，尤其是驱动版本与库的 write format 不匹配，
+  或以可写模式打开同一个库文件。本项目的 `todo/local/todolist.trace.db` 就记录过这类外部连接；
+  外部排查请走 `todolist-h2.json` 里的 TCP 端口 + 只读账号，不要直接开库文件；
+- 同时有第二个进程（另一个游戏实例、脚本）打开同一个 `todo/` 目录。
+
+因此现在默认开启启动自动备份（`h2BackupOnStart`），并新增 `/todo h2 backups` 与 `/todo h2 restore`，
+保证出现损坏时至少有一个可回滚点。
 
 ---
 

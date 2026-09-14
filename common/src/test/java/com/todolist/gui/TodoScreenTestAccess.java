@@ -451,6 +451,24 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 返回快速新增行「材料反推」按钮。
+     *
+     * @return 材料反推按钮
+     */
+    Button getQuickAddMaterialButtonForTest() {
+        return readScreenField("quickAddMaterialButton", Button.class);
+    }
+
+    /**
+     * 返回快速新增行「材料反推」按钮边界。
+     *
+     * @return 按钮边界数组
+     */
+    int[] getQuickAddMaterialButtonBoundsForTest() {
+        return TodoScreenTestSupport.toWidgetBounds(getQuickAddMaterialButtonForTest());
+    }
+
+    /**
      * 返回描述输入框。
      *
      * @return 描述输入框

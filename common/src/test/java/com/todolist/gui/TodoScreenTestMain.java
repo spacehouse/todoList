@@ -72,6 +72,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldToggleCompletedSectionWithoutChangingCurrentViewUtf8", TodoScreenTestMain::shouldToggleCompletedSectionWithoutChangingCurrentViewUtf8);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepBottomActionButtonsCenteredAboveQuickAddUtf8", TodoScreenTestMain::shouldKeepBottomActionButtonsCenteredAboveQuickAddUtf8);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldBlurDetailInputsWhenClickingOutsideFieldsUtf8", TodoScreenTestMain::shouldBlurDetailInputsWhenClickingOutsideFieldsUtf8);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepTaskSelectionWhenClickingMaterialButtonUtf8", TodoScreenTestMain::shouldKeepTaskSelectionWhenClickingMaterialButtonUtf8);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineThreeColumnLayoutOnLargeScreen", TodoScreenTestMain::shouldUseInlineThreeColumnLayoutOnLargeScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseInlineDetailPanelOnMediumScreen", TodoScreenTestMain::shouldUseInlineDetailPanelOnMediumScreen);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldUseOverlayDetailPanelOnCompactScreen", TodoScreenTestMain::shouldUseOverlayDetailPanelOnCompactScreen);
@@ -4330,6 +4331,31 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertFalse(access(screen).getDescFieldForTest().isFocused(), "点击描述框外后描述输入框应失焦");
         GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(), "描述框失焦时也不应清空当前选中任务");
+    }
+
+    /**
+     * 验证快速新增行的「材料反推」按钮属于编辑区：点击它不应清空当前选中任务。
+     */
+    private static void shouldKeepTaskSelectionWhenClickingMaterialButtonUtf8() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Material Entry Task");
+        Task task = access(screen).getFilteredTasksForTest().get(0);
+        access(screen).selectTaskForTest(task);
+
+        int[] bounds = access(screen).getQuickAddMaterialButtonBoundsForTest();
+        int centerX = bounds[0] + Math.max(1, bounds[2] / 2);
+        int centerY = bounds[1] + Math.max(1, bounds[3] / 2);
+
+        screen.mouseClicked(centerX, centerY, 0);
+
+        GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(),
+                "点击材料反推按钮不应清空当前选中任务");
     }
 
     private static Task copyTask(Task task) {

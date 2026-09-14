@@ -7,6 +7,7 @@ import com.todolist.gui.testsupport.RecordingClientOps;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
+import com.todolist.task.TaskTrigger;
 
 import java.util.List;
 import java.util.UUID;
@@ -56,6 +57,8 @@ public final class TodoHudRendererTestMain {
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldClearCachesWhenForceRefreshing", TodoHudRendererTestMain::shouldClearCachesWhenForceRefreshing);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldFollowGuiPersonalTaskSnapshot", TodoHudRendererTestMain::shouldFollowGuiPersonalTaskSnapshot);
         GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldChangePanelHeightWhenTogglingExpanded", TodoHudRendererTestMain::shouldChangePanelHeightWhenTogglingExpanded);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldKeepThirdLevelTaskInsideItsParentGroup", TodoHudRendererTestMain::shouldKeepThirdLevelTaskInsideItsParentGroup);
+        GuiTestSupport.runTestCase("TodoHudRendererTestMain.shouldKeepTriggeredParentInPendingWhenTriggerNotMet", TodoHudRendererTestMain::shouldKeepTriggeredParentInPendingWhenTriggerNotMet);
     }
 
     /**
@@ -435,7 +438,7 @@ public final class TodoHudRendererTestMain {
     }
 
     /**
-     * 验证 HUD 中的子任务行会带层级前缀和额外缩进，不再与普通任务完全一致。
+     * 验证 HUD 中的子任务行会带树形连线与额外缩进，不再与普通任务完全一致。
      */
     private static void shouldDifferentiateSubtaskRowsInHud() {
         RecordingClientOps ops = GuiTestSupport.resetState();
@@ -455,7 +458,9 @@ public final class TodoHudRendererTestMain {
         renderer.refreshHudModelForTest();
 
         GuiTestSupport.assertEquals("Parent Task", renderer.getRowTitleTextForTest(parent.getId()), "父任务 HUD 标题应保持原样");
-        GuiTestSupport.assertEquals("- ", renderer.getRowPrefixTextForTest(subtask.getId()), "子任务前缀应独立绘制在优先级色块前");
+        GuiTestSupport.assertEquals("true|[]", renderer.getRowTreeLineForTest(subtask.getId()),
+                "唯一子任务应作为同级末位，用树形连线表示层级归属");
+        GuiTestSupport.assertEquals("", renderer.getRowTreeLineForTest(parent.getId()), "顶层任务不应有树形连线");
         GuiTestSupport.assertEquals("Child Task", renderer.getRowTitleTextForTest(subtask.getId()), "子任务标题正文不应再混入层级前缀");
         GuiTestSupport.assertTrue(
                 renderer.getPriorityBlockOffsetForTest(subtask.getId()) > renderer.getPriorityBlockOffsetForTest(parent.getId()),
@@ -574,6 +579,95 @@ public final class TodoHudRendererTestMain {
         );
         GuiTestSupport.assertEquals("2/2", renderer.getRowTrailingTextForTest(parent.getId()), "全部完成后，父任务右侧统计应显示满额进度");
         GuiTestSupport.assertTrue(renderer.isRowTitleStrikethroughForTest(parent.getId()), "进入已完成部分的父任务应显示删除线");
+    }
+
+    /**
+     * 验证三层依赖任务在 HUD 中不会被丢到全局分组：孙任务始终跟随所在父组，
+     * 部分完成时整组仍留在未完成区，且层级缩进逐层递增。
+     */
+    private static void shouldKeepThirdLevelTaskInsideItsParentGroup() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-three-level", "HUD Three Level");
+        Task root = createTeamTask("Root", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        Task middle = createTeamTask("Middle", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, false);
+        middle.setParentTaskId(root.getId());
+        middle.setSubtaskSortOrder(0L);
+        Task leafDone = createTeamTask("Leaf Done", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, true);
+        leafDone.setParentTaskId(middle.getId());
+        leafDone.setSubtaskSortOrder(0L);
+        Task leafTodo = createTeamTask("Leaf Todo", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.LOW, false);
+        leafTodo.setParentTaskId(middle.getId());
+        leafTodo.setSubtaskSortOrder(1L);
+
+        ops.getTeamTaskManager().addTask(root);
+        ops.getTeamTaskManager().addTask(middle);
+        ops.getTeamTaskManager().addTask(leafDone);
+        ops.getTeamTaskManager().addTask(leafTodo);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Root", "Middle", "Leaf Done", "Leaf Todo"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "孙任务未全部完成时，整条依赖链都应留在未完成区"
+        );
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedDoneTasksForTest()),
+                "孙任务未完成前不应有任务进入已完成区");
+        GuiTestSupport.assertTrue(renderer.isRowTitleStrikethroughForTest(leafDone.getId()),
+                "已完成的孙任务应保留在原位置并显示删除线");
+        GuiTestSupport.assertTrue(
+                renderer.getPriorityBlockOffsetForTest(middle.getId()) > renderer.getPriorityBlockOffsetForTest(root.getId()),
+                "子任务缩进应大于顶层任务");
+        GuiTestSupport.assertTrue(
+                renderer.getPriorityBlockOffsetForTest(leafDone.getId()) > renderer.getPriorityBlockOffsetForTest(middle.getId()),
+                "孙任务缩进应大于子任务");
+        GuiTestSupport.assertEquals("true|[]", renderer.getRowTreeLineForTest(middle.getId()),
+                "第 2 层任务应与父任务画出树形连线");
+        GuiTestSupport.assertEquals("false|[false]", renderer.getRowTreeLineForTest(leafDone.getId()),
+                "第 3 层任务应记录所在层级与祖先层是否还有后续兄弟，供连线绘制使用");
+    }
+
+    /**
+     * 验证挂触发器的父任务完成态与 GUI 一致：即使直属子任务全部完成，
+     * 只要触发器未达标，整组仍留在未完成区。
+     */
+    private static void shouldKeepTriggeredParentInPendingWhenTriggerNotMet() {
+        RecordingClientOps ops = GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = createMinecraft();
+        ModConfig config = ModConfig.getInstance();
+        config.setHudDefaultView("TEAM_ALL");
+        config.setHudProjectSource("ALL");
+
+        Project project = createTeamProject("hud-triggered-parent", "HUD Triggered Parent");
+        Task parent = createTeamTask("Triggered Parent", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.HIGH, false);
+        parent.setTrigger(new TaskTrigger(TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 64));
+        Task child = createTeamTask("Triggered Child", project.getId(), OWNER_ID.toString(), "owner", Task.Priority.MEDIUM, true);
+        child.setParentTaskId(parent.getId());
+        child.setSubtaskSortOrder(0L);
+
+        ops.getTeamTaskManager().addTask(parent);
+        ops.getTeamTaskManager().addTask(child);
+
+        TodoHudRenderer renderer = new TodoHudRenderer(minecraft);
+        renderer.refreshHudModelForTest();
+
+        GuiTestSupport.assertEquals(
+                List.of("Triggered Parent", "Triggered Child"),
+                taskTitles(renderer.getCachedPendingTasksForTest()),
+                "挂触发器的父任务在触发器未达标时应留在未完成区，与 GUI 完成态保持一致"
+        );
+        GuiTestSupport.assertEquals(List.of(), taskTitles(renderer.getCachedDoneTasksForTest()),
+                "挂触发器的父任务不应因为子任务全完成而提前进入已完成区");
+        GuiTestSupport.assertEquals("0/64", renderer.getRowTrailingTextForTest(parent.getId()),
+                "父任务挂触发器时右侧应优先展示触发器进度，而不是子任务进度");
+        GuiTestSupport.assertEquals("", renderer.getRowTrailingTextForTest(child.getId()),
+                "无触发器、无子任务的叶子不再展示进度文本");
     }
 
     /**
