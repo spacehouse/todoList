@@ -249,16 +249,38 @@ common 引擎提供公开静态入口，平台桥接类订阅各自事件总线�
 - [x] `build-local-17.bat build --offline` 双平台 jar 产出（fabric/forge 1.20.1-1.4.2）并归档 `dist/`
 - [x] 放宽父任务触发器限制（Phase X）：父任务允许挂触发器、完成态改为触发器优先（`syncParentCompletionStates` 跳过有触发器的父任务）；移除右键菜单/编辑器/命令/引擎索引四道守卫与「新增子任务时清除父任务触发器」逻辑；`TaskTriggerServiceTestMain.shouldAdvanceParentTaskWithSubtasks` 与 `TaskManagerSubtaskTestMain.shouldKeepTriggeredParentCompletionFromBeingOverwritten` 固化
 - [ ] 游戏内手工验证清单（见 §8，待用户在游戏环境执行）
-- [ ] **同物品任务额度配额（Phase Z，方案已定、待实现）**：同一项目内多条任务追踪同一种物品时，不再被同一份物品同时满足；设计稿见 `feat-trigger-credit-allocation.md`
-  - [ ] Z1 `TriggerCreditAllocator` 纯逻辑（分组 = 项目 + 类型 + 物品 + 负责人；台账 = 已完成任务）+ 离线单测
-  - [ ] Z2 接入收集类 `recalculateItemCollectByUuid`（进度展示改为"可用份额"）+ 离线回归 + 实机验证
-  - [ ] Z3 接入合成类 1a：`advanceMatchingTasksByUuid` 改两阶段（先累加、再统一判定）+ 离线回归 + 实机验证
+- [ ] **同物品任务额度配额（Phase Z，方案已定、待实现）**：同一项目内多条任务追踪同一种物品 / 同一目标时，不再被同一份物品或同一批事件同时满足；**按任务列表顺序（从上往下）分配额度**，拖拽排序即调整优先级；设计稿见 `feat-trigger-credit-allocation.md`
+  - [ ] 验收标准：三条不变量 I1 已完成不回退 / I2 同一次分配不重复吃额度（两类 `availableResource` 定义不同：收集类 `max(0, held − used)`、累加型 `批次 amount`，且累加型停止条件是"需求耗尽或 `pool` 用尽"）/ I3 判定只由持久化顺序决定（`sortByPriority`、折叠、搜索均不得影响结果）；另加实现级不变量 I4：`0 ≤ pool`、`0 ≤ progress ≤ targetCount`（既有 `clampProgress` 保证）、`completed == (progress == targetCount)`（**双向，需新增**，靠"自动完成写满 + 所有完成入口补写 + `Task.fromNbt` 双向加载兜底"三处共同保证）
+  - [ ] Z1 `TriggerCreditAllocator` 纯逻辑（**值输入 → 值输出，不持有 / 不修改 `Task`**；`progressByTaskId` 覆盖输入的全部候选 = 全量结果而非变更结果；分组 = 项目 + 类型 + 目标身份 + 负责人，`owner` 来源唯一化：个人任务取 `CachedBucket.playerUuid`、团队任务取 `assigneeUuid`，禁止 ambient context；重算入口按 **quota group** 而非单任务命名，输入拆分为 `StateQuotaSnapshot` / `EventBatchQuotaSnapshot`、输出 `AllocationResult` 的接口契约在本阶段冻结）+ OrderKey **Segment 路径序**（顶层 `(sort_order, created_at, id)`、子层 `(subtask_sort_order, id)`，每层 tie-break 必须落在比较键里；子层需显式排序，H2 的 `ORDER BY` 不含 `subtask_sort_order`）+ "`used` 取自桶内全量任务列表而非触发器索引"的取数入口 + 前置条件（`targetCount ≥ 1`、`progress ∈ [0, targetCount)`、`used / held / amount ≥ 0`、候选已属同一组）+ **三态 `quota participation`（`STATE` / `EVENT_BATCH` / `NONE`，`ADVANCEMENT` 属 `NONE`）** + 离线单测
+  - [ ] Z2 接入收集类（组级重算入口 `recalculateCollectQuotaGroup`：`pool = max(0, held − used)` 两遍分配，第一遍写满 `progress`、第二遍用第一遍之后的未完成状态填充展示）+ 额度相关变更立即重算，**`groupKey` 可空**（无触发器 / 未指派 = 无组，不是伪 group），受影响组按 **`distinct(非空(beforeGroup), 非空(afterGroup))`** 去重后按 **`switch(quotaMode)` 三态**处理（覆盖触发类型变更（含 `ADVANCEMENT` 的 `NONE` 分支）、目标 identity 变更、指派改派 / 领取 / 取消领取、**触发器新增与删除**；跨类时旧收集组重算、新累加组只置 `progress = 0`）+ **重算只在外部事务提交点派发一次**（事务内自动完成不反向派发；父任务批量勾选先改完状态再聚合重算；重算稳定后才落库推送，且按 diff 回写；**GUI 本地直接写 H2 的路径同样走组处理入口**）+ **触发器编辑重置按上位规则落地（新增 / 修改且变更后仍有触发器 → 已完成任务显式重置；删除触发器只释放额度、不重置 `completed`，含 GUI 确认提示）** + **取消完成收口为原子入口 `revertCompletion()`（两类都置 `progress = 0`，不暴露中间态）** + **加载后首次获得有效 `held` 快照时补一次收集类重算（按 `(玩家 UUID, groupKey)` 内存去重、每组仅一次；离线负责人不重算、不伪造 `held`；配非持久化 `quotaHydration`，未就绪前 GUI / HUD 不显示旧进度）** + **`Task` 层两个稳定态入口（`completeNormalized()` 补满 / `revertCompletion()` 原子取消；不收口到 `TaskTriggerService` 以免反向依赖）+ `Task.fromNbt` 双向加载规范化** + **§5.5 进度文案在 Z2 前定稿** + 离线回归 + 实机验证
+  - [ ] Z3 接入累加型：`advanceMatchingTasksByUuid` 改为**事件批次分账**（`pool = 本批事件量`，batch 边界 = 单次 advancement 调用携带的 `amount`），按列表顺序 `take = min(need, pool)`，覆盖 `CRAFT_ITEM` / `BREAK_BLOCK` / `KILL_ENTITY`；**累加型不做任何历史重算**（新建 / 删除 / 改目标都只影响后续批次，不清算已分账事件）；取消完成时 `progress` 归零、手动完成时 `progress` 补至 `targetCount` + 离线回归 + 实机验证
   - [ ] Z4 （可选）同物品占用提示文案 + 文档同步
 
 ### 待定决策（Phase Z）
 
 - 收集类进度语义变化后的提示方式：任务右侧加后缀（如 `0/32（同物品已占用 16）`）还是只做文档说明，实现前需先定文案。
-- 合成类若日后要消除"先后创建"的偏差，需要走 1b：新增"每玩家每物品累计合成量"持久化 + 任务创建基线（动 NBT/H2 表结构）。
+- `ADVANCEMENT`（进度）数量恒为 1、本质是一次性事件，归入 **`quota participation = NONE`**：不纳入额度配额，也不进 allocator，保持现有的逐任务独立判定（已知残留：同一进度被多条任务追踪时仍会一起完成，后续要处理需单独立项）。因此跨组处理的 `switch(quotaMode)` 必须有 `NONE` 分支，**不能用 `else` 把它当事件账**。
+- allocator 是**纯函数**：输入拆分为 `StateQuotaSnapshot` / `EventBatchQuotaSnapshot`（值）、输出 `AllocationResult`（值），不持有也不修改 `Task`；拆成两个输入类型是为了让"`mode` 与类型不自洽 / STATE 传了 `amount`"这类接线错误**无法被表达**。§3.3 / §3.4 的算法伪代码一律写成值到值的计算，回写（`trigger.progress`、`completeNormalized()`、`removeIndex`、通知）全部由 service 层负责。`AllocationResult.progressByTaskId` 覆盖输入的全部候选任务（全量结果，非变更结果）。
+- `groupKey` 的负责人来源唯一化、**禁止 ambient context**：个人任务取 `CachedBucket.playerUuid`（= `tasks.owner_uuid`），团队任务取 `normalizeAssignee(task.assigneeUuid)`；不得用"当前玩家 / 事件玩家"推导（团队场景下两者本来就不同人）。
+- 已完成任务修改 `targetCount` / 目标视为显式重置：Phase Z **实际落地**该规则（保存时先取消完成 + 清零进度，再写入新触发器并重算该组），GUI 需补一次确认提示。
+- 取消完成时累加型 `progress` 改为归零、手动完成时累加型 `progress` 补至 `targetCount`（保证"存储值 = 展示值"，与前者对称），均与今天的行为不同，实现时需一并改并补回归。**收集类取消完成也必须显式把 `progress` 置 0**（不能只依赖"后续重算覆盖"）：主机可在成员离线时勾选团队任务，而离线负责人不重算，否则会留下 `!completed && progress == targetCount`，重载后被加载规范化改回 `completed = true`，等于取消操作被吞掉。
+- 触发器编辑会连带清空 `progress`（改类型、改目标或只改 `targetCount` 都会因编辑器整体重建触发器而归零）：属既有事实，Phase Z 在此基础上补"已完成任务先取消完成"，使 `completed ⇒ progress == targetCount` 全局成立；若后续要做"改数量保留进度"需另立需求。
+- `progress` 与 `completed` 是两个独立持久化字段，历史上会出现"已完成但进度未满"（手动完成只翻转 `completed`）：Phase Z 统一为"所有把 `completed` 置 true 的入口都补写 `progress`，并在 `Task.fromNbt` 做一次性加载规范化"。
+- 跨 quota group 变更（触发类型变更、目标 identity 变更、团队任务改派）必须按 `beforeGroup` / `afterGroup` 统一流程分别处理；**触发类型在编辑器中是可改的**（5 种类型轮换，含收集型 ↔ 累加型互转），因此类型变更必须纳入跨组处理。项目内不存在"任务移动到其他项目/桶"的操作，故不列该路径。
+- 完成态的收口放在 `Task` 层，不放在 `TaskTriggerService.completeTask`——`TaskManager` 位于 `com.todolist.task` 且不依赖 `com.todolist.trigger`，反向收口会造成 `task → trigger` 的反向依赖、破坏当前单向分层。收敛为两个**都输出稳定状态**的入口：`completeNormalized()`（`completed = true` + `progress` 补满）与 `revertCompletion()`（`completed = false` + `progress = 0`，原子完成，不暴露 `!completed && progress == targetCount` 中间态）。
+- 加载后的"首次 `held` 快照重算"配一个**非持久化**的组级 `quotaHydration`（`READY` / `NOT_READY`）：未就绪时 GUI / HUD 不渲染旧 `progress`，也不据此判定达标——只靠"不推送"拦不住 GUI 直接读任务对象。
+- 局域网主机 / 单人下 GUI 会**直接写本地 H2**，该路径必须同样调用组处理入口（否则额度不重算、展示与台账不一致）；但**不**把 GUI 改成"只能发请求"，那是远超 Phase Z 的服务端权威重构。
+- 配额重算按"受影响组去重"执行：`distinct(beforeGroup, afterGroup)`，`targetCount` 不在分组键内，因此改数量的 `beforeGroup == afterGroup` 必须只处理一次，避免重复自动完成 / 重复通知。
+- 重算事务边界单向下发：重算内部的自动完成不再反向派发一次额度重算；只有外部操作（拖拽 / 编辑触发器 / 手动完成 / 事件批次提交）才启动新的组重算。批量操作（父任务批量勾选、命令批量完成）以"一次用户操作"为原子单位：先改完全部状态、再汇总受影响组、每组只重算一次，禁止在循环内逐条重算。
+- 未指派团队任务与**无触发器任务**都等于"无 quota group"（`groupKey = null`）：`!hasTrigger → null` 这条同时覆盖了"新增触发器"（无 → 有）与"删除触发器"（有 → 无）两种 mutation，两者都走 §5.4 第 8 条的 `beforeGroup` / `afterGroup` 流程。**已完成任务新增触发器必须显式重置**（`completed = false` + `progress = 0`），否则会留下违反 I4 的状态。
+- 加载 / 重启后，收集类要在**首次获得有效 `held` 快照**时补一次组级重算（加载规范化只解决 I4，不替代额度重算）；负责人离线时不重算、不伪造 `held`，等其上线首次快照再算。累加型在任何情况下都**不**因加载而重算、也不回放历史。
+- "列表顺序"是**分账顺序 + 条件优先级**（收集类"整份满足优先"），不是严格优先级；材料配方预览用的是严格顺序占用，两者场景不同、不做统一。
+- `AllocationResult.progressByTaskId` 是**全量结果**（allocator 契约），但回写要**按 diff**（service 策略）：进度未变化的任务不写库、不推送。
+- `groupKey` 的负责人归一化：个人任务的 `owner` 恒为玩家自身 UUID（绝不为 `null`），团队任务用 `normalizeAssignee` 且 `null` / `""` 等价为"无组"；不同玩家的个人任务靠 bucket 天然隔离。
+- 加载后的"首次 `held` 快照重算"以 `(玩家 UUID, groupKey)` 为键在内存去重、每组只做一次；重算完成前不得推送旧语义进度；该标记不持久化（重启重做一次即可，结果幂等）。
+- §5.5 的进度文案（后缀 / tooltip）需在 **Z2 前定稿**，不要拖到 Z4；同时要覆盖"手动完成收集任务后 `used` 变大、同组其它任务进度下降"这一正确但反直觉的行为。
+- 完成态不变量 I4 第 3 条为**双向**：`completed == (progress == targetCount)`。为保证任何调用方拿到的都是稳定状态，取消完成收口为原子入口 `revertCompletion()`（`completed = false` + `progress = 0`），不暴露"先翻转状态位、再补进度"的中间态；`Task.fromNbt` 保留双向规范化作为历史 / 异常数据兜底，并配合"重算稳定后才落库与推送"。
+- `used / pool / amount` 内部一律用 `int`（不用 `long`）：`targetCount` 已被限制为正 int，溢出需要同组需求总量超过 21 亿，与项目实际规模相差多个数量级，不做该防御。
 
 ### 实施补充说明
 
