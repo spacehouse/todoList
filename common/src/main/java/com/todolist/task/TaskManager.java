@@ -205,9 +205,13 @@ public class TaskManager {
     /**
      * 切换指定任务的完成状态。
      *
-     * <p>无子任务时切换自身；有子任务时级联切换其全部后代（层级不限）。
-     * 挂有触发器的任务完成态由触发器决定（触发器优先），因此手动勾选时直接切换自身，
-     * 不受子任务聚合覆盖；带触发器的后代则跳过，避免覆盖触发器进度。
+     * <p>无子任务时切换自身；有子任务时级联切换其**全部后代**（层级不限，含挂触发器的后代）。
+     * 级联必须覆盖带触发器的后代：否则会留下「父任务已完成、后代仍未完成」的幽灵任务——
+     * 未完成列表只列顶层任务、已完成区只列已完成子任务，两侧都看不见，玩家既看不到也处理不了。
+     *
+     * <p>挂有触发器的任务完成态由触发器决定（触发器优先），因此手动勾选时直接切换自身，
+     * 不受子任务聚合覆盖；级联只切换完成态、不修改后代触发器进度，
+     * 这样取消勾选后进度仍是真实值，触发器达标后也能自行恢复。
      *
      * @param taskId 任务 ID
      */
@@ -229,7 +233,7 @@ public class TaskManager {
         boolean changed = false;
         for (String descendantId : collectDescendantIds(task.getId())) {
             Task descendant = tasks.get(descendantId);
-            if (descendant == null || descendant.hasTrigger() || descendant.isCompleted() == targetCompleted) {
+            if (descendant == null || descendant.isCompleted() == targetCompleted) {
                 continue;
             }
             descendant.setCompleted(targetCompleted);
