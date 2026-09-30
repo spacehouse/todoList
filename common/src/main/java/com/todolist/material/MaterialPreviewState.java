@@ -11,9 +11,13 @@ import java.util.Set;
 /**
  * 材料反推预览界面的状态容器（纯逻辑，可离线测试）。
  *
- * <p>持有界面上的全部可变状态：目标物品与数量、生成模式、逐节点配方覆盖、
- * 玩家手动终止项、取消勾选的材料；并负责把这些状态转成解析选项、解析计划、
- * 按勾选过滤计划，以及最终生成任务。
+ * <p>持有界面上的全部可变状态：目标物品与数量、逐节点配方覆盖、逐节点展开/收起、
+ * 玩家取消展开的节点、多候选材料的替换选择；并负责把这些状态转成解析选项、
+ * 解析计划，以及最终生成任务。
+ *
+ * <p>生成任务的口径是「只按预览树显示出来的部分」：展开的节点会生成它的下级材料任务，
+ * 收起的节点就是该分支的最终材料（仍生成它自己的任务）。因此不再有独立的生成模式，
+ * 「只要目标一条任务」等价于把目标节点收起。
  *
  * <p>界面只负责渲染与事件分发，不重复实现这些语义，因此这部分可脱离 MC 运行时测试。
  */
@@ -23,15 +27,11 @@ public final class MaterialPreviewState {
     private final String targetItemId;
     /** 目标数量。 */
     private int targetCount;
-    /** 生成模式。 */
-    private MaterialTaskMode mode;
     /** 物品资源 ID → 指定配方 ID（逐节点切换配方的结果）。 */
     private final Map<String, String> recipeOverrides = new LinkedHashMap<>();
-    /** 被玩家标记为「到此为止」的物品资源 ID。 */
+    /** 被玩家标记为「到此为止」（收起下级配方）的物品资源 ID。 */
     private final Set<String> stopAtItems = new LinkedHashSet<>();
-    /** 被玩家取消勾选的最终材料。 */
-    private final Set<String> unselectedLeafItems = new LinkedHashSet<>();
-    /** 被玩家要求「继续展开」的物品（覆盖熔炼类终止条件）。 */
+    /** 被玩家要求「继续展开」（展开下级配方）的物品资源 ID。 */
     private final Set<String> forceExpandItems = new LinkedHashSet<>();
     /** 候选组键（默认代表物品 ID）→ 玩家选定的替代物品 ID。 */
     private final Map<String, String> candidateOverrides = new LinkedHashMap<>();
@@ -43,12 +43,10 @@ public final class MaterialPreviewState {
      *
      * @param targetItemId 目标物品资源 ID
      * @param targetCount  目标数量，最小为 1
-     * @param mode         生成模式，为 null 时按仅目标任务处理
      */
-    public MaterialPreviewState(String targetItemId, int targetCount, MaterialTaskMode mode) {
+    public MaterialPreviewState(String targetItemId, int targetCount) {
         this.targetItemId = targetItemId == null ? "" : targetItemId;
         this.targetCount = Math.max(1, targetCount);
-        this.mode = mode == null ? MaterialTaskMode.TARGET_ONLY : mode;
     }
 
     /**
@@ -79,35 +77,6 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 返回当前生成模式。
-     *
-     * @return 生成模式
-     */
-    public MaterialTaskMode getMode() {
-        return mode;
-    }
-
-    /**
-     * 设置生成模式。
-     *
-     * @param mode 生成模式，为 null 时不改变
-     */
-    public void setMode(MaterialTaskMode mode) {
-        if (mode != null) {
-            this.mode = mode;
-        }
-    }
-
-    /**
-     * 在两种生成模式之间切换。
-     */
-    public void toggleMode() {
-        this.mode = mode == MaterialTaskMode.TARGET_ONLY
-                ? MaterialTaskMode.TARGET_WITH_MATERIALS
-                : MaterialTaskMode.TARGET_ONLY;
-    }
-
-    /**
      * 返回只读的配方覆盖表。
      *
      * @return 物品资源 ID → 配方 ID
@@ -117,21 +86,12 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 返回只读的手动终止项集合。
+     * 返回只读的「到此为止」集合。
      *
      * @return 物品资源 ID 集合
      */
     public Set<String> getStopAtItems() {
         return Set.copyOf(stopAtItems);
-    }
-
-    /**
-     * 返回只读的取消勾选材料集合。
-     *
-     * @return 物品资源 ID 集合
-     */
-    public Set<String> getUnselectedLeafItems() {
-        return Set.copyOf(unselectedLeafItems);
     }
 
     /**
@@ -144,8 +104,8 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 设置或取消「继续展开」：既用于对熔炼类配方的输入强制继续反推，
-     * 也用于展开默认折叠（{@code MaterialStopReason.FOLDED}）的层级。
+     * 设置或取消「继续展开」：既用于展开默认折叠（{@code MaterialStopReason.FOLDED}）的层级，
+     * 也用于对熔炼类配方的输入强制继续反推。
      *
      * @param itemId 物品资源 ID
      * @param expand 为 true 时要求继续展开，为 false 时恢复默认折叠行为
@@ -189,14 +149,7 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 清空全部配方覆盖，回到默认选择策略。
-     */
-    public void clearRecipeOverrides() {
-        recipeOverrides.clear();
-    }
-
-    /**
-     * 在候选配方之间轮换（预览界面「切换配方」按钮的行为）。
+     * 在候选配方之间轮换（点击预览树里的功能方块节点时的行为）。
      * 首次调用基于默认策略的预选结果前进一格。
      *
      * @param itemId     物品资源 ID
@@ -232,10 +185,10 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 设置或取消「到此为止」（不再展开该物品）。
+     * 设置或取消「到此为止」（收起该物品的下级配方）。
      *
      * @param itemId 物品资源 ID
-     * @param stop   为 true 时停止展开，为 false 时恢复展开
+     * @param stop   为 true 时收起，为 false 时恢复展开
      */
     public void setStopAt(String itemId, boolean stop) {
         if (itemId == null || itemId.isEmpty()) {
@@ -249,30 +202,66 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 判断某个最终材料是否被勾选（默认全部勾选）。
+     * 判断该节点是否还能展开下级配方（与 {@link #toggleExpand} 的可点击范围一致）。
      *
-     * @param itemId 物品资源 ID
-     * @return 未取消勾选时返回 true
+     * <p>无配方 / 循环依赖 / 深度或节点上限这类天然终止的节点不可展开；
+     * 其余节点都可以在「展开」与「收起」之间来回切换。
+     *
+     * @param node 材料节点
+     * @return 可以切换展开状态时返回 true
      */
-    public boolean isLeafSelected(String itemId) {
-        return itemId != null && !unselectedLeafItems.contains(itemId);
+    public boolean isExpandToggleAvailable(MaterialNode node) {
+        if (node == null || node.itemId() == null || node.itemId().isEmpty()) {
+            return false;
+        }
+        if (!node.isLeaf()) {
+            return true;
+        }
+        MaterialStopReason reason = node.stopReason();
+        return reason == MaterialStopReason.FOLDED
+                || reason == MaterialStopReason.COOKING_INPUT
+                || reason == MaterialStopReason.USER_STOPPED;
     }
 
     /**
-     * 设置某个最终材料的勾选状态。
+     * 切换某个节点的「展开 / 收起下级配方」。
      *
-     * @param itemId   物品资源 ID
-     * @param selected 是否勾选
+     * <p>语义映射（对应解析器的开关）：
+     * <ul>
+     *     <li>已展开的节点 → 收起：玩家主动展开过的恢复默认折叠，否则标记「到此为止」；</li>
+     *     <li>默认折叠（{@code FOLDED}）→ 继续展开；</li>
+     *     <li>熔炼类输入（{@code COOKING_INPUT}）→ 在「继续展开 / 恢复默认」之间切换；</li>
+     *     <li>「到此为止」（{@code USER_STOPPED}）→ 恢复展开；</li>
+     *     <li>其余自然终止的节点 → 不变。</li>
+     * </ul>
+     *
+     * @param node 材料节点
+     * @return 状态发生变化时返回 true（调用方据此重新解析）
      */
-    public void setLeafSelected(String itemId, boolean selected) {
-        if (itemId == null || itemId.isEmpty()) {
-            return;
+    public boolean toggleExpand(MaterialNode node) {
+        if (!isExpandToggleAvailable(node)) {
+            return false;
         }
-        if (selected) {
-            unselectedLeafItems.remove(itemId);
-        } else {
-            unselectedLeafItems.add(itemId);
+        String itemId = node.itemId();
+        if (!node.isLeaf()) {
+            if (isForceExpanded(itemId)) {
+                // 玩家主动展开过的节点：折叠回默认折叠状态
+                setForceExpand(itemId, false);
+            } else {
+                setStopAt(itemId, true);
+            }
+            return true;
         }
+        if (node.stopReason() == MaterialStopReason.COOKING_INPUT) {
+            setForceExpand(itemId, !isForceExpanded(itemId));
+            return true;
+        }
+        if (node.stopReason() == MaterialStopReason.USER_STOPPED) {
+            setStopAt(itemId, false);
+            return true;
+        }
+        setForceExpand(itemId, true);
+        return true;
     }
 
     /**
@@ -339,34 +328,22 @@ public final class MaterialPreviewState {
     }
 
     /**
-     * 计算允许保留的最终材料集合（供勾选过滤使用）。
+     * 按当前预览树生成任务列表。
      *
-     * @param plan 完整计划
-     * @return 允许集合；全部勾选时返回 null（表示不过滤）
-     */
-    public Set<String> allowedLeafItems(MaterialPlan plan) {
-        if (plan == null || unselectedLeafItems.isEmpty()) {
-            return null;
-        }
-        Set<String> allowed = new LinkedHashSet<>();
-        for (String itemId : plan.leafTotals().keySet()) {
-            if (!unselectedLeafItems.contains(itemId)) {
-                allowed.add(itemId);
-            }
-        }
-        return allowed;
-    }
-
-    /**
-     * 按当前状态生成任务列表（已应用勾选过滤）。
+     * <p>树形（哪些节点展开、各自用哪条配方、用哪种替代材料）由 {@link #resolve} 决定，
+     * 生成时完全按这棵树走：展开的分支会生成下级材料任务，收起的节点作为最终材料生成自身任务。
      *
      * @param index   配方反查索引
      * @param context 生成上下文
      * @return 任务列表
      */
     public List<Task> generate(MaterialRecipeIndex index, MaterialTaskContext context) {
-        MaterialPlan plan = resolve(index);
-        MaterialPlan selected = plan.retainLeaves(allowedLeafItems(plan));
-        return MaterialTaskGenerator.generate(selected, targetItemId, targetCount, mode, context);
+        return MaterialTaskGenerator.generate(
+                resolve(index),
+                targetItemId,
+                targetCount,
+                MaterialTaskMode.TARGET_WITH_MATERIALS,
+                context
+        );
     }
 }

@@ -27,6 +27,46 @@ public final class TriggerTargetSupportTestMain {
         GuiTestSupport.runTestCase("TriggerTargetSupportTestMain.shouldBuildNonEmptyDefaultTitle", TriggerTargetSupportTestMain::shouldBuildNonEmptyDefaultTitle);
         GuiTestSupport.runTestCase("TriggerTargetSupportTestMain.shouldEmbedItemMarkupInDefaultTitle", TriggerTargetSupportTestMain::shouldEmbedItemMarkupInDefaultTitle);
         GuiTestSupport.runTestCase("TriggerTargetSupportTestMain.shouldFallbackAdvancementDisplayNameToRawId", TriggerTargetSupportTestMain::shouldFallbackAdvancementDisplayNameToRawId);
+        GuiTestSupport.runTestCase("TriggerTargetSupportTestMain.shouldBuildMaterialTaskTitleWithoutStation", TriggerTargetSupportTestMain::shouldBuildMaterialTaskTitleWithoutStation);
+    }
+
+    /**
+     * 校验材料反推任务标题：按配方类型选动作词、**只内联产物标记**（不再内联功能方块，避免 HUD 过长），
+     * 无配方时回退「收集」措辞。
+     */
+    private static void shouldBuildMaterialTaskTitleWithoutStation() {
+        net.minecraft.network.chat.contents.TranslatableContents smelting = translatableContents(
+                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:iron_ingot", 27,
+                        com.todolist.material.MaterialRecipeKind.SMELTING));
+        GuiTestSupport.assertNotNull(smelting, "材料任务标题应是可翻译组件");
+        GuiTestSupport.assertEquals("gui.todolist.material.task_title.smelting", smelting.getKey(),
+                "应按配方类型选择动作词");
+        GuiTestSupport.assertEquals("[item:minecraft:iron_ingot]", smelting.getArgs()[0],
+                "标题应内联产物标记");
+        GuiTestSupport.assertEquals(27, smelting.getArgs()[1], "标题应带上需求数量");
+        GuiTestSupport.assertEquals(2, smelting.getArgs().length,
+                "标题不应再内联功能方块（只有产物与数量两个参数）");
+
+        net.minecraft.network.chat.contents.TranslatableContents collect = translatableContents(
+                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:raw_iron", 8, null));
+        GuiTestSupport.assertNotNull(collect, "无配方时也应返回可翻译组件");
+        GuiTestSupport.assertEquals("gui.todolist.material.task_title.collect", collect.getKey(),
+                "无配方时应回退「收集」措辞");
+    }
+
+    /**
+     * 取出组件的可翻译内容。
+     *
+     * @param component 组件
+     * @return 可翻译内容；不是可翻译组件时返回 null
+     */
+    private static net.minecraft.network.chat.contents.TranslatableContents translatableContents(
+            net.minecraft.network.chat.Component component) {
+        if (component == null
+                || !(component.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents contents)) {
+            return null;
+        }
+        return contents;
     }
 
     /**

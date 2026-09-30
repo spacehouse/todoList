@@ -24,6 +24,8 @@ public final class MaterialTaskGeneratorTestMain {
     private static final String RAW_IRON = "minecraft:raw_iron";
     /** 跨层级重复出现的最终材料：橡木原木。 */
     private static final String OAK_LOG = "minecraft:oak_log";
+    /** 跨分支重复出现的中间产物：共享件。 */
+    private static final String SHARED_PART = "test:shared";
 
     /**
      * 工具类不需要实例化。
@@ -45,6 +47,126 @@ public final class MaterialTaskGeneratorTestMain {
         GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldFallbackTitleWhenProviderMissing", MaterialTaskGeneratorTestMain::shouldFallbackTitleWhenProviderMissing);
         GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldReturnEmptyForInvalidInput", MaterialTaskGeneratorTestMain::shouldReturnEmptyForInvalidInput);
         GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldMergeRepeatedFinalMaterialIntoOneTask", MaterialTaskGeneratorTestMain::shouldMergeRepeatedFinalMaterialIntoOneTask);
+        GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldMergeRepeatedIntermediateIntoOneTask", MaterialTaskGeneratorTestMain::shouldMergeRepeatedIntermediateIntoOneTask);
+        GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldPassRecipeKindToTitleProvider", MaterialTaskGeneratorTestMain::shouldPassRecipeKindToTitleProvider);
+        GuiTestSupport.runTestCase("MaterialTaskGeneratorTestMain.shouldHintRecipeKindForFoldedMaterial", MaterialTaskGeneratorTestMain::shouldHintRecipeKindForFoldedMaterial);
+    }
+
+    /**
+     * 验证标题回调能拿到每个物品的配方类型：展开两层时依次为 工作台合成 / 熔炼 / 无配方。
+     *
+     * <p>配方类型是任务标题「[功能方块] 动作词 产物 ×数量」提示的来源；
+     * 无配方的最终材料传 null，由回调回退为「收集」措辞。
+     */
+    private static void shouldPassRecipeKindToTitleProvider() {
+        MaterialPlan plan = ironBlockPlanExpandedTwice();
+
+        List<String> calls = new ArrayList<>();
+        MaterialTaskContext context = new MaterialTaskContext("project-1", Task.Scope.PERSONAL,
+                "creator-uuid", null, null, recordingTitleProvider(calls));
+        MaterialTaskGenerator.generate(plan, IRON_BLOCK, 3, MaterialTaskMode.TARGET_WITH_MATERIALS, context);
+
+        GuiTestSupport.assertEquals(3, calls.size(), "三层任务各应回调一次标题渲染");
+        GuiTestSupport.assertEquals(IRON_BLOCK + "|CRAFTING", calls.get(0), "目标物应提示工作台合成");
+        GuiTestSupport.assertEquals(IRON_INGOT + "|SMELTING", calls.get(1), "中间产物应提示熔炉熔炼");
+        GuiTestSupport.assertEquals(RAW_IRON + "|none", calls.get(2), "最终材料无配方，应传 null");
+    }
+
+    /**
+     * 验证默认只展开一层时，「折叠（未展开）」的直接材料也会带上推荐配方类型。
+     *
+     * <p>不这样做的话，默认视图里除目标物外全是「收集」，功能方块提示就丢了。
+     */
+    private static void shouldHintRecipeKindForFoldedMaterial() {
+        MaterialPlan plan = ironBlockPlan();
+
+        List<String> calls = new ArrayList<>();
+        MaterialTaskContext context = new MaterialTaskContext("project-1", Task.Scope.PERSONAL,
+                "creator-uuid", null, null, recordingTitleProvider(calls));
+        MaterialTaskGenerator.generate(plan, IRON_BLOCK, 3, MaterialTaskMode.TARGET_WITH_MATERIALS, context);
+
+        GuiTestSupport.assertEquals(2, calls.size(), "默认一层应生成两条任务");
+        GuiTestSupport.assertEquals(IRON_BLOCK + "|CRAFTING", calls.get(0), "目标物应提示工作台合成");
+        GuiTestSupport.assertEquals(IRON_INGOT + "|SMELTING", calls.get(1),
+                "折叠的直接材料应提示熔炉熔炼（推荐配方）");
+    }
+
+    /**
+     * 构造用于记录配方类型的标题回调：把「物品|配方类型」按调用顺序写入结果列表。
+     *
+     * @param calls 输出：按调用顺序记录的「物品资源 ID|配方类型」
+     * @return 标题回调
+     */
+    private static MaterialTaskTitleProvider recordingTitleProvider(List<String> calls) {
+        return (itemId, count, kind) -> {
+            calls.add(itemId + "|" + (kind == null ? "none" : kind.name()));
+            return itemId + " x" + count;
+        };
+    }
+
+    /**
+     * 验证同种中间产物出现在两个分支时也只生成一条任务，且数量取两个分支的汇总。
+     *
+     * <p>否则两条同类任务会用同一份进度（收集类看持有量、合成类看每次合成量），
+     * 一条满足就会把另一条也推到达标，表现为"任务进度共享"。
+     */
+    private static void shouldMergeRepeatedIntermediateIntoOneTask() {
+        MaterialPlan plan = sharedIntermediatePlan();
+
+        List<Task> tasks = MaterialTaskGenerator.generate(
+                plan, "test:target", 2, MaterialTaskMode.TARGET_WITH_MATERIALS, personalContext());
+
+        GuiTestSupport.assertEquals(5, tasks.size(), "应生成 目标 + 部件A + 共享件 + 原料 + 部件B 共 5 条任务");
+        Task partA = findByTarget(tasks, "test:part_a");
+        Task partB = findByTarget(tasks, "test:part_b");
+        Task shared = findByTarget(tasks, SHARED_PART);
+        Task raw = findByTarget(tasks, RAW_IRON);
+        GuiTestSupport.assertTrue(partA != null && partB != null && shared != null && raw != null,
+                "每个材料都应生成一条任务");
+        GuiTestSupport.assertEquals(1, countByTarget(tasks, SHARED_PART), "同种中间产物只应生成一条任务");
+        GuiTestSupport.assertEquals(4, shared.getTrigger().getTargetCount(),
+                "两个分支各需 2 个，共享件数量应取汇总需求 4");
+        GuiTestSupport.assertTrue(shared.getTrigger().getType() == TaskTrigger.Type.ITEM_COLLECT,
+                "材料反推任务一律用「收集」语义（拿到即达成，配方只作为标题提示）");
+        GuiTestSupport.assertEquals(partA.getId(), shared.getParentTaskId(),
+                "合并后的任务应挂在首次出现的位置（部件A 下）");
+        GuiTestSupport.assertEquals(shared.getId(), raw.getParentTaskId(),
+                "只在重复分支里出现的更深层材料，应挂到最近的已生成祖先任务下");
+        GuiTestSupport.assertEquals(1, countByTarget(tasks, RAW_IRON), "原料同样只应生成一条任务");
+        GuiTestSupport.assertEquals(4, raw.getTrigger().getTargetCount(), "原料数量应取汇总需求 4");
+    }
+
+    /**
+     * 在任务列表中按触发器目标查找任务。
+     *
+     * @param tasks  任务列表
+     * @param target 目标物品资源 ID
+     * @return 首个匹配任务；没有时返回 null
+     */
+    private static Task findByTarget(List<Task> tasks, String target) {
+        for (Task task : tasks) {
+            if (target.equals(task.getTrigger().getTarget())) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 统计追踪指定物品的任务条数。
+     *
+     * @param tasks  任务列表
+     * @param target 目标物品资源 ID
+     * @return 任务条数
+     */
+    private static int countByTarget(List<Task> tasks, String target) {
+        int count = 0;
+        for (Task task : tasks) {
+            if (target.equals(task.getTrigger().getTarget())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -95,10 +217,10 @@ public final class MaterialTaskGeneratorTestMain {
     }
 
     /**
-     * 模式 B：默认只展开一层，生成「合成目标任务 + 直接材料收集任务」。
+     * 模式 B：默认只展开一层，生成「目标物收集任务 + 直接材料收集任务」。
      *
-     * <p>合成任务挂 {@code CRAFT_ITEM}（展开配方材料说明这一步必须自己合成），
-     * 最终材料的收集任务挂 {@code ITEM_COLLECT}（持有量语义）；两者都优先于子任务聚合。
+     * <p>两条任务都挂 {@code ITEM_COLLECT}（持有量语义）：最终目标是拿到材料，
+     * 配方（含功能方块）只作为标题提示，不强制必须自己制作。
      */
     private static void shouldGenerateParentWithMaterialSubtasks() {
         List<Task> tasks = MaterialTaskGenerator.generate(
@@ -107,16 +229,16 @@ public final class MaterialTaskGeneratorTestMain {
         GuiTestSupport.assertEquals(2, tasks.size(), "默认展开一层：目标物 + 一层直接材料");
         Task parent = tasks.get(0);
         Task child = tasks.get(1);
-        GuiTestSupport.assertEquals(IRON_BLOCK + " x3", parent.getTitle(), "父任务标题应使用合成语义");
+        GuiTestSupport.assertEquals(IRON_BLOCK + " x3", parent.getTitle(), "父任务标题应由标题回调生成");
         GuiTestSupport.assertTrue(parent.isTopLevelTask(), "父任务应为顶层任务");
-        GuiTestSupport.assertTrue(parent.getTrigger().getType() == TaskTrigger.Type.CRAFT_ITEM,
-                "合成任务应挂 CRAFT_ITEM 触发器（展开配方材料即需要自己合成）");
-        GuiTestSupport.assertEquals(IRON_BLOCK, parent.getTrigger().getTarget(), "合成任务应追踪目标物品");
-        GuiTestSupport.assertEquals(3, parent.getTrigger().getTargetCount(), "合成任务数量应为目标数量");
+        GuiTestSupport.assertTrue(parent.getTrigger().getType() == TaskTrigger.Type.ITEM_COLLECT,
+                "材料反推任务一律用「收集」语义，目标物也不例外");
+        GuiTestSupport.assertEquals(IRON_BLOCK, parent.getTrigger().getTarget(), "目标任务应追踪目标物品");
+        GuiTestSupport.assertEquals(3, parent.getTrigger().getTargetCount(), "目标任务数量应为目标数量");
         GuiTestSupport.assertEquals(IRON_INGOT, child.getTrigger().getTarget(), "子任务应追踪默认展开出的直接材料");
         GuiTestSupport.assertEquals(27, child.getTrigger().getTargetCount(), "铁块 ×3 需要铁锭 ×27");
         GuiTestSupport.assertTrue(child.getTrigger().getType() == TaskTrigger.Type.ITEM_COLLECT,
-                "最终材料任务应使用 ITEM_COLLECT 触发器");
+                "直接材料任务应使用 ITEM_COLLECT 触发器");
         GuiTestSupport.assertTrue(child.isSubtask(), "材料任务应挂为子任务");
         GuiTestSupport.assertEquals(parent.getId(), child.getParentTaskId(), "子任务应挂到父任务下");
         GuiTestSupport.assertEquals(0L, child.getSubtaskSortOrder(), "首个子任务排序号应为 0");
@@ -124,7 +246,7 @@ public final class MaterialTaskGeneratorTestMain {
 
     /**
      * 验证任务层级与预览展开层级一一对应：展开两层时生成三层依赖任务链，
-     * 每一层的任务都挂自身的 ITEM_COLLECT 触发器。
+     * 每一层的任务都挂自身的 {@code ITEM_COLLECT} 触发器（材料反推一律「收集」语义）。
      */
     private static void shouldGenerateDependencyChainMatchingExpandedLevels() {
         List<Task> tasks = MaterialTaskGenerator.generate(
@@ -135,11 +257,11 @@ public final class MaterialTaskGeneratorTestMain {
         Task middle = tasks.get(1);
         Task leaf = tasks.get(2);
         GuiTestSupport.assertTrue(root.isTopLevelTask(), "根任务应为顶层任务");
-        GuiTestSupport.assertTrue(root.getTrigger().getType() == TaskTrigger.Type.CRAFT_ITEM,
-                "根任务应挂 CRAFT_ITEM 触发器");
+        GuiTestSupport.assertTrue(root.getTrigger().getType() == TaskTrigger.Type.ITEM_COLLECT,
+                "根任务同样用「收集」语义（目标物由工作台合成，该信息只体现在标题提示里）");
         GuiTestSupport.assertEquals(root.getId(), middle.getParentTaskId(), "中间产物应挂到根任务下");
-        GuiTestSupport.assertTrue(middle.getTrigger().getType() == TaskTrigger.Type.CRAFT_ITEM,
-                "中间产物应挂 CRAFT_ITEM 触发器");
+        GuiTestSupport.assertTrue(middle.getTrigger().getType() == TaskTrigger.Type.ITEM_COLLECT,
+                "中间产物同样用「收集」语义（拿到铁锭即达成，是否熔炼出来不强制）");
         GuiTestSupport.assertEquals(IRON_INGOT, middle.getTrigger().getTarget(), "中间产物触发器应追踪铁锭");
         GuiTestSupport.assertEquals(middle.getId(), leaf.getParentTaskId(), "最终材料应挂到中间产物下");
         GuiTestSupport.assertEquals(RAW_IRON, leaf.getTrigger().getTarget(), "最深层应为最终材料粗铁");
@@ -262,6 +384,33 @@ public final class MaterialTaskGeneratorTestMain {
     }
 
     /**
+     * 构造「中间产物跨分支重复」的材料计划：
+     * 目标 ← 部件A + 部件B；部件A ← 共享件；部件B ← 共享件；共享件 ← 粗铁。
+     *
+     * @return 材料计划
+     */
+    private static MaterialPlan sharedIntermediatePlan() {
+        MaterialRecipeIndex index = new MaterialRecipeIndex();
+        index.add(new MaterialRecipe("target", "test:target", 1, List.of(
+                new MaterialIngredient(List.of("test:part_a"), 1),
+                new MaterialIngredient(List.of("test:part_b"), 1)), MaterialRecipeKind.CRAFTING));
+        index.add(new MaterialRecipe("part_a", "test:part_a", 1, List.of(
+                new MaterialIngredient(List.of(SHARED_PART), 1)), MaterialRecipeKind.CRAFTING));
+        index.add(new MaterialRecipe("part_b", "test:part_b", 1, List.of(
+                new MaterialIngredient(List.of(SHARED_PART), 1)), MaterialRecipeKind.CRAFTING));
+        index.add(new MaterialRecipe("shared", SHARED_PART, 1, List.of(
+                new MaterialIngredient(List.of(RAW_IRON), 1)), MaterialRecipeKind.CRAFTING));
+        MaterialResolveOptions options = new MaterialResolveOptions(
+                MaterialResolveOptions.DEFAULT_MAX_DEPTH,
+                MaterialResolveOptions.DEFAULT_MAX_NODES,
+                Map.of(),
+                Set.of(),
+                Set.of("test:part_a", "test:part_b", SHARED_PART),
+                MaterialResolveOptions.DEFAULT_EXPAND_DEPTH);
+        return MaterialResolver.resolve("test:target", 2, index, options);
+    }
+
+    /**
      * 构造「铁块 ← 铁锭 ← 熔炼粗铁」的配方索引。
      *
      * @return 配方索引
@@ -290,6 +439,6 @@ public final class MaterialTaskGeneratorTestMain {
      * @return 标题回调
      */
     private static MaterialTaskTitleProvider defaultTitleProvider() {
-        return (itemId, count, collect) -> itemId + " x" + count;
+        return (itemId, count, kind) -> itemId + " x" + count;
     }
 }
