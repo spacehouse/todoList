@@ -208,6 +208,14 @@ tasks.register<JavaExec>("materialPreviewStateTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("materialPreviewLayoutTest") {
+    group = "verification"
+    description = "Run the material preview horizontal tree layout self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialPreviewLayoutTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -229,6 +237,7 @@ tasks.named("check").configure {
     dependsOn("materialResolverTest")
     dependsOn("materialTaskGeneratorTest")
     dependsOn("materialPreviewStateTest")
+    dependsOn("materialPreviewLayoutTest")
 }
 
 tasks.withType<Test>().configureEach {

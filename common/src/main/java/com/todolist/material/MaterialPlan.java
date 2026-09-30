@@ -3,7 +3,6 @@ package com.todolist.material;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 材料反推结果：展开树 + 合并去重后的最终材料清单。
@@ -48,24 +47,5 @@ public record MaterialPlan(MaterialNode root,
      */
     public boolean isEmpty() {
         return leafTotals.isEmpty();
-    }
-
-    /**
-     * 按允许集合过滤最终材料清单（供预览界面的勾选使用）。
-     *
-     * @param allowedItemIds 允许保留的物品资源 ID 集合；为 null 时返回原计划（表示全选）
-     * @return 过滤后的新计划；allowedItemIds 为 null 时返回 this
-     */
-    public MaterialPlan retainLeaves(Set<String> allowedItemIds) {
-        if (allowedItemIds == null) {
-            return this;
-        }
-        Map<String, Integer> filtered = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> entry : leafTotals.entrySet()) {
-            if (allowedItemIds.contains(entry.getKey())) {
-                filtered.put(entry.getKey(), entry.getValue());
-            }
-        }
-        return new MaterialPlan(root, filtered, nodeCount, truncated);
     }
 }

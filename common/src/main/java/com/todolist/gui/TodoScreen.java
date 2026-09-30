@@ -3131,12 +3131,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
                 null,
                 null,
-                (materialItemId, materialCount, collect) -> TriggerTargetSupport.buildDefaultTaskTitle(new TaskTrigger(
-                        collect ? TaskTrigger.Type.ITEM_COLLECT : TaskTrigger.Type.CRAFT_ITEM,
-                        materialItemId,
-                        materialCount)).getString()
+                (materialItemId, materialCount, recipeKind) ->
+                        TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount, recipeKind).getString()
         );
-        MaterialPreviewState state = new MaterialPreviewState(itemId, 1, MaterialTaskMode.TARGET_WITH_MATERIALS);
+        MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
         minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks));
     }
 

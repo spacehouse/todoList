@@ -1,10 +1,23 @@
 # 同物品任务的额度配额（Phase Z 设计稿）
 
-> 状态：**已定方案，尚未实现**
+> 状态：**❌ 已废弃，不采用**（2026-09-28 实机验证结论；实现已从工作区回退）
+>
+> **结论先行（务必先读 §0）**：本方案的核心机制——以 `used = Σ(同组已完成任务的 targetCount)` 参与
+> `pool = max(0, held − used)` 的**跨时间额度台账**——在实机验证中被证明不成立：
+> 它把"历史上完成过的采集"当成对**当前库存**的永久占用，而物品会被消耗、熔炼、搬走，
+> 于是"新建同物品任务→进度不涨"变成常态。本文档保留为**设计记录与教训**，
+> 其中**排他性**（同一份物品在任一时刻只能计入同组的一条未完成任务）仍然成立且有价值，
+> 需要保留的是这一点，而不是台账。**回退范围与后续方向见 §0。**
+>
+> 以下"决策记录 / §1~§9"保留为原始设计过程记录（含当时的修订理由），**不要按其实现**。
+>
 > 决策记录（2026-09-15）：
 > 1. 方案 1 全量额度配额，**分账顺序按任务列表顺序（从上往下）**，拖拽排序即调整**分账顺序**。
->    注意这不是"严格优先级"：收集类采用**条件优先级**（整份满足优先）——
->    排在前面的任务无法整份满足时，额度会让给后面能整份满足的任务（§3.3、§3.6）；
+>    （2026-09-28 修订，实机验证反馈）**两类都是严格优先级**：额度严格按列表从上往下流，
+>    前一条任务写满（完成）后才轮到下一条——后排任务不会"插队"完成，前排任务的展示进度也不会回退。
+>    想让某条任务优先，就把它拖到上面（§3.3、§3.5、§3.6）。
+>    原"收集类条件优先级（整份满足优先）"已废弃：它会让 `×64` 在前、`×16` 在后、持有 16 时，
+>    `×16` 直接完成而 `×64` 的展示进度从 `15/64` 掉回 `0/64`，不符合直觉；
 > 2. 累加型（合成 / 破坏 / 击杀）采用**事件批次分账**（严格语义，不引入持久化字段）；
 > 3. 已完成任务被改 `targetCount` / 目标 / **新增触发器**时**视为显式重置**（先取消完成、清零进度、再按新目标重新判定）；
 >    Phase Z 在编辑器保存路径实际落地该规则（含 GUI 一次确认提示），见 §4.1；
@@ -17,6 +30,54 @@
 >    收集类不能只依赖"后续组级重算覆盖"——负责人离线时不重算，否则取消操作会被加载规范化吞掉（§4.2）。
 >
 > 关联：`docs/feat-trigger-completion.md`（触发器语义底座）、`docs/feat-material-task-generation.md`（材料反推生成的收集/合成任务链）
+
+## 0. 废弃结论、回退范围与后续方向（2026-09-28）
+
+### 0.1 为什么台账方案不成立
+
+`pool = max(0, held − used)`、`used = Σ(同组【已完成】任务的 targetCount)` 的设计意图是
+"防止已完成任务占用的额度被后面的任务重复使用"。问题出在"占用"这个词被跨时间理解了：
+
+| 时点 | 实际发生 | 规则算出 |
+|---|---|---|
+| 1 | 持有 10 石头，"收集石头 ×10"完成 | `used = 10` |
+| 2 | 这 10 个石头被熔炼 / 搬到箱子 / 用掉 | `held = 0`，但 `used` **仍是 10** |
+| 3 | 新建"收集石头 ×20"，捡到 15 个 | `pool = max(0, 15 − 10) = 5` → 显示 `5/20` |
+
+**已完成的任务对当前库存没有任何实际占用**（那些物品早已不在背包里），
+但台账让它永久占住一个固定额度，且偏差会跟着 `held` 一起漂移。
+表现就是实机看到的"捡到物品但新任务进度不涨 / 涨得不对"。
+
+而这条台账**本来就是多余的**：它要防的是"同一份物品被多条任务重复使用"，
+这件事只需要**排他性**——同一时刻只有一条**未完成**任务能占用同一份额度。
+排他性由"候选只含未完成任务 + 额度严格从上往下流"即可实现，不需要任何跨时间账本。
+
+### 0.2 回退范围
+
+- **已回退**：Phase Z 的全部代码实现（`TriggerCreditAllocator` / `QuotaGroupKey` / `QuotaParticipation` /
+  `TaskOrderView` 四个新类、其离线测试、`TaskTriggerService` / `Task` / `TaskManager` / `TodoScreen` /
+  `TaskListWidget` / `TaskPackets` / `CommandBootstrap` / `build.gradle.kts` / 本地化键的全部改动）。
+  工作区已回到 `db7c609`（本文档的修订保留）。
+- **已保留（独立 bug 修复，与本方案无关）**：材料反推对"熔炼 / 高炉 / 烟熏 / 营火 / 切石 / 锻造"等
+  **不触发合成事件**的加工方式改用「收集」语义（见 `feat-material-task-generation.md`）。
+- **备份**：改动集补丁在 `e:\AI\Todolist-versions\1.21.1\phaseZ-changes.bak.20260928-1.patch`；
+  完整工作区在 git stash `stash@{0}`（`phaseZ-wip-20260928`），确认不需要后可清理。
+
+### 0.3 仍然成立的部分（后续设计可复用）
+
+- **排他性**：同一份物品在任一时刻只能计入同组的一条**未完成**任务；由"候选只含未完成 + 严格从上往下"实现。
+- **候选与顺序的口径**：候选集合与顺序来自统一的一处（桶内全量列表 + 路径序），不新增持久化字段。
+- **两类的不对称**：收集类（状态账，可随时按当前持有量重算）vs 累加型（事件账，不回溯历史）。
+
+### 0.4 后续方向（按成本排序，逐项另立设计）
+
+1. **材料生成去重**（✅ 已完成）：生成阶段保证**同一物品在整棵材料树里只生成一条任务**、数量取全树汇总
+   （`MaterialTaskGenerator#collectNodeTotals` + 全物品 `emittedItemIds`，Phase E11）。从结构上消除材料链内部同物品共享，不需要引擎侧配额。
+2. **项目级线性模式**（大功能，RPG 化地基）：项目可选"线性"，同项目任务按从上到下串行，主线 / 支线分层（支线可并行）。
+   它天然解决同物品共享，也让"额度台账"彻底不必要。需另立设计稿（PRD / 技术文档）。
+3. **幽灵任务**（✅ 已按"源头级联完成"处理）：父任务完成时级联完成全部未完成后代（含带触发器的后代），
+   手动勾选与引擎达标两条路径都覆盖，见 `docs/feat-trigger-completion.md` Phase Y1。
+   之所以不再走"额度侧过滤 / 让残留可见"：前者的额度引擎本身已废弃，后者会把任务树层级打断、且"已完成任务里还挂着未完成项"依旧反直觉。
 
 ## 1. 问题
 
@@ -113,7 +174,7 @@ hasTrigger && progress == targetCount          ⇒  completed
 
 | 入口 | 动作 |
 |---|---|
-| 自动完成（`TaskTriggerService`） | 收集类第一遍显式写 `progress = targetCount`（§3.3）；累加型 `take = min(need, pool)` 天然写满（§3.4）。两类的"写满"与"完成"都在同一处发生，天然满足双向 |
+| 自动完成（`TaskTriggerService`） | 收集类"写满即完成"（`take == targetCount`，§3.3）；累加型 `take = min(need, pool)` 同样天然写满（§3.4）。两类的"写满"与"完成"都在同一处发生，天然满足双向 |
 | 手动 / 批量 / 命令完成 | **所有把 `completed` 置为 `true` 的入口**都必须同时把 `trigger.progress` 补到 `targetCount`（§4.2）；不能依赖"后续重算刷新" |
 | 加载规范化（`Task.fromNbt`） | 反序列化后按**双向**修正：`completed && progress < targetCount` → 写满 `progress`；`!completed && progress == targetCount` → 置 `completed = true`（§5.4 第 7 条） |
 
@@ -172,16 +233,34 @@ hasTrigger && progress == targetCount          ⇒  completed
 
 ```
 OrderKey(task) = [Seg0, Seg1, Seg2, ...]      // 根 → 父 → 子 → 孙
-  Seg0（顶层）  = (sort_order, created_at, id)
+  Seg0（顶层）  = 桶内任务列表中的位置（见下方"顶层口径的实现记录"）
   Seg1..SegN（第 N 层子任务）= (subtask_sort_order, id)
 
 比较规则（必须写死，避免 tie 时返回 0 让顺序依赖原集合迭代序）：
-  逐段比较，段内按字段顺序依次比较；
-  Seg0 的 sort_order 相同时比 created_at，再相同比 id；
-  子层 segment 的 subtask_sort_order 相同时比 id；
+  逐段比较；
+  顶层不再二次比较（列表位置本身即全序），子层的 subtask_sort_order 相同时比 id；
   前缀相同而路径更短者在前：
     [1] < [1,1] < [1,1,1] < [1,1,2] < [1,2] < [2]
 ```
+
+**顶层口径的实现记录（Z1 冻结）：`Task` 不持有顶层 `sort_order` 字段。**
+
+`tasks.sort_order` 是**纯 DB 列**：写入按保存列表下标（`H2TaskStore#insertTasks`），
+读取时只作为 `ORDER BY` 使用、**不回填**到 `Task`（`H2TaskStore#loadBucket` 的 SELECT 列表里没有该列）。
+因此内存中"顶层顺序"是由 **store 返回的列表顺序**表达的，而该顺序就是
+`ORDER BY sort_order, created_at, id` 的结果序——两者等价，`created_at` / `id` 的 tie-break
+由 DB 在对齐列表时一次性解决。
+
+于是顶层 Segment 直接取**桶内任务列表的位置**，不再比较 `(sort_order, created_at, id)`：
+
+- 语义与文档一致（先按 `sort_order`，相同再按 `created_at`，再相同按 `id`）；
+- 不改 `Task` / DB schema / NBT 与网络负载，改动面最小；
+- "顺序来源唯一化"落在这条规则的**唯一一处**：构建排序视图时传入的列表必须已按持久化顺序排列
+  （`CachedBucket.tasks` 来自 store，天然满足）。
+
+**只有当上述前提被打破时（例如某条路径拿集合迭代序当列表顺序），判定顺序才会漂移。**
+若将来确实需要 `Task` 自带顶层排序号，属于另立改动（新增字段 + 读取回填 + 写入改按字段），
+不在本阶段范围内。
 
 每层的 tie-break 必须落在比较键里（不能只把 `id` 写在文字说明中）：
 否则 `sort_order` 相同的两条任务 OrderKey 相等 → comparator 返回 0 → 排序结果取决于集合迭代序，
@@ -191,33 +270,32 @@ OrderKey(task) = [Seg0, Seg1, Seg2, ...]      // 根 → 父 → 子 → 孙
 
 | 层 | Segment | 现有权威实现 |
 |---|---|---|
-| 顶层 | `(sort_order, created_at, id)` | `H2TaskStore` 的 `ORDER BY sort_order, created_at, id` |
+| 顶层 | 桶内任务列表位置（等价于 `sort_order, created_at, id` 的全序） | `H2TaskStore` 的 `ORDER BY sort_order, created_at, id` |
 | 子层 | `(subtask_sort_order, id)` | `TaskManager#getSiblingSubtasksInOrder` 的比较器 |
 
-**不存在 NULL / 缺失分支，不要为此加兜底逻辑**：OrderKey 用到的列在 schema 里全部 `NOT NULL`，
-读取走 `ResultSet#getLong` → Java 基本类型 `long`，因此 Segment 字段恒有值，
-既不依赖 H2 的 NULL 排序规则，也不需要"无 `sort_order` 则用 `created_at`"这种分支
-（`created_at` 是**相同 `sort_order` 时的第二级比较**，不是缺失时的回退）。
-
-| 列 | schema 定义 | 在 OrderKey 中的角色 |
+| 列 | schema 定义 | 在顺序中的角色 |
 |---|---|---|
-| `sort_order` | `BIGINT NOT NULL` | 顶层第一级 |
-| `created_at` | `BIGINT NOT NULL` | 顶层第二级 |
+| `sort_order` | `BIGINT NOT NULL` | 顶层第一级（**纯 DB 列，不回填到 `Task`**，见上方实现记录） |
+| `created_at` | `BIGINT NOT NULL` | 顶层第二级（DB 对齐列表时生效） |
 | `id` | `VARCHAR(64) NOT NULL`（主键组成部分） | 顶层第三级 / 子层第二级 |
 | `subtask_sort_order` | `BIGINT NOT NULL DEFAULT 0` | 子层第一级 |
 
-四列都非空、`id` 又是主键的一部分，**OrderKey 才是真正的全序**（不会出现两条任务比较结果相等）。
+四列都非空、`id` 又是主键的一部分，**顺序才是真正的全序**（不会出现两条任务比较结果相等）。
+
+**不存在 NULL / 缺失分支，不要为此加兜底逻辑**：`created_at` 是**相同 `sort_order` 时的第二级比较**，
+不是 `sort_order` 缺失时的回退；子层的 `id` 也是**相同 `subtask_sort_order` 时的比较项**，同理。
 
 `id` 的格式也写死：由 `Task` 构造器 `UUID.randomUUID().toString()` 生成，
 即**小写十六进制 UUID 字符串**（`8-4-4-4-12`，仅 `0-9a-f` 与 `-`），
 因此 `String.compareTo` 与任何合理 collation 的排序结果一致，不存在大小写 / locale 歧义。
 
-**判定顺序只由内存 OrderKey 决定，不需要与 H2 的 collation 保持一致**：
+**判定顺序只由内存中的顺序视图决定，不需要与 H2 的 collation 保持一致**：
 `groupKey` / 顺序视图都在内存里构建（§5.2 明确"子层必须显式排序"），
-DB 的 `ORDER BY` 只是"数据来源"，不是"判定依据"。真正的约束是——
+DB 的 `ORDER BY` 只负责提供"已按持久化顺序排列的列表"，判定依据仍是内存视图。真正的约束是——
 
-> **全过程只能有一个比较器**：§5.2 的顺序视图、allocator 的输入顺序、测试断言都必须用同一个
-> OrderKey 实现；一旦某条路径改用 DB 返回顺序，就会出现两套口径。
+> **全过程只能有一个顺序来源**：§5.2 的顺序视图、allocator 的输入顺序、测试断言都必须走同一个
+> 实现（`TaskOrderView`）；一旦某条路径改用集合迭代序（例如把 `HashMap` / `HashSet` 的遍历序
+> 当成候选顺序），就会出现两套口径，直接破坏 I3。
 
 若担心"某条路径偷偷用了 DB 顺序"，用测试 54（H2 加载结果 vs 内存 OrderKey 排序结果一致）兜底。
 
@@ -238,8 +316,9 @@ DB 的 `ORDER BY` 只是"数据来源"，不是"判定依据"。真正的约束�
 不能假设 load 出来就是对的。
 
 这等价于"深度优先展开"（父任务 → 它的子任务 → 下一个顶层任务），与列表展示一致，
-而且天然覆盖 父→子→孙 多于两层的情况。顶层顺序由 `TaskManager.reorderTasks` 写回 `sort_order`，
-子层顺序由 `reorderSubtasks` 写回 `subtask_sort_order`，两者都持久化，跨重启一致。
+而且天然覆盖 父→子→孙 多于两层的情况。顶层顺序由 `TaskManager.reorderTasks` 改内存列表顺序、
+再经保存路径按列表下标写回 `sort_order`（见上方实现记录），子层顺序由 `reorderSubtasks`
+写回 `subtask_sort_order`，两者都持久化，跨重启一致。
 
 **排序来源只能用持久化字段**，不要用视图派生顺序：
 
@@ -249,30 +328,37 @@ DB 的 `ORDER BY` 只是"数据来源"，不是"判定依据"。真正的约束�
 | 折叠 / 展开状态 | 折叠只是隐藏子任务，不改变相对顺序 |
 | 搜索过滤 / 分页 / HUD 与 GUI 的差异 | 视图不同不应产生不同完成结果 |
 
-### 3.3 收集类（ITEM_COLLECT）：状态账，两遍分配
+### 3.3 收集类（ITEM_COLLECT）：状态账，严格顺序分配
 
 ```
 输入 = 同组【未完成】任务（已按 §3.2 OrderKey 排好序）+ 该组 used + 该组 held
 pool = max(0, held − used)  // held 沿用现有 countHeldItems 口径（含容器展开）
 used = Σ(同组【已完成】任务的 targetCount)   // 由调用方在组内算出并传入，见 §5.4 数据来源约束
 
-第一遍（决定谁完成）——只有能"整份满足"的任务才占用额度：
-    for taskId in orderedIncompleteTaskIds:
-        if (pool >= targetCount[taskId]) {
-            resultProgress[taskId] = targetCount[taskId]  // 必须写满：完成态存储值 = 展示值（I4 第 3 条）
-            completedIds.add(taskId)
-            pool -= targetCount[taskId]
-        }
-
-第二遍（决定展示）——把剩余额度按同一顺序**排他**地填给仍未完成的任务：
-    for taskId in orderedIncompleteTaskIds:              // "未完成" = 第一遍之后的完成集合之外
-        if (taskId in completedIds) continue
-        take = min(targetCount[taskId], pool)
-        resultProgress[taskId] = take
-        pool -= take
+for taskId in orderedIncompleteTaskIds:          // 严格从上往下，没有"两遍"
+    take = min(targetCount[taskId], pool)
+    resultProgress[taskId] = take
+    pool -= take
+    if (take == targetCount[taskId]) completedIds.add(taskId)   // 写满即完成（I4 第 3 条正向）
 
 返回 AllocationResult(resultProgress, completedIds)      // 纯计算结果，不触碰任何 Task 对象
 ```
+
+**额度严格按顺序流下去**：前排任务没写满之前，后面任何任务都拿不到额度。
+因此后排任务不会"插队"完成，前排任务的展示进度也不会回退。
+
+**候选集合必须排除"幽灵任务"**（实机验证（第 7 轮）修订）：
+若某任务的**祖先链上已有已完成任务**，它即使自身未完成也**不再进入额度候选**，这条规则对收集类与累加型同时适用。
+
+- 来源：`TaskManager#toggleTaskCompletion` 级联完成父任务时会**跳过带触发器的后代**（避免覆盖触发器进度），
+  于是留下"父任务已完成、子任务未完成"的后代；而在「未完成」列表里只列未完成的**顶层**任务，
+  这些后代要先展开一个**已完成**的父任务才能看到 → 表现为"看不到"，故称幽灵。
+- 危害：它们仍是合法候选，且按 OrderKey 紧随其已完成的父任务之后，会**抢走同物品额度**，
+  让玩家新建的同物品收集任务永远停在 `0/N`（"捡到物品但进度不涨"）。
+- 排除后的语义：**父任务完成即视为整条链已了结**，其后代退出活跃集合；
+  要让某个子任务继续推进，把它手动完成、或提升为顶层任务（或先取消父任务的完成态）。
+- 注意：`used` 台账不受影响——幽灵本身是未完成的，本来就不计入 `used`；
+  已完成的同组任务照旧按 `targetCount` 占用额度（那是另一条已定规则）。
 
 **伪代码是"状态输入 → 状态输出"的纯计算**：allocator 全程只读写 `targetCount[...]` /
 `progress[...]` / `resultProgress` / `completedIds` 这些值，**不接收也不修改 `Task` 实例**
@@ -284,35 +370,27 @@ used = Σ(同组【已完成】任务的 targetCount)   // 由调用方在组内
 它的 `targetCount` 只能从桶内全量任务列表里累加（§5.4 第 1、2 条），
 而 allocator 只拿到"未完成候选"，看不到已完成任务。
 
-**两个前置约束（都容易实现错）：**
+**前置约束（容易实现错）：**
 
 - **候选必须已经属于同一 quota group**：allocator 不接受混杂列表，也不自己判断目标相等性
   （与 §3.1"不自定义相等性"一致）。调用方传 `StateQuotaSnapshot` / `EventBatchQuotaSnapshot`（§5.1），
-  allocator 只负责在同一组内按顺序分账；
-- **第二遍的"未完成"必须是第一遍执行完成之后的状态**，不能复用第一遍之前的快照。
-  典型错误写法是先把未完成任务收集成 `incomplete`，再跑第一遍、再 `secondPass(incomplete)`——
-  那样第一遍刚完成的任务仍在列表里，会被第二遍再写一次 `progress`。
+  allocator 只负责在同一组内按顺序分账。
 
 三个要点：
 
 - **`pool` 必须夹到 0 以上**：`used` 只由"已完成任务的 `targetCount`"决定，不会因玩家丢弃物品而缩小，
   所以 `held < used` 是常态（例：A 已完成 ×32、当前持有 16 → `pool = max(0, 16 − 32) = 0`），
   夹紧后 B 显示 `0/32` 而不是 `-16/32`；
-- **整份满足才占用**：`32` 那条在持有 16 时不会被"部分占用"，额度留给后面能整份满足的 `16`；
-- **展示排他**：第二遍同一份额度只填给一条任务，避免"多条任务都显示 16/32 却谁也完不成"。
+- **写满即完成**：`take == targetCount` 时才进 `completedIds`；未写满的那条进度只是"展示切片"，
+  不计入下一轮的 `used`（`used` 只累加**已完成**任务的 `targetCount`）；
+- **展示天然排他**：同一份额度只填给一条任务，不会出现"多条任务都显示 16/32 却谁也完不成"。
 
-**"列表顺序"是分账顺序，不是严格优先级**：列表顺序决定"谁先被尝试"，
-但第一遍的"整份满足才占用"会让**排在后面、却能一次满足的任务先完成**
-（`A ×32` 在前、`B ×16` 在后、`held = 16` → B 先完成，A 显示 `0/32`）。
-这是有意设计（否则 `×32` 会长期"占着"额度导致 `×16` 永远做不了），但**不要把它描述成"严格按优先级分配"**。
+**拖拽是唯一的优先级手段**：想让后面的任务先做，就把它拖到上面。
+原设计曾用"条件优先级（整份满足优先）"让 `×16` 自动插队，但实机反馈该行为反直觉
+（`×64` 的展示进度会从 `15/64` 掉回 `0/64`、`×16` 莫名完成），因此废弃（见 §3.6）。
 
-注意与材料配方预览的区别：配方预览（`MaterialListScreen`）用的是**严格顺序**占用
-（上面的行先吃掉数量，下面的行只能用剩余量）；Phase Z 是**任务级额度**，用条件优先级。
-两者场景不同，**不需要也不应该强行统一**。
-
-第一遍必须**同时**写 `resultProgress[taskId] = targetCount[taskId]` 并把 id 放进 `completedIds`：
-若第一遍只登记完成而不写进度，回写链路（不再像现有实现那样先 `setProgress(held)`）
-就会留下"已完成却 `0/16`"的状态，直接违反 I4 第 3 条。
+注意与材料配方预览的关系：配方预览（`MaterialListScreen`）用的是**严格顺序**占用
+（上面的行先吃掉数量，下面的行只能用剩余量）；Phase Z 的任务级额度现在与它同款口径。
 
 ### 3.4 累加型（合成 / 破坏 / 击杀）：事件账，批次分账
 
@@ -370,12 +448,15 @@ used = Σ(同组【已完成】任务的 targetCount)   // 由调用方在组内
 同一任务状态 + 同一批次输入 → allocator 输出一致；
 **不是**"整个累加型链路支持 exactly-once"。
 
-### 3.5 两类的不对称（必须明确，避免后续误判为 bug）
+### 3.5 两类的其余不对称（顺序规则已统一）
+
+**顺序规则两类一致**：都是"额度按候选顺序严格从上往下流"（§3.3、§3.4）。
+下表的不对称只来自"状态账 vs 事件账"这一点，与顺序无关：
 
 | | 收集类（状态账） | 累加型（事件账） |
 |---|---|---|
 | 能否随时重算 | ✅ 纯函数：改顺序 / 改目标 / 改指派后立即重算 | ❌ 事件已经"花掉"，无法回溯 |
-| 拖拽的影响 | 立即改变"谁先完成"，可能让某条提前完成 | **只影响后续批次**，已分配的不返还 |
+| 拖拽的影响 | 立即改变"谁先拿额度"，可能让某条提前完成 | **只影响后续批次**，已分配的不返还 |
 | 取消完成 / 删除任务 | 释放额度，后续任务可能提前完成 | **不返还已分账事件**，后续任务不追溯补领 |
 | `targetCount` / 目标 / 指派变更 | 立即重算 | `progress` 归零，旧账不迁移 |
 | 进度含义 | 当前可分配到的持有量 | 本任务实际分到的历史事件量 |
@@ -384,14 +465,17 @@ used = Σ(同组【已完成】任务的 targetCount)   // 由调用方在组内
 
 ### 3.6 行为示例
 
-两条 `收集 铁锭 ×32`（列表在前）、`收集 铁锭 ×16`（列表在后）：
+两条 `收集 铁锭 ×64`（列表在前）、`收集 铁锭 ×16`（列表在后）：
 
-| 背包持有 | 铁锭 ×32 | 铁锭 ×16 | 说明 |
+| 背包持有 | 铁锭 ×64 | 铁锭 ×16 | 说明 |
 |---|---|---|---|
-| 0 | 0/32 | 0/16 | 都没占用 |
-| 16 | 16/32 未完成 | **16/16 完成** | 32 不能整份满足，额度让给后面的 16 |
-| 16（上一行之后） | 0/32 未完成 | 已完成 | 第二遍展示：剩余额度为 0 |
-| 48 | 32/32 完成 | 已完成 | 合计 48，不再共享 |
+| 0 | 0/64 | 0/16 | 都没占用 |
+| 16 | 16/64 未完成 | 0/16 未完成 | 额度严格从上往下：前排没写满，后排拿不到 |
+| 63 | 63/64 未完成 | 0/16 未完成 | 前排进度持续增长，不回退、不被插队 |
+| 64 | **64/64 完成** | 0/16 未完成 | 前排写满后才开始给后排 |
+| 80 | 已完成 | **16/16 完成** | 写满前排后剩余 16 个满足后排 |
+
+想让 `×16` 先完成，把它拖到 `×64` 上面即可。
 
 两条 `合成 木板 ×4`（同批创建）：
 
@@ -537,8 +621,17 @@ completed = false && progress == targetCount
 `com.todolist.trigger.TriggerCreditAllocator`（无 MC 依赖，可离线单测）。
 两类的分配形状相同（`take = min(need, pool)` 的顺序贪心），只是 `pool` 与 `need` 的来源不同：
 
+Z1 落地的类（均在 `com.todolist.trigger` 包内）：
+
+| 类 | 职责 |
+|---|---|
+| `TriggerCreditAllocator` | 分配器本体 + 两个输入快照 + `AllocationResult`（值输入 → 值输出，不持有 `Task`） |
+| `QuotaGroupKey` | 分组键 `(桶 / 项目 / 类型 / 目标 / 负责人)`；`owner` 唯一化；`computeUsed` 即"`used` 取数入口" |
+| `QuotaParticipation` | 三态 `STATE` / `EVENT_BATCH` / `NONE`；穷尽式 switch 强制新增类型显式声明 |
+| `TaskOrderView` | §5.2 的"列表顺序视图"（顶层取列表位置、子层显式按 `(subtask_sort_order, id)` 排序） |
+
 ```
-收集类：pool = held − used，need = targetCount（整份满足才占用），结果含展示进度
+收集类：pool = held − used，need = targetCount（严格顺序，写满即完成），结果含展示进度
 累加型：pool = 本批事件量，need = targetCount − progress（允许部分累加），结果只含完成集合 + 新的 progress
 ```
 
@@ -660,7 +753,7 @@ allocator **不做排序、不做分组、不做相等性判断**，只做"同�
 结果中的 progress 全部落在 [0, targetCount]
 completedTaskIds 中的任务，其 progress 必为 targetCount
 收集类：Σ(本轮新增占用) ≤ max(0, held − used)                  // I2
-        "本轮新增占用" 严格定义为【第一遍完成任务的 targetCount】之和
+        "本轮新增占用" 严格定义为【写满即完成任务的 targetCount】之和
 累加型：Σ(本轮 take) = min(amount, Σ候选剩余需求)               // I2
         停止条件 = pool 用尽 或 所有候选均达标（需求耗尽）；
         两者都不是时不得提前停止；仍有剩余 pool 则直接丢弃（没有别的任务要领）
@@ -671,11 +764,12 @@ completedTaskIds 中的任务，其 progress 必为 targetCount
 
 | 阶段 | 写入 | 是否算"占用" | 说明 |
 |---|---|---|---|
-| 收集类第一遍（整份满足 → 完成） | `progress = targetCount` + 进 `completedIds` | ✅ **算**，计入 `used` | 这是真正的额度消费 |
-| 收集类第二遍（填给未完成任务） | `progress = take` | ❌ **不算** | 只是展示切片；**不计入 `used`、不跨轮累积、不影响下一轮 `pool`** |
+| 收集类（写满即完成） | `progress = targetCount` + 进 `completedIds` | ✅ **算**，计入 `used` | 这是真正的额度消费 |
+| 收集类（未写满的那条） | `progress = take`（`take < targetCount`） | ❌ **不算** | 只是展示切片；**不计入 `used`、不跨轮累积、不影响下一轮 `pool`** |
 
 下一轮的 `pool` 只由 `held − Σ(已完成任务 targetCount)` 决定，
-而第二遍写入的进度属于**未完成任务**，不参与该求和 → 天然不会累积。
+而未写满的那条属于**未完成任务**，不参与该求和 → 天然不会累积。
+由于额度严格从上往下流，任意时刻**最多只有一条**任务处于"未写满"的展示状态。
 
 注：累加型的停止条件是"**需求耗尽或 pool 用尽**"，不是"amount 用尽即停"——
 例如 A、B 各需 2、`amount = 8` 时实际 `Σ take = 4`，剩余 4 丢弃，此时 `amount` 并未用尽。
@@ -701,9 +795,10 @@ amount ≥ 0             // 累加型批次量。现网入口全部 ≥ 1：
 
 ### 5.2 排序来源
 
-在桶内提供统一的"列表顺序"视图供引擎取候选任务：
+在桶内提供统一的"列表顺序"视图供引擎取候选任务（实现见 `com.todolist.trigger.TaskOrderView`）：
 
-- 按 §3.2 的 OrderKey Segment 路径序生成（顶层 `(sort_order, created_at, id)`、子层 `(subtask_sort_order, id)`）；
+- 按 §3.2 的顺序规则生成（顶层取**传入列表的位置**——即 `CachedBucket.tasks` 的持久化顺序；
+  子层取 `(subtask_sort_order, id)`）；
 - **子层必须显式排序**：`H2TaskStore` 的 `ORDER BY sort_order, created_at, id` 不含 `subtask_sort_order`，
   load 出来的顺序对子任务不成立；可按父任务分组后复用 `TaskManager#getSiblingSubtasksInOrder` 的同款比较器；
 - 与折叠/展开、优先级排序、搜索过滤**无关**；
@@ -713,7 +808,7 @@ amount ≥ 0             // 累加型批次量。现网入口全部 ≥ 1：
 
 | 位置 | 现状 | 改法 |
 |---|---|---|
-| `recalculateItemCollectByUuid` | 逐任务 `setProgress(held)` + `isSatisfied()` | 取 `held` + 由桶内全量列表算 `used` → 按 §3.3 两遍分配 → 回写进度 + 完成集合 |
+| `recalculateItemCollectByUuid` | 逐任务 `setProgress(held)` + `isSatisfied()` | 取 `held` + 由桶内全量列表算 `used` → 按 §3.3 严格顺序分配 → 回写进度 + 完成集合 |
 | `advanceMatchingTasksByUuid` | 循环内 `addProgress(amount)` 后立即判完成 | 改为 §3.4 批次分账：候选（未完成、同组）按列表顺序吃 `pool`，再统一提交完成；覆盖 `CRAFT_ITEM` / `BREAK_BLOCK` / `KILL_ENTITY` |
 | `completeTask` / `markDirty` / `removeIndex` / 通知推送 | 既有链路 | 完成动作仍走原链路 |
 | `Task#setCompleted` | 被多处直接调用，各自不管 `trigger.progress` | **收口为两个"天然稳定"的迁移入口** `completeNormalized()` / `revertCompletion()`（见下）；其余入口改调它们 |
@@ -915,7 +1010,7 @@ revertCompletion()      // 收口所有 completed=true → false，且一步到�
    ```
 
    理由：一轮重算内部已经完成"谁完成 + 谁展示"的完整分配，事务结束时同组状态已自洽
-   （第一遍已把完成任务的额度从 `pool` 中扣除，与 `used` 台账一致），**不需要也不必再算一次**。
+   （分配时已把写满任务占用的额度从 `pool` 中扣除，与 `used` 台账一致），**不需要也不必再算一次**。
    若允许自动完成再派发重算，会形成 `recalculate → complete → recalculate` 的重入；
    即使因"第二次看到 A 已完成"而收敛，也属于不该依赖的行为，且会放大通知 / 落库副作用。
 
@@ -923,7 +1018,7 @@ revertCompletion()      // 收口所有 completed=true → false，且一步到�
 
    | 完成来源 | 是否另起一次组重算 |
    |---|---|
-   | 重算事务内的自动完成（收集类第一遍、累加型批次分账） | ❌ 不另起，属当前事务 |
+   | 重算事务内的自动完成（收集类写满即完成、累加型批次分账） | ❌ 不另起，属当前事务 |
    | 手动勾选 / 批量勾选 / 命令完成 | ✅ 需要（外部操作改变了 `used` 台账，同组展示要跟着变） |
 
 10. **批量操作以"一次用户操作 / 一次服务事务"为原子单位，只在最后统一重算一次**。
@@ -1005,34 +1100,46 @@ revertCompletion()      // 收口所有 completed=true → false，且一步到�
       直到该负责人上线并拿到 `held`；
     - 具体渲染方式（隐藏数字 vs 占位符）与 §5.5 的文案一并定稿。
 
+    **实现记录（Z2 落地时的结论）：本阶段不引入 `quotaHydration` 渲染闸门。**
+    理由是加载后的重算已被现有链路覆盖——平台层在服务端 tick 循环里对
+    「存在未完成收集类触发器」的玩家周期性调用 `handleInventoryChanged`，
+    因此"上线后首次获得 `held` 快照即重算"在一个扫描间隔内即完成；
+    且推送路径只推引擎写过的**脏任务**，旧语义 `progress` 不会被推送。
+    而要做 NOT_READY 闸门，必须在客户端重建 `bucketKey`（含 `P:LOCAL` / `T`）与 `owner`
+    才能与引擎侧分组键对齐，跨端对齐的成本与口径漂移风险高于它消除的"首扫前瞬态旧值"。
+    若后续要恢复该机制，须按本条的原始要求另立改动（并同时处理 `NOT_READY` 期间的判定禁用）。
+
     累加型在任何情况下都**不**因加载而重算、不回放历史事件（§3.4）。
 
-### 5.5 显示与文案（待定 UI 决策）
+### 5.5 显示与文案（Z2 前定稿：tooltip，不加后缀）
 
 收集类任务的右侧进度会从"持有量/需求"变成"**可分配额度/需求**"（§3.6 例子里 `铁锭 ×32` 会显示 `0/32`）。
 判定正确，但玩家可能疑惑"我明明有 16 个"。
 
-两个候选处理：
+**定稿：进度数字保持原样（`0/32`），不做任何后缀；解释信息只放进 tooltip。**
+理由：HUD / GUI 的任务条目空间有限，放不下 `0/32（同物品已占用 16）` 这类长文本。
 
-- **A**：进度旁加后缀（如 `0/32（同物品已占用 16）`）或 tooltip；
-- **B**：不改文案，靠文档说明"同物品任务按列表顺序分配额度，可拖拽调整优先级"。
+tooltip 文案必须**简洁**，只回答"为什么这个数字和背包数量不一样"，建议一行：
 
-实现时二选一，倾向前者。**该决策需在 Z2 前定稿**（不要拖到 Z4），因为文案会影响
-HUD 与 GUI 的布局与本地化键定义。
+> 同物品任务按列表顺序分配额度，已完成的任务会占用额度；拖拽可调整顺序。
 
-若采用 A，建议 tooltip 文案覆盖三件事：
-
-> 同物品任务按列表顺序分配额度；已完成任务会占用额度；拖拽可调整分账顺序。
-
-另外要覆盖一个高频困惑场景：**手动完成一条收集任务后 `used` 变大**，
+同样的 tooltip 要顺带覆盖一个高频困惑场景：**手动完成一条收集任务后 `used` 变大**，
 可能让同组其它任务从 `8/16` 掉到 `0/16` —— 这属于正确行为（§3.3 的 `used` 台账），
-但需要靠 tooltip / 文档说明，否则玩家会以为进度被"吞了"。
+不说明的话玩家会以为进度被"吞了"。
+
+约束：
+
+- 只在收集类（`quotaMode = STATE`）的触发任务上展示，其他类型不引入该 tooltip；
+- tooltip 与进度数字**同源**（都读 `trigger.progress`），不得在 tooltip 里另算一份额度；
+- 新增本地化键，中英同步（`common/src/main/resources/assets/todolist/lang/*.json`）；
+- `quotaHydration = NOT_READY` 时按 §5.4 第 11 条处理（不显示旧进度 / 占位），tooltip 同样不得展示旧值。
+
 
 ## 6. 测试计划
 
 离线（扩展 `TaskTriggerServiceTestMain`，纯逻辑入口现成）：
 
-1. 两条同物品收集：持有只够列表靠后那条 → 只完成它，前一条显示 0/N；
+1. 两条同物品收集（严格从上往下）：①A `×16`、B `×16`、`held = 16` → 只完成 A，B 显示 `0/16`；②A `×64`、B `×16`、`held = 16` → A 显示 `16/64` 未完成、B 显示 `0/16` 未完成（后排不插队、前排进度不回退）；
 2. 持有够全部 → 两条都完成；
 3. 持有回落到不足 → 已完成不回退；
 4. **拖拽对调顺序后立即重算**：已完成保持完成、未完成任务的完成结果按新顺序变化，且**无需新的 MC 事件**；
@@ -1080,17 +1187,19 @@ HUD 与 GUI 的布局与本地化键定义。
 43. **OrderKey 子层 tie-break 用 `id` 而非 `created_at`**：同父下 `child A(subtask_sort_order=1, id=10)`、`child B(subtask_sort_order=1, id=20)`，且 **A 的 `created_at` 晚于 B** → 必须仍是 `A < B`（锁住 §3.2 最容易回归的细节）；
 44. **加载后首次 collect 重算（Phase Z 与旧存档的交界面）**：构造旧数据 `A 已完成 32/32`、`B 未完成 8/16`、当前 `held = 16` → 加载 + 首次 `held` 快照后断言 `A` 仍 `32/32` 已完成、`B` 变为 `0/16` 未完成，且**不发生任何累加型历史回放**；
 45. **触发器新增 / 删除的跨组处理**：①已完成且**原本无触发器**的任务新增 `ITEM_COLLECT 铁锭 ×16` → `completed = false`、`progress = 0`、`afterGroup` 按 `held` 判定；②已完成任务删除触发器 → 旧收集组释放额度、`completed` **保持**（不被重置）；
-46. **第一遍完成的任务不被第二遍覆盖**：`A ×16`、`held = 16` → 第一遍使 A `16/16` 完成并进 `completedIds`；断言第二遍**不把 A 重新写回**（防实现复用第一遍之前的候选快照）；
-47. **第二遍展示排他**：A `×32`、B `×32`、`held = 16`、`used = 0` → 断言 `A = 16/32`、`B = 0/32`（同一份额度只填给列表靠前的一条，不重复展示）；
+46. **严格顺序：前排写满后才轮到后排**：`A ×16`、`B ×16`、`held = 16` → 断言 `A = 16/16` 完成、`B = 0/16`（额度不给后排留"半份"，也不允许后排插队）；
+47. **展示排他**：A `×32`、B `×32`、`held = 16`、`used = 0` → 断言 `A = 16/32`、`B = 0/32`（同一份额度只给列表靠前的一条，不重复展示）；
 48. **离线负责人取消完成收集类**：团队收集任务已完成、负责人离线（无 `held` 快照）时被主机取消完成 → 断言落库状态为 `completed = false` + `progress = 0`（**不得**出现 `!completed && progress == targetCount`），且重载后 `Task.fromNbt` **不会**把它改回 `completed = true`；
-49. **OrderKey 顶层 tie-break**：`sort_order` 相同 → 比 `created_at`；两者都相同 → 比 `id`；逐级断言顺序；
+49. **OrderKey 顶层顺序取列表位置**：`TaskOrderView.depthFirst` 的顶层相对顺序恒等于传入列表的顺序（即 `sort_order, created_at, id` 的结果序），不随传入以外的任何因素变化；
 50. **个人任务与团队任务的 groupKey 隔离**：同一玩家个人的 `收集铁锭 ×16` 与团队（已指派给自己）的同物品任务**不共享额度**；个人任务的 `owner` 恒为玩家 UUID、不为 `null`；
 51. **跨项目 / 跨桶隔离**：同物品、同负责人、同类型，但属于不同项目 → 不共享额度；
 52. **`ADVANCEMENT` 残留回归**：多条 `ADVANCEMENT` 任务追踪同一进度 → 仍**一起完成**（确认未被误接入 allocator，属已知残留而非 bug）；
 53. **新增 / 删除触发器时累加型 `progress` 路径**：①新建 `CRAFT_ITEM` 触发器 → `progress = 0`（构造器既有行为），Phase Z 不额外置零、不回放历史；②删除累加型触发器 → 任务退出额度体系，后续同目标合成事件不再分账给它；
 54. **H2 加载顺序 vs 内存 OrderKey 排序一致**：构造子层 `subtask_sort_order` 相同、而 `created_at` 与 `id` 顺序**相反**的数据，分别经 H2 查询与内存 OrderKey 排序 → 断言判定采用的列表顺序恒为内存 OrderKey 的结果（`(subtask_sort_order, id)`），不随 DB collation 变化；
 55. **删除"未完成且已有部分展示进度"的收集任务**：A `16/16`（已完成）、B `8/16`（未完成、展示中），删除 B → 断言 A 的额度不受影响、重算后 A 仍 `16/16` 完成；反向再删除 A → B 获得释放额度并按新 `pool` 重新展示（防"删除未完成任务时误改他人额度"）；
-56. **hydration 未就绪前不显示旧进度**：构造旧存档数据使某收集组初始为 `NOT_READY` → 在首次 `held` 快照到达前，断言 GUI / HUD **不渲染**该组旧 `progress`（也不据此判定达标）；快照到达并重算后转 `READY`，展示变为重算结果。
+56. **hydration 未就绪前不显示旧进度**：构造旧存档数据使某收集组初始为 `NOT_READY` → 在首次 `held` 快照到达前，断言 GUI / HUD **不渲染**该组旧 `progress`（也不据此判定达标）；快照到达并重算后转 `READY`，展示变为重算结果。（本阶段按 §5.4 第 11 条"实现记录"不做该闸门，本项随之暂缓）
+57. **幽灵收集任务不参与额度分配**：父任务 `收集 铁锭 ×64` 已完成、其子任务 `收集 粗铁 ×16` 未完成（父任务目标不同物品），另有顶层 `收集 粗铁 ×16`，`held(粗铁) = 16` → 断言只有顶层任务完成 `16/16`，幽灵任务 `progress` 保持 0；
+58. **幽灵累加型任务不参与批次分账**：同上结构换成 `CRAFT_ITEM` → 一批 `amount = 4` 只让顶层任务完成，幽灵任务 `progress` 保持 0；
 
 实机清单（追加到 `feat-trigger-completion.md` §8）：
 
@@ -1118,8 +1227,8 @@ HUD 与 GUI 的布局与本地化键定义。
 | 手动完成累加型补满进度 | `progress` 由"保持不变"改为"补至 `targetCount`"，与本任务实际事件量不再相等 | §4.2 + 测试 22；已在规格中显式声明 |
 | 编辑触发器连带清空 `progress` | 改目标或改 `targetCount` 都会因触发器整体重建而归零，玩家可能困惑 | §4.1 + 测试 20、21 |
 | 已完成任务被编辑后退回未完成 | 决策 3 落地后，改数量 / 改目标会把已完成任务重置为未完成并清零进度 | 属显式设计：§4.1 + GUI 确认提示 + 测试 27 |
-| 收集类 `pool` 未夹紧 | `used > held` 时算出负 `pool`，第二遍可能倒扣进度 | §3.3 的 `max(0, ...)` + I4 第 1 条 + 测试 23 |
-| 收集类完成未写满进度 | 第一遍只登记完成不写 `progress` → 留下"已完成 `0/16`" | §3.3 第一遍显式写 `targetCount` + I4 第 3 条 + 测试 24 |
+| 收集类 `pool` 未夹紧 | `used > held` 时算出负 `pool`，分配时会倒扣进度 | §3.3 的 `max(0, ...)` + I4 第 1 条 + 测试 23 |
+| 收集类完成未写满进度 | 只登记完成不写 `progress` → 留下"已完成 `0/16`" | §3.3 `take == targetCount` 时 `progress` 已写满 + I4 第 3 条 + 测试 24 |
 | 手动完成留下脏进度 | GUI / 批量 / 命令完成都只置 `completed`，不动 `progress`，且已完成任务不再被重算覆盖 | 统一入口补写 + `Task.fromNbt` 加载兜底（§4.2、§5.4 第 7 条）+ 测试 28、29 |
 | 跨组变更漏算旧组 | 只重算新组 → 旧组额度不释放，后续任务卡在不够的状态 | §5.4 第 8 条 + 测试 30 |
 | 跨组来源只枚举了两条 | 漏掉**触发类型变更**（编辑器可在 5 种类型间轮换，含跨类） | §4.1 + §5.4 第 8 条按 `beforeGroup`/`afterGroup` 统一处理 + 测试 31、32 |
@@ -1138,7 +1247,7 @@ HUD 与 GUI 的布局与本地化键定义。
 | 全量结果被当成"无条件写库" | 每次背包变化都把整组任务 `UPDATE` 一遍并推送，产生写放大与 HUD 抖动 | §5.1 区分"全量结果（契约）"与"按 diff 回写（service 策略）" |
 | 触发器新增/删除漏处理 | 已完成任务新增触发器 → `completed = true` + `progress = 0` 违反 I4；删除触发器 → 旧收集组额度不释放 | §4.1 上位规则 + §5.1 `!hasTrigger → null` + §5.4 第 8 条来源表 + 测试 45 |
 | 加载后收集类展示停留在旧语义 | 旧存档 `progress` 由 Phase Z 之前写入，不重算会一直显示过期值 | §5.4 第 11 条（首次 `held` 快照时重算；离线不重算）+ 测试 44 |
-| "列表顺序"被误描述为严格优先级 | 文档写"优先级"但算法是"整份满足优先"，容易被当成实现错了 | §3.3 / 决策记录统一为"分账顺序 + 条件优先级" |
+| "列表顺序"的口径漂移 | 若回到"整份满足优先"，会出现前排进度回退 + 后排插队完成（实机已反馈该行为反直觉） | 决策记录 1 / §3.3 / §3.6 统一为"严格从上往下"；回归测试 1、46、47 |
 | `Snapshot` 传入非法组合 | `mode` 与 `groupKey.type` 不自洽时 allocator 会"正确地算出错误结果" | §5.1 Snapshot 合法性约束（调用方保证，allocator 不纠正） |
 | `EVENT_BATCH` 分支被误当成"一律清 0" | 拖拽排序也会被清进度 | §5.4 第 8 条 `case EVENT_BATCH` 注释明确"归零由具体 mutation 语义决定" |
 | 收集类取消完成只靠"后续重算" | 负责人离线时无人重算 → 留下 `!completed && progress == targetCount`，重载后被规范化改回 `completed = true`，**取消操作被吞掉** | §4.2 两类都**显式置 `progress = 0`** + 测试 48 |
@@ -1156,10 +1265,10 @@ HUD 与 GUI 的布局与本地化键定义。
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| Phase Z1 | `TriggerCreditAllocator` 纯逻辑（**值输入 → 值输出，不持有 / 不修改 `Task`**；`progressByTaskId` 覆盖全部候选）+ **冻结接口契约（拆分为 `StateQuotaSnapshot` / `EventBatchQuotaSnapshot` 两个输入类型 + `AllocationResult` 输出 + 前后置条件 + 三态 `quota participation`；`owner(task)` 来源唯一化）** + OrderKey Segment 路径序（含每层 tie-break，子层显式排序，不依赖 DB 顺序） + "`used` 来自桶内全量列表"的取数入口 + 离线单测（不接线） | ⬜ 未开始 |
-| Phase Z2 | 接入收集类（组级重算入口 `recalculateCollectQuotaGroup`：`pool = max(0, held − used)` 两遍分配，含"完成即写满 `progress`"）+ 额度相关变更立即重算（**`groupKey` 可空、`distinct(非空(beforeGroup), 非空(afterGroup))` 去重后按 `switch(quotaMode)` 三态处理**，覆盖**类型变更（含 `ADVANCEMENT` 的 `NONE` 分支）/ 目标变更 / 指派（改派 / 领取 / 取消领取）/ 触发器新增与删除**；**重算事务内不反向派发、批量操作只在提交点聚合派发一次**；**重算稳定后才落库推送、且按 diff 回写**；**GUI 本地保存路径同样走组处理入口**）+ **触发器编辑重置（上位规则：新增 / 修改且变更后仍有触发器 → 已完成任务显式重置；删除触发器只释放额度、不重置 `completed`，含 GUI 确认提示；累加型部分待 Z3 接线后完整生效）** + **取消完成收口为原子入口 `revertCompletion()`（两类都置 `progress = 0`）** + **加载后首次获得有效 `held` 快照时补一次收集类重算（内存去重、每组仅一次；离线负责人不重算；`quotaHydration` 未就绪前 GUI / HUD 不显示旧进度）** + **`Task` 层 `completeNormalized()` / `revertCompletion()` + `Task.fromNbt` 双向加载规范化** + **§5.5 进度文案定稿** + 离线回归 + 实机验证 | ⬜ 未开始 |
-| Phase Z3 | 接入累加型（`advanceMatchingTasksByUuid` 批次分账，覆盖 `CRAFT_ITEM` / `BREAK_BLOCK` / `KILL_ENTITY`；含取消完成 `progress` 归零、手动完成 `progress` 补至 `targetCount`，且**不实现任何历史重算**）+ 离线回归 + 实机验证 | ⬜ 未开始 |
-| Phase Z4 | （可选）同物品占用提示文案 + 文档同步 | ⬜ 未开始 |
+| Phase Z1 | `TriggerCreditAllocator` 纯逻辑（**值输入 → 值输出，不持有 / 不修改 `Task`**；`progressByTaskId` 覆盖全部候选）+ **冻结接口契约（拆分为 `StateQuotaSnapshot` / `EventBatchQuotaSnapshot` 两个输入类型 + `AllocationResult` 输出 + 前后置条件 + 三态 `quota participation`；`owner(task)` 来源唯一化）** + OrderKey Segment 路径序（含每层 tie-break，子层显式排序，不依赖 DB 顺序） + "`used` 来自桶内全量列表"的取数入口 + 离线单测（不接线） | ✅ 已完成 |
+| Phase Z2 | 接入收集类（组级重算入口 `recalculateCollectQuotaGroup`：`pool = max(0, held − used)` 严格从上往下分配，含"写满即完成并写满 `progress`"）+ 额度相关变更立即重算（**`groupKey` 可空、`distinct(非空(beforeGroup), 非空(afterGroup))` 去重后按 `switch(quotaMode)` 三态处理**，覆盖**类型变更（含 `ADVANCEMENT` 的 `NONE` 分支）/ 目标变更 / 指派（改派 / 领取 / 取消领取）/ 触发器新增与删除**；**重算事务内不反向派发、批量操作只在提交点聚合派发一次**；**重算稳定后才落库推送、且按 diff 回写**；**GUI 本地保存路径同样走组处理入口**）+ **触发器编辑重置（上位规则：新增 / 修改且变更后仍有触发器 → 已完成任务显式重置；删除触发器只释放额度、不重置 `completed`，含 GUI 确认提示；累加型部分待 Z3 接线后完整生效）** + **取消完成收口为原子入口 `revertCompletion()`（两类都置 `progress = 0`）** + **加载后首次获得有效 `held` 快照时补一次收集类重算（内存去重、每组仅一次；离线负责人不重算；`quotaHydration` 未就绪前 GUI / HUD 不显示旧进度）** + **`Task` 层 `completeNormalized()` / `revertCompletion()` + `Task.fromNbt` 双向加载规范化** + **§5.5 进度文案定稿** + 离线回归 + 实机验证 | ✅ 已完成（`Task` 层两个收口入口 + 双向加载规范化；全部 `completed` 入口收口；收集类组级严格顺序分配 `recalculateCollectQuotaGroup` + 按 diff 回写 + 按列表顺序取候选；**统一额度变更派发**：`quotaGroupsOf` / `distinctQuotaGroups` / `processQuotaMutation`（三态判断 + 按负责人在线与否处理），并接入团队保存路径；**触发器编辑上位规则**：新增 / 修改且变更后仍有触发器 → 已完成任务经确认后显式重置，删除触发器只释放额度；**§5.5 tooltip** 已在 GUI 任务行落地（仅收集类、悬停进度区域）；**GUI 本地保存路径**已在服务端线程上合并引擎触发器进度后再落库（额度重算由平台层 tick 扫描覆盖）；**`quotaHydration` 渲染闸门本阶段不做**，理由见 §5.4 第 11 条"实现记录"。（2026-09-28 实机反馈修订）收集类由"整份满足优先（两遍分配）"改为**严格从上往下（一遍分配）**，与累加型口径统一，避免前排进度回退与后排插队完成；**候选集合排除"祖先已完成"的幽灵任务**（见 §3.3），修复"捡到物品但新任务进度不涨"。离线回归通过，**实机验证待执行**） |
+| Phase Z3 | 接入累加型（`advanceMatchingTasksByUuid` 批次分账，覆盖 `CRAFT_ITEM` / `BREAK_BLOCK` / `KILL_ENTITY`；含取消完成 `progress` 归零、手动完成 `progress` 补至 `targetCount`，且**不实现任何历史重算**）+ 离线回归 + 实机验证 | ✅ 已完成（`advanceMatchingTasksByUuid` 按 `QuotaParticipation` 三态分流：`EVENT_BATCH` 走 `advanceQuotaBatch` 批次分账、`NONE`/`STATE` 保持单条推进；按额度分组调用 `allocateEventBatch` 并按 diff 回写；单候选走单条快捷路径。取消完成 / 手动完成的 `progress` 归零与补满由 `Task` 层两个原子入口承担） |
+| Phase Z4 | （可选）同物品占用提示文案 + 文档同步 | 🚧 文案部分已随 Z2 落地（GUI 任务行 tooltip，中英本地化键 `gui.todolist.trigger.progress_quota.tooltip`）；仅剩文档同步 |
 
 ## 9. 与未来 RPG 化的边界（本阶段不改动）
 
@@ -1178,6 +1287,12 @@ HUD 与 GUI 的布局与本地化键定义。
    将来的 Stage / Optional Objective 若想改变这个统计范围（例如"未解锁的 objective 不占额度"
    或"可选目标不占额度"），**必须另立设计文档**，不允许在本阶段顺手扩大/缩小候选集合——
    那会同时改动 `used` 台账、`pool` 语义与已验证的 I1~I4。
+
+   **已知推论（实现落地时确认）**：父子任务若**同类型、同目标、同负责人、同项目**，
+   则属于**同一个 quota group**，会互相竞争同一份额度——一次事件 / 一份持有量只会满足其中一条
+   （列表顺序在前者优先，即父任务先于其子任务）。
+   父子关系本身**不是**额度维度；若将来希望"父任务与子任务各算一份额度"，
+   属于给分组键**新增维度**，同样必须另立设计。
 
 **明确不做的方向**：对话树、多结局剧情、大规模 World State / NPC AI Quest、完整剧情编辑器——
 会把项目从"Minecraft 任务管理"变成"RPG Quest Framework"，复杂度不属同一量级。
