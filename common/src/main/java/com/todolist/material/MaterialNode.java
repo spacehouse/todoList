@@ -11,7 +11,8 @@ import java.util.List;
  * @param itemId        该节点对应的物品资源 ID（多候选取代表）
  * @param requiredCount 该节点需要的数量（已完成向上取整的数量传播）
  * @param candidates    输入多候选（物品标签/多选输入）的全部物品 ID；单候选时只有一个元素
- * @param recipe        使用的配方；叶子节点为 null
+ * @param recipe        该物品的推荐配方；无配方时为 null。因默认展开层级被折叠（{@link MaterialStopReason#FOLDED}）
+ *                      的节点也会带上配方，供任务标题提示「用哪个功能方块做」
  * @param stopReason    不再展开的原因；已展开节点为 null
  * @param children      子节点列表；叶子节点为空列表
  */

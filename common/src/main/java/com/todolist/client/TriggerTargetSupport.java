@@ -1,5 +1,6 @@
 package com.todolist.client;
 
+import com.todolist.material.MaterialRecipeKind;
 import com.todolist.task.TaskTrigger;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.client.Minecraft;
@@ -133,6 +134,31 @@ public final class TriggerTargetSupport {
                 nameToken,
                 trigger.getTargetCount()
         );
+    }
+
+    /**
+     * 生成材料反推任务标题：把该物品的配方类型渲染成「动作词 + 产物图标 ×数量」，
+     * 如「熔炼 [铁锭] ×27」；没有配方（最终材料）或类型未知时回退为「收集 …」。
+     *
+     * <p>**不再内联功能方块**：功能方块（工作台 / 熔炉 …）由材料配方预览的横向配方树承担展示，
+     * 任务标题保持简短——HUD 行宽有限，再塞一个方块图标 + 方块名会挤掉材料名。
+     * 动作词与语序仍由语言文件决定，标题是可本地化的文本。
+     *
+     * @param itemId 产物物品资源 ID
+     * @param count  需求数量
+     * @param kind   配方类型；无配方时为 null
+     * @return 任务标题文本
+     */
+    public static Component buildMaterialTaskTitle(String itemId, int count, MaterialRecipeKind kind) {
+        if (itemId == null || itemId.isEmpty()) {
+            return Component.empty();
+        }
+        String itemToken = "[item:" + itemId + "]";
+        int safeCount = Math.max(1, count);
+        String key = kind == null || kind.stationItemId() == null
+                ? "gui.todolist.material.task_title.collect"
+                : "gui.todolist.material.task_title." + kind.name().toLowerCase(Locale.ROOT);
+        return Component.translatable(key, itemToken, safeCount);
     }
 
     /**
