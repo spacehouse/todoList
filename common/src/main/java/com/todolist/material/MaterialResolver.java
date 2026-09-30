@@ -93,7 +93,10 @@ public final class MaterialResolver {
             return leaf(itemId, need, candidates, MaterialStopReason.USER_STOPPED, context);
         }
         if (path.contains(itemId)) {
-            return leaf(itemId, need, candidates, MaterialStopReason.CYCLE, context);
+            // 回到当前依赖链上的同一材料：不再展开，但仍保留推荐配方——
+            // 界面据此显示功能方块节点，玩家还能切换成别的配方绕开这个环
+            MaterialRecipe cyclic = chooseRecipe(itemId, context.index.findByOutput(itemId), context.options);
+            return leaf(itemId, need, candidates, MaterialStopReason.CYCLE, cyclic, context);
         }
         List<MaterialRecipe> recipes = context.index.findByOutput(itemId);
         if (recipes.isEmpty()) {
@@ -102,13 +105,15 @@ public final class MaterialResolver {
         if (depth >= context.options.maxDepth()) {
             return leaf(itemId, need, candidates, MaterialStopReason.MAX_DEPTH, context);
         }
-        // 默认只展开根节点的直接材料：更深层需要玩家在预览里逐节点「继续展开」
-        if (depth >= context.options.defaultExpandDepth() && !context.options.isForceExpanded(itemId)) {
-            return leaf(itemId, need, candidates, MaterialStopReason.FOLDED, context);
-        }
         MaterialRecipe recipe = chooseRecipe(itemId, recipes, context.options);
         if (recipe == null) {
             return leaf(itemId, need, candidates, MaterialStopReason.NO_RECIPE, context);
+        }
+        // 默认只展开根节点的直接材料：更深层需要玩家在预览里逐节点「继续展开」。
+        // 折叠节点也带上已选配方：预览里仍显示"未展开"，但生成的任务标题可以据此提示
+        // 「用哪个功能方块做」（Phase E12）。
+        if (depth >= context.options.defaultExpandDepth() && !context.options.isForceExpanded(itemId)) {
+            return leaf(itemId, need, candidates, MaterialStopReason.FOLDED, recipe, context);
         }
         int craftCount = ceilDiv(need, recipe.outputCount());
         // D7：熔炼/烧制类配方的输入视为最终材料；玩家可要求「继续展开」以覆盖该终止条件
@@ -138,8 +143,9 @@ public final class MaterialResolver {
             path.remove(itemId);
         }
         if (children.isEmpty()) {
-            // 全部输入都指回依赖链上的材料：该物品只能作为最终材料终止
-            return leaf(itemId, need, candidates, MaterialStopReason.CYCLE, context);
+            // 全部输入都指回依赖链上的材料：该物品只能作为最终材料终止，
+            // 同样保留推荐配方，避免功能方块节点消失后无法再切换配方
+            return leaf(itemId, need, candidates, MaterialStopReason.CYCLE, recipe, context);
         }
         context.nodeCount++;
         return new MaterialNode(itemId, need, candidates, recipe, null, children);
@@ -160,9 +166,29 @@ public final class MaterialResolver {
                                      List<String> candidates,
                                      MaterialStopReason reason,
                                      Context context) {
+        return leaf(itemId, need, candidates, reason, null, context);
+    }
+
+    /**
+     * 创建叶子材料节点，并按需保留推荐配方（供任务标题提示「用哪个功能方块做」）。
+     *
+     * @param itemId     物品资源 ID
+     * @param need       数量
+     * @param candidates 多候选物品列表
+     * @param reason     停止展开的原因
+     * @param recipe     该物品的推荐配方；没有配方或不需要提示时传 null
+     * @param context    解析上下文
+     * @return 叶子节点
+     */
+    private static MaterialNode leaf(String itemId,
+                                     int need,
+                                     List<String> candidates,
+                                     MaterialStopReason reason,
+                                     MaterialRecipe recipe,
+                                     Context context) {
         context.nodeCount++;
         context.leafTotals.merge(itemId, need, Integer::sum);
-        return new MaterialNode(itemId, need, candidates, null, reason, List.of());
+        return new MaterialNode(itemId, need, candidates, recipe, reason, List.of());
     }
 
     /**
