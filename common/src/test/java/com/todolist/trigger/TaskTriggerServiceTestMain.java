@@ -49,7 +49,42 @@ public final class TaskTriggerServiceTestMain {
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldIgnoreUnassignedTeamTaskForAllPlayers", TaskTriggerServiceTestMain::shouldIgnoreUnassignedTeamTaskForAllPlayers);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldResetTriggerProgressWhenTeamAssigneeChanges", TaskTriggerServiceTestMain::shouldResetTriggerProgressWhenTeamAssigneeChanges);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldAdvanceParentTaskWithSubtasks", TaskTriggerServiceTestMain::shouldAdvanceParentTaskWithSubtasks);
+        GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldCompleteDescendantsWhenParentCompletes", TaskTriggerServiceTestMain::shouldCompleteDescendantsWhenParentCompletes);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldCountHeldItemsInsideContainerItem", TaskTriggerServiceTestMain::shouldCountHeldItemsInsideContainerItem);
+    }
+
+    /**
+     * 父任务达标时级联完成其全部未完成后代（含带触发器的后代），并移出倒排索引。
+     *
+     * <p>固化「父任务达标不留幽灵任务」的规则：只完成自身会留下「父已完成、后代未完成」
+     * 的子任务，未完成列表只列顶层任务、已完成区只列已完成子任务，两侧都看不见。
+     * 级联只切换完成态、不改写触发器进度。
+     */
+    private static void shouldCompleteDescendantsWhenParentCompletes() {
+        Task parent = newTask(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_block", 3);
+        Task middle = newTask(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 27);
+        middle.setParentTaskId(parent.getId());
+        Task leaf = newTask(TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 27);
+        leaf.setParentTaskId(middle.getId());
+        Task doneChild = newTask(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 1);
+        doneChild.setParentTaskId(parent.getId());
+        doneChild.setCompleted(true);
+        Task unrelated = newTask(TaskTrigger.Type.BREAK_BLOCK, "minecraft:dirt", 1);
+        TaskTriggerService.CachedBucket bucket = newPersonalBucket(parent, middle, leaf, doneChild, unrelated);
+
+        bucket.completeDescendants(parent);
+
+        GuiTestSupport.assertTrue(middle.isCompleted(), "未完成的带触发器子任务应被级联完成");
+        GuiTestSupport.assertTrue(leaf.isCompleted(), "多层级后代应被级联完成");
+        GuiTestSupport.assertFalse(unrelated.isCompleted(), "不在该分支下的任务不应被级联完成");
+        GuiTestSupport.assertEquals(2, bucket.peekDirtyTasks().size(),
+                "级联完成的任务应进入脏集合等待增量落库");
+        GuiTestSupport.assertTrue(bucket.find(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot").isEmpty(),
+                "级联完成的子任务应移出倒排索引");
+        GuiTestSupport.assertTrue(bucket.find(TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron").isEmpty(),
+                "级联完成的孙任务同样应移出倒排索引");
+        GuiTestSupport.assertEquals(0, middle.getTrigger().getProgress(), "级联不应改写触发器进度");
+        GuiTestSupport.assertEquals(0, leaf.getTrigger().getProgress(), "级联不应改写触发器进度");
     }
 
     /**

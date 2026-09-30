@@ -29,6 +29,41 @@ public final class TaskManagerSubtaskTestMain {
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldAggregateThreeLevelCompletionBottomUp", TaskManagerSubtaskTestMain::shouldAggregateThreeLevelCompletionBottomUp);
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldCascadeDeleteDescendants", TaskManagerSubtaskTestMain::shouldCascadeDeleteDescendants);
         GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldToggleAllDescendantsWhenParentToggled", TaskManagerSubtaskTestMain::shouldToggleAllDescendantsWhenParentToggled);
+        GuiTestSupport.runTestCase("TaskManagerSubtaskTestMain.shouldCascadeToggleToTriggeredDescendants", TaskManagerSubtaskTestMain::shouldCascadeToggleToTriggeredDescendants);
+    }
+
+    /**
+     * 验证勾选带触发器的父任务时，同样带触发器的后代也被级联切换。
+     *
+     * <p>若跳过后代中的带触发器任务，会留下「父任务已完成、后代未完成」的幽灵任务：
+     * 未完成列表只列顶层任务、已完成区只列已完成子任务，两侧都看不见，玩家无法处理。
+     * 级联只切换完成态，不修改触发器进度，取消勾选后进度仍能如实回落。
+     */
+    private static void shouldCascadeToggleToTriggeredDescendants() {
+        TaskManager manager = new TaskManager();
+        Task root = createTask("root", "project-a", false, null);
+        root.setTrigger(new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_block", 3));
+        Task middle = createTask("middle", "project-a", false, root.getId());
+        middle.setTrigger(new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 27));
+        Task leaf = createTask("leaf", "project-a", false, middle.getId());
+        leaf.setTrigger(new TaskTrigger(TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 27));
+        addAll(manager, root, middle, leaf);
+
+        manager.toggleTaskCompletion(root.getId());
+        GuiTestSupport.assertTrue(manager.getTask(middle.getId()).isCompleted(),
+                "勾选父任务应级联完成带触发器的中间层任务");
+        GuiTestSupport.assertTrue(manager.getTask(leaf.getId()).isCompleted(),
+                "勾选父任务应级联完成带触发器的叶子任务");
+
+        manager.toggleTaskCompletion(root.getId());
+        GuiTestSupport.assertFalse(manager.getTask(root.getId()).isCompleted(),
+                "再次勾选应取消父任务的完成态");
+        GuiTestSupport.assertFalse(manager.getTask(middle.getId()).isCompleted(),
+                "取消勾选应级联恢复带触发器的中间层任务");
+        GuiTestSupport.assertFalse(manager.getTask(leaf.getId()).isCompleted(),
+                "取消勾选应级联恢复带触发器的叶子任务");
+        GuiTestSupport.assertEquals(0, manager.getTask(leaf.getId()).getTrigger().getProgress(),
+                "级联只切换完成态，不应改写触发器进度");
     }
 
     /**

@@ -13,7 +13,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -632,9 +634,14 @@ public final class TaskTriggerService {
     }
 
     /**
-     * 任务达标后的统一完成处理：立即增量落库、推送进度变化、发送完成提示。
+     * 任务达标后的统一完成处理：级联完成后代、立即增量落库、推送进度变化、发送完成提示。
      *
-     * 落库与推送都只针对本批进度变化的任务（{@link #flushBucket} 的增量语义），
+     * <p>先级联完成未完成后代：父任务达标代表整条分支做完，若不处理会留下
+     * 「父任务已完成、后代仍未完成」的幽灵任务（未完成列表只列顶层任务、已完成区只列
+     * 已完成子任务，两侧都看不见）。规则与 GUI 侧
+     * {@code TaskManager#toggleTaskCompletion} 保持一致。
+     *
+     * <p>落库与推送都只针对本批进度变化的任务（{@link #flushBucket} 的增量语义），
      * 不再发送全量任务快照：全量快照会让服务端多读一次库、客户端把上千条任务
      * 重新写回本地存储，表现为「完成任务的那一刻卡顿一下」。
      *
@@ -647,6 +654,7 @@ public final class TaskTriggerService {
         if (server == null) {
             return;
         }
+        bucket.completeDescendants(task);
         flushBucket(server, bucket.key, true);
         TaskPackets.notifyTriggerCompleted(player, task.getTitle());
     }
@@ -899,6 +907,61 @@ public final class TaskTriggerService {
             List<Task> group = triggerIndex.get(indexKey(task.getTrigger()));
             if (group != null) {
                 group.remove(task);
+            }
+        }
+
+        /**
+         * 任务达标后级联完成其全部未完成后代（层级不限，含挂触发器的后代），并移出触发器索引。
+         *
+         * <p>父任务达标代表整条分支做完；若只完成自身，会留下「父任务已完成、后代仍未完成」
+         * 的幽灵任务——未完成列表只列顶层任务、已完成区只列已完成子任务，两侧都看不见，
+         * 玩家既看不到也处理不了。规则与 GUI 侧 {@code TaskManager#toggleTaskCompletion} 一致。
+         *
+         * <p>只切换完成态、**不修改后代触发器进度**：进度是真实数据，保留它才能在玩家
+         * 取消勾选父任务后如实回落。已完成后代从倒排索引移除，避免事件继续推进它。
+         *
+         * <p>使用广度优先遍历并记录已访问节点，父子关系成环时也不会死循环。
+         * 包级可见供同包离线测试直接构造级联场景。
+         *
+         * @param parent 刚达标的任务
+         */
+        void completeDescendants(Task parent) {
+            if (parent == null || parent.getId() == null || parent.getId().isEmpty()) {
+                return;
+            }
+            Map<String, List<String>> childIdsByParent = new HashMap<>();
+            Map<String, Task> tasksById = new HashMap<>();
+            for (Task task : tasks) {
+                if (task == null || task.getId() == null || !task.isSubtask()) {
+                    continue;
+                }
+                tasksById.put(task.getId(), task);
+                childIdsByParent
+                        .computeIfAbsent(task.getParentTaskId(), ignored -> new ArrayList<>())
+                        .add(task.getId());
+            }
+            Deque<String> pending = new ArrayDeque<>();
+            pending.add(parent.getId());
+            Set<String> visited = new HashSet<>();
+            while (!pending.isEmpty()) {
+                String currentId = pending.poll();
+                if (currentId == null || !visited.add(currentId)) {
+                    continue;
+                }
+                List<String> childIds = childIdsByParent.get(currentId);
+                if (childIds == null) {
+                    continue;
+                }
+                for (String childId : childIds) {
+                    pending.add(childId);
+                    Task child = tasksById.get(childId);
+                    if (child == null || child.isCompleted()) {
+                        continue;
+                    }
+                    child.setCompleted(true);
+                    markDirty(child);
+                    removeIndex(child);
+                }
             }
         }
 
