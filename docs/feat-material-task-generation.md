@@ -1,9 +1,67 @@
 # 实现方案（草稿）：反推前置材料并生成收集任务
 
-> 状态：**方案草稿，暂不实现**（当前分支优先处理其他小改动）
-> 对应 TODO.md 计划项：【feat】支持根据收集目标反推前置材料并自动生成收集任务 / 支持粘贴导入材料清单生成收集任务 / 支持模组自定义配方类型的材料反推
+> 状态：**🧊 已冻结后续开发**（2026-10-25 方向评审结论；点 1 已实现代码保留为 experimental，详见 §0）
+> 对应 TODO.md 计划项：【feat】支持根据收集目标反推前置材料并自动生成收集任务（点 1，experimental 待合入）；点 2（清单导入）/ 点 3（模组通用 resolver）已取消
 > 目标分支：`verify/1.20.1-feat-trigger-and-item-title`（设计同时面向 1.20.1 / 1.21.1，实际 API 名按落地分支核对）
-> 更新日期：2026-09-13
+> 更新日期：2026-10-26
+>
+> **结论先行（务必先读 §0）**：本特性的**自研配方反推路线**于 2026-10-25 方向评审后冻结。
+> 冻结原因是投入产出比与项目定位，而非实现被证伪——原版配方收录不全（仅 7 种类型，酿造等天然缺口）、
+> 模组自定义配方类型兼容是无底洞（等于自建 JEI/EMI 级配方索引）、配方链重复物品的全局最优聚合需要「先聚合再展开」
+> 的两阶段算法；三者都做到「全面且兼容各 mod」的投入远超独立项目可承受范围，而配方索引这件事 JEI/EMI 已经做得更好。
+> **点 1 已实现代码保留**（约 5,600 行，E1-E15 含 6 轮实机反馈打磨，离线回归全绿），以 experimental 状态
+> 随触发器特性合入（2026-10-26 轻量实机冒烟已通过，fabric + forge，见 Phase H），此后只修缺陷、不扩配方能力；
+> **点 2 / 点 3 取消，不要再按其实现**。配方能力的外部承接路线见 §0.4。
+>
+> 以下 §1~§10 保留为原始设计过程记录（含当时的修订理由）；其中 §4（点 2）、§5（点 3）已随冻结失效，仅作历史参考。
+>
+> 关联：`docs/feat-trigger-completion.md`（触发器语义底座）、`docs/feat-trigger-credit-allocation.md`（Phase Z 废弃记录，其 §0.4 引用了本方案 E11 的去重结论）
+
+## 0. 冻结结论、保留范围与后续方向（2026-10-25）
+
+### 0.1 为什么冻结（方向性结论，非技术证伪）
+
+Phase Z 的废弃是实机验证**证伪**了机制；本次不同——点 1 的实现在其覆盖范围内是**成立的**
+（E3-E10 经过 6 轮实机反馈打磨，已知边界都有界面提示），冻结的原因是**投入产出比与项目定位**：
+
+- **配方收录不全**：原版只索引 7 种配方类型，酿造等天然缺口；药水还涉及 NBT / 组件变体表示问题（见 §3.7）；
+- **模组兼容是无底洞**：覆盖各 mod 自定义配方类型等于自建一套 JEI/EMI 级别的配方索引生态，
+  独立项目永远追不上社区插件的覆盖速度；
+- **重复物品的精确处理代价高**：E11「全树同物品合并」解决了进度共享，但跨分支「先聚合再展开」的
+  全局最优仍是未实现的两阶段算法（§3.7 已知取舍，当前误差偏保守、偏多）；
+- **项目定位**：todoList 的核心是轻量替代 FTB Quests，独立开发的精力必须优先投在触发器底座、任务模型
+  这些无人替代的部分；配方索引属于重复劳动，应交给现成生态。
+
+### 0.2 冻结范围与保留物
+
+- **保留（experimental）**：点 1 全部已实现代码——`common` 下 `material` 包 20 个类 + `MaterialListScreen`
+  + 7 个离线测试（约 5,600 行），随触发器特性分支合入主线，对外标注 experimental；
+  此后只做缺陷修复，不再扩展配方能力；合入前的一次轻量实机冒烟已于 2026-10-26 通过（fabric + forge 双加载器，见 Phase H）；
+- **取消**：点 2（文本材料清单导入）、点 3（模组自定义配方类型通用 resolver）——不再实现；
+- **不受影响**：触发器底座（`trigger` 包、`TaskTrigger`、`TaskManager`）对 material 包**零依赖**，
+  冻结不影响底座演进；material 侧依赖的 D6「触发器优先」语义（§3.6）属于底座行为，继续有效。
+
+### 0.3 仍然成立、可复用的结论
+
+- **触发式收集任务生成链路**：`MaterialTaskGenerator`「材料清单 → 挂 `ITEM_COLLECT` 触发器的任务树」，
+  是未来任何任务生成来源（JEI/EMI 附属、AI 生成、导入格式）都可复用的落库出口；
+- **E12「一律收集语义」**：中间产物也挂 `ITEM_COLLECT`（拿到即达成，配方只是标题提示）——已过实机检验，
+  后续任何生成器都应沿用，不要回退到 `CRAFT_ITEM`；
+- **E11「全树同物品合并」**：同种物品只生成一条任务、数量取全树汇总，从结构上消除同物品进度共享
+  （即 Phase Z §0.4 第 1 条的落地结论）；
+- **`[物品]` ×数量 标题渲染**：与物品标题 markup（`feat-item-title-markup.md`）共用的渲染基建；
+- **横向配方树预览交互结论**（E13-E15：展开/收起、配方切换、浮层遮挡处理、循环配方可绕开）：
+  若附属模组需要预览界面，可直接参考。
+
+### 0.4 后续方向（按成本排序，均不在本模组内实现）
+
+1. **JEI/EMI 附属模组**（如 `jei-for-todolist`）：借 JEI/EMI 的完整配方索引做反推，产出经 §0.3 的任务生成链路落库；
+   主模组保持零第三方依赖；JEI 属客户端 mod、任务生成本就发生在客户端 GUI、生成的触发式任务本就经网络同步，
+   架构上成立；若需三加载器统一 API 可优先评估 EMI；
+2. **任务导入格式**：主模组定义一份 JSON 任务批量导入格式，作为**所有外部生成来源的统一入口**
+   （JEI 附属、AI 生成、清单导入都是生产者）；这是 FTB Quests chapters 导入导出的同款模式；
+   点 2 的「清单导入」需求将来以此形态重生，而非模组内置文本解析器；
+3. **AI 生成待办**（TODO.md 计划项保留）：同样作为任务导入格式的生产者，输入自然语言、输出触发式任务。
 
 ## 1. 背景与目标
 
@@ -48,6 +106,8 @@
 
 依赖关系：点 1 是地基；点 2 复用点 1 的模型与建任务链路（可省约 30%~40% 代码量）；点 3 只需在点 1 的注册表里增加一个 resolver 实现，不新增架构。
 
+> **2026-10-25 冻结后**：点 1 保留为 experimental（§0.2）；点 2 / 点 3 已取消，上表与依赖关系仅作设计过程记录。
+
 ## 3. 点 1：原版配方反推（L1）
 
 ### 3.1 处理流程
@@ -68,50 +128,134 @@
   └─ MaterialPlan → 生成任务
 ```
 
-### 3.2 语义规则（必须先拍板，决定后续全部实现）
+### 3.2 语义规则（Phase A 已定稿）
 
-| 规则项 | 建议默认 | 说明 |
+| 规则项 | 结论 | 状态 |
 |---|---|---|
-| 叶子材料 | 生成 `ITEM_COLLECT` 收集任务 | 不可再合成的材料，持有量语义成立 |
-| 中间产物 | **不生成任务**（默认） | `ITEM_COLLECT` 是"当前持有量"，中间产物合成后立即被消耗，持有量永远到不了目标，任务会永久卡住 |
-| 中间产物（备选） | 生成 `CRAFT_ITEM` 子任务 | 累加语义，能反映"合成过 N 次"，但语义与"收集"不同，需产品确认 |
-| 数量传播 | `ceil(need / outputCount) × inputCount` | 向上取整；多输入按各自消耗量分别计算 |
-| 同材料合并 | 合并求和为一条 | 结果是 DAG 而非树，不合并会产出大量重复任务 |
-| 循环依赖 | visited 检测 + 深度上限 | 如 铁块 ↔ 铁锭、木板 ↔ 原木 |
-| tag 输入 | 取 tag 内**任一**代表物 + 数量（建议允许用户改） | 如 `#minecraft:planks`；需决定是"任一"还是"全部" |
-| 多配方选择 | "最省料"为默认，允许用户切换 | 同一物品多配方会导致整棵树不同，必须可干预 |
-| 催化剂 / 工具 | 标记排除，不计入数量 | 模具、搅拌棒、桶等可复用物品 |
-| 概率产出 | 取"必得最小值"（保守） | 取期望值会算不准，建议先保守 |
+| 叶子材料 | 生成 `ITEM_COLLECT` 收集任务（不可再合成的材料，持有量语义成立） | ✅ 已定 |
+| 中间产物 | **与叶子材料一致：生成「收集」任务并挂 `ITEM_COLLECT`**（持有量语义）。原「必须在任务创建后真的合成出来」的 `CRAFT_ITEM` 结论已作废（Phase E12）：最终目标是「拿到这个材料」，买 / 捡 / 交换同样达成目标，配方只是提示、不强制照做。**配方（含功能方块）改为在任务标题里提示**（见「任务标题」行） | ✅ 已修订（Phase E12） |
+| 默认展开层级 | **默认只展开根物品的直接材料**（`defaultExpandDepth = 1`，超出层级的节点以 `MaterialStopReason.FOLDED` 终止）；玩家在预览中选中节点点「继续展开」后才展开下一层 | ✅ 已修订（实机验证（第 2 轮）） |
+| 数量传播 | `ceil(need / outputCount) × inputCount`；向上取整，多输入按各自消耗量分别计算 | ✅ 已定 |
+| 同材料合并 | 合并求和为一条（结果是 DAG 而非树，不合并会产出大量重复任务）。**生成任务时整棵材料树里同种物品只生成一条任务**，挂在首次出现的位置、数量取全树汇总需求（Phase E9 先只覆盖「最终材料」；Phase E11 推广到全树） | ✅ 已修订（Phase E11） |
+| 循环依赖 | visited 检测 + 深度上限（如 铁块 ↔ 铁锭）；展开结果回到当前依赖链上的同一材料时**不展示该子项**，避免重复 | ✅ 已定 |
+| 多配方选择 | **默认预选"产出比最高"，同产出比时优先 crafting**（不耗燃料）；玩家可在预览界面覆盖。不静默替玩家决定 | ✅ 已定 |
+| 终止条件 | **熔炼/烧制类（smelting / blasting / smoking / campfire）配方的输入即视为最终材料，不再展开**；玩家可在预览中对任一节点改为"继续展开" | ✅ 已定 |
+| 熔炼燃料 | **本期不处理**：材料清单只列物品，不提示燃料（燃料不在配方数据里，无法准确折算） | ✅ 已定 |
+| 生成范围 | **只按预览树显示出来的部分生成**（Phase E13）：预览界面上不再提供「仅目标 / 目标 + 材料」模式切换；展开的分支生成下级材料任务，收起的节点作为该分支的最终材料生成自身任务。「只要目标一条任务」等价于**把目标节点收起**（`stopAtItems` 含根节点）。生成器 API 仍保留 `MaterialTaskMode`（含 `TARGET_ONLY`），供其他调用方与离线测试直接使用 | ✅ 已修订（Phase E13） |
+| 父任务触发器 | **全部任务（目标物、中间产物、最终材料）统一挂 `ITEM_COLLECT`**（持有量语义，拿到即达标）；没有任何任务挂 `CRAFT_ITEM`（Phase E12）。完成态只由「触发器达标」或「手动勾选」决定，触发器判定**优先于子任务聚合**（聚合逻辑跳过有触发器的父任务，见 §3.6） | ✅ 已修订（Phase E12） |
+| 任务标题（体现配方） | 标题按节点首次出现位置的配方类型渲染成「**动作词 + 产物图标 ×数量**」，如「熔炼 `[铁锭]` ×27」「切石 `[石砖]` ×8」「合成 `[铁块]` ×3」；没有配方（最终材料）时为「收集 `[原木]` ×8」。**不内联功能方块**（Phase E14）：HUD 行宽有限，再塞一个方块的图标 + 名称会挤掉材料名，功能方块改由材料配方预览的横向配方树承担展示。动作词与语序在 `gui.todolist.material.task_title.*` 里，标题仍是可本地化文本 | ✅ 已修订（Phase E14） |
+| 催化剂 / 工具 | 标记排除，不计入数量（模具、桶等可复用物品） | 🕓 待定（点 1 可先不做） |
+| 概率产出 | 取"必得最小值"（保守） | 🕓 待定（点 1 无概率配方，点 3 再定） |
+| tag / 多候选输入 | **默认优先选择玩家背包里已有的候选材料**，其次取候选列表首项；预览界面提供「选择材料」列表可手动指定用哪一种，节点行同时显示「可选 N 种」 | ✅ 已实现（实机验证（第 3 轮）） |
 
-### 3.3 新增组件（预估）
+### 3.3 新增组件（含落地状态）
 
-| 组件 | 职责 | 预估行数 |
+| 组件 | 职责 | 状态 |
 |---|---|---|
-| `RecipeIndex` | item → 配方列表 反查索引 + 缓存 | 150~200 |
-| `RecipeResolver`（接口）+ `VanillaRecipeResolver` | 统一解析入口，覆盖 7 种原版配方类型 | 200~250 |
-| `MaterialResolver` | 递归展开 + 数量传播 + DAG 合并 + 循环/深度保护 | 250~350 |
-| `MaterialNode` / `MaterialPlan` | 材料树/清单数据模型 | ~100 |
-| `MaterialTaskGenerator` | 材料清单 → 任务（挂触发器、建子任务） | ~150 |
-| `MaterialListScreen` | 材料清单预览（树/清单、勾选、改数量、切配方） | 350~450 |
+| `MaterialRecipeKind` / `MaterialIngredient` / `MaterialRecipe` | 中立模型（物品资源 ID 表示，与 MC 解耦） | ✅ Phase B |
+| `MaterialRecipeIndex` | 产物 → 配方 反查索引 | ✅ Phase B |
+| `MaterialRecipeSelector` | 多配方默认策略（D3） | ✅ Phase B |
+| `MaterialRecipeResolver` + `VanillaMaterialRecipeResolver` + `MaterialRecipeIndexBuilder` | MC 配方 → 中立模型（7 种原版类型） | ✅ Phase B |
+| `MaterialResolver` | 递归展开 + 数量传播 + 合并 + 循环/深度/节点保护 + 终止条件 | ✅ Phase C |
+| `MaterialStopReason` / `MaterialNode` / `MaterialPlan` / `MaterialResolveOptions` | 展开树、终止原因与结果模型 | ✅ Phase C |
+| `MaterialTaskGenerator` + `MaterialTaskMode` / `MaterialTaskContext` / `MaterialTaskTitleProvider` | 材料清单 → 任务（模式 A / 模式 B） | ✅ Phase D |
+| `MaterialPreviewState` | 预览状态：目标/数量、逐节点配方覆盖、逐节点展开/收起、手动终止、勾选过滤 | ✅ Phase E1（Phase E13 去掉勾选与模式） |
+| `MaterialPreviewLayout` | 预览树的横向分层几何（列/行分配、功能方块节点位置、内容尺寸），纯逻辑可离线测试 | ✅ Phase E13 |
+| `MaterialListScreen` | 预览界面（横向配方树、点图标选材料/切配方、点节点展开收起、双向滚动、生成入口） | ✅ Phase E2（Phase E13 重写） |
 
-### 3.4 建任务链路
+离线测试：`materialRecipeTest`（索引 + 选择策略 6 例）、`materialResolverTest`（反推核心 11 例）、`materialTaskGeneratorTest`（任务生成 11 例）、`materialPreviewStateTest`（预览状态 7 例）、`materialPreviewLayoutTest`（横向布局 3 例）、`MaterialListScreenTestMain`（预览界面 9 例，已并入 `guiSystemTest`），均已挂 `:common:check`。
+
+### 3.4 建任务链路（两种模式）
+
+**模式 A：只生成目标物品任务**
 
 ```text
-目标任务（父任务，仅作分组）
-  ├─ 子任务：收集 铁锭 ×36    ← trigger: ITEM_COLLECT minecraft:iron_ingot 36
-  ├─ 子任务：收集 橡木原木 ×12 ← trigger: ITEM_COLLECT minecraft:oak_log 12
-  └─ 子任务：收集 煤炭 ×8      ← trigger: ITEM_COLLECT minecraft:coal 8
+收集 铁块 ×8    ← trigger: ITEM_COLLECT minecraft:iron_block 8
 ```
 
-- 复用 `Task.addSubtask` + `setParentTaskId` + `subtaskSortOrder`，**不改任务模型**；
-- **注意与现有规则的冲突**：`feat-trigger-completion.md` Phase V 规定「已有子任务的父任务不允许挂触发器」。因此目标任务作为父任务时**自身不能挂 `ITEM_COLLECT`**，只作分组；触发器全部下沉到叶子子任务。若希望目标任务本身也可追踪，需改为与材料任务**平级**生成——这是待拍板项。
+适合"我就想要 64 个铁锭"这类场景，不建子任务，一条普通任务即可。
+
+**模式 B：按展开层级生成依赖任务链**
+
+```text
+[工作台] 合成 铁块 ×8            ← 标题提示配方；trigger: ITEM_COLLECT minecraft:iron_block 8
+  └─ [熔炉] 熔炼 铁锭 ×72        ← 标题提示配方；trigger: ITEM_COLLECT minecraft:iron_ingot 72
+```
+
+若在预览中对「铁锭」点了「继续展开」，则再往下生成一层：
+
+```text
+[工作台] 合成 铁块 ×8            ← 标题提示配方；trigger: ITEM_COLLECT minecraft:iron_block 8
+  └─ [熔炉] 熔炼 铁锭 ×72        ← 标题提示配方；trigger: ITEM_COLLECT minecraft:iron_ingot 72
+       └─ 收集 粗铁 ×72          ← 无配方，标题回退为「收集」；trigger: ITEM_COLLECT minecraft:raw_iron 72
+```
+
+- 复用 `Task.addSubtask` + `setParentTaskId` + `subtaskSortOrder`，**不改任务模型**（扁平单指父指针，支持任意深度）；
+- **所有材料任务统一挂 `ITEM_COLLECT`（持有量语义）**：最终目标是「拿到这个材料」，配方制作 / 购买 / 捡拾 / 交换都算达成；配方（含功能方块）只作为**标题提示**，不强制照做（Phase E12）；
+  - 这也是「熔炼 / 切石 / 锻造产物挂 `CRAFT_ITEM` 永远推不动」的根治办法：不再依赖「能否检测到合成事件」这个判据，`MaterialRecipeKind.isCraftEventDetectable()` 已删除；
+- 标题体现配方：见 §3.2「任务标题（体现配方）」行（`[功能方块] 动作词 [产物] ×数量`，无配方时回退「收集」）；
+- 每条任务都由自身触发器决定完成态，**触发器判定优先于子任务聚合**，不会因为子任务全部完成而被自动完成；
+- 任务支持**手动勾选**：勾选/取消直接切换该任务自身的完成态，不会被聚合逻辑改回去；
+- 任务层级与预览中已展开的材料层级**一一对应**，未展开的层不会生成任务；
+- **整棵材料树里同种物品只生成一条任务**（Phase E11）：挂在深度优先顺序里**首次出现**的位置，数量取该物品在全树的**汇总需求**，标题里的配方提示取该物品首次出现位置的配方类型。例如第 1 层需要 2 个、第 2 层另有 2 个共享件 → 只生成一条任务、数量为 4；
+  - 原因：同种物品若生成多条任务，会各自用 `ITEM_COLLECT` 的持有量语义比较（背包里只有一半就把几条都判为完成），表现为"任务进度共享"；
+  - 重复出现的节点不再建任务，但仍会继续下钻，把更深层的材料挂到**最近的已生成祖先任务**下，避免漏掉只在重复分支里出现的材料；
+  - 被合并掉的层级不会再有该材料的子任务，因此中间产物任务可能没有对应的材料子任务；其完成态本就由自身触发器决定，不受影响；
+- 玩家在预览中取消勾选的最终材料不生成任务；若某节点展开出的材料全部被取消勾选，该节点退化为最终材料，仍生成一条「收集」任务；
+- 生成的任务全部落在**当前项目**下（已定）；`MaterialTaskGenerator` 只产出纯数据，不写存储、不发网络包，由预览界面确认后走现有保存链路；
+- **团队作用域生成时不做自动指派**（已定）：生成后由玩家在任务列表里领取/指派；未领取前触发器不推进（Phase U 规则）。
 
 ### 3.5 预览界面（点 1 的主要工作量）
 
-- 展示材料清单 / 树形结构；
-- 支持切换配方、调整数量、勾选要生成哪些条目；
+- 展示**横向配方树**：从左（目标物）到右（原料）分层排布，物品与其下级配方之间插入**功能方块节点**；
+- 点图标切换配方 / 选择替代材料，点节点展开 / 收起下级配方，滚轮与拖拽双向滚动；
+- **只按预览树显示出来的部分生成任务**（不设独立的生成模式）；
 - 与已有任务去重（同材料已有收集任务时，是累加数量还是新建子任务）；
 - 预览阶段可反复调整，确认后才落库。
+
+**Phase E13 实际形态（横向配方树）**：
+
+- 入口：任务列表底部快速新增行的「材料」按钮（与「触发」按钮同一行，不依赖选中任务）→ 复用 `ItemSelectorScreen` 选目标物品 → 打开 `MaterialListScreen`（标题为「材料配方预览」）；
+- **横向分层布局**（`MaterialPreviewLayout`，纯几何、离线可测）：产物在第 N 列、材料在第 N+1 列（列距 `COLUMN_PITCH = 96`），**功能方块节点插在两者之间**（相对所属物品右移 `STATION_OFFSET = 40`）；行分配用后序法（叶子依次占行、父节点取首末子节点行中点），同一棵子树占连续行区间、连线不交叉；内容尺寸交给界面做双向滚动；
+- **功能方块节点**：只要该节点解析出了配方就画（默认折叠但已带推荐配方的节点同样画，用于提示"这一步该用哪个方块做"）。**点它的图标**＝该物品有多条配方时切到下一条（方块与下级材料随之变化）；只有一条配方时点击无效果；
+- **物品节点**：图标 + 名称 + 数量（含持有量标注）。**点图标**＝该输入有多种候选材料时弹出「可选材料」列表（板面内浮层，可滚动，选中即重新解析）；**点节点其余区域（名称 / 数量）**＝展开或收起它的下级配方；
+- **展开 / 收起**统一为一个动作，内部映射到解析器的两个开关：折叠节点（`FOLDED`）→「继续展开」；已展开节点 → 玩家主动展开过的恢复默认折叠，否则标记「到此为止」；熔炼输入（`COOKING_INPUT`）→ 在两者间切换；「到此为止」（`USER_STOPPED`）→ 恢复展开；无配方 / 循环 / 深度上限等天然终止的节点不可切换；
+- **双向滚动**：滚轮纵向、按住 Shift 的滚轮横向（Shift 状态由键盘事件维护，不依赖窗口句柄）、在空白处拖拽可自由平移（`scrollX` / `scrollY` 均收敛在内容尺寸内）；
+- **面板放大**：宽度 `min(760, 屏幕宽 − 40)`、高度 `min(400, 屏幕高 − 60)`；
+- **背包持有量标注**（沿用 Phase E7/E8，改为按布局顺序逐节点分配）：统计玩家背包（含快捷栏与副手，**不展开潜影盒等容器内容**）已有物品数量；数量与需求比较，达到或超过时标绿并追加「已够」，不够时保持默认蓝并追加灰色「缺 N」；同种材料跨层级时**自上而下、高层级优先占用**，避免每行单独看都"已够"；
+- 底部只保留数量输入、取消与生成按钮；原「仅目标 / 目标 + 材料」模式按钮、勾选框与三个行操作按钮（切换配方 / 到此为止 / 选择材料）**全部移除**，改为在树上直接操作；
+- 生成结果通过 `TodoScreen.applyGeneratedMaterialTasks()` 走现有 `taskManager.addTask` + `markUnsaved()` + `applySearchFilter()` + 后台自动保存链路，落在**当前项目**下；团队作用域不自动指派。
+
+### 3.6 D6：父任务完成态冲突（放宽 Phase V 的配套改造，必须先解决）
+
+现有两套完成态机制会互相覆盖：
+
+| 机制 | 行为 | 位置 |
+|---|---|---|
+| 子任务聚合 | 父任务的**直属子任务全部完成**时，父任务被置为 `completed = true`；只要还有未完成子任务，就被置回 `false` | `TaskManager.syncParentCompletionStates()` |
+| 触发器 | 达标时 `task.setCompleted(true)` | `TaskTriggerService.completeTask()` |
+
+聚合逻辑是**无条件**按子任务统计结果覆盖父任务完成态的，所以给父任务挂触发器后，只要聚合逻辑触发（`parentCompletionDirty` 置位后任意一次读），触发器设置的完成态就会被抹掉，表现为"父任务自动完成又自己变回未完成"。
+
+**已定语义：触发器优先** —— 父任务挂了触发器时，`syncParentCompletionStates()` 跳过它，完成态完全由触发器决定；没有触发器的父任务维持现有聚合行为不变。
+
+此外还需同步放开四处守卫（均在 Phase V 加的）：右键菜单显示项、`TriggerEditScreen` 编辑器、`/todo task trigger set` 命令、`TaskTriggerService.rebuildIndex` 索引收录，以及"新增首个子任务时清除父任务触发器"的逻辑。
+
+### 3.7 已知取舍（Phase C 实现记录）
+
+- **向上取整误差（偏保守）**：同一中间产物出现在不同分支时，会在各分支分别向上取整。
+  例如「1 原木 → 4 木板」，两条分支各需 5 木板时，分别展开为 2 + 2 = 4 原木，而合并后只需 `ceil(10/4) = 3` 原木。
+  当前实现已**在同一配方内先合并重复输入**（减少节点数与误差），但**不做跨分支的中间产物聚合**。
+  要精确到全局最优需改成「先聚合再展开」的两阶段算法，本期不做；误差方向是偏多，不会导致任务无法完成。
+- **节点数上限**：默认 `MaterialResolveOptions.DEFAULT_MAX_NODES = 2000`，超出时 `MaterialPlan.truncated` 置为 true，
+  预览界面需提示"结果被截断"（对应风险 R1）。
+- **深度上限**：默认 32 层，与路径循环检测（`MaterialStopReason.CYCLE`）共同防止死循环。
+- **未收录的配方类型反推不出材料**（已知边界，实机反馈）：原版只索引 7 种配方类型，
+  **酿造（BrewingStand）不在其中**，所以药水这类只能「酿造」得到的物品会以「无配方」终止；
+  模组里靠**结构性方块**（如 Create 动力合成器）合成的物品同理。界面会在悬浮提示里说明
+  「未收录该配方类型，按最终材料处理」，避免被误认为"不可合成"。
+  补齐途径是**点 3（模组自定义配方类型）**；另注意药水的效果是 NBT / 组件，而当前配方索引按
+  **物品 ID** 归并，即便补上酿造也会把所有药水塌成同一个 `minecraft:potion`，需要先解决变体表示。
 
 ## 4. 点 2：文本材料清单导入
 
@@ -155,16 +299,18 @@ iron_ingot    64
 
 ```text
 for (RecipeType<?> type : 全部配方类型) {
-    for (RecipeHolder<?> holder : 该类型全部配方) {
-        Recipe<?> recipe = holder.value();
-        NonNullList<Ingredient> inputs = recipe.getIngredients();   // 通用输入
-        ItemStack output = recipe.getResultItem(registryAccess);     // 通用输出
+    for (Recipe<?> recipe : 该类型全部配方) {
+        String recipeId = recipe.getId();                            // 1.20.1：配方自带 ID
+        List<Ingredient> inputs = recipe.getIngredients();            // 通用输入
+        ItemStack output = recipe.getResultItem(registryAccess);      // 通用输出
         // 过滤：输入为空 / 输出为空 / 输出等于输入的配方不参与
     }
 }
 ```
 
-> **待核对项 T1**：`getIngredients()` / `getResultItem(RegistryAccess)` 在 1.20.1 与 1.21.1 的映射与可见性需在实现时逐一核对（1.21 起配方 API 有调整）。此为本点最大的不确定来源。
+> **T1 已核对（1.20.1，Phase B 编译验证）**：该项目映射下**不存在 `RecipeHolder`**，配方本身就是 `Recipe`，ID 走 `Recipe#getId()`；
+> `RecipeManager#getAllRecipesFor(RecipeType)` 返回配方列表，`Recipe#getIngredients()` / `getResultItem(RegistryAccess)` 均可直接调用。
+> 1.21.1 分支映射是否一致，需在该分支落地时再核对（1.21 起配方 API 有调整）。
 
 ### 5.2 覆盖边界
 
@@ -173,18 +319,23 @@ for (RecipeType<?> type : 全部配方类型) {
 
 ### 5.3 注册表设计（与点 1 共用）
 
-```text
-RecipeResolverRegistry
-  ├─ VanillaRecipeResolver      （点 1，L1）
-  ├─ GenericTypeRecipeResolver  （点 3，L2，通用反射/通用接口）
-  └─ JsonRuleRecipeResolver     （L3 数据驱动，后续，本期不做）
-
-RecipeResolver {
-    boolean canResolve(RecipeHolder<?> holder)
-    ResolvedRecipe resolve(RecipeHolder<?> holder, ItemStack target)
-}
-ResolvedRecipe { List<IngredientSpec> inputs; ItemStack output; int outputCount; }
-```
+> **实施补充（Phase B 落地后的实际形态）**：中立模型改用**物品资源 ID 字符串**而非 `ItemStack`，
+> 这样索引、选择策略与递归展开都能离线构造数据并测试；只有 `VanillaMaterialRecipeResolver`
+> 需要 MC 运行时（把 `Recipe` 转成中立模型）。
+>
+> ```text
+> MaterialRecipeResolver {
+>     Set<RecipeType<?>> supportedTypes()
+>     MaterialRecipe resolve(Recipe<?> recipe, RegistryAccess registryAccess)
+> }
+> MaterialRecipe { String id; String outputItemId; int outputCount;
+>                  List<MaterialIngredient> inputs; MaterialRecipeKind kind }
+> MaterialIngredient { List<String> candidates; int count }   // 多候选 = 物品标签/多选输入
+> ```
+>
+> 已落地的组件：`MaterialRecipeKind`、`MaterialIngredient`、`MaterialRecipe`、`MaterialRecipeIndex`、
+> `MaterialRecipeSelector`（纯逻辑，离线测试）、`MaterialRecipeResolver`、`VanillaMaterialRecipeResolver`、
+> `MaterialRecipeIndexBuilder`（MC 侧）。
 
 点 3 只需实现该接口并注册，不改点 1 的算法。
 
@@ -208,28 +359,46 @@ ResolvedRecipe { List<IngredientSpec> inputs; ItemStack output; int outputCount;
 
 | # | 风险 / 决策 | 影响 | 状态 |
 |---|---|---|---|
-| D1 | 中间产物是否生成任务；若生成，用 `CRAFT_ITEM` 还是 `ITEM_COLLECT` | 决定任务是否正确可完成 | **待拍板** |
-| D2 | 目标任务是父任务（不能挂触发器）还是与材料任务平级 | 决定目标任务能否自身追踪 | **待拍板** |
-| D3 | 多配方选择策略（最省料 / 最少步骤 / 用户选） | 整棵材料树结果 | **待拍板** |
-| D4 | 概率产出取期望值还是必得最小值 | 数量准确性 | **待拍板** |
-| D5 | tag 输入按"任一"还是"全部"展开 | 数量准确性 | **待拍板** |
-| T1 | `Recipe` 通用方法在 1.20.1 / 1.21.1 的可用性 | 点 3 可行性 | **待核对** |
+| D1 | 中间产物是否生成任务 | 决定任务是否正确可完成 | ✅ 已定：不生成，只出叶子材料 |
+| D2 | 目标任务能否自身追踪 | 目标任务能否挂触发器 | ✅ 已定：放宽 Phase V，父任务可挂 |
+| D3 | 多配方选择策略 | 整棵材料树结果 | ✅ 已定：默认产出比最高（同比较优先 crafting），玩家可覆盖 |
+| D4 | 概率产出取期望值还是必得最小值 | 数量准确性 | ❌ 随点 3 取消，不再需要决策（冻结见 §0） |
+| D5 | tag 输入按"任一"还是"全部"展开 | 数量准确性 | ❌ 随冻结不再需要决策（点 1 实际按 E5 候选选择落地） |
+| D6 | 父任务完成态：聚合逻辑与触发器互相覆盖（见 §3.6） | 放宽 Phase V 的前置项 | ✅ 已定：触发器优先，聚合逻辑跳过有触发器的父任务 |
+| D7 | 终止条件 | 决定铁锭会不会被推成铁粒 | ✅ 已定：熔炼类配方的输入即停止，玩家可改 |
+| D8 | 熔炼燃料提示 | 数量准确性 | ✅ 已定：本期不处理 |
+| T1 | `Recipe` 通用方法在 1.20.1 / 1.21.1 的可用性 | 点 3 可行性 | ❌ 随点 3 取消失效（1.20.1 已核对结论保留为记录） |
 | R1 | 任务数量爆炸（复杂物品树可达数十~数百节点） | 需要聚合 + 勾选，否则污染任务列表 | 由 3.5 预览界面缓解 |
 | R2 | 配方解析性能（大树上重算会卡 GUI） | 需反查索引 + 缓存，项目对卡顿敏感 | 由 `RecipeIndex` 缓解 |
 | R3 | 实机验证不可离线覆盖 | token / 返工成本主要来源 | 需实机清单 |
 
-## 8. 分步实现计划（全部未开始）
+## 8. 分步实现计划
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| Phase A | 语义拍板（D1~D5）+ API 核对（T1） | ⬜ 未开始 |
-| Phase B | 点 1：`RecipeIndex` + `RecipeResolver` 注册表 + `VanillaRecipeResolver` | ⬜ 未开始 |
-| Phase C | 点 1：`MaterialResolver`（递归/数量/DAG/循环）+ 离线单测 | ⬜ 未开始 |
-| Phase D | 点 1：`MaterialTaskGenerator` + 建任务链路 | ⬜ 未开始 |
-| Phase E | 点 1：`MaterialListScreen` 预览界面 | ⬜ 未开始 |
-| Phase F | 点 2：`MaterialListTextParser` + `ItemNameIndex` 抽取 + `ImportMaterialScreen` | ⬜ 未开始 |
-| Phase G | 点 3：`GenericTypeRecipeResolver` + 过滤规则 | ⬜ 未开始 |
-| Phase H | 离线回归挂 `:common:check` + 实机验证清单 | ⬜ 未开始 |
+| Phase A | 语义拍板（D1~D3、D6~D8 已定；D4/D5 与 T1 留点 3） | ✅ 完成 |
+| Phase A2 | **放宽 Phase V**：聚合逻辑改为"有触发器的父任务跳过" + 放开四处守卫 + 去掉"新增首个子任务时清除父任务触发器" + 触发器回归测试 | ✅ 完成 |
+| Phase B | 点 1：`RecipeIndex` + `RecipeResolver` 注册表 + `VanillaRecipeResolver`（含 `MaterialRecipeSelector` 默认策略） | ✅ 完成 |
+| Phase C | 点 1：`MaterialResolver`（递归/数量/合并/循环与深度保护/终止条件）+ 离线单测 | ✅ 完成 |
+| Phase D | 点 1：`MaterialTaskGenerator` + 建任务链路（模式 A / B） | ✅ 完成 |
+| Phase E1 | 点 1：`MaterialPreviewState`（预览状态层：配方覆盖 / 终止与继续展开 / 勾选过滤）+ 离线单测 | ✅ 完成 |
+| Phase E2 | 点 1：`MaterialListScreen` 预览界面 + 任务列表入口接线 + GUI 测试 | ✅ 完成 |
+| Phase E3 | **实机验证（第 2 轮）修订**：预览改「材料配方预览」并默认只展开直接材料（`FOLDED` + 「继续展开」）；预览树形连线展示；依赖链上重复子材料不展示；按展开层级生成多层依赖任务（合成任务不挂触发器 + 收集任务挂 `ITEM_COLLECT`） | ✅ 完成，`:common:check` 全量通过 |
+| Phase E4 | **实机验证（第 3 轮）修订**：合成任务改为挂 `CRAFT_ITEM` 触发器，不再靠子任务聚合完成（材料齐了也要真的做出来）；`TaskManager` 支持手动勾选带触发器的父任务直接切换自身完成态 | ✅ 完成（Phase E6 曾改为 `ITEM_COLLECT`，Phase E7 已改回 `CRAFT_ITEM`） |
+| Phase E5 | **多候选材料选择**：`MaterialResolveOptions` 新增候选覆盖与「背包已有物品」；`MaterialResolver` 按「玩家指定 &gt; 背包已有 &gt; 候选首项」选择替代材料；预览界面新增「选择材料」按钮（复用 `ItemSelectorScreen` 资源 ID 白名单）与「可选 N 种」提示 | ✅ 完成，`:common:check` 全量通过 |
+| Phase E6 | **实机验证（第 3 轮）修订**：合成任务触发器由 `CRAFT_ITEM` 改为 `ITEM_COLLECT`（持有量语义），已有物品即达标，修复「明明有父任务物品却还在等子任务」；GUI 任务列表与 HUD 右侧进度改为**触发器进度优先**（挂触发器的父任务不再被子任务进度顶掉）；HUD 多层子任务改为树形连线展示（与材料配方预览一致） | ✅ 完成，`:common:check` 全量通过 |
+| Phase E7 | **实机验证（第 4 轮）修订**：合成任务触发器**改回 `CRAFT_ITEM`**（展开配方材料即代表必须自己合成，背包已有旧物品不应直接判达标，撤销 E6 的做法）；`MaterialListScreen` 新增**背包持有量标注**（不含潜影盒，达标标绿 + 未达标追加「(已有 N)」）；HUD 树形连线加宽（`HUD_TREE_LEVEL_WIDTH` 6→10）并补正横向分支线，修复"只有竖线没有树形结构" | ✅ 完成，`:common:check` 全量通过 |
+| Phase E8 | **实机验证（第 5 轮）修订**：持有量标注**增加文字提示**（「已够」绿色 / 不够时「缺 N」灰色，只给还需要准备多少），不再只靠颜色区分；新增**同种材料跨层级累计分配**（按显示顺序自上而下、高层级先占用背包数量，低层级只用剩余数量比较），并让数量本身在宽度不足时仍可见 | ✅ 完成，`:common:check` 全量通过 |
+| Phase E9 | **实机验证（第 5 轮）修订**：`MaterialTaskGenerator` 新增 `collectFinalMaterialTotals()`，同种最终材料跨层级/分支重复出现时**只生成一条「收集」任务**（挂首次出现位置、数量取汇总需求），修复"多条收集任务共享同一份背包物品、只凑一半就全部完成" | ✅ 完成，`:common:check` 全量通过 |
+| Phase E10 | **实机验证（第 6 轮）修订**：`MaterialRecipeKind` 新增 `isCraftEventDetectable()`（仅 `CRAFTING` 为真），`MaterialTaskGenerator` 对**配方类型不是工作台/背包合成**的节点（熔炼 / 高炉 / 烟熏 / 营火 / 切石 / 锻造）改用「收集」`ITEM_COLLECT` 语义，修复"熔炼产物任务挂 `CRAFT_ITEM` 导致进度永远推不动"（石头 / 铁锭等） | ✅ 完成，`:common:check` 全量通过 |
+| Phase E11 | **同物品任务进度共享修订**：`MaterialTaskGenerator` 把 Phase E9 的「仅最终材料去重 + 汇总」推广到**整棵材料树**（`collectNodeTotals()` + 全物品 `emittedItemIds`），同种物品只生成一条任务、数量取全树汇总、语义取所有出现位置的并集；重复节点不建任务但仍继续下钻，深层材料挂到最近的已生成祖先任务下。修复"同种中间产物跨分支生成多条任务 → 收集类互相判完成 / 合成类一次合成同时推进多条" | ✅ 完成，`:common:check` 全量通过 |
+| Phase E12 | **配方式提示修订（实机反馈）**：材料反推生成的任务**一律改用「收集」`ITEM_COLLECT`**（含目标物与中间产物）——最终目标是拿到材料，怎么拿到都算达成，配方只是提示；`MaterialRecipeKind.isCraftEventDetectable()` 随之删除。标题改为体现配方：`MaterialTaskTitleProvider` 回调参数由 `boolean collect` 换成 `MaterialRecipeKind`，`TriggerTargetSupport#buildMaterialTaskTitle` 渲染「[功能方块] 动作词 [产物] ×数量」（lang `gui.todolist.material.task_title.*`，功能方块图标写在语言文件里）；`MaterialResolver` 让**折叠（FOLDED）节点也带上推荐配方**，因此默认只展开一层时直接材料同样能显示功能方块提示 | ✅ 完成，`:common:check` 全量通过 |
+| Phase E13 | **预览界面横向配方树重写（实机反馈）**：`MaterialListScreen` 改为从左到右的**分层横向配方树**，物品与下级配方之间插入**功能方块节点**（点图标切换配方）；点物品图标弹出「可选材料」浮层选替代材料；点节点其余区域展开 / 收起下级配方；面板放大并支持双向滚动（滚轮纵向、Shift + 滚轮横向、空白拖拽平移）；**移除**生成模式按钮、勾选复选框与三个行操作按钮，生成范围改为**只按展示出来的树**。新增纯几何类 `MaterialPreviewLayout`（列/行分配 + 功能方块位置 + 内容尺寸）与 `materialPreviewLayoutTest`；`MaterialPreviewState` 去掉模式与勾选、新增 `toggleExpand` / `isExpandToggleAvailable`；`MaterialPlan#retainLeaves` 删除；`MaterialRecipeKind` 新增 `stationItemId()`（功能方块映射的唯一来源，任务标题也改用它） | ✅ 完成，`:common:check` 全量通过 |
+| Phase E14 | **实机反馈修订**：① 任务标题去掉功能方块（改为「动作词 + 产物 ×数量」，避免 HUD 挤不下）；② 功能方块节点与物品节点视觉区分（有底 + 有框 + 可切换标记）；③ 点物品图标无可选材料时改为展开 / 收起（不再无响应）；④ **循环配方不再卡死**：`MaterialResolver` 让 CYCLE 终止的节点也保留推荐配方，功能方块节点不消失、可继续切换配方绕开环；⑤ 悬浮提示说明不能再展开的原因（未收录配方类型 / 循环依赖 / 达到上限）；⑥ 树上的物品图标不再盖住悬浮提示与「可选材料」弹出列表（绘制前先 `GuiContext.flush()`；**实测不足，已由 Phase E15 ① 改为不绘制被覆盖的节点**） | ✅ 完成，`:common:check` 全量通过 |
+| Phase E15 | **实机反馈修订二**：① **浮层不再被树上的物品图标压住**——物品图标走独立渲染批次，绘制顺序压不住，因此把「浮层板面」（可选材料列表 / 悬浮提示，二者同帧只会出现一个）先算出来，树渲染时**只跳过真正落在浮层下的图标**（文字、连线、方块格走普通批次，能被面板正常盖住）。第一版曾整格跳过，实测会把**被点的那颗图标也连带隐藏**（列表在其右侧、仅 3px 擦边），故收紧为按图标矩形判定；② **首列不再裁掉长名称**——节点名称居中画在格子下方，`MaterialPreviewLayout` 为首尾列各预留半个标签宽（`LABEL_SIDE_MARGIN`），内容宽度同步加上这一份边距 | ✅ 完成，`:common:check` 全量通过 |
+| Phase F | 点 2：`MaterialListTextParser` + `ItemNameIndex` 抽取 + `ImportMaterialScreen` | ❌ 已取消（2026-10-25 方向评审，见 §0.2） |
+| Phase G | 点 3：`GenericTypeRecipeResolver` + 过滤规则 | ❌ 已取消（2026-10-25 方向评审，见 §0.2） |
+| Phase H | 实机验证：离线回归已全部挂 `:common:check`（各 Phase 行内标注）；完整实机清单于 2026-10-25 收敛为**一页轻量冒烟清单**（约 8-10 项核心交互，与幽灵任务 Y1 验证合并执行，见 TODO.md 与 `docs/verify-automation-plan.md` 的 L3 分工） | ✅ 已完成（2026-10-26 冒烟全部通过，fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md` 结果记录） |
 
 ## 9. 工作量与代码量估算（基于本仓库同类特性实测行数）
 
@@ -245,12 +414,9 @@ ResolvedRecipe { List<IngredientSpec> inputs; ItemStack output; int outputCount;
 
 token 量级参考（含探索、实现、构建、离线测试修错，不含实机回归）：约 **0.8M~1.5M**；含实机验证与回归修复通常再翻倍以上。实机验证是本特性的主要成本来源。
 
-## 10. 待确认问题（需要用户拍板后才进入实现）
+## 10. 待确认问题（2026-10-25 冻结后仅第 1 问仍相关）
 
-1. D1：中间产物要不要建任务？用哪种触发器？
-2. D2：目标任务作父任务（不挂触发器）还是与材料任务平级（可挂触发器）？
-3. D3：默认配方选择策略？
-4. 生成的任务挂在当前选中任务下，还是新建一个独立任务/项目？
-5. 与已有收集任务去重时：累加数量，还是新建独立子任务？
-6. 是否需要"生成前预览、确认后落库"，还是直接生成后允许撤销？
-7. 点 2 的清单文本来源，是否已有目标模组（投影 / Create）的实际输出样本可参考？
+1. 与已有收集任务去重时：累加数量，还是新建独立子任务？（点 1 后续缺陷修复 / 附属模组接入时再定）
+2. ~~D5：tag 输入按"任一"还是"全部"展开？~~（随冻结失效，见 §7）
+3. ~~D4：概率产出取期望值还是必得最小值？~~（随点 3 取消失效）
+4. ~~点 2 的清单文本来源样本？~~（随点 2 取消失效；清单导入需求由「任务导入格式」承接，见 §0.4）
