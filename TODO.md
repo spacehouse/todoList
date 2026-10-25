@@ -2,39 +2,42 @@
 
 本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成` 四类维护，便于后续排期、分支同步与回归验证。
 
-更新日期：`2026-09-29`
+更新日期：`2026-10-26`
 
 ## 进行中
 
 - 【feat】**已废弃并回退**：同物品任务的额度配额（Phase Z）——实机验证证明"已完成任务永久占用额度"的跨时间台账机制不成立（会让新建同物品任务进度不涨），实现已从工作区回退；保留"排他性"结论与教训记录，见 `docs/feat-trigger-credit-allocation.md` §0
-- 【feat】材料反推生成时，同一物品在整棵材料树里只生成一条任务（数量取全树汇总），从结构上消除材料链内部的同物品进度共享——实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-material-task-generation.md` Phase E11），待实机验证
-- 【feat】材料反推任务标题体现配方：材料任务**一律改为「收集」语义**（含目标物与中间产物，拿到即达成），标题渲染为「动作词 + `[产物]` ×数量」（如「熔炼 `[铁锭]` ×27」，功能方块由预览界面展示，见 Phase E14），折叠（未展开）节点也带推荐配方提示——实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-material-task-generation.md` Phase E12），待实机验证
-- 【feat】材料配方预览改为**横向配方树**：从左到右分层排布，物品与下级配方之间插入**功能方块节点**（点图标切换配方），点物品图标弹出「可选材料」列表，点节点其余区域展开 / 收起下级配方；面板放大并支持双向滚动（滚轮 / Shift+滚轮 / 拖拽）；去掉「仅目标 / 目标+材料」模式按钮、勾选框与三个行操作按钮，生成任务**只按展示出来的树**——实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-material-task-generation.md` Phase E13），待实机验证
-- 【feat】材料配方预览实机反馈修订：任务标题去掉功能方块（改为「动作词 + 产物 ×数量」，避免 HUD 挤不下）；功能方块节点与物品节点视觉区分（有底 + 有框 + 可切换标记）；点物品图标无可选材料时改为展开 / 收起；**循环配方不再卡死**（CYCLE 节点保留配方、可继续切换绕开环）；悬浮提示说明为何不能展开（未收录配方类型 / 循环依赖 / 达到上限）；可选材料弹出列表不再被树上图标遮挡（该条实测不足，见下一条修订）——实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-material-task-generation.md` Phase E14），待实机验证
-- 【fix】材料配方预览实机反馈修订二：**可选材料列表与悬浮提示不再被树上的图标压住**（图标走独立渲染批次，改为只跳过真正落在浮层下的图标；被点的那颗不再连带消失）；**首列不再裁掉较长材料名**（横向布局为首尾列预留半个标签宽的边距）——实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-material-task-generation.md` Phase E15），待实机验证
-- 【fix】幽灵任务（父任务已完成、带触发器的后代未完成且在已完成/未完成列表中都看不见）：改为**源头级联完成**——父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度；实现与离线回归已完成（`:common:check` 全绿，见 `docs/feat-trigger-completion.md` Phase Y1），待实机验证
 
 ## 待同步
 
 - 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称）（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-item-title-markup.md`）
 - 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`）
+- 【fix】幽灵任务源头级联完成（Phase Y1，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度；离线回归与实机验证均通过（2026-10-26，并入材料冒烟清单执行），见 `docs/feat-trigger-completion.md` Phase Y1
+- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力
 
 ## 计划中
 
-- 【feat】支持根据收集目标反推前置材料并自动生成收集任务（点 1：原版配方反推，见 `docs/feat-material-task-generation.md`）
-- 【feat】支持粘贴 / 导入材料清单生成收集任务（点 2：文本清单导入，见 `docs/feat-material-task-generation.md`）
-- 【feat】支持模组自定义配方类型的材料反推（点 3：通用配方 resolver + 数据驱动适配，见 `docs/feat-material-task-generation.md`）
-- 【feat】支持投影材料列表联动
-- 【feat】支持机械动力材料清单联动
-- 【feat】支持 FTB 团队联动
-- 【feat】支持 AI 生成待办
+> 2026-10-25 起新需求进入本区前需先通过「需求准入三问」（见文末维护约定），填写模板 `docs/requirement-review-template.md`。
+
+### 主模组
+
+- 【feat】支持任务批量导入格式（JSON）：作为所有外部任务生成来源（JEI/EMI 附属、AI 生成、清单导入）的统一入口（背景见 `docs/feat-material-task-generation.md` §0.4）
 - 【feat】支持团队项目任务设置为重复领取 / 重复完成
 - 【feat】支持个人项目跨存档同步
 
+### 附属 / 外部集成（独立模组或外部工具承载，主模组保持轻量与零第三方依赖）
+
+- 【feat】JEI/EMI 附属模组（如 jei-for-todolist）：借 JEI/EMI 的完整配方索引做材料反推，产出经任务导入格式落库
+- 【feat】支持 AI 生成待办：作为任务导入格式的生产者，输入自然语言、输出触发式任务
+- 【feat】支持投影材料列表联动
+- 【feat】支持机械动力材料清单联动
+- 【feat】支持 FTB 团队联动
+
 ### 借鉴成熟 RPG 任务系统的方向（参考评估，暂不启动）
 
-以下条目来自对成熟 RPG 任务系统（WoW / 巫师3 / 天际 / BG3）的方向评估，**均需在 Phase Z 落地后再评估**；
-其中 Stage / Optional 会改变额度统计范围，属于"必须另立设计"的功能，边界见 `docs/feat-trigger-credit-allocation.md` §9。
+以下条目来自对成熟 RPG 任务系统（WoW / 巫师3 / 天际 / BG3）的方向评估；
+原"Phase Z 落地后再评估"的前提已随 Phase Z 废弃失效，改为**建立需求评审流程后逐项评估**
+（Stage / Optional 会改变完成统计范围，属于"必须另立设计"的功能，边界见 `docs/feat-trigger-credit-allocation.md` §9）。
 
 - 【feat】HUD 任务级追踪与关注（Track / Focus；现状仅支持项目级星标）
 - 【feat】任务阶段 Stage 与顺序推进（与"父子 = 展示层级"解耦）
@@ -42,7 +45,7 @@
 - 【feat】可选目标（Optional Objective）与额外奖励
 - 【feat】任务状态扩展：已失败 / 已放弃 / 归档，并保留已完成历史
 - 【feat】冒险日志（Journal）：任务步骤与历史时间线
-- 【docs】RPG 化任务系统总体架构梳理（待 Phase Z 落地后评估是否需要；已明确暂不做：对话树、多结局、World State、NPC AI Quest、世界导航与路径点）
+- 【docs】RPG 化任务系统总体架构梳理（需先通过需求评审再评估是否启动；已明确暂不做：对话树、多结局、World State、NPC AI Quest、世界导航与路径点）
 
 ## 已完成
 
@@ -79,3 +82,14 @@
 - 在当前分支完成开发并通过验证后，先移动到 `待同步`
 - 完成其他维护分支同步后，再从 `待同步` 移动到 `已完成`
 - 如果后续需要拆分优先级，可在条目前追加 `P0 / P1 / P2`
+
+### 需求准入三问（2026-10-25 起，进入 `计划中` 前必答）
+
+1. **用户故事**：谁在什么场景下需要它？能写清楚才算想清楚——自造需求是本项目已付出过实机验证代价的风险（Phase Z 教训，见 `docs/feat-trigger-credit-allocation.md` §0）。
+2. **验证方案**：实机怎么验、验收标准是什么？先定标准再动手，避免"实现完才发现证伪"。
+3. **投入上限**：最多投入多少时间 / token？超出即冻结，止损优先。
+
+补充规则：
+
+- **experimental 转正条件**：拿到社区反馈（Issue / 评论 / 实际使用报告）后方可转正——移入对应正式分区并去掉 experimental 标注；长期无反馈的实验性功能到期冻结或移除。
+- 评审模板与示例：`docs/requirement-review-template.md`。
