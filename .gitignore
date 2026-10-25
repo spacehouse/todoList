@@ -68,6 +68,14 @@ local.properties
 # Trae
 .trae/
 
+# ZCode
+.agents/
+.zcode/
+
+# Verify automation (local, machine-specific like build-local-17.bat)
+verify-all.bat
+verify-reports/
+
 */logs/*
 */log/*
 *.log
