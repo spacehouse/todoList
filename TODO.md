@@ -22,8 +22,10 @@
 ### 主模组
 
 - 【feat】支持任务批量导入格式（JSON）：作为所有外部任务生成来源（JEI/EMI 附属、AI 生成、清单导入）的统一入口（背景见 `docs/feat-material-task-generation.md` §0.4）
+- 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（**CurseForge 审查硬约束**：1.4.1 两次被拒，"expose its database over TCP with admin credentials... requires a fix before upload"；准入三问与删除范围见 `docs/h2-tcp-server-removal.md`；最终验收 = 移除后 jar 上传 CF 通过审查）
 - 【feat】支持团队项目任务设置为重复领取 / 重复完成
 - 【feat】支持个人项目跨存档同步
+- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（准入三问：用户故事 = 维护者只需读懂一条存储链路，消除"配置强制 H2 后永不执行"的死分支；范围 = `TaskStorage` / `ProjectStorage` / `ProjectPlayerStateStorage` 的非 H2 分支 + `ModConfig` 的 NBT 配置注释与 lang key，**明确不含** H2 不可用时的应急 NBT 写入（数据安全兜底，`shouldKeepNbtWritableWhenH2Unavailable` 固化）、NBT→H2 老数据迁移链（老玩家升档生命线）、`Task` NBT 序列化格式（网络包与 H2 行映射基建）；验证方案 = `:common:check` 全绿且上述保留用例仍通过；投入上限 = 1 个工作日，超限冻结）
 
 ### 附属 / 外部集成（独立模组或外部工具承载，主模组保持轻量与零第三方依赖）
 
