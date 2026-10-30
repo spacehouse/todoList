@@ -73,9 +73,8 @@ public final class H2LegacyMigrationReader {
         List<Task> tasks = new ArrayList<>();
         if (root.contains("tasks", NBT_LIST_TYPE)) {
             ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
-            for (int index = 0; index < taskList.size(); index++) {
-                tasks.add(Task.fromNbt(taskList.getCompound(index)));
-            }
+            // 使用显式栈展开旧 subtasks，支持任意深度且不受递归栈限制。
+            tasks = com.todolist.task.TaskCompatibilityAdapter.readTaskNbtList(taskList);
         }
         output.add(new LegacyTaskBucket(bucketType, ownerUuid, root.getLong("lastSaved"), tasks));
     }

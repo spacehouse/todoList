@@ -136,6 +136,7 @@ public final class TodoScreenTestMain {
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldSelectSubtaskFromExpandedParentRows", TodoScreenTestMain::shouldSelectSubtaskFromExpandedParentRows);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldTrimLongParentTaskContextWithinDetailPanel", TodoScreenTestMain::shouldTrimLongParentTaskContextWithinDetailPanel);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCreateSubtaskFromParentDetailAction", TodoScreenTestMain::shouldCreateSubtaskFromParentDetailAction);
+        GuiTestSupport.runTestCase("TodoScreenTestMain.shouldCreateNestedSubtaskFromSubtasksDetailAction", TodoScreenTestMain::shouldCreateNestedSubtaskFromSubtasksDetailAction);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldKeepNewEmptySubtaskWhileAutoSaveRuns", TodoScreenTestMain::shouldKeepNewEmptySubtaskWhileAutoSaveRuns);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenDetailLosesFocus", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenDetailLosesFocus);
         GuiTestSupport.runTestCase("TodoScreenTestMain.shouldDiscardEmptySubtaskWhenSelectingParentTask", TodoScreenTestMain::shouldDiscardEmptySubtaskWhenSelectingParentTask);
@@ -2443,6 +2444,33 @@ public final class TodoScreenTestMain {
     }
 
     /**
+     * 验证选中子任务后仍可继续创建下一层子任务。
+     */
+    private static void shouldCreateNestedSubtaskFromSubtasksDetailAction() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
+        createDefaultPersonalProject();
+        createDefaultTeamProject();
+        TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
+        ScreenDriver.init(minecraft, screen);
+        addTaskViaInput(screen, "Nested Root");
+        Task root = requireTaskByTitle(screen, "Nested Root");
+        access(screen).selectTaskForTest(root);
+        access(screen).clickAddSubtaskButtonForTest();
+        Task child = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertNotNull(child, "第一层子任务应创建成功");
+        access(screen).getTitleFieldForTest().setValue("Nested Child");
+        GuiTestSupport.assertTrue(access(screen).isAddSubtaskButtonVisibleForTest(), "选中子任务后仍应显示添加子任务按钮");
+
+        access(screen).clickAddSubtaskButtonForTest();
+
+        Task grandchild = access(screen).getSelectedTaskForTest();
+        GuiTestSupport.assertNotNull(grandchild, "第二层子任务应创建成功");
+        GuiTestSupport.assertEquals(child.getId(), grandchild.getParentTaskId(), "第二层子任务应指向第一层子任务");
+        GuiTestSupport.assertEquals(3, access(screen).getManagedTasksForTest().size(), "应存在根任务、子任务和孙任务三条记录");
+    }
+
+    /**
      * 验证开启自动保存时，刚创建且仍在编辑中的空白子任务不会被立即清理，
      * 但也不会被自动保存提前落盘。
      */
@@ -3126,7 +3154,7 @@ public final class TodoScreenTestMain {
         access(screen).selectTaskForTest(task);
         access(screen).openTaskContextMenuForTest(task);
         GuiTestSupport.assertTrue(access(screen).hasContextMenuForTest(), "打开上下文菜单后应处于菜单打开状态");
-        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含优先级、添加子任务和删除操作");
+        GuiTestSupport.assertEquals(6, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含优先级、添加子任务、移动和删除操作");
 
         access(screen).clickContextMenuItemForTest(0);
 
@@ -3152,7 +3180,7 @@ public final class TodoScreenTestMain {
 
         access(screen).selectTaskForTest(parent);
         access(screen).openTaskContextMenuForTest(parent);
-        GuiTestSupport.assertEquals(5, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含添加子任务入口");
+        GuiTestSupport.assertEquals(6, access(screen).getContextMenuItemTextsForTest().size(), "父任务上下文菜单应包含添加子任务入口");
 
         access(screen).clickContextMenuItemForTest(3);
 

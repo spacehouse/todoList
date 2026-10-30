@@ -62,6 +62,7 @@ public class TodoHudRenderer {
     private int cachedDoneSummaryCount;
     private final Map<String, RowRenderCache> rowRenderCacheByTaskId = new HashMap<>();
     private final Map<String, ParentSubtaskProgress> parentProgressByTaskId = new HashMap<>();
+    private final Map<String, Integer> rowDepthByTaskId = new HashMap<>();
     private HudViewMode cachedHudViewMode = HudViewMode.PERSONAL;
     private Project.Scope cachedHudScope = Project.Scope.PERSONAL;
     private String cachedProjectSourceMode = "";
@@ -161,11 +162,16 @@ public class TodoHudRenderer {
         private final List<Task> pendingTasks;
         private final List<Task> doneTasks;
         private final Map<String, ParentSubtaskProgress> parentProgress;
+        private final Map<String, Integer> depthByTaskId;
 
-        private HudDisplayModel(List<Task> pendingTasks, List<Task> doneTasks, Map<String, ParentSubtaskProgress> parentProgress) {
+        private HudDisplayModel(List<Task> pendingTasks,
+                                List<Task> doneTasks,
+                                Map<String, ParentSubtaskProgress> parentProgress,
+                                Map<String, Integer> depthByTaskId) {
             this.pendingTasks = List.copyOf(pendingTasks);
             this.doneTasks = List.copyOf(doneTasks);
             this.parentProgress = Map.copyOf(parentProgress);
+            this.depthByTaskId = Map.copyOf(depthByTaskId);
         }
     }
 
@@ -310,6 +316,7 @@ public class TodoHudRenderer {
         int pendingSummaryTotal;
         int doneSummaryTotal;
         parentProgressByTaskId.clear();
+        rowDepthByTaskId.clear();
         if (sqlResult != null) {
             List<Task> topLevelTasks = new ArrayList<>(sqlResult.getPendingTasks());
             topLevelTasks.addAll(sqlResult.getDoneTasks());
@@ -321,6 +328,7 @@ public class TodoHudRenderer {
             pendingSummaryTotal = sqlResult.getPendingTotal();
             doneSummaryTotal = sqlResult.getDoneTotal();
             parentProgressByTaskId.putAll(displayModel.parentProgress);
+            rowDepthByTaskId.putAll(displayModel.depthByTaskId);
         } else {
             List<Task> tasks = loadTasksByScope(scope);
             tasks = filterByViewMode(tasks, viewMode);
@@ -334,6 +342,7 @@ public class TodoHudRenderer {
             pendingSummaryTotal = countTopLevelTasks(pending);
             doneSummaryTotal = countTopLevelTasks(done);
             parentProgressByTaskId.putAll(displayModel.parentProgress);
+            rowDepthByTaskId.putAll(displayModel.depthByTaskId);
         }
         cachedPendingTasks = pending;
         cachedDoneTasks = done;
@@ -451,68 +460,67 @@ public class TodoHudRenderer {
     private HudDisplayModel buildHudDisplayModel(List<Task> source, boolean showSubtasks) {
         List<Task> input = source == null ? List.of() : new ArrayList<>(source);
         if (input.isEmpty()) {
-            return new HudDisplayModel(List.of(), List.of(), Map.of());
+            return new HudDisplayModel(List.of(), List.of(), Map.of(), Map.of());
         }
 
-        Map<String, List<Task>> subtasksByParentId = new LinkedHashMap<>();
-        Map<String, Integer> originalIndexes = new HashMap<>();
-        Map<String, ParentSubtaskProgress> progressByParentId = new HashMap<>();
-        List<Task> orphanSubtasks = new ArrayList<>();
-
-        for (int index = 0; index < input.size(); index++) {
-            Task task = input.get(index);
-            if (task == null) {
-                continue;
-            }
-            String taskId = valueOrEmpty(task.getId());
-            if (!taskId.isEmpty()) {
-                originalIndexes.put(taskId, index);
-            }
-            if (task.isSubtask()) {
-                String parentTaskId = valueOrEmpty(task.getParentTaskId());
-                subtasksByParentId.computeIfAbsent(parentTaskId, ignored -> new ArrayList<>()).add(task);
-            }
-        }
-
-        Comparator<Task> subtaskComparator = Comparator
-                .comparingLong(Task::getSubtaskSortOrder)
-                .thenComparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE));
-        for (List<Task> siblingSubtasks : subtasksByParentId.values()) {
-            siblingSubtasks.sort(subtaskComparator);
-        }
-
+        com.todolist.task.TaskTreeIndex treeIndex = com.todolist.task.TaskTreeIndex.build(input);
         List<Task> pending = new ArrayList<>(input.size());
         List<Task> done = new ArrayList<>(input.size());
-        for (Task task : input) {
-            if (task == null || task.isSubtask()) {
+        Map<String, ParentSubtaskProgress> progressByParentId = new HashMap<>();
+        Map<String, Integer> depthByTaskId = new HashMap<>();
+
+        for (Task root : treeIndex.getRoots()) {
+            if (root == null || root.getId() == null) {
                 continue;
             }
-            String parentTaskId = valueOrEmpty(task.getId());
-            List<Task> childTasks = subtasksByParentId.remove(parentTaskId);
-            ParentSubtaskProgress progress = buildParentSubtaskProgress(childTasks);
-            if (progress != null && !parentTaskId.isEmpty()) {
-                progressByParentId.put(parentTaskId, progress);
+            List<Task> target = root.isCompleted() ? done : pending;
+            target.add(root);
+            depthByTaskId.put(root.getId(), 0);
+            List<Task> rootChildren = treeIndex.getChildren(root.getId());
+            ParentSubtaskProgress rootProgress = buildParentSubtaskProgress(rootChildren);
+            if (rootProgress != null) {
+                progressByParentId.put(root.getId(), rootProgress);
             }
-            List<Task> target = isHudGroupCompleted(task, progress) ? done : pending;
-            target.add(task);
-            if (showSubtasks && childTasks != null && !childTasks.isEmpty()) {
-                target.addAll(childTasks);
+            if (!showSubtasks) {
+                continue;
             }
-        }
-
-        if (showSubtasks) {
-            for (List<Task> remainingSubtasks : subtasksByParentId.values()) {
-                orphanSubtasks.addAll(remainingSubtasks);
+            // 显式栈展开整棵树；渲染阶段仍受 HUD 最大行数配置限制。
+            java.util.ArrayDeque<TaskDepthEntry> stack = new java.util.ArrayDeque<>();
+            for (int index = rootChildren.size() - 1; index >= 0; index--) {
+                stack.push(new TaskDepthEntry(rootChildren.get(index), 1));
             }
-            orphanSubtasks.sort(Comparator.comparingInt(task -> originalIndexes.getOrDefault(valueOrEmpty(task.getId()), Integer.MAX_VALUE)));
-            for (Task orphanSubtask : orphanSubtasks) {
-                if (orphanSubtask == null) {
+            while (!stack.isEmpty()) {
+                TaskDepthEntry entry = stack.pop();
+                Task task = entry.task;
+                if (task == null || task.getId() == null) {
                     continue;
                 }
-                (orphanSubtask.isCompleted() ? done : pending).add(orphanSubtask);
+                target.add(task);
+                depthByTaskId.put(task.getId(), entry.depth);
+                ParentSubtaskProgress childProgress = buildParentSubtaskProgress(treeIndex.getChildren(task.getId()));
+                if (childProgress != null) {
+                    progressByParentId.putIfAbsent(task.getId(), childProgress);
+                }
+                List<Task> children = treeIndex.getChildren(task.getId());
+                for (int index = children.size() - 1; index >= 0; index--) {
+                    stack.push(new TaskDepthEntry(children.get(index), entry.depth + 1));
+                }
             }
         }
-        return new HudDisplayModel(pending, done, progressByParentId);
+        return new HudDisplayModel(pending, done, progressByParentId, depthByTaskId);
+    }
+
+    /**
+     * HUD 树展开时使用的任务/深度对。
+     */
+    private static final class TaskDepthEntry {
+        private final Task task;
+        private final int depth;
+
+        private TaskDepthEntry(Task task, int depth) {
+            this.task = task;
+            this.depth = depth;
+        }
     }
 
     /**
@@ -1035,9 +1043,11 @@ public class TodoHudRenderer {
      */
     private HudRowVisual buildRowVisual(Task task, int hudWidth) {
         int rowWidth = Math.max(0, hudWidth - 8);
-        boolean subtask = task != null && task.isSubtask();
+        int depth = task == null ? 0 : rowDepthByTaskId.getOrDefault(task.getId(), task.isSubtask() ? 1 : 0);
+        boolean subtask = depth > 0;
+        int depthIndent = Math.min(depth, 12) * HUD_SUBTASK_EXTRA_INDENT;
         int prefixWidth = subtask ? client.font.width(HUD_SUBTASK_PREFIX) : 0;
-        int priorityBlockOffset = subtask ? HUD_SUBTASK_EXTRA_INDENT + prefixWidth : 0;
+        int priorityBlockOffset = depthIndent + prefixWidth;
         int currentOffset = priorityBlockOffset + HUD_PRIORITY_BLOCK_WIDTH + HUD_PRIORITY_BLOCK_GAP;
         int maxLabelWidth = Math.max(18, rowWidth / 3);
 
@@ -1072,7 +1082,7 @@ public class TodoHudRenderer {
                 : Component.literal(progressToken).withStyle(rowCompleted ? ChatFormatting.DARK_GRAY : ChatFormatting.GRAY);
 
         return new HudRowVisual(priorityBlockOffset, resolvePriorityBlockColor(task.getPriority()),
-                subtask ? HUD_SUBTASK_EXTRA_INDENT : 0, prefixText, "",
+                subtask ? depthIndent : 0, prefixText, "",
                 null,
                 tagToken.isEmpty() ? null : tagToken,
                 assigneeOffset, tagOffset, titleOffset, titleText, progressOffset, progressText);
@@ -1093,6 +1103,7 @@ public class TodoHudRenderer {
                 + task.getPriority().name() + '|'
                 + isTaskCompletedInHud(task) + '|'
                 + buildParentProgressText(resolveParentSubtaskProgress(task)) + '|'
+                + rowDepthByTaskId.getOrDefault(valueOrEmpty(task.getId()), 0) + '|'
                 + resolveFirstTaskTag(task) + '|'
                 + hudWidth + '|'
                 + guiScale;
@@ -1105,7 +1116,7 @@ public class TodoHudRenderer {
      * @return 父任务进度；非父任务或无子任务时返回 null
      */
     private ParentSubtaskProgress resolveParentSubtaskProgress(Task task) {
-        if (task == null || task.isSubtask()) {
+        if (task == null) {
             return null;
         }
         String taskId = valueOrEmpty(task.getId());

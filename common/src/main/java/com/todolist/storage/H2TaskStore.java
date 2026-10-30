@@ -201,7 +201,7 @@ public final class H2TaskStore {
                         tasks.add(readTask(resultSet, tagsByTaskId));
                     }
                 }
-                return tasks;
+                return com.todolist.task.TaskCompatibilityAdapter.normalizeLoadedTasks(tasks);
             }
         } catch (SQLException exception) {
             throw markUnavailable(H2StorageAvailability.Reason.READ_FAILED, "Failed to load H2 tasks", exception);

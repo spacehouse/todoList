@@ -167,17 +167,17 @@ public final class H2LegacyMigrationPreflight {
     }
 
     /**
-     * 将旧任务桶标准化为可迁移的平铺结构；仅允许单层 subtasks。
+     * 将旧任务桶标准化为可迁移的平铺结构；支持任意深度 subtasks。
      *
      * @param bucket 旧任务桶
      * @return 标准化后的任务列表
-     * @throws LegacyMigrationException 检测到不可迁移嵌套时抛出
+     * @throws LegacyMigrationException 迁移标准化失败时抛出
      */
     private Iterable<Task> normalizeTasks(LegacyTaskBucket bucket) throws LegacyMigrationException {
         try {
             return TaskCompatibilityAdapter.normalizeLoadedTasks(bucket.tasks());
-        } catch (IllegalStateException exception) {
-            throw new LegacyMigrationException("旧数据包含两层及以上 subtasks，当前迁移仅支持单层结构: "
+        } catch (RuntimeException exception) {
+            throw new LegacyMigrationException("旧任务树标准化失败: "
                     + bucket.bucketType() + "/" + bucket.ownerUuid(), exception);
         }
     }

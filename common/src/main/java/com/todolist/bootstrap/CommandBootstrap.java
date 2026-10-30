@@ -21,6 +21,7 @@ import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
+import com.todolist.task.TaskManager;
 import com.todolist.task.TaskStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.storage.H2ConnectionProvider;
@@ -3003,7 +3004,8 @@ public final class CommandBootstrap {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
-            Task task = findTaskById(tasks, taskId);
+            TaskManager taskManager = createCommandTaskManager(tasks);
+            Task task = taskManager.getTask(taskId);
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
             }
@@ -3018,8 +3020,8 @@ public final class CommandBootstrap {
                 );
             }
 
-            task.setCompleted(true);
-            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            taskManager.completeTask(taskId);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, taskManager.getAllTasks());
             syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
@@ -3052,7 +3054,8 @@ public final class CommandBootstrap {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = loadProjectTasksForCommand(source, player, project);
-            Task task = findTaskById(tasks, taskId);
+            TaskManager taskManager = createCommandTaskManager(tasks);
+            Task task = taskManager.getTask(taskId);
             if (task == null || !task.belongsToProject(project.getId())) {
                 return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
             }
@@ -3068,8 +3071,8 @@ public final class CommandBootstrap {
                         task.getTitle()
                 );
             }
-            task.setCompleted(true);
-            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            taskManager.completeTask(taskId);
+            saveProjectTasksForCommand(source, player, project, storage, taskManager.getAllTasks());
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -3229,13 +3232,14 @@ public final class CommandBootstrap {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
-            Task task = findTaskById(tasks, taskId);
+            TaskManager taskManager = createCommandTaskManager(tasks);
+            Task task = taskManager.getTask(taskId);
             if (task == null) {
                 return sendCommandFailure(source, "command.todolist.task.remove.not_found", taskId);
             }
 
-            tasks.remove(task);
-            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            taskManager.deleteTask(taskId);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, taskManager.getAllTasks());
             syncTasksToPlayer(source.getServer(), player);
             return sendCommandSuccess(
                     source,
@@ -3268,15 +3272,16 @@ public final class CommandBootstrap {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             List<Task> tasks = loadProjectTasksForCommand(source, player, project);
-            Task task = findTaskById(tasks, taskId);
+            TaskManager taskManager = createCommandTaskManager(tasks);
+            Task task = taskManager.getTask(taskId);
             if (task == null || !task.belongsToProject(project.getId())) {
                 return sendCommandFailure(source, "command.todolist.task.remove.not_found", taskId);
             }
             if (!canOperateProjectTask(source, player, project, task, Operation.DELETE_TASK)) {
                 return sendCommandFailure(source, "command.todolist.task.project.permission_denied");
             }
-            tasks.remove(task);
-            saveProjectTasksForCommand(source, player, project, storage, tasks);
+            taskManager.deleteTask(taskId);
+            saveProjectTasksForCommand(source, player, project, storage, taskManager.getAllTasks());
             return sendCommandSuccess(
                     source,
                     COMMAND_SUCCESS,
@@ -3297,6 +3302,22 @@ public final class CommandBootstrap {
         return Comparator.comparing(Task::isCompleted)
                 .thenComparing((Task task) -> task.getPriority().ordinal(), Comparator.reverseOrder())
                 .thenComparing(Task::getCreatedAt, Comparator.reverseOrder());
+    }
+
+    /**
+     * 将存储读出的任务列表装载为任务管理器，供命令复用树级完成/删除语义。
+     *
+     * @param tasks 存储读取的任务列表
+     * @return 已装载的任务管理器
+     */
+    private static TaskManager createCommandTaskManager(List<Task> tasks) {
+        TaskManager taskManager = new TaskManager();
+        if (tasks != null) {
+            for (Task task : tasks) {
+                taskManager.addTask(task);
+            }
+        }
+        return taskManager;
     }
 
     /**

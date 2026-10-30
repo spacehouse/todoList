@@ -60,7 +60,7 @@ public final class TodoScreenTaskSupportTestMain {
                 "中文子"
         );
 
-        GuiTestSupport.assertEquals(List.of(), withoutSearch, "无搜索词时不应因为子任务条件把父任务直接混入结果");
+        GuiTestSupport.assertEquals(List.of(parent), withoutSearch, "深层子任务命中优先级/指派筛选时应保留父任务上下文");
         GuiTestSupport.assertEquals(List.of(parent), withSearch, "搜索命中子任务时应返回父任务以保留上下文");
     }
 

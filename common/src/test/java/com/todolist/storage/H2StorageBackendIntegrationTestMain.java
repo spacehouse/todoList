@@ -37,6 +37,7 @@ public final class H2StorageBackendIntegrationTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteTaskStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteTaskStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldPreserveSubtaskFieldsThroughH2", H2StorageBackendIntegrationTestMain::shouldPreserveSubtaskFieldsThroughH2);
+        GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldPreserveTwelveLevelTreeThroughH2", H2StorageBackendIntegrationTestMain::shouldPreserveTwelveLevelTreeThroughH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldSerializeConcurrentPlayerTaskSavesWithTags", H2StorageBackendIntegrationTestMain::shouldSerializeConcurrentPlayerTaskSavesWithTags);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectPlayerStateToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectPlayerStateToH2);
@@ -110,6 +111,43 @@ public final class H2StorageBackendIntegrationTestMain {
             GuiTestSupport.assertEquals(2L, loaded.get(1).getSubtaskSortOrder(), "子任务读回后应保留父内排序号");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 子任务字段读写时发生异常", exception);
+        } finally {
+            selectNbtBackendQuietly();
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
+     * 验证十二层任务树在 H2 中按平铺 parent_task_id 完整保存与恢复。
+     */
+    private static void shouldPreserveTwelveLevelTreeThroughH2() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-deep-tree-");
+            selectH2Backend();
+
+            TaskStorage storage = new TaskStorage();
+            com.todolist.task.TaskManager manager = new com.todolist.task.TaskManager();
+            Task root = manager.addTask("h2-deep-root", "");
+            root.setProjectId("project-deep");
+            Task current = root;
+            for (int level = 1; level <= 12; level++) {
+                current = manager.addSubtask(current.getId(), "h2-level-" + level, "");
+                current.setProjectId("project-deep");
+            }
+            String deepestId = current.getId();
+            String rootId = root.getId();
+            String parentId = current.getParentTaskId();
+            storage.saveTasks(manager.getAllTasks());
+
+            List<Task> loaded = storage.loadTasks();
+            com.todolist.task.TaskTreeIndex index = com.todolist.task.TaskTreeIndex.build(loaded);
+            GuiTestSupport.assertEquals(13, loaded.size(), "H2 应保留全部 13 条任务记录");
+            GuiTestSupport.assertEquals(12, index.getDepth(deepestId), "H2 读回后最深层深度应保持 12");
+            GuiTestSupport.assertEquals(parentId, index.getParentTaskId(deepestId), "H2 读回后最深层父 ID 应保持");
+            GuiTestSupport.assertEquals(rootId, index.getRootTaskId(deepestId), "H2 读回后应可追溯到根任务");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 深层任务树时发生异常", exception);
         } finally {
             selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);

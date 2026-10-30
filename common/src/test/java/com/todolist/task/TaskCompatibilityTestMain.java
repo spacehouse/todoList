@@ -36,12 +36,20 @@ public final class TaskCompatibilityTestMain {
                 TaskCompatibilityTestMain::shouldNormalizeLegacySingleLevelSubtasks
         );
         GuiTestSupport.runTestCase(
-                "TaskCompatibilityTestMain.shouldRejectNestedLegacySubtasksBeyondOneLevel",
-                TaskCompatibilityTestMain::shouldRejectNestedLegacySubtasksBeyondOneLevel
+                "TaskCompatibilityTestMain.shouldNormalizeLegacySubtasksAtArbitraryDepth",
+                TaskCompatibilityTestMain::shouldNormalizeLegacySubtasksAtArbitraryDepth
+        );
+        GuiTestSupport.runTestCase(
+                "TaskCompatibilityTestMain.shouldRepairInvalidParentsAndCycles",
+                TaskCompatibilityTestMain::shouldRepairInvalidParentsAndCycles
         );
         GuiTestSupport.runTestCase(
                 "TaskCompatibilityTestMain.shouldFlattenLegacySubtasksWhenLoadingTaskStorage",
                 TaskCompatibilityTestMain::shouldFlattenLegacySubtasksWhenLoadingTaskStorage
+        );
+        GuiTestSupport.runTestCase(
+                "TaskCompatibilityTestMain.shouldRoundTripTwelveLevelTreeThroughNbtStorage",
+                TaskCompatibilityTestMain::shouldRoundTripTwelveLevelTreeThroughNbtStorage
         );
     }
 
@@ -96,24 +104,58 @@ public final class TaskCompatibilityTestMain {
     }
 
     /**
-     * 验证两层及以上旧 subtasks 会被明确阻断。
+     * 验证任意深度的旧 subtasks 均可被展平，不再有两级限制。
      */
-    private static void shouldRejectNestedLegacySubtasksBeyondOneLevel() {
+    private static void shouldNormalizeLegacySubtasksAtArbitraryDepth() {
         GuiTestSupport.resetState();
-        Task parent = new Task("parent", "");
-        parent.setId("parent-1");
-        Task child = new Task("child", "");
-        child.setId("child-1");
-        child.addSubtask(new Task("grandchild", ""));
-        parent.addSubtask(child);
-
-        boolean failed = false;
-        try {
-            TaskCompatibilityAdapter.normalizeLoadedTasks(List.of(parent));
-        } catch (IllegalStateException exception) {
-            failed = exception.getMessage() != null && exception.getMessage().contains("两层");
+        Task root = new Task("level-0", "");
+        root.setId("level-0");
+        Task current = root;
+        for (int level = 1; level <= 12; level++) {
+            Task child = new Task("level-" + level, "");
+            child.setId("level-" + level);
+            current.addSubtask(child);
+            current = child;
         }
-        GuiTestSupport.assertTrue(failed, "两层旧 subtasks 应被明确阻断");
+
+        List<Task> normalized = TaskCompatibilityAdapter.normalizeLoadedTasks(List.of(root));
+
+        GuiTestSupport.assertEquals(13, normalized.size(), "十二层旧 subtasks 应全部展平");
+        for (int level = 1; level <= 12; level++) {
+            Task task = normalized.get(level);
+            GuiTestSupport.assertEquals("level-" + level, task.getId(), "展平顺序应保持深度优先");
+            GuiTestSupport.assertEquals("level-" + (level - 1), task.getParentTaskId(), "每层子任务应指向上一层");
+            GuiTestSupport.assertEquals(0L, task.getSubtaskSortOrder(), "每层只有一个子任务，序号应为 0");
+        }
+    }
+
+    /**
+     * 验证无效父 ID、自引用和循环父子关系会被修复而不丢失任务。
+     */
+    private static void shouldRepairInvalidParentsAndCycles() {
+        GuiTestSupport.resetState();
+        Task selfParent = new Task("self", "");
+        selfParent.setId("self");
+        selfParent.setParentTaskId("self");
+        Task orphan = new Task("orphan", "");
+        orphan.setId("orphan");
+        orphan.setParentTaskId("missing-parent");
+        Task cycleA = new Task("cycle-a", "");
+        cycleA.setId("cycle-a");
+        cycleA.setParentTaskId("cycle-b");
+        Task cycleB = new Task("cycle-b", "");
+        cycleB.setId("cycle-b");
+        cycleB.setParentTaskId("cycle-a");
+
+        List<Task> normalized = TaskCompatibilityAdapter.normalizeLoadedTasks(
+                List.of(selfParent, orphan, cycleA, cycleB));
+
+        GuiTestSupport.assertEquals(4, normalized.size(), "修复非法关系时不得丢失任务");
+        GuiTestSupport.assertNull(findTask(normalized, "self").getParentTaskId(), "自引用应提升为根任务");
+        GuiTestSupport.assertNull(findTask(normalized, "orphan").getParentTaskId(), "无效父 ID 应提升为根任务");
+        boolean cycleBroken = findTask(normalized, "cycle-a").isTopLevelTask()
+                || findTask(normalized, "cycle-b").isTopLevelTask();
+        GuiTestSupport.assertTrue(cycleBroken, "循环父子关系应至少断开一条边");
     }
 
     /**
@@ -135,6 +177,48 @@ public final class TaskCompatibilityTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证旧 NBT 展平读取时发生异常", exception);
         }
+    }
+
+    /**
+     * 验证十二层任务树可通过 NBT 平铺存储完整往返。
+     */
+    private static void shouldRoundTripTwelveLevelTreeThroughNbtStorage() {
+        GuiTestSupport.resetState();
+        try {
+            TaskStorage storage = new TaskStorage();
+            TaskManager manager = new TaskManager();
+            Task root = manager.addTask("root", "");
+            root.setProjectId("project-a");
+            Task current = root;
+            for (int level = 1; level <= 12; level++) {
+                Task child = manager.addSubtask(current.getId(), "level-" + level, "");
+                child.setProjectId("project-a");
+                current = child;
+            }
+            String rootId = root.getId();
+            String deepestId = current.getId();
+            String parentOfDeepestId = current.getParentTaskId();
+
+            storage.saveTasks(manager.getAllTasks());
+            List<Task> loaded = storage.loadTasks();
+            TaskTreeIndex index = TaskTreeIndex.build(loaded);
+
+            GuiTestSupport.assertEquals(13, loaded.size(), "NBT 往返后应保留全部 13 个任务");
+            GuiTestSupport.assertEquals(12, index.getDepth(deepestId), "最深层任务应保持第 12 层");
+            GuiTestSupport.assertEquals(parentOfDeepestId, index.getParentTaskId(deepestId), "最深层父 ID 应保留");
+            GuiTestSupport.assertEquals(rootId, index.getRootTaskId(deepestId), "应能追溯到根任务");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证十二层 NBT 往返时发生异常", exception);
+        }
+    }
+
+    private static Task findTask(List<Task> tasks, String taskId) {
+        for (Task task : tasks) {
+            if (task != null && taskId.equals(task.getId())) {
+                return task;
+            }
+        }
+        throw new IllegalStateException("找不到任务: " + taskId);
     }
 
     /**

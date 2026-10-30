@@ -59,17 +59,20 @@ public class Task {
 
     /**
      * 将任务写入 NBT。
-     * Phase 1 开始统一按平铺结构写出，只保留兼容读取旧 subtasks 的能力。
+     *
+     * <p>当前格式统一按平铺结构写出：每个任务只保存自身的 {@code parentTaskId}
+     * 和父内排序号，因此任意深度都不会增加 NBT 嵌套层级。空的 {@code subtasks}
+     * 列表仅用于兼容仍在读取旧递归格式的第三方工具。</p>
      *
      * @return 当前任务的 NBT 表示
      */
     public CompoundTag toNbt() {
         CompoundTag nbt = new CompoundTag();
-        nbt.putString("id", id);
-        nbt.putString("title", title);
-        nbt.putString("description", description);
+        nbt.putString("id", id == null ? "" : id);
+        nbt.putString("title", title == null ? "" : title);
+        nbt.putString("description", description == null ? "" : description);
         nbt.putBoolean("completed", completed);
-        nbt.putString("priority", priority.name());
+        nbt.putString("priority", priority == null ? Priority.MEDIUM.name() : priority.name());
         nbt.putLong("createdAt", createdAt);
 
         // Tags
@@ -112,81 +115,82 @@ public class Task {
     }
 
     /**
-     * 从 NBT 读取任务。
-     * 同时兼容旧的递归 subtasks 与新的平铺子任务字段。
+     * 从 NBT 读取单个平铺任务。
+     *
+     * <p>该方法刻意不读取旧格式的 {@code subtasks} 递归列表：旧数据必须由
+     * {@link TaskCompatibilityAdapter#readTaskNbtList(ListTag)} 使用显式栈展开，
+     * 以免深层嵌套任务导致递归栈溢出。读取过程对损坏字段做安全降级，
+     * 保证单个坏字段不会让整份存档无法加载。</p>
      *
      * @param nbt 任务 NBT
      * @return 还原后的任务对象
      */
     public static Task fromNbt(CompoundTag nbt) {
-        String title = nbt.getString("title");
-        String description = nbt.getString("description");
+        CompoundTag safeNbt = nbt == null ? new CompoundTag() : nbt;
+        String title = safeNbt.getString("title");
+        String description = safeNbt.getString("description");
         Task task = new Task(title, description);
 
-        // Load ID
-        if (nbt.contains("id")) {
-            task.id = nbt.getString("id"); // Note: would need to make id non-final or use reflection
+        String storedId = normalizeOptionalText(safeNbt.getString("id"));
+        if (storedId != null) {
+            task.id = storedId;
         }
 
-        task.completed = nbt.getBoolean("completed");
+        task.completed = safeNbt.getBoolean("completed");
 
-        // Priority
-        String priorityStr = nbt.getString("priority");
-        task.priority = Priority.valueOf(priorityStr);
+        String priorityStr = safeNbt.getString("priority");
+        task.priority = parsePriority(priorityStr);
 
-        task.createdAt = nbt.getLong("createdAt");
+        long createdAt = safeNbt.getLong("createdAt");
+        task.createdAt = createdAt > 0L ? createdAt : System.currentTimeMillis();
 
         // Tags
-        if (nbt.contains("tags", NBT_LIST_TYPE)) {
-            ListTag tagsList = nbt.getList("tags", NBT_COMPOUND_TYPE);
+        if (safeNbt.contains("tags", NBT_LIST_TYPE)) {
+            ListTag tagsList = safeNbt.getList("tags", NBT_COMPOUND_TYPE);
             for (int i = 0; i < tagsList.size(); i++) {
                 CompoundTag tagNbt = tagsList.getCompound(i);
-                task.tags.add(tagNbt.getString("tag"));
+                String tag = normalizeOptionalText(tagNbt.getString("tag"));
+                if (tag != null) {
+                    task.tags.add(tag);
+                }
             }
         }
 
         // Due date
-        if (nbt.contains("dueDate")) {
-            task.dueDate = nbt.getLong("dueDate");
+        if (safeNbt.contains("dueDate")) {
+            task.dueDate = safeNbt.getLong("dueDate");
         }
 
-        if (nbt.contains("scope")) {
-            try {
-                task.scope = Scope.valueOf(nbt.getString("scope"));
-            } catch (IllegalArgumentException e) {
-                task.scope = Scope.PERSONAL;
-            }
-        } else {
+        String scopeName = safeNbt.getString("scope");
+        try {
+            task.scope = scopeName == null || scopeName.isBlank()
+                    ? Scope.PERSONAL
+                    : Scope.valueOf(scopeName);
+        } catch (IllegalArgumentException e) {
             task.scope = Scope.PERSONAL;
         }
-        if (nbt.contains("creatorUuid")) {
-            task.creatorUuid = nbt.getString("creatorUuid");
-        }
-        if (nbt.contains("assigneeUuid")) {
-            task.assigneeUuid = nbt.getString("assigneeUuid");
-        }
-        if (nbt.contains("assigneeName")) {
-            task.assigneeName = nbt.getString("assigneeName");
-        }
-        if (nbt.contains("projectId")) {
-            task.projectId = nbt.getString("projectId");
-        }
-        if (nbt.contains(PARENT_TASK_ID_KEY)) {
-            task.parentTaskId = normalizeOptionalText(nbt.getString(PARENT_TASK_ID_KEY));
-        }
-        if (nbt.contains(SUBTASK_SORT_ORDER_KEY)) {
-            task.subtaskSortOrder = nbt.getLong(SUBTASK_SORT_ORDER_KEY);
+        task.creatorUuid = normalizeOptionalText(safeNbt.getString("creatorUuid"));
+        task.assigneeUuid = normalizeOptionalText(safeNbt.getString("assigneeUuid"));
+        task.assigneeName = normalizeOptionalText(safeNbt.getString("assigneeName"));
+        task.projectId = normalizeOptionalText(safeNbt.getString("projectId"));
+        task.parentTaskId = normalizeOptionalText(safeNbt.getString(PARENT_TASK_ID_KEY));
+        if (safeNbt.contains(SUBTASK_SORT_ORDER_KEY)) {
+            task.subtaskSortOrder = Math.max(0L, safeNbt.getLong(SUBTASK_SORT_ORDER_KEY));
         }
 
-        // Subtasks
-        if (nbt.contains("subtasks", NBT_LIST_TYPE)) {
-            ListTag subtasksList = nbt.getList("subtasks", NBT_COMPOUND_TYPE);
-            for (int i = 0; i < subtasksList.size(); i++) {
-                task.subtasks.add(Task.fromNbt(subtasksList.getCompound(i)));
+        // 旧版递归 subtasks 由 TaskCompatibilityAdapter 负责展开；这里保持空列表。
+        return task;
+    }
+
+    private static Priority parsePriority(String priorityStr) {
+        if (priorityStr != null && !priorityStr.isBlank()) {
+            try {
+                return Priority.valueOf(priorityStr);
+            } catch (IllegalArgumentException ignored) {
+                // 损坏的优先级按中优先级处理，避免整份任务数据加载失败。
             }
         }
-
-        return task;
+        return Priority.MEDIUM;
     }
 
     /**
@@ -206,14 +210,14 @@ public class Task {
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setTitle(String title) { this.title = title == null ? "" : title; }
     public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public void setDescription(String description) { this.description = description == null ? "" : description; }
     public boolean isCompleted() { return completed; }
     public void setCompleted(boolean completed) { this.completed = completed; }
     public Priority getPriority() { return priority; }
-    public void setPriority(Priority priority) { this.priority = priority; }
-    public Set<String> getTags() { return new LinkedHashSet<>(tags); }
+    public void setPriority(Priority priority) { this.priority = priority == null ? Priority.MEDIUM : priority; }
+    public Set<String> getTags() { return new LinkedHashSet<>(tags == null ? Set.of() : tags); }
     public void setTags(Iterable<String> tags) {
         this.tags.clear();
         for (String tag : tags) {

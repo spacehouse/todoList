@@ -24,6 +24,8 @@ import java.util.UUID;
  * 任务同步相关的网络包定义与服务端处理逻辑。
  */
 public class TaskPackets {
+    /** 单次同步允许接收的最大任务数，防止恶意/损坏数据耗尽客户端内存。 */
+    private static final int MAX_TASKS_PER_PACKET = 200_000;
     public static final ResourceLocation SYNC_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "sync_tasks");
     public static final ResourceLocation TEAM_SYNC_TASKS_ID = new ResourceLocation(TodoConstants.MOD_ID, "team_sync_tasks");
     public static final ResourceLocation TASK_CONFIRMED_ID = new ResourceLocation(TodoConstants.MOD_ID, "task_confirmed");
@@ -207,7 +209,9 @@ public class TaskPackets {
         TaskStorage storage = TodoListCommon.getTaskStorage();
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
-            storage.savePersonalTasks(player.getServer(), player.getUUID(), tasks);
+            // 服务端统一重建树关系，拒绝循环/无效父 ID 后再落盘。
+            List<Task> validatedTasks = com.todolist.task.TaskCompatibilityAdapter.normalizeLoadedTasks(tasks);
+            storage.savePersonalTasks(player.getServer(), player.getUUID(), validatedTasks);
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to save player tasks", e);
             StorageFailureNotifier.notifyPlayer(player, e, "message.todolist.save_failed");
@@ -219,6 +223,8 @@ public class TaskPackets {
         try {
             H2MaintenanceGuard.ensureWritableIfH2();
             List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storage.loadTeamTasks(), baseTasks, tasks);
+            // 合并后再做一次树级校验，防止基线/提交中的旧客户端数据制造环或孤立任务。
+            tasksToSave = com.todolist.task.TaskCompatibilityAdapter.normalizeLoadedTasks(tasksToSave);
             storage.saveTeamTasks(tasksToSave);
             if (baseTasks == null) {
                 broadcastTeamTasksExcept(server, player);
@@ -374,7 +380,7 @@ public class TaskPackets {
      * 将单个任务写入网络缓冲区。
      */
     public static void writeTask(FriendlyByteBuf buf, Task task) {
-        buf.writeNbt(task.toNbt());
+        buf.writeNbt(task == null ? new CompoundTag() : task.toNbt());
     }
 
     /**
@@ -389,22 +395,29 @@ public class TaskPackets {
      * 将任务列表写入网络缓冲区。
      */
     public static void writeTaskList(FriendlyByteBuf buf, List<Task> tasks) {
-        buf.writeInt(tasks.size());
-        for (Task task : tasks) {
+        List<Task> safeTasks = tasks == null ? List.of() : tasks;
+        buf.writeInt(safeTasks.size());
+        for (Task task : safeTasks) {
             writeTask(buf, task);
         }
     }
 
     /**
-     * 从网络缓冲区读取任务列表。
+     * 从网络缓冲区读取任务列表，并立即修复非法父子关系。
      */
     public static List<Task> readTaskList(FriendlyByteBuf buf) {
         int size = buf.readInt();
+        if (size < 0 || size > MAX_TASKS_PER_PACKET) {
+            throw new IllegalArgumentException("Invalid task list size: " + size);
+        }
         List<Task> tasks = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            tasks.add(readTask(buf));
+            CompoundTag nbt = buf.readNbt();
+            if (nbt != null) {
+                tasks.add(Task.fromNbt(nbt));
+            }
         }
-        return tasks;
+        return com.todolist.task.TaskCompatibilityAdapter.normalizeLoadedTasks(tasks);
     }
 
     @FunctionalInterface

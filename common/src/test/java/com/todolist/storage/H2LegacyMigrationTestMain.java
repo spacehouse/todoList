@@ -36,9 +36,10 @@ public final class H2LegacyMigrationTestMain {
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldReadBackupWithoutRestoringPrimary", H2LegacyMigrationTestMain::shouldReadBackupWithoutRestoringPrimary);
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldAllowSingleLevelSubtasks", H2LegacyMigrationTestMain::shouldAllowSingleLevelSubtasks);
-        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldRejectNestedSubtasksBeyondOneLevel", H2LegacyMigrationTestMain::shouldRejectNestedSubtasksBeyondOneLevel);
+        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldAllowNestedSubtasksAtAnyDepth", H2LegacyMigrationTestMain::shouldAllowNestedSubtasksAtAnyDepth);
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldMigrateLegacyDataInSingleTransaction", H2LegacyMigrationTestMain::shouldMigrateLegacyDataInSingleTransaction);
         GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldFlattenSingleLevelSubtasksDuringMigration", H2LegacyMigrationTestMain::shouldFlattenSingleLevelSubtasksDuringMigration);
+        GuiTestSupport.runTestCase("H2LegacyMigrationTestMain.shouldMigrateFourLevelNestedSubtasks", H2LegacyMigrationTestMain::shouldMigrateFourLevelNestedSubtasks);
     }
 
     /**
@@ -95,27 +96,32 @@ public final class H2LegacyMigrationTestMain {
     }
 
     /**
-     * 验证两层及以上旧 subtasks 仍会阻断迁移。
+     * 验证任意深度的旧 subtasks 均可通过预检。
      */
-    private static void shouldRejectNestedSubtasksBeyondOneLevel() {
+    private static void shouldAllowNestedSubtasksAtAnyDepth() {
         Task parent = createTask("parent");
         parent.setId("parent-1");
+        parent.setProjectId("project-a");
         Task child = createTask("child");
         child.setId("child-1");
-        child.addSubtask(createTask("grandchild"));
+        Task current = child;
+        for (int level = 2; level <= 8; level++) {
+            Task next = createTask("level-" + level);
+            next.setId("level-" + level);
+            current.addSubtask(next);
+            current = next;
+        }
         parent.addSubtask(child);
         LegacyMigrationData data = new LegacyMigrationData(
                 List.of(new LegacyTaskBucket("LOCAL_PERSONAL", "LOCAL", 1L, List.of(parent))),
                 List.of(),
                 List.of()
         );
-        boolean failed = false;
         try {
             new H2LegacyMigrationPreflight().validate(data);
         } catch (LegacyMigrationException exception) {
-            failed = exception.getMessage().contains("两层") || exception.getMessage().contains("子任务");
+            throw new IllegalStateException("多层 subtasks 预检不应失败", exception);
         }
-        GuiTestSupport.assertTrue(failed, "两层及以上旧 subtasks 应阻断迁移");
     }
 
     /**
@@ -178,6 +184,34 @@ public final class H2LegacyMigrationTestMain {
     }
 
     /**
+     * 验证四层旧 subtasks 迁移到 H2 后父链完整、没有孤立任务。
+     */
+    private static void shouldMigrateFourLevelNestedSubtasks() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = Files.createTempDirectory("todolist-h2-migrate-deep-");
+            Path finalTempGameDir = tempGameDir;
+            DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
+            DataPathProvider.resetStorageNamespace();
+            LegacyMigrationData data = createLegacyDataWithNestedSubtasks();
+
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            try (Connection connection = provider.openConnection()) {
+                new H2LegacyMigrator().migrate(connection, data);
+                assertCount(connection, "tasks", 4);
+                assertTaskRelation(connection, "deep-root", null, 0L, "project-deep", Task.Scope.TEAM.name(), "creator-d", "assignee-d", "Deep Assignee");
+                assertTaskRelation(connection, "deep-level-1", "deep-root", 0L, "project-deep", Task.Scope.TEAM.name(), "creator-d", "assignee-d", "Deep Assignee");
+                assertTaskRelation(connection, "deep-level-2", "deep-level-1", 0L, "project-deep", Task.Scope.TEAM.name(), "creator-d", "assignee-d", "Deep Assignee");
+                assertTaskRelation(connection, "deep-level-3", "deep-level-2", 0L, "project-deep", Task.Scope.TEAM.name(), "creator-d", "assignee-d", "Deep Assignee");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证多层 subtasks 迁移时发生异常", exception);
+        } finally {
+            deleteRecursively(tempGameDir);
+        }
+    }
+
+    /**
      * 写入用于迁移测试的旧 NBT 数据。
      *
      * @throws Exception 写入失败时抛出
@@ -219,6 +253,35 @@ public final class H2LegacyMigrationTestMain {
         parent.addSubtask(child);
         return new LegacyMigrationData(
                 List.of(new LegacyTaskBucket("TEAM", "TEAM", 1L, List.of(parent))),
+                List.of(),
+                List.of()
+        );
+    }
+
+    /**
+     * 创建一份包含四层嵌套 subtasks 的旧数据快照。
+     *
+     * @return 旧数据快照
+     */
+    private static LegacyMigrationData createLegacyDataWithNestedSubtasks() {
+        Task root = createTask("deep root");
+        root.setId("deep-root");
+        root.setProjectId("project-deep");
+        root.setScope(Task.Scope.TEAM);
+        root.setCreatorUuid("creator-d");
+        root.setAssigneeUuid("assignee-d");
+        root.setAssigneeName("Deep Assignee");
+        Task level1 = createTask("deep level 1");
+        level1.setId("deep-level-1");
+        Task level2 = createTask("deep level 2");
+        level2.setId("deep-level-2");
+        Task level3 = createTask("deep level 3");
+        level3.setId("deep-level-3");
+        root.addSubtask(level1);
+        level1.addSubtask(level2);
+        level2.addSubtask(level3);
+        return new LegacyMigrationData(
+                List.of(new LegacyTaskBucket("TEAM", "TEAM", 1L, List.of(root))),
                 List.of(),
                 List.of()
         );

@@ -178,7 +178,8 @@ public class TaskStorage {
     private void saveTasksToFile(List<Task> tasks, Path file) throws IOException {
         CompoundTag root = new CompoundTag();
         root.putLong("lastSaved", System.currentTimeMillis());
-        root.putInt("version", 1);
+        // v2: 任务统一以平铺列表保存，任意层级只依赖 parentTaskId。
+        root.putInt("version", 2);
 
         ListTag taskList = new ListTag();
         for (Task task : tasks) {
@@ -211,7 +212,7 @@ public class TaskStorage {
      */
     public List<Task> loadTasks() throws IOException {
         if (StorageBackendFactory.isH2Selected()) {
-            return h2TaskStore.loadLocalTasks();
+            return normalizeLoadedTasks(h2TaskStore.loadLocalTasks());
         }
         ensureDirectoryExists();
         Path dataFile = getDataDirectory().resolve(DATA_FILE);
@@ -240,7 +241,7 @@ public class TaskStorage {
      */
     public List<Task> loadPlayerTasks(UUID playerUuid) throws IOException {
         if (StorageBackendFactory.isH2Selected()) {
-            return h2TaskStore.loadPlayerTasks(playerUuid);
+            return normalizeLoadedTasks(h2TaskStore.loadPlayerTasks(playerUuid));
         }
         ensureDirectoryExists();
         Path playersDir = DataPathProvider.getTaskPlayersDir();
@@ -282,7 +283,7 @@ public class TaskStorage {
      */
     public List<Task> loadTeamTasks() throws IOException {
         if (StorageBackendFactory.isH2Selected()) {
-            return h2TaskStore.loadTeamTasks();
+            return normalizeLoadedTasks(h2TaskStore.loadTeamTasks());
         }
         ensureDirectoryExists();
         Path teamFile = getDataDirectory().resolve(TEAM_FILE);
@@ -319,34 +320,12 @@ public class TaskStorage {
         int version = root.getInt("version");
 
         ListTag taskList = root.getList("tasks", NBT_COMPOUND_TYPE);
-        List<Task> tasks = new ArrayList<>();
-        IOException malformedTaskException = null;
-
-        for (int i = 0; i < taskList.size(); i++) {
-            CompoundTag taskNbt = taskList.getCompound(i);
-            try {
-                Task task = Task.fromNbt(taskNbt);
-                tasks.add(task);
-            } catch (Exception e) {
-                TodoConstants.LOGGER.error("Failed to load task at index {}", i, e);
-                IOException currentException = new IOException("Failed to parse task data at index " + i + " from " + file, e);
-                if (malformedTaskException == null) {
-                    malformedTaskException = currentException;
-                } else {
-                    malformedTaskException.addSuppressed(currentException);
-                }
-            }
-        }
-
-        if (malformedTaskException != null) {
-            throw malformedTaskException;
-        }
-
         List<Task> normalizedTasks;
         try {
-            normalizedTasks = TaskCompatibilityAdapter.normalizeLoadedTasks(tasks);
-        } catch (IllegalStateException exception) {
-            throw new IOException("Failed to normalize legacy subtask data from " + file, exception);
+            // 显式栈展开旧递归 subtasks，并顺带修复重复 ID、循环父链和跨项目关系。
+            normalizedTasks = TaskCompatibilityAdapter.readTaskNbtList(taskList);
+        } catch (RuntimeException exception) {
+            throw new IOException("Failed to normalize task data from " + file, exception);
         }
 
         maybeLogLoadSummary(file, version, lastSaved, normalizedTasks.size());
@@ -485,6 +464,21 @@ public class TaskStorage {
      */
     public Path getDataDirectoryPath() {
         return getDataDirectory();
+    }
+
+    /**
+     * 标准化存储后端返回的任务列表，修复旧数据或异常数据中的父子关系。
+     *
+     * @param loadedTasks 存储后端读取结果
+     * @return 标准化后的平铺任务列表
+     */
+    private List<Task> normalizeLoadedTasks(List<Task> loadedTasks) {
+        try {
+            return TaskCompatibilityAdapter.normalizeLoadedTasks(loadedTasks);
+        } catch (RuntimeException exception) {
+            TodoConstants.LOGGER.error("Failed to normalize loaded task hierarchy; keeping raw snapshot", exception);
+            return loadedTasks == null ? new ArrayList<>() : new ArrayList<>(loadedTasks);
+        }
     }
 
     /**

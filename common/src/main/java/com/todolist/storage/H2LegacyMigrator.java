@@ -130,9 +130,10 @@ public final class H2LegacyMigrator {
      */
     private java.util.List<Task> normalizeTasks(LegacyTaskBucket bucket) throws LegacyMigrationException {
         try {
+            // 任意深度旧 subtasks 均由显式栈展开，随后写入平铺 parent_task_id 列。
             return TaskCompatibilityAdapter.normalizeLoadedTasks(bucket.tasks());
-        } catch (IllegalStateException exception) {
-            throw new LegacyMigrationException("旧数据包含两层及以上 subtasks，无法迁移到 H2: "
+        } catch (RuntimeException exception) {
+            throw new LegacyMigrationException("旧任务树无法迁移到 H2: "
                     + bucket.bucketType() + "/" + bucket.ownerUuid(), exception);
         }
     }

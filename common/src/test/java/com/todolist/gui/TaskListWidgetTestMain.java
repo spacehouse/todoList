@@ -38,6 +38,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepSubtasksCollapsedByDefault", TaskListWidgetTestMain::shouldKeepSubtasksCollapsedByDefault);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldExpandParentRowWhenClickingToggle", TaskListWidgetTestMain::shouldExpandParentRowWhenClickingToggle);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldShowParentProgressSummaryWhenSubtasksExist", TaskListWidgetTestMain::shouldShowParentProgressSummaryWhenSubtasksExist);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldShowProgressMarkerForEveryNestedLevel", TaskListWidgetTestMain::shouldShowProgressMarkerForEveryNestedLevel);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepScrollOffsetInsideScrollableTaskArea", TaskListWidgetTestMain::shouldKeepScrollOffsetInsideScrollableTaskArea);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedRowsSeparatedFromActiveRows", TaskListWidgetTestMain::shouldKeepCompletedRowsSeparatedFromActiveRows);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldHideActiveTasksWhenSectionCollapsed", TaskListWidgetTestMain::shouldHideActiveTasksWhenSectionCollapsed);
@@ -47,6 +48,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlySiblingSubtasksWhenDraggingSubtask", TaskListWidgetTestMain::shouldReorderOnlySiblingSubtasksWhenDraggingSubtask);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedSectionUnchangedAfterReorder", TaskListWidgetTestMain::shouldKeepCompletedSectionUnchangedAfterReorder);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldAutoScrollWhenDraggingNearListEdge", TaskListWidgetTestMain::shouldAutoScrollWhenDraggingNearListEdge);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderTwelveLevelTreeAndRowAddButton", TaskListWidgetTestMain::shouldRenderTwelveLevelTreeAndRowAddButton);
     }
 
     /**
@@ -325,6 +327,68 @@ public final class TaskListWidgetTestMain {
     }
 
     /**
+     * 校验任意层级的任务都显示自身进度，且不会复用父任务的进度。
+     */
+    private static void shouldShowProgressMarkerForEveryNestedLevel() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 400);
+
+        Task root = createTask("progress-root", "Root");
+        Task childA = createSubtask("progress-child-a", "Child A", root.getId(), 0L);
+        Task childDone = createSubtask("progress-child-done", "Child Done", root.getId(), 1L);
+        childDone.setCompleted(true);
+        Task childExtra = createSubtask("progress-child-extra", "Child Extra", root.getId(), 2L);
+
+        Task grandA = createSubtask("progress-grand-a", "Grand A", childA.getId(), 0L);
+        Task grandDone = createSubtask("progress-grand-done", "Grand Done", childA.getId(), 1L);
+        grandDone.setCompleted(true);
+        Task grandExtra = createSubtask("progress-grand-extra", "Grand Extra", childA.getId(), 2L);
+
+        Task greatLeaf = createSubtask("progress-great-leaf", "Great Leaf", grandA.getId(), 0L);
+        greatLeaf.setAssigneeName("alice");
+        Task greatDone = createSubtask("progress-great-done", "Great Done", grandA.getId(), 1L);
+        greatDone.setCompleted(true);
+
+        List<Task> tasks = List.of(
+                root, childA, childDone, childExtra,
+                grandA, grandDone, grandExtra, greatLeaf, greatDone
+        );
+        widget.setSections(List.of(new TaskListWidget.SectionModel(
+                "active", "未完成（9）", tasks, true, true
+        )));
+        widget.setExpandedParentTaskIds(java.util.Set.of(root.getId(), childA.getId(), grandA.getId()));
+
+        GuiTestSupport.assertEquals("1/3", widget.getTaskTrailingMetaTextForTest(root.getId()), "根任务应显示自己的 1/3 进度");
+        GuiTestSupport.assertEquals("1/3", widget.getTaskTrailingMetaTextForTest(childA.getId()), "一级子任务应显示自己的 1/3 进度");
+        GuiTestSupport.assertEquals("1/2", widget.getTaskTrailingMetaTextForTest(grandA.getId()), "二级子任务应显示自己的 1/2 进度");
+        GuiTestSupport.assertEquals("0/1 @alice", widget.getTaskTrailingMetaTextForTest(greatLeaf.getId()), "叶子任务应显示自身进度并保留负责人");
+        GuiTestSupport.assertEquals("1/1", widget.getTaskTrailingMetaTextForTest(greatDone.getId()), "已完成叶子任务应显示 1/1");
+        GuiTestSupport.assertEquals("1/1", widget.getTaskTrailingMetaTextForTest(childDone.getId()), "已完成叶子子任务应显示 1/1");
+
+        int[] bounds = widget.getTaskTrailingMetaBoundsForTest(greatLeaf.getId());
+        GuiTestSupport.assertEquals(4, bounds.length, "深层叶子任务应能计算右侧标记边界");
+        GuiTestSupport.assertTrue(bounds[0] >= 0, "深层标记不应越过列表左边界");
+        GuiTestSupport.assertTrue(bounds[0] + bounds[2] <= 220, "深层标记不应越过列表右边界");
+        GuiTestSupport.assertTrue(bounds[2] > 0, "深层标记宽度应大于零");
+
+        widget.setExpandedParentTaskIds(java.util.Set.of());
+        GuiTestSupport.assertEquals("1/3", widget.getTaskTrailingMetaTextForTest(root.getId()), "折叠后根任务标记应保持");
+        GuiTestSupport.assertFalse(
+                widget.getRowDebugSnapshotForTest().contains("SUBTASK:" + childA.getId()),
+                "折叠后子任务行应隐藏");
+
+        widget.setExpandedParentTaskIds(java.util.Set.of(root.getId(), childA.getId(), grandA.getId()));
+        widget.setScrollOffsetForTest(2);
+        GuiTestSupport.assertEquals("0/1 @alice", widget.getTaskTrailingMetaTextForTest(greatLeaf.getId()),
+                "滚动后深层标记文本应保持");
+        int[] scrolledBounds = widget.getTaskTrailingMetaBoundsForTest(greatLeaf.getId());
+        GuiTestSupport.assertEquals(4, scrolledBounds.length, "滚动后深层标记仍应可计算");
+        GuiTestSupport.assertTrue(scrolledBounds[0] + scrolledBounds[2] <= 220,
+                "滚动后深层标记不应越过列表右边界");
+    }
+
+    /**
      * 校验滚动行为会被限制在任务滚动区内，不会超过可滚动范围。
      */
     private static void shouldKeepScrollOffsetInsideScrollableTaskArea() {
@@ -579,6 +643,52 @@ public final class TaskListWidgetTestMain {
         widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
 
         GuiTestSupport.assertTrue(widget.getScrollOffsetForTest() > 0, "拖拽靠近底部边缘时应触发自动向下滚动");
+    }
+
+    /**
+     * 校验十二层任务树逐级缩进渲染，并且每个任务行都有可点击的子任务添加入口。
+     */
+    private static void shouldRenderTwelveLevelTreeAndRowAddButton() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 360, 500);
+        List<Task> tasks = new ArrayList<>();
+        Task root = createTask("deep-root", "Level 0");
+        tasks.add(root);
+        Task current = root;
+        java.util.Set<String> expanded = new java.util.LinkedHashSet<>();
+        for (int level = 1; level < 12; level++) {
+            Task child = createSubtask("deep-" + level, "Level " + level, current.getId(), 0L);
+            tasks.add(child);
+            expanded.add(current.getId());
+            current = child;
+        }
+        widget.setSections(List.of(new TaskListWidget.SectionModel("active", "未完成（12）", tasks, true, true)));
+        widget.setExpandedParentTaskIds(expanded);
+
+        GuiTestSupport.assertEquals(13, widget.getRowDebugSnapshotForTest().size(), "应渲染标题行与 12 层任务行");
+        GuiTestSupport.assertEquals(TaskListWidget.RowType.TASK, widget.getRowTypeForTest(root.getId()), "根任务应为普通任务行");
+        GuiTestSupport.assertEquals(TaskListWidget.RowType.SUBTASK, widget.getRowTypeForTest("deep-11"), "第十二层应为子任务行");
+        GuiTestSupport.assertTrue(
+                widget.getTaskIndentForTest("deep-11") > widget.getTaskIndentForTest("deep-5"),
+                "更深层任务应拥有更大的缩进"
+        );
+        GuiTestSupport.assertEquals("0/1", widget.getTaskTrailingMetaTextForTest("deep-11"),
+                "第十二层叶子任务也应显示自身进度标记");
+        int[] deepMarkerBounds = widget.getTaskTrailingMetaBoundsForTest("deep-11");
+        GuiTestSupport.assertEquals(4, deepMarkerBounds.length, "第十二层任务应能计算右侧标记边界");
+        GuiTestSupport.assertTrue(deepMarkerBounds[0] + deepMarkerBounds[2] <= 360,
+                "第十二层任务的右侧标记不应被列表右边界裁切");
+
+        AtomicReference<Task> clickedParent = new AtomicReference<>();
+        widget.setCanAddSubtask(task -> true);
+        widget.setOnAddSubtask(clickedParent::set);
+        int addX = widget.getAddSubtaskCenterXForTest("deep-11");
+        int rowY = widget.getTaskRowCenterYForTest("deep-11");
+        GuiTestSupport.assertTrue(addX > 0, "任务行右侧应显示子任务添加按钮");
+        widget.mouseClicked(addX, rowY, 0);
+        GuiTestSupport.assertEquals("deep-11", clickedParent.get() == null ? null : clickedParent.get().getId(),
+                "点击任意层级任务行的加号都应回调该父任务");
     }
 
     /**

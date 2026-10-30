@@ -78,23 +78,81 @@ final class TodoScreenTaskSupport {
         }
         String query = searchQuery.toLowerCase();
         List<Task> scope = searchableTasks == null ? input : searchableTasks;
-        List<String> matchedTopLevelIds = new ArrayList<>();
+        java.util.Map<String, Task> scopeById = new java.util.LinkedHashMap<>();
+        for (Task task : scope) {
+            if (task != null && task.getId() != null) {
+                scopeById.put(task.getId(), task);
+            }
+        }
+        java.util.Set<String> matchedRootIds = new java.util.LinkedHashSet<>();
         for (Task task : scope) {
             if (!matchesSearchQuery(task, query)) {
                 continue;
             }
-            String matchedTopLevelId = task.isSubtask() ? task.getParentTaskId() : task.getId();
-            if (matchedTopLevelId != null && !matchedTopLevelId.isEmpty() && !matchedTopLevelIds.contains(matchedTopLevelId)) {
-                matchedTopLevelIds.add(matchedTopLevelId);
+            String rootId = findRootTaskId(task, scopeById);
+            if (rootId != null) {
+                matchedRootIds.add(rootId);
             }
         }
         List<Task> result = new ArrayList<>();
         for (Task task : input) {
-            if (task != null && task.getId() != null && matchedTopLevelIds.contains(task.getId())) {
+            if (task != null && task.getId() != null && matchedRootIds.contains(task.getId())) {
                 result.add(task);
             }
         }
         return result;
+    }
+
+    /**
+     * 收集任务集合中的全部祖先任务，供深层搜索与路径展示复用。
+     *
+     * @param tasks 任务集合
+     * @return 去重后的祖先任务列表
+     */
+    static List<Task> collectAncestorTasks(List<Task> tasks) {
+        List<Task> result = new ArrayList<>();
+        if (tasks == null) {
+            return result;
+        }
+        java.util.Map<String, Task> byId = new java.util.LinkedHashMap<>();
+        for (Task task : tasks) {
+            if (task != null && task.getId() != null) {
+                byId.putIfAbsent(task.getId(), task);
+            }
+        }
+        java.util.Set<String> added = new java.util.LinkedHashSet<>();
+        for (Task task : tasks) {
+            String currentId = task == null ? null : task.getParentTaskId();
+            java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+            while (currentId != null && visited.add(currentId)) {
+                Task parent = byId.get(currentId);
+                if (parent == null) {
+                    break;
+                }
+                if (added.add(parent.getId())) {
+                    result.add(parent);
+                }
+                currentId = parent.getParentTaskId();
+            }
+        }
+        return result;
+    }
+
+    private static String findRootTaskId(Task task, java.util.Map<String, Task> byId) {
+        if (task == null) {
+            return null;
+        }
+        Task current = task;
+        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+        while (current != null && current.getId() != null && visited.add(current.getId())) {
+            String parentId = current.getParentTaskId();
+            Task parent = parentId == null ? null : byId.get(parentId);
+            if (parent == null) {
+                return current.getId();
+            }
+            current = parent;
+        }
+        return task.getId();
     }
 
     /**
@@ -347,9 +405,9 @@ final class TodoScreenTaskSupport {
 
     /**
      * 构建当前项目视图下用于列表层级展示的任务范围。
-     * 该范围会保留当前视图可见的顶层任务，并补齐其直属子任务。
+     * 该范围会保留当前视图可见的根任务，并补齐其任意深度的全部后代任务。
      *
-     * @param visibleTopLevelTasks 当前视图可见的顶层任务
+     * @param visibleTopLevelTasks 当前视图可见的根任务
      * @param scopedProjectTasks 当前项目内的任务范围
      * @return 供列表层级展示使用的任务快照
      */
@@ -357,21 +415,68 @@ final class TodoScreenTaskSupport {
         List<Task> visibleParents = visibleTopLevelTasks == null ? List.of() : List.copyOf(visibleTopLevelTasks);
         List<Task> scopedTasks = scopedProjectTasks == null ? List.of() : List.copyOf(scopedProjectTasks);
         List<Task> result = new ArrayList<>(visibleParents);
-        Set<String> visibleParentIds = new LinkedHashSet<>();
+        Set<String> visibleRootIds = new LinkedHashSet<>();
         Set<String> appendedTaskIds = new LinkedHashSet<>();
         for (Task task : visibleParents) {
             if (task == null || task.getId() == null || task.getId().isEmpty()) {
                 continue;
             }
-            visibleParentIds.add(task.getId());
+            visibleRootIds.add(task.getId());
             appendedTaskIds.add(task.getId());
         }
+        if (visibleRootIds.isEmpty()) {
+            return result;
+        }
+
+        java.util.Map<String, List<Task>> childrenByParentId = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Task> scopedById = new java.util.LinkedHashMap<>();
         for (Task task : scopedTasks) {
-            if (task == null || !task.isSubtask() || task.getId() == null || task.getId().isEmpty()) {
+            if (task == null || task.getId() == null || task.getId().isEmpty()) {
                 continue;
             }
-            String parentTaskId = task.getParentTaskId();
-            if (parentTaskId != null && visibleParentIds.contains(parentTaskId) && appendedTaskIds.add(task.getId())) {
+            scopedById.put(task.getId(), task);
+            String parentId = task.getParentTaskId();
+            if (parentId != null && !parentId.isEmpty()) {
+                childrenByParentId.computeIfAbsent(parentId, ignored -> new ArrayList<>()).add(task);
+            }
+        }
+        for (List<Task> children : childrenByParentId.values()) {
+            children.sort((left, right) -> {
+                int compared = Long.compare(left.getSubtaskSortOrder(), right.getSubtaskSortOrder());
+                if (compared != 0) {
+                    return compared;
+                }
+                return String.valueOf(left.getId()).compareTo(String.valueOf(right.getId()));
+            });
+        }
+
+        java.util.ArrayDeque<Task> stack = new java.util.ArrayDeque<>();
+        for (int index = visibleParents.size() - 1; index >= 0; index--) {
+            Task root = visibleParents.get(index);
+            if (root != null) {
+                stack.push(root);
+            }
+        }
+        Set<String> visited = new LinkedHashSet<>();
+        while (!stack.isEmpty()) {
+            Task parent = stack.pop();
+            if (parent == null || parent.getId() == null || !visited.add(parent.getId())) {
+                continue;
+            }
+            if (!visibleRootIds.contains(parent.getId())) {
+                appendedTaskIds.add(parent.getId());
+            }
+            List<Task> children = childrenByParentId.get(parent.getId());
+            if (children == null) {
+                continue;
+            }
+            for (int index = children.size() - 1; index >= 0; index--) {
+                stack.push(children.get(index));
+            }
+        }
+        for (Task task : scopedTasks) {
+            if (task != null && task.getId() != null && appendedTaskIds.contains(task.getId())
+                    && !visibleRootIds.contains(task.getId()) && !result.contains(task)) {
                 result.add(task);
             }
         }
@@ -394,21 +499,37 @@ final class TodoScreenTaskSupport {
             return parentTaskIds;
         }
         String query = searchQuery.toLowerCase();
-        Set<String> visibleParentIds = new LinkedHashSet<>();
+        Set<String> visibleRootIds = new LinkedHashSet<>();
         List<Task> visibleParents = visibleTopLevelTasks == null ? List.of() : visibleTopLevelTasks;
         List<Task> scope = searchableTasks == null ? List.of() : searchableTasks;
+        java.util.Map<String, Task> scopeById = new java.util.LinkedHashMap<>();
+        for (Task task : scope) {
+            if (task != null && task.getId() != null) {
+                scopeById.putIfAbsent(task.getId(), task);
+            }
+        }
         for (Task task : visibleParents) {
             if (task != null && task.getId() != null && !task.getId().isEmpty()) {
-                visibleParentIds.add(task.getId());
+                visibleRootIds.add(task.getId());
             }
         }
         for (Task task : scope) {
-            if (task == null || !task.isSubtask() || !matchesSearchQuery(task, query)) {
+            if (!matchesSearchQuery(task, query)) {
                 continue;
             }
-            String parentTaskId = task.getParentTaskId();
-            if (parentTaskId != null && visibleParentIds.contains(parentTaskId)) {
-                parentTaskIds.add(parentTaskId);
+            String rootId = findRootTaskId(task, scopeById);
+            if (rootId == null || !visibleRootIds.contains(rootId)) {
+                continue;
+            }
+            String currentId = task == null ? null : task.getParentTaskId();
+            java.util.Set<String> visited = new LinkedHashSet<>();
+            while (currentId != null && visited.add(currentId)) {
+                Task current = scopeById.get(currentId);
+                if (current == null) {
+                    break;
+                }
+                parentTaskIds.add(current.getId());
+                currentId = current.getParentTaskId();
             }
         }
         return parentTaskIds;
@@ -438,14 +559,17 @@ final class TodoScreenTaskSupport {
         }
         List<Task> topLevelTasks = filterTasksByProjectAndCompletion(taskManager.getAllTasks(), currentProjectId, completed, true);
         List<Task> scopedTasks = filterTasksByProjectAndCompletion(taskManager.getAllTasks(), currentProjectId, completed, false);
+        List<Task> allProjectTasks = filterTasksByProject(taskManager.getAllTasks(), currentProjectId);
         // 已完成区补充：当玩家在团队"我的"视图下有已完成的直属子任务时，
         // 即使父任务本身未全部完成，也将其作为上下文条目加入已完成区。
         if (completed && "TEAM_ASSIGNED".equals(viewModeName) && currentPlayerUuid != null && !currentPlayerUuid.isEmpty()) {
             topLevelTasks = supplementParentsWithCompletedSubtasks(taskManager, topLevelTasks, currentProjectId, currentPlayerUuid);
         }
+        List<Task> prioritizedTopLevelTasks = filterRootsByPriorityIncludingDescendants(
+                currentPriorityFilter, topLevelTasks, allProjectTasks);
         List<Task> topLevelScopedTasks = applyAssignedFilterForView(
-                applyPriorityFilterToTasks(currentPriorityFilter, topLevelTasks),
-                applyPriorityFilterToTasks(currentPriorityFilter, scopedTasks),
+                prioritizedTopLevelTasks,
+                scopedTasks,
                 currentProjectId,
                 viewModeName,
                 currentPlayerUuid
@@ -453,17 +577,93 @@ final class TodoScreenTaskSupport {
         if (searchQuery == null || searchQuery.isEmpty()) {
             return topLevelScopedTasks;
         }
+        // 搜索范围覆盖项目内全部层级，避免仅完成/未完成过滤把深层命中排除在外。
         List<Task> searchableScopedTasks = applyAssignedFilterForView(
-                applyPriorityFilterToTasks(
-                        currentPriorityFilter,
-                        scopedTasks
-                ),
-                applyPriorityFilterToTasks(currentPriorityFilter, scopedTasks),
+                allProjectTasks,
+                allProjectTasks,
                 currentProjectId,
                 viewModeName,
                 currentPlayerUuid
         );
-        return applySearchQueryToTasks(searchQuery, topLevelTasks, searchableScopedTasks);
+        return applySearchQueryToTasks(searchQuery, prioritizedTopLevelTasks, searchableScopedTasks);
+    }
+
+    /**
+     * 过滤指定项目下的全部任务，不限制完成状态或层级。
+     *
+     * @param source 原始任务列表
+     * @param currentProjectId 当前项目 ID
+     * @return 项目内全部任务
+     */
+    private static List<Task> filterTasksByProject(List<Task> source, String currentProjectId) {
+        List<Task> result = new ArrayList<>();
+        if (source == null || currentProjectId == null || currentProjectId.isEmpty()) {
+            return result;
+        }
+        for (Task task : source) {
+            if (task != null && task.belongsToProject(currentProjectId)) {
+                result.add(task);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 按优先级筛选根任务，同时保留“自身或任意后代命中优先级”的根任务。
+     *
+     * <p>这样深层子任务命中筛选时不会被遗漏，同时列表仍能显示完整父级上下文。</p>
+     *
+     * @param currentPriorityFilter 当前优先级筛选值
+     * @param topLevelTasks 根任务列表
+     * @param scopedTasks 项目内全部任务
+     * @return 筛选后的根任务列表
+     */
+    static List<Task> filterRootsByPriorityIncludingDescendants(int currentPriorityFilter,
+                                                                 List<Task> topLevelTasks,
+                                                                 List<Task> scopedTasks) {
+        if (currentPriorityFilter == 0) {
+            return topLevelTasks == null ? List.of() : new ArrayList<>(topLevelTasks);
+        }
+        Task.Priority targetPriority = Task.Priority.MEDIUM;
+        if (currentPriorityFilter == 1) {
+            targetPriority = Task.Priority.HIGH;
+        } else if (currentPriorityFilter == 3) {
+            targetPriority = Task.Priority.LOW;
+        }
+        java.util.Map<String, Task> byId = new java.util.LinkedHashMap<>();
+        for (Task task : scopedTasks == null ? List.<Task>of() : scopedTasks) {
+            if (task != null && task.getId() != null) {
+                byId.putIfAbsent(task.getId(), task);
+            }
+        }
+        Set<String> matchedRootIds = new LinkedHashSet<>();
+        for (Task task : byId.values()) {
+            if (task.getPriority() != targetPriority) {
+                continue;
+            }
+            String currentId = task.getId();
+            Set<String> visited = new LinkedHashSet<>();
+            while (currentId != null && visited.add(currentId)) {
+                Task current = byId.get(currentId);
+                if (current == null) {
+                    break;
+                }
+                String parentId = current.getParentTaskId();
+                Task parent = parentId == null ? null : byId.get(parentId);
+                if (parent == null) {
+                    matchedRootIds.add(current.getId());
+                    break;
+                }
+                currentId = parentId;
+            }
+        }
+        List<Task> result = new ArrayList<>();
+        for (Task task : topLevelTasks == null ? List.<Task>of() : topLevelTasks) {
+            if (task != null && task.getId() != null && matchedRootIds.contains(task.getId())) {
+                result.add(task);
+            }
+        }
+        return result;
     }
 
     /**

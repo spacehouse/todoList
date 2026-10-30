@@ -9,6 +9,7 @@ import com.todolist.task.Task;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -335,6 +336,8 @@ final class TodoScreenWidgetBuildSupport {
                                                         Task selectedTask,
                                                         Consumer<Task> onTaskToggleCompletion,
                                                         Consumer<List<Task>> onTaskReorder,
+                                                        Predicate<Task> canAddSubtask,
+                                                        Consumer<Task> onAddSubtask,
                                                         int quickAddFieldX,
                                                         int inputRowY,
                                                         int quickAddFieldWidth,
@@ -348,6 +351,8 @@ final class TodoScreenWidgetBuildSupport {
         }
         taskListWidget.setOnTaskToggleCompletion(onTaskToggleCompletion);
         taskListWidget.setOnTaskReorder(onTaskReorder);
+        taskListWidget.setCanAddSubtask(canAddSubtask);
+        taskListWidget.setOnAddSubtask(onAddSubtask);
 
         EditBox quickAddField = new EditBox(font, quickAddFieldX, inputRowY, quickAddFieldWidth, inputRowHeight, Component.empty());
         quickAddField.setHint(Component.translatable("gui.todolist.input.quick_add.placeholder"));
