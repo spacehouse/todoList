@@ -11,9 +11,9 @@
 ## 待同步
 
 - 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称）（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-item-title-markup.md`）
-- 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`）
+- 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`；2026-11-01 文案直观性修订：任务列表进度悬浮提示带类型谓语与回落注记、编辑器加收集范围提示、命令输出目标本地化名）
 - 【fix】幽灵任务源头级联完成（Phase Y1，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度；离线回归与实机验证均通过（2026-10-26，并入材料冒烟清单执行），见 `docs/feat-trigger-completion.md` Phase Y1
-- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力
+- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力；2026-11-01 文案直观性修订：任务标题统一回「收集」（动作词与收集语义矛盾，见该文档 §0.3）、材料预览两处提示语优化
 - 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）；**待 CurseForge 上传审查作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
 
 ## 计划中

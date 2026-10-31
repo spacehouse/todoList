@@ -3147,7 +3147,7 @@ public class TodoScreen extends BaseTodoScreen implements ProjectManager.Project
                 null,
                 null,
                 (materialItemId, materialCount, recipeKind) ->
-                        TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount, recipeKind).getString()
+                        TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount).getString()
         );
         MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
         minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks));
