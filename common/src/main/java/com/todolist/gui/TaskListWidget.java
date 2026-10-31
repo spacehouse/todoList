@@ -2,7 +2,9 @@ package com.todolist.gui;
 
 import com.todolist.config.ModConfig;
 import com.todolist.task.Task;
+import com.todolist.task.TaskTrigger;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -402,9 +404,17 @@ public class TaskListWidget implements Renderable {
         context.renderOutline(x, y, width, height, config.getBorderColor());
 
         // 将任务内容限制在列表矩形内部，避免末行覆盖到底部输入区域。
+        pendingTriggerTooltip = List.of();
         context.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
         renderTasks(context, mouseX, mouseY);
         context.disableScissor();
+
+        // 悬浮提示在 scissor 之外渲染，避免被列表矩形裁剪。
+        if (!pendingTriggerTooltip.isEmpty()) {
+            context.renderTooltip(client.font,
+                    pendingTriggerTooltip.stream().map(Component::getVisualOrderText).toList(),
+                    mouseX, mouseY);
+        }
 
         // 绘制滚动条（如果需要）
         int totalContentHeight = getTotalContentHeight();
@@ -565,6 +575,57 @@ public class TaskListWidget implements Renderable {
             }
             context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingTextX, textBaselineY, TASK_META_TEXT_COLOR, false);
         }
+
+        if (task.hasTrigger()
+                && mouseX >= x && mouseX < x + width
+                && mouseY >= taskY && mouseY < taskY + rowHeight - 1) {
+            pendingTriggerTooltip = buildTriggerTooltipLines(task);
+        }
+    }
+
+    /** 当前帧命中触发器悬浮提示的任务行内容，在 scissor 之外的 render 末尾统一渲染。 */
+    private List<Component> pendingTriggerTooltip = List.of();
+
+    /**
+     * 构建有触发器任务的悬浮提示行：触发类型 + 带谓语的进度（按触发类型区分），
+     * 收集类（持有量语义）额外附注记，解释进度会随物品消耗回落，避免被误认为异常。
+     *
+     * @param task 任务
+     * @return 悬浮提示行；无触发器时为空列表
+     */
+    private List<Component> buildTriggerTooltipLines(Task task) {
+        if (task == null || !task.hasTrigger()) {
+            return List.of();
+        }
+        TaskTrigger trigger = task.getTrigger();
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable(
+                "gui.todolist.trigger.type." + trigger.getType().name().toLowerCase(Locale.ROOT)));
+        lines.add(Component.translatable(
+                progressTooltipKey(trigger.getType()),
+                trigger.getProgress(),
+                trigger.getTargetCount()));
+        if (trigger.getType() == TaskTrigger.Type.ITEM_COLLECT) {
+            lines.add(Component.translatable("gui.todolist.trigger.progress.hold_note")
+                    .withStyle(net.minecraft.ChatFormatting.GRAY));
+        }
+        return lines;
+    }
+
+    /**
+     * 返回触发类型对应的悬浮进度键（谓语与类型一致）。
+     *
+     * @param type 触发类型
+     * @return 语言键
+     */
+    private static String progressTooltipKey(TaskTrigger.Type type) {
+        return switch (type) {
+            case ITEM_COLLECT -> "gui.todolist.trigger.progress.hold";
+            case CRAFT_ITEM -> "gui.todolist.trigger.progress.crafted";
+            case BREAK_BLOCK -> "gui.todolist.trigger.progress.broken";
+            case KILL_ENTITY -> "gui.todolist.trigger.progress.killed";
+            case ADVANCEMENT -> "gui.todolist.trigger.progress.done";
+        };
     }
 
     /**

@@ -3091,7 +3091,7 @@ public final class CommandBootstrap {
                     COMMAND_SUCCESS,
                     SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
                     "command.todolist.task.trigger.set.success",
-                    task.getTitle(), type.name().toLowerCase(java.util.Locale.ROOT), normalizedTarget, count
+                    task.getTitle(), type.name().toLowerCase(java.util.Locale.ROOT), describeTriggerTargetComponent(type, normalizedTarget), count
             );
         } catch (IOException e) {
             TodoConstants.LOGGER.error("Failed to set task trigger for command", e);
@@ -3182,7 +3182,7 @@ public final class CommandBootstrap {
                     "command.todolist.task.trigger.info.format",
                     task.getTitle(),
                     trigger.getType().name().toLowerCase(java.util.Locale.ROOT),
-                    trigger.getTarget(),
+                    describeTriggerTargetComponent(trigger.getType(), trigger.getTarget()),
                     trigger.getProgress(),
                     trigger.getTargetCount()
             );
@@ -3190,6 +3190,53 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.error("Failed to read task trigger for command", e);
             return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.info.failed", e);
         }
+    }
+
+    /**
+     * 构造触发器目标的展示组件：可识别的物品 / 方块 / 实体目标显示本地化名称并附资源 ID，
+     * 识别失败（或进度等无注册表映射的目标）时原样显示资源 ID。
+     * 返回可翻译组件的嵌套结构，由客户端按玩家语言本地化渲染。
+     *
+     * @param type   触发类型
+     * @param target 目标资源 ID
+     * @return 展示组件
+     */
+    private static Component describeTriggerTargetComponent(TaskTrigger.Type type, String target) {
+        String fallbackId = target == null ? "" : target;
+        try {
+            net.minecraft.resources.ResourceLocation location = net.minecraft.resources.ResourceLocation.tryParse(fallbackId);
+            if (location != null && type != null) {
+                switch (type) {
+                    case ITEM_COLLECT, CRAFT_ITEM -> {
+                        net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                                .getOptional(location).orElse(null);
+                        if (item != null && item != net.minecraft.world.item.Items.AIR) {
+                            return Component.translatable(item.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    case BREAK_BLOCK -> {
+                        net.minecraft.world.level.block.Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                                .getOptional(location).orElse(null);
+                        if (block != null) {
+                            return Component.translatable(block.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    case KILL_ENTITY -> {
+                        net.minecraft.world.entity.EntityType<?> entityType = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                                .getOptional(location).orElse(null);
+                        if (entityType != null) {
+                            return Component.translatable(entityType.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    default -> {
+                        // 进度等目标没有注册表显示名，保持原样。
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 解析失败时回退为原始资源 ID。
+        }
+        return Component.literal(fallbackId);
     }
 
     /**

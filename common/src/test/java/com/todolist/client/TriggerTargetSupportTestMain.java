@@ -31,16 +31,15 @@ public final class TriggerTargetSupportTestMain {
     }
 
     /**
-     * 校验材料反推任务标题：按配方类型选动作词、**只内联产物标记**（不再内联功能方块，避免 HUD 过长），
-     * 无配方时回退「收集」措辞。
+     * 校验材料反推任务标题：**2026-11-01 起统一为「收集」语义**（持有量达标即完成，
+     * 标题不再按配方类型渲染动作词），且只内联产物标记（不再内联功能方块，避免 HUD 过长）。
      */
     private static void shouldBuildMaterialTaskTitleWithoutStation() {
         net.minecraft.network.chat.contents.TranslatableContents smelting = translatableContents(
-                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:iron_ingot", 27,
-                        com.todolist.material.MaterialRecipeKind.SMELTING));
+                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:iron_ingot", 27));
         GuiTestSupport.assertNotNull(smelting, "材料任务标题应是可翻译组件");
-        GuiTestSupport.assertEquals("gui.todolist.material.task_title.smelting", smelting.getKey(),
-                "应按配方类型选择动作词");
+        GuiTestSupport.assertEquals("gui.todolist.material.task_title.collect", smelting.getKey(),
+                "标题应统一为「收集」措辞，不随配方类型变化");
         GuiTestSupport.assertEquals("[item:minecraft:iron_ingot]", smelting.getArgs()[0],
                 "标题应内联产物标记");
         GuiTestSupport.assertEquals(27, smelting.getArgs()[1], "标题应带上需求数量");
@@ -48,10 +47,10 @@ public final class TriggerTargetSupportTestMain {
                 "标题不应再内联功能方块（只有产物与数量两个参数）");
 
         net.minecraft.network.chat.contents.TranslatableContents collect = translatableContents(
-                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:raw_iron", 8, null));
+                TriggerTargetSupport.buildMaterialTaskTitle("minecraft:raw_iron", 8));
         GuiTestSupport.assertNotNull(collect, "无配方时也应返回可翻译组件");
         GuiTestSupport.assertEquals("gui.todolist.material.task_title.collect", collect.getKey(),
-                "无配方时应回退「收集」措辞");
+                "无配方时同样使用「收集」措辞");
     }
 
     /**
