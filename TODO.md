@@ -11,9 +11,10 @@
 ## 待同步
 
 - 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称）（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-item-title-markup.md`）
-- 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`）
+- 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`；2026-11-01 文案直观性修订：任务列表进度悬浮提示带类型谓语与回落注记、编辑器加收集范围提示、命令输出目标本地化名）
 - 【fix】幽灵任务源头级联完成（Phase Y1，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度；离线回归与实机验证均通过（2026-10-26，并入材料冒烟清单执行），见 `docs/feat-trigger-completion.md` Phase Y1
-- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力
+- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力；2026-11-01 文案直观性修订：任务标题统一回「收集」（动作词与收集语义矛盾，见该文档 §0.3）、材料预览两处提示语优化
+- 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）；**待 CurseForge 上传审查作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
 
 ## 计划中
 
@@ -22,7 +23,6 @@
 ### 主模组
 
 - 【feat】支持任务批量导入格式（JSON）：作为所有外部任务生成来源（JEI/EMI 附属、AI 生成、清单导入）的统一入口（背景见 `docs/feat-material-task-generation.md` §0.4）
-- 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（**CurseForge 审查硬约束**：1.4.1 两次被拒，"expose its database over TCP with admin credentials... requires a fix before upload"；准入三问与删除范围见 `docs/h2-tcp-server-removal.md`；最终验收 = 移除后 jar 上传 CF 通过审查）
 - 【feat】支持团队项目任务设置为重复领取 / 重复完成
 - 【feat】支持个人项目跨存档同步
 - 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（准入三问：用户故事 = 维护者只需读懂一条存储链路，消除"配置强制 H2 后永不执行"的死分支；范围 = `TaskStorage` / `ProjectStorage` / `ProjectPlayerStateStorage` 的非 H2 分支 + `ModConfig` 的 NBT 配置注释与 lang key，**明确不含** H2 不可用时的应急 NBT 写入（数据安全兜底，`shouldKeepNbtWritableWhenH2Unavailable` 固化）、NBT→H2 老数据迁移链（老玩家升档生命线）、`Task` NBT 序列化格式（网络包与 H2 行映射基建）；验证方案 = `:common:check` 全绿且上述保留用例仍通过；投入上限 = 1 个工作日，超限冻结）
