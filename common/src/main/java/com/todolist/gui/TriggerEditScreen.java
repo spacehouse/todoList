@@ -290,6 +290,9 @@ public class TriggerEditScreen extends Screen {
         if (countField != null && countField.getValue().trim().isEmpty()) {
             context.drawString(font, Component.translatable("gui.todolist.trigger.edit.count_hint"), x + 96, y + 132, 0xFF777777, false);
         }
+        if (type == TaskTrigger.Type.ITEM_COLLECT) {
+            context.drawString(font, Component.translatable("gui.todolist.trigger.edit.collect_scope_hint"), x + 10, y + h - 12, 0xFF777777, false);
+        }
         super.render(context, mouseX, mouseY, delta);
     }
 
