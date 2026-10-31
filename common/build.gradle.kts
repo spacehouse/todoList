@@ -66,7 +66,7 @@ tasks.register<JavaExec>("guiSystemTest") {
 
 tasks.register<JavaExec>("h2DiagnosticTest") {
     group = "verification"
-    description = "Run the H2 M1-0 driver, temporary database, DDL, backup, script, and TCP API diagnostics."
+    description = "Run the H2 M1-0 driver, temporary database, DDL, backup, and script diagnostics."
     classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
     mainClass.set("com.todolist.storage.H2DiagnosticTestMain")
     dependsOn(tasks.named(testSourceSet.classesTaskName))
@@ -109,14 +109,6 @@ tasks.register<JavaExec>("h2StorageAvailabilityTest") {
     description = "Run the M1-E H2 storage availability self-tests."
     classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
     mainClass.set("com.todolist.storage.H2StorageAvailabilityTestMain")
-    dependsOn(tasks.named(testSourceSet.classesTaskName))
-}
-
-tasks.register<JavaExec>("h2TcpAccessTest") {
-    group = "verification"
-    description = "Run the M2 H2 TCP access self-tests."
-    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
-    mainClass.set("com.todolist.storage.H2TcpAccessTestMain")
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
@@ -225,7 +217,6 @@ tasks.named("check").configure {
     dependsOn("h2LegacyMigrationTest")
     dependsOn("h2StorageBackendIntegrationTest")
     dependsOn("h2StorageAvailabilityTest")
-    dependsOn("h2TcpAccessTest")
     dependsOn("h2CommandIntegrationTest")
     dependsOn("h2MaintenanceBackupTest")
     dependsOn("h2TaskQueryServiceTest")

@@ -12,7 +12,6 @@ import com.todolist.project.ProjectPlayerStateStorage;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.project.ProjectStorage;
 import com.todolist.storage.H2StorageBootstrap;
-import com.todolist.storage.H2TcpServerManager;
 import com.todolist.task.Task;
 import com.todolist.task.TaskTrigger;
 import net.minecraft.commands.CommandSource;
@@ -88,7 +87,6 @@ public final class CommandBootstrapIntegrationTestMain {
             runCase("CommandBootstrapIntegrationTestMain.shouldFlushProjectSaveAfterBackgroundFailure", CommandBootstrapIntegrationTestMain::shouldFlushProjectSaveAfterBackgroundFailure);
             runCase("CommandBootstrapIntegrationTestMain.shouldPreserveCommandAccessModeAfterExternalConfigEdit", CommandBootstrapIntegrationTestMain::shouldPreserveCommandAccessModeAfterExternalConfigEdit);
         } finally {
-            H2TcpServerManager.stop();
             H2StorageBootstrap.resetAllForTests();
             TaskPackets.setServerPacketSender(null);
         }

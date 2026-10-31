@@ -122,7 +122,6 @@ public final class H2SchemaInitializer {
         try (Statement statement = connection.createStatement()) {
             createIndexes(statement);
             createComments(statement);
-            ensureTcpUsers(statement);
         }
     }
 
@@ -364,25 +363,6 @@ public final class H2SchemaInitializer {
      */
     private String columnKey(String tableName, String columnName) {
         return COMMENT_KEY_PREFIX + "column." + tableName + "." + columnName;
-    }
-
-    /**
-     * 创建或修复 H2 TCP 外部访问账号。
-     *
-     * @param statement SQL statement
-     * @throws SQLException 用户或授权 DDL 执行失败时抛出
-     */
-    private void ensureTcpUsers(Statement statement) throws SQLException {
-        H2TcpConfig config = H2TcpConfig.load();
-        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getAdminUser()) + " PASSWORD '" + escapeSql(config.getAdminPassword()) + "' ADMIN");
-        statement.execute("ALTER USER " + quoteIdentifier(config.getAdminUser()) + " SET PASSWORD '" + escapeSql(config.getAdminPassword()) + "'");
-        statement.execute("ALTER USER " + quoteIdentifier(config.getAdminUser()) + " ADMIN TRUE");
-        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getReadonlyUser()) + " PASSWORD '" + escapeSql(config.getReadonlyPassword()) + "'");
-        statement.execute("ALTER USER " + quoteIdentifier(config.getReadonlyUser()) + " SET PASSWORD '" + escapeSql(config.getReadonlyPassword()) + "'");
-        statement.execute("CREATE USER IF NOT EXISTS " + quoteIdentifier(config.getReadwriteUser()) + " PASSWORD '" + escapeSql(config.getReadwritePassword()) + "'");
-        statement.execute("ALTER USER " + quoteIdentifier(config.getReadwriteUser()) + " SET PASSWORD '" + escapeSql(config.getReadwritePassword()) + "'");
-        statement.execute("GRANT SELECT ON SCHEMA PUBLIC TO " + quoteIdentifier(config.getReadonlyUser()));
-        statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA PUBLIC TO " + quoteIdentifier(config.getReadwriteUser()));
     }
 
     /**
