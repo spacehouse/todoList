@@ -9,7 +9,7 @@
 ### 优化与修复
 
 - **移除进入世界的系统提示**：不再在进入世界后向管理员推送 H2 存储模式与管理命令提示；相关命令仍可通过 `/todolist h2 status`、`/todolist h2 backup`、`/todolist h2 reload-db`、`/todolist h2 health` 使用。
-- **移除 H2 TCP 远程访问路径**：H2 TCP 服务固定仅监听本机回环地址（127.0.0.1），协议层拒绝所有非本机连接，满足 CurseForge 安全审核要求；历史配置中的远程访问字段将被忽略，外部工具访问请改用 SSH 隧道等安全方案。
+- **移除 H2 TCP 外部访问能力**：为满足 CurseForge 安全审核要求，H2 TCP 服务端与外部访问账号体系已整体移除，`/todo h2 restart-tcp` 与 `/todo h2 reset-password` 命令随之删除；`config/todolist-h2.json` 中的 `tcpEnabled`、`port`、`accounts` 等字段废弃并被静默忽略（数据库路径覆盖 `databasePathOverride` 保留）。外部工具排查数据请改用备份副本路线：`/todo h2 backup` 生成备份后，用 DBeaver 等工具以 H2 嵌入式只读方式打开副本，详见仓库文档 `docs/h2-external-client-guide.md`。
 - **GUI 编辑自动保存默认开启**：GUI 编辑自动保存开关默认改为开启，无需手动配置即可在编辑后自动保存。
 
 ## [1.4.1] - 2026-08-16
