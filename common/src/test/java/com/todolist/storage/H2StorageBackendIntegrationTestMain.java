@@ -9,6 +9,7 @@ import com.todolist.project.ProjectStorage;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -41,6 +42,7 @@ public final class H2StorageBackendIntegrationTestMain {
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldUpdateTriggerStatesWithoutTouchingOtherRows", H2StorageBackendIntegrationTestMain::shouldUpdateTriggerStatesWithoutTouchingOtherRows);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectStorageToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectStorageToH2);
         GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldRouteProjectPlayerStateToH2", H2StorageBackendIntegrationTestMain::shouldRouteProjectPlayerStateToH2);
+        GuiTestSupport.runTestCase("H2StorageBackendIntegrationTestMain.shouldIgnoreLegacyTcpConfigFields", H2StorageBackendIntegrationTestMain::shouldIgnoreLegacyTcpConfigFields);
     }
 
     /**
@@ -391,6 +393,42 @@ public final class H2StorageBackendIntegrationTestMain {
         Project project = new Project(name, scope, TEST_PLAYER.toString());
         project.addMember(TEST_PLAYER.toString(), Project.ProjectRole.PROJECT_MANAGER, "Owner");
         return project;
+    }
+
+    /**
+     * 验证遗留 TCP 配置字段被静默忽略，且数据库路径覆盖仍然生效（TCP 移除后的兼容用例）。
+     */
+    private static void shouldIgnoreLegacyTcpConfigFields() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-legacy-config-");
+            Path overridePath = tempGameDir.resolve("legacy-db").toAbsolutePath().normalize();
+            Path configPath = H2StorageConfig.getConfigPath();
+            Files.createDirectories(configPath.getParent());
+            Files.writeString(configPath, """
+                    {
+                      "tcpEnabled": true,
+                      "port": 9092,
+                      "autoIncrementPort": true,
+                      "accounts": {
+                        "adminUser": "todo_admin",
+                        "adminPassword": "legacy-password-123456789012"
+                      },
+                      "databasePathOverride": "%s"
+                    }
+                    """.formatted(overridePath.toString().replace("\\", "/")), StandardCharsets.UTF_8);
+            H2StorageConfig config = H2StorageConfig.load();
+            GuiTestSupport.assertTrue(!config.isRecreatedFromCorrupt(), "含遗留 TCP 字段的配置不应被判为损坏");
+            H2ConnectionProvider provider = new H2ConnectionProvider();
+            GuiTestSupport.assertEquals(overridePath, provider.getDatabaseBasePath(), "遗留 TCP 字段被忽略且路径覆盖生效");
+            GuiTestSupport.assertTrue(provider.getJdbcUrl().startsWith("jdbc:h2:file:"), "TCP 移除后连接应始终为嵌入式");
+        } catch (Exception exception) {
+            throw new IllegalStateException("遗留配置解析测试失败", exception);
+        } finally {
+            if (tempGameDir != null) {
+                deleteRecursively(tempGameDir);
+            }
+        }
     }
 
     /**

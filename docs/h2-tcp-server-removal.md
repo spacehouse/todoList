@@ -1,6 +1,6 @@
 # 设计：移除 H2 TCP 服务端，外部排查改走备份文件路线
 
-> 状态：**已评审通过，待实现**（对应 TODO.md 计划中条目）
+> 状态：**已实现，待 CF 上传验收**（2026-10-28 完成实现与回归，见 §6）
 > 类型：外部约束强制变更（CurseForge 审查要求）
 > 目标分支：`verify/1.20.1-feat-trigger-and-item-title`
 > 更新日期：2026-10-28
@@ -76,11 +76,13 @@ Task NBT 序列化格式。
 
 ## 6. 验收标准
 
-- [ ] `:common:check` 全绿，无 TCP 遗留引用
-- [ ] 遗留 `tcpEnabled: true` 配置被忽略，游戏正常启动
-- [ ] 备份 / 恢复 / 健康检查命令实机可用，指南新路线可照做走通
-- [ ] `verify-all.bat dev-fabric` PASS
-- [ ] 移除后 jar 上传 CurseForge 通过审查（最终验收）
+- [x] `:common:check` 全绿，无 TCP 遗留引用（2026-10-28，唯一残留为 H2StorageConfig 中说明历史字段的注释）
+- [x] 遗留 `tcpEnabled: true` 配置被忽略，游戏正常启动（新增用例 `shouldIgnoreLegacyTcpConfigFields` 固化；dev-fabric 启动冒烟 PASS）
+- [x] 备份 / 恢复 / 健康检查命令离线回归通过（`h2CommandIntegrationTest`、`h2MaintenanceBackupTest` 全绿）；实机确认待用户在 CF 上传测试时顺带执行
+- [x] `verify-all.bat dev-fabric` PASS（2026-10-28，报告 `verify-reports\run-20261028-005124`）
+- [ ] 移除后 jar 上传 CurseForge 通过审查（最终验收，待执行）
+
+实现记录：`H2TcpConfig` 并未整体删除——其中 `databasePathOverride`（数据库路径覆盖，测试隔离依赖）保留，类精简重命名为 `H2StorageConfig`，沿用 `config/todolist-h2.json` 文件名；`H2ConnectionProvider` 的 `openEmbeddedBootstrapConnection` 随 `prepareEmbeddedBeforeTcp` 删除（仅其调用方使用）。
 
 ## 7. 后续（不在本需求内）
 

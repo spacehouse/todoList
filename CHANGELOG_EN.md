@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.4.2] - 2026-10-28
+
+### Improvements & Fixes
+
+- **Removed world-entry system hints**: The mod no longer pushes H2 storage mode and admin command hints to admins after joining a world; the commands remain available via `/todolist h2 status`, `/todolist h2 backup`, `/todolist h2 reload-db`, and `/todolist h2 health`.
+- **Removed H2 TCP external access**: To satisfy CurseForge security review requirements, the H2 TCP server and its external account system have been removed entirely, along with the `/todo h2 restart-tcp` and `/todo h2 reset-password` commands. Legacy fields (`tcpEnabled`, `port`, `accounts`, ...) in `config/todolist-h2.json` are deprecated and silently ignored (the `databasePathOverride` option is kept). To inspect data with external tools, use the backup-copy route: create a backup via `/todo h2 backup`, then open the extracted database copy read-only with H2 embedded mode (see `docs/h2-external-client-guide.md` in the repository).
+- **GUI auto-save enabled by default**: The GUI edit auto-save toggle now defaults to on.
+
 ## [1.4.1] - 2026-08-16
 
 ### New Features
