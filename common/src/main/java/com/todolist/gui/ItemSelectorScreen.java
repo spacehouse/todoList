@@ -385,8 +385,12 @@ public class ItemSelectorScreen extends Screen {
      * 渲染搜索框、结果列表（图标 + 名称 + ID）与滚动指示。
      */
     @Override
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        // Background is drawn manually in render to keep cross-loader consistency.
+    }
+
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, com.todolist.config.ModConfig.getInstance().getBackgroundColor());
         int w = Math.max(220, Math.min(360, width - 40));
         int h = Math.max(200, Math.min(280, height - 40));
         int x = (width - w) / 2;

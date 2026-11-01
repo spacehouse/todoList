@@ -515,12 +515,17 @@ public final class SelfTestSupport {
     private static void assertStoredProgress(MinecraftServer server, ServerPlayer player,
                                              String taskId, int progress, boolean completed,
                                              String stage) throws Exception {
+        int engineProgress = TaskTriggerService.debugPersonalTriggerProgress(
+                server, player.getUUID(), taskId);
+        TodoConstants.LOGGER.info("[selftest] 诊断 {} taskId={} 引擎内存进度={} 期望={}",
+                stage, taskId, engineProgress, progress);
         List<Task> tasks = TodoListCommon.getTaskStorage().loadPersonalTasks(server, player.getUUID());
         Task t = tasks.stream().filter(x -> x.getId().equals(taskId)).findFirst().orElse(null);
-        check(t != null, stage + ": 任务应存在于存储");
+        check(t != null, stage + ": 任务应存在于存储（引擎内存进度=" + engineProgress + "）");
         check(t.getTrigger() != null && t.getTrigger().getProgress() == progress,
                 stage + ": 进度应为 " + progress + "，实际 "
-                        + (t.getTrigger() == null ? "无触发器" : t.getTrigger().getProgress()));
+                        + (t.getTrigger() == null ? "无触发器" : t.getTrigger().getProgress())
+                        + "（引擎内存进度=" + engineProgress + "）");
         check(t.isCompleted() == completed,
                 stage + ": 完成态应为 " + completed + "，实际 " + t.isCompleted());
     }

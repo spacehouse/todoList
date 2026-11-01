@@ -245,6 +245,29 @@ public final class TaskTriggerService {
     }
 
     /**
+     * 诊断用：读取指定玩家个人桶内某任务的触发器进度（不触发加载、不落库）。
+     * 仅供 SelfTestSupport 在事件入口直调后区分「引擎未推进」与「落库丢失」，
+     * 桶不存在返回 -1、任务不在桶内返回 -1、任务无触发器返回 -2。
+     *
+     * @param server 当前服务端
+     * @param uuid   玩家 UUID
+     * @param taskId 任务 ID
+     * @return 桶内触发器进度
+     */
+    public static int debugPersonalTriggerProgress(MinecraftServer server, UUID uuid, String taskId) {
+        CachedBucket bucket = peekBucket(personalBucketKey(server, uuid));
+        if (bucket == null) {
+            return -1;
+        }
+        for (Task task : bucket.tasks) {
+            if (task.getId().equals(taskId)) {
+                return task.getTrigger() == null ? -2 : task.getTrigger().getProgress();
+            }
+        }
+        return -1;
+    }
+
+    /**
      * 判定指定玩家的个人桶或团队桶是否存在未完成的 ITEM_COLLECT 触发任务，
      * 供平台层决定是否执行库存快照扫描。
      *
