@@ -693,14 +693,14 @@ public class MaterialListScreen extends Screen {
      * 滚轮：默认纵向滚动，按住 Shift 时横向滚动；弹出列表优先消费。
      */
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double xDelta, double yDelta) {
         if (candidatePopup != null && candidatePopup.contains(mouseX, mouseY)) {
-            candidatePopup.scroll = clamp(candidatePopup.scroll + (delta < 0 ? 1 : -1),
+            candidatePopup.scroll = clamp(candidatePopup.scroll + (yDelta < 0 ? 1 : -1),
                     0, candidatePopup.maxScroll());
             return true;
         }
         if (insideTree(mouseX, mouseY)) {
-            int step = delta < 0 ? 1 : -1;
+            int step = yDelta < 0 ? 1 : -1;
             if (shiftHeld) {
                 scrollX = clamp(scrollX + step * SCROLL_STEP_X, 0, maxScrollX());
             } else {
@@ -708,7 +708,7 @@ public class MaterialListScreen extends Screen {
             }
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, xDelta, yDelta);
     }
 
     /**
@@ -794,7 +794,7 @@ public class MaterialListScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         int x = panelLeft;
         int y = panelTop;
         int w = panelWidth;

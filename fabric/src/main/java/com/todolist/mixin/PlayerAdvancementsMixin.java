@@ -2,7 +2,7 @@ package com.todolist.mixin;
 
 import com.todolist.fabric.AdvancementAwardGate;
 import com.todolist.trigger.TaskTriggerService;
-import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,26 +29,26 @@ public class PlayerAdvancementsMixin {
     /**
      * 进度达成后转发 ADVANCEMENT 触发事件。
      *
-     * @param advancement  本次授奖的进度
+     * @param advancement  本次授奖的进度持有者（1.21+ 为 AdvancementHolder）
      * @param criterionKey 本次达成的条件键
      * @param callbackInfo 原方法返回值回调
      */
     @Inject(method = "award", at = @At("RETURN"))
-    private void todolist$onAdvancementAwarded(Advancement advancement, String criterionKey,
+    private void todolist$onAdvancementAwarded(AdvancementHolder advancement, String criterionKey,
                                                CallbackInfoReturnable<Boolean> callbackInfo) {
         if (!Boolean.TRUE.equals(callbackInfo.getReturnValue()) || advancement == null || player == null) {
             return;
         }
         // 隐藏进度没有展示信息，不作为可选目标
-        if (advancement.getDisplay() == null) {
+        if (advancement.value() == null || advancement.value().display().isEmpty()) {
             return;
         }
         if (!player.getAdvancements().getOrStartProgress(advancement).isDone()) {
             return;
         }
-        if (!AdvancementAwardGate.shouldReport(player.getUUID(), advancement.getId().toString())) {
+        if (!AdvancementAwardGate.shouldReport(player.getUUID(), advancement.id().toString())) {
             return;
         }
-        TaskTriggerService.handleAdvancementAwarded(player, advancement.getId().toString());
+        TaskTriggerService.handleAdvancementAwarded(player, advancement.id().toString());
     }
 }

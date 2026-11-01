@@ -312,13 +312,13 @@ public class ItemSelectorScreen extends Screen {
      * 滚轮滚动列表。
      */
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (delta < 0) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double xDelta, double yDelta) {
+        if (yDelta < 0) {
             scrollOffset = Math.min(scrollOffset + 1, Math.max(0, filtered.size() - visibleRows()));
-        } else if (delta > 0) {
+        } else if (yDelta > 0) {
             scrollOffset = Math.max(0, scrollOffset - 1);
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, xDelta, yDelta);
     }
 
     /**
@@ -386,7 +386,7 @@ public class ItemSelectorScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         int w = Math.max(220, Math.min(360, width - 40));
         int h = Math.max(200, Math.min(280, height - 40));
         int x = (width - w) / 2;

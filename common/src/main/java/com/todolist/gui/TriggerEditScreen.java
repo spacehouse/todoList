@@ -274,7 +274,7 @@ public class TriggerEditScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         int w = Math.max(220, Math.min(320, width - 30));
         int h = 202;
         int x = (width - w) / 2;

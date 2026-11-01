@@ -6,6 +6,11 @@ import com.todolist.task.TaskTrigger;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,6 +42,7 @@ public final class TaskTriggerServiceTestMain {
      * @param args 命令行参数，当前未使用
      */
     public static void main(String[] args) {
+        GuiTestSupport.bootstrapEnvironment();
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldCompleteKillEntityByAccumulatedKills", TaskTriggerServiceTestMain::shouldCompleteKillEntityByAccumulatedKills);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldAdvanceBreakBlockForTasksSharingTarget", TaskTriggerServiceTestMain::shouldAdvanceBreakBlockForTasksSharingTarget);
         GuiTestSupport.runTestCase("TaskTriggerServiceTestMain.shouldAdvanceCraftItemByCraftedBatchAmount", TaskTriggerServiceTestMain::shouldAdvanceCraftItemByCraftedBatchAmount);
@@ -428,22 +434,14 @@ public final class TaskTriggerServiceTestMain {
         ));
         Map<String, Integer> counts = new HashMap<>();
 
-        // 嵌套潜影盒：内部装有钻石，用于验证不会递归展开
-        ListTag nestedList = new ListTag();
-        nestedList.add(itemEntry("minecraft:diamond", 9));
-        CompoundTag nestedBoxTag = new CompoundTag();
-        nestedBoxTag.put("Items", nestedList);
-        CompoundTag nestedBox = itemEntry("minecraft:shulker_box", 1);
-        nestedBox.put("BlockEntityTag", nestedBoxTag);
+        // 潜影盒内容 = DataComponents.CONTAINER 的物品列表；嵌套潜影盒内部装有钻石，用于验证不会递归展开
+        ItemStack nestedBox = containerStack("minecraft:shulker_box", 1,
+                List.of(itemStack("minecraft:diamond", 9)));
+        ItemStack ironIngot = itemStack("minecraft:iron_ingot", 64);
+        ItemStack goldIngot = itemStack("minecraft:gold_ingot", 5);
 
-        ListTag items = new ListTag();
-        items.add(itemEntry("minecraft:iron_ingot", 64));
-        items.add(itemEntry("minecraft:gold_ingot", 5));
-        items.add(nestedBox);
-        CompoundTag containerTag = new CompoundTag();
-        containerTag.put("Items", items);
-
-        TaskTriggerService.mergeContainerContents(containerTag, targets, counts);
+        TaskTriggerService.mergeContainerContents(
+                ItemContainerContents.fromItems(List.of(ironIngot, goldIngot, nestedBox)), targets, counts);
 
         GuiTestSupport.assertEquals(64, counts.get("minecraft:iron_ingot"), "潜影盒内的铁锭应计入持有量");
         GuiTestSupport.assertEquals(1, counts.get("minecraft:shulker_box"), "潜影盒内嵌套的潜影盒应按物品本身计入一次");
@@ -452,16 +450,33 @@ public final class TaskTriggerServiceTestMain {
     }
 
     /**
-     * 构造一条容器内容条目 NBT（1.20.1 物品格式：id + Count）。
+     * 构造一个指定物品与数量的物品堆（1.21+ DataComponents 格式）。
      *
      * @param id    物品资源 ID
      * @param count 数量
-     * @return 条目 NBT
+     * @return 物品堆
      */
-    private static CompoundTag itemEntry(String id, int count) {
-        CompoundTag entry = new CompoundTag();
-        entry.putString("id", id);
-        entry.putByte("Count", (byte) count);
-        return entry;
+    private static ItemStack itemStack(String id, int count) {
+        Item item = BuiltInRegistries.ITEM.get(
+                ResourceLocation.fromNamespaceAndPath(id.split(":")[0], id.split(":", 2)[1]));
+        ItemStack stack = new ItemStack(item, count);
+        return stack;
+    }
+
+    /**
+     * 构造一个携带容器内容组件的物品堆。
+     *
+     * @param id    容器物品资源 ID
+     * @param count 数量
+     * @param items 容器内物品堆列表
+     * @return 携带容器内容的物品堆
+     */
+    private static ItemStack containerStack(String id, int count, List<ItemStack> items) {
+        ItemStack stack = itemStack(id, count);
+        stack.applyComponents(net.minecraft.core.component.DataComponentPatch.builder()
+                .set(net.minecraft.core.component.DataComponents.CONTAINER,
+                        ItemContainerContents.fromItems(items))
+                .build());
+        return stack;
     }
 }

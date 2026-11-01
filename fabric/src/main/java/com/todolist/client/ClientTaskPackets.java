@@ -62,26 +62,27 @@ public class ClientTaskPackets {
                 boolean success = buf.readBoolean();
                 client.execute(() ->
                         TodoListMod.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId));
+                return;
             }
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
-            String title = buf.readUtf();
-            client.execute(() -> TodoToastRenderer.show(title));
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
-            TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
-            client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, handler, buf, responseSender) -> {
-            List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
-            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
-            client.execute(() -> {
-                AdvancementCatalog.apply(namespaceAtReceive, entries);
-                TodoListMod.LOGGER.info("Received {} advancements from server catalog", entries.size());
-            });
+            if (channelId.equals(TaskPackets.TRIGGER_COMPLETED_ID)) {
+                String title = buf.readUtf();
+                client.execute(() -> TodoToastRenderer.show(title));
+                return;
+            }
+            if (channelId.equals(TaskPackets.TRIGGER_PROGRESS_ID)) {
+                TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+                client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
+                return;
+            }
+            if (channelId.equals(TaskPackets.ADVANCEMENT_CATALOG_ID)) {
+                List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
+                String namespaceAtReceive = DataPathProvider.getStorageNamespace();
+                client.execute(() -> {
+                    AdvancementCatalog.apply(namespaceAtReceive, entries);
+                    TodoListMod.LOGGER.info("Received {} advancements from server catalog", entries.size());
+                });
+                return;
+            }
         });
     }
 
