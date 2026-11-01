@@ -72,7 +72,7 @@ public final class TriggerTargetSupportTestMain {
      * 校验物品与合成类目标直接使用目标物品作为图标。
      */
     private static void shouldResolveItemIconForItemTargets() {
-        GuiTestSupport.assertTrue(BuiltInRegistries.ITEM.containsKey(new net.minecraft.resources.ResourceLocation("minecraft", "iron_ingot")),
+        GuiTestSupport.assertTrue(BuiltInRegistries.ITEM.containsKey(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "iron_ingot")),
                 "测试环境应已注册原版物品");
         GuiTestSupport.assertEquals("minecraft:iron_ingot",
                 TriggerTargetSupport.resolveIconId(TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot"),

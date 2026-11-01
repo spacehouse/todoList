@@ -77,7 +77,7 @@ public class ForgeGameEventBridge {
     @SubscribeEvent
     public void onAdvancement(AdvancementEvent.AdvancementEarnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            String advancementId = event.getAdvancement().getId().toString();
+            String advancementId = event.getAdvancement().id().toString();
             TaskTriggerService.handleAdvancementAwarded(player, advancementId);
         }
     }

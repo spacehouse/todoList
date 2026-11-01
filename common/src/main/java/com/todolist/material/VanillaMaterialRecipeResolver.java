@@ -64,10 +64,11 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
      * @return 中立配方；无法解析时返回 null
      */
     @Override
-    public MaterialRecipe resolve(Recipe<?> recipe, RegistryAccess registryAccess) {
-        if (recipe == null) {
+    public MaterialRecipe resolve(net.minecraft.world.item.crafting.RecipeHolder<?> holder, RegistryAccess registryAccess) {
+        if (holder == null) {
             return null;
         }
+        Recipe<?> recipe = holder.value();
         MaterialRecipeKind kind = KIND_BY_TYPE.get(recipe.getType());
         if (kind == null) {
             return null;
@@ -84,7 +85,7 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
         if (inputs.isEmpty()) {
             return null;
         }
-        ResourceLocation recipeId = recipe.getId();
+        ResourceLocation recipeId = holder.id();
         return new MaterialRecipe(
                 recipeId == null ? "" : recipeId.toString(),
                 outputItemId,

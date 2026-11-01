@@ -143,13 +143,13 @@ public class TaskPackets {
         if (server.getAdvancements() == null) {
             return entries;
         }
-        for (Advancement advancement : server.getAdvancements().getAllAdvancements()) {
-            if (advancement == null || advancement.getDisplay() == null) {
+        for (net.minecraft.advancements.AdvancementHolder holder : server.getAdvancements().getAllAdvancements()) {
+            if (holder == null || holder.value() == null || holder.value().display().isEmpty()) {
                 continue;
             }
             entries.add(new AdvancementCatalog.Entry(
-                    advancement.getId().toString(),
-                    advancement.getDisplay().getTitle().getString()));
+                    holder.id().toString(),
+                    holder.value().display().get().getTitle().getString()));
         }
         return entries;
     }
@@ -255,6 +255,40 @@ public class TaskPackets {
         }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sendTeamTasksToPlayer(player, tasks);
+        }
+    }
+
+    /**
+     * 向指定玩家发送团队任务列表，自动判断是否需要分块。
+     *
+     * @param player 目标玩家
+     * @param tasks 团队任务列表
+     */
+    private static void sendTeamTasksToPlayer(ServerPlayer player, List<Task> tasks) {
+        byte[] data = TaskPacketChunking.serializeTasks(tasks);
+        if (data.length <= TaskPacketChunking.MAX_CHUNK_BYTES) {
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data));
+            serverPacketSender.send(player, TEAM_SYNC_TASKS_ID, buf);
+        } else {
+            sendChunkedTeamTasksToPlayer(player, data);
+        }
+    }
+
+    /**
+     * 以分块方式向玩家发送团队任务数据。
+     *
+     * @param player 目标玩家
+     * @param data 完整序列化字节数组
+     */
+    private static void sendChunkedTeamTasksToPlayer(ServerPlayer player, byte[] data) {
+        List<byte[]> chunks = TaskPacketChunking.splitPayload(data);
+        String sessionId = TaskPacketChunking.newSessionId();
+        TodoConstants.LOGGER.info("Sending chunked team tasks to player {}: {} chunks, {} bytes total",
+                player.getName().getString(), chunks.size(), data.length);
+        for (int i = 0; i < chunks.size(); i++) {
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            TaskPacketChunking.writeChunk(buf, sessionId, chunks.size(), i, chunks.get(i));
+            serverPacketSender.send(player, TEAM_SYNC_TASKS_CHUNKED_ID, buf);
         }
     }
 
@@ -407,11 +441,9 @@ public class TaskPackets {
             List<Task> submittedTasks = baseTasks == null ? tasks : mergeTeamTasks(currentTasks, baseTasks, tasks);
             List<Task> tasksToSave = mergeTeamTasksWithPermission(player, currentTasks, submittedTasks);
             H2MaintenanceGuard.ensureWritableIfH2();
-            List<Task> storedTasks = storage.loadTeamTasks();
-            List<Task> tasksToSave = baseTasks == null ? tasks : mergeTeamTasks(storedTasks, baseTasks, tasks);
             TaskTriggerService.mergeTeamTriggerStateInto(tasksToSave);
             // 领取人变更的团队任务清零进度（必须在合并引擎进度之后，否则重置会被覆盖）
-            TaskTriggerService.resetTriggerProgressOnAssigneeChange(storedTasks, tasksToSave);
+            TaskTriggerService.resetTriggerProgressOnAssigneeChange(currentTasks, tasksToSave);
             storage.saveTeamTasks(tasksToSave);
             TaskTriggerService.invalidateTeam();
             if (containsPendingItemCollectTrigger(tasksToSave)) {

@@ -2,7 +2,6 @@ package com.todolist.client;
 
 import com.todolist.material.MaterialRecipeKind;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.advancements.Advancement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientAdvancements;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -190,10 +189,10 @@ public final class TriggerTargetSupport {
             Minecraft client = Minecraft.getInstance();
             if (client != null && client.getConnection() != null) {
                 ClientAdvancements advancements = client.getConnection().getAdvancements();
-                if (advancements != null && advancements.getAdvancements() != null) {
-                    Advancement advancement = advancements.getAdvancements().get(location);
-                    if (advancement != null && advancement.getDisplay() != null) {
-                        return advancement.getDisplay().getTitle().getString();
+                if (advancements != null && advancements.get(location) != null) {
+                    net.minecraft.advancements.AdvancementHolder holder = advancements.get(location);
+                    if (holder != null && holder.value() != null && holder.value().display().isPresent()) {
+                        return holder.value().display().get().getTitle().getString();
                     }
                 }
             }
@@ -245,7 +244,7 @@ public final class TriggerTargetSupport {
         if (location == null) {
             return null;
         }
-        ResourceLocation eggId = new ResourceLocation(location.getNamespace(), location.getPath() + SPAWN_EGG_SUFFIX);
+        ResourceLocation eggId = ResourceLocation.fromNamespaceAndPath(location.getNamespace(), location.getPath() + SPAWN_EGG_SUFFIX);
         return BuiltInRegistries.ITEM.containsKey(eggId) ? eggId.toString() : null;
     }
 

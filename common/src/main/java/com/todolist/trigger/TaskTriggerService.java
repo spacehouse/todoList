@@ -6,11 +6,10 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.task.TaskTrigger;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayDeque;
@@ -39,19 +38,6 @@ public final class TaskTriggerService {
     private static final long FLUSH_DEBOUNCE_MS = 3000L;
     /** 客户端推送节流窗口（毫秒）：与落库解耦，保证 HUD 进度接近实时。 */
     private static final long PUSH_THROTTLE_MS = 250L;
-
-    /** 方块实体容器数据在物品 NBT 中的键名。 */
-    private static final String BLOCK_ENTITY_TAG_KEY = "BlockEntityTag";
-    /** 容器内容列表在方块实体 NBT 中的键名。 */
-    private static final String CONTAINER_ITEMS_KEY = "Items";
-    /** 物品 NBT 中的资源 ID 键名。 */
-    private static final String ITEM_ID_KEY = "id";
-    /** 物品 NBT 中的数量键名。 */
-    private static final String ITEM_COUNT_KEY = "Count";
-    /** NBT 列表类型 ID。 */
-    private static final int NBT_LIST_TYPE = 9;
-    /** NBT 复合类型 ID。 */
-    private static final int NBT_COMPOUND_TYPE = 10;
 
     private static final Map<String, CachedBucket> BUCKETS = new HashMap<>();
 
@@ -585,9 +571,7 @@ public final class TaskTriggerService {
                 continue;
             }
             mergeHeldItem(counts, targets, stack);
-            if (stack.getItem() instanceof BlockItem) {
-                mergeContainerContents(stack.getTagElement(BLOCK_ENTITY_TAG_KEY), targets, counts);
-            }
+            mergeContainerContents(stack.get(DataComponents.CONTAINER), targets, counts);
         }
         return counts;
     }
@@ -611,21 +595,23 @@ public final class TaskTriggerService {
 
     /**
      * 统计容器类物品（如潜影盒、模组背包）内部的物品数量。
+     * 1.21+ 容器内容存放在 {@code DataComponents.CONTAINER}，统一覆盖原版与模组容器物品。
      * 只展开一层：容器内再嵌套的容器按物品本身计数，其内部内容不再递归展开。
      *
-     * @param blockEntityTag 容器物品的方块实体 NBT，可为 null
-     * @param targets        待统计物品资源 ID 集合
-     * @param counts         统计结果累加目标
+     * @param container 容器物品的内容组件，可为 null
+     * @param targets   待统计物品资源 ID 集合
+     * @param counts    统计结果累加目标
      */
-    static void mergeContainerContents(CompoundTag blockEntityTag, Set<String> targets, Map<String, Integer> counts) {
-        if (blockEntityTag == null || !blockEntityTag.contains(CONTAINER_ITEMS_KEY, NBT_LIST_TYPE)) {
+    static void mergeContainerContents(ItemContainerContents container, Set<String> targets, Map<String, Integer> counts) {
+        if (container == null) {
             return;
         }
-        ListTag items = blockEntityTag.getList(CONTAINER_ITEMS_KEY, NBT_COMPOUND_TYPE);
-        for (int i = 0; i < items.size(); i++) {
-            CompoundTag entry = items.getCompound(i);
-            String itemId = entry.getString(ITEM_ID_KEY);
-            int count = entry.getByte(ITEM_COUNT_KEY) & 0xFF;
+        for (ItemStack inner : container.nonEmptyItems()) {
+            if (inner == null || inner.isEmpty()) {
+                continue;
+            }
+            String itemId = BuiltInRegistries.ITEM.getKey(inner.getItem()).toString();
+            int count = inner.getCount();
             if (itemId.isEmpty() || count <= 0 || !targets.contains(itemId)) {
                 continue;
             }

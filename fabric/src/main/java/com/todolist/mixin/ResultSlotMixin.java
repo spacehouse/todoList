@@ -76,8 +76,9 @@ public class ResultSlotMixin {
         }
         return player.level()
                 .getRecipeManager()
-                .getRecipeFor(RecipeType.CRAFTING, craftSlots, player.level())
-                .map(recipe -> recipe.getResultItem(player.level().registryAccess()))
+                .getRecipeFor(RecipeType.CRAFTING, craftSlots.asCraftInput(), player.level(),
+                        (net.minecraft.world.item.crafting.RecipeHolder<net.minecraft.world.item.crafting.CraftingRecipe>) null)
+                .map(recipe -> recipe.value().getResultItem(player.level().registryAccess()))
                 .orElse(ItemStack.EMPTY);
     }
 }

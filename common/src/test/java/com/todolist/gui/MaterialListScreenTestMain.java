@@ -294,14 +294,14 @@ public final class MaterialListScreenTestMain {
         Harness fanHarness = openScreenFor("test:target", fanIndex(), 1);
         MaterialListScreen fanScreen = fanHarness.screen;
 
-        GuiTestSupport.assertTrue(fanScreen.mouseScrolled(TREE_CENTER_X, 120, -1),
+        GuiTestSupport.assertTrue(fanScreen.mouseScrolled(TREE_CENTER_X, 120, 0, -1),
                 "树区域内的滚轮应被界面消费");
         GuiTestSupport.assertTrue(fanScreen.getScrollYForTest() > 0, "滚轮向下应产生纵向偏移");
         for (int i = 0; i < 40; i++) {
-            fanScreen.mouseScrolled(TREE_CENTER_X, 120, -1);
+            fanScreen.mouseScrolled(TREE_CENTER_X, 120, 0, -1);
         }
         int stabilized = fanScreen.getScrollYForTest();
-        fanScreen.mouseScrolled(TREE_CENTER_X, 120, -1);
+        fanScreen.mouseScrolled(TREE_CENTER_X, 120, 0, -1);
         GuiTestSupport.assertEquals(stabilized, fanScreen.getScrollYForTest(),
                 "滚动到底后纵向偏移不应继续增加");
 
@@ -312,7 +312,7 @@ public final class MaterialListScreenTestMain {
         deepScreen.clickItemBodyForTest("test:c");
 
         deepScreen.keyPressed(GLFW.GLFW_KEY_LEFT_SHIFT, 0, 0);
-        GuiTestSupport.assertTrue(deepScreen.mouseScrolled(EMPTY_POINT_X, EMPTY_POINT_Y, -1),
+        GuiTestSupport.assertTrue(deepScreen.mouseScrolled(EMPTY_POINT_X, EMPTY_POINT_Y, 0, -1),
                 "按住 Shift 时滚轮应被界面消费");
         int afterShiftWheel = deepScreen.getScrollXForTest();
         GuiTestSupport.assertTrue(afterShiftWheel > 0, "按住 Shift 时滚轮应改为横向滚动");

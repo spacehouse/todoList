@@ -2,6 +2,7 @@ package com.todolist.material;
 
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 
 import java.util.Set;
@@ -27,9 +28,9 @@ public interface MaterialRecipeResolver {
     /**
      * 把一条 MC 配方转换为中立模型。
      *
-     * @param recipe         MC 配方（1.20.1 中配方自带 {@link Recipe#getId()}）
+     * @param holder         MC 配方持有者（1.21+ 配方 ID 由 {@link RecipeHolder#id()} 承载）
      * @param registryAccess 注册表访问，用于解析产物
      * @return 中立配方；无法解析（产物为空 / 无有效输入）时返回 null
      */
-    MaterialRecipe resolve(Recipe<?> recipe, RegistryAccess registryAccess);
+    MaterialRecipe resolve(RecipeHolder<?> holder, RegistryAccess registryAccess);
 }

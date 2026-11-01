@@ -1,7 +1,7 @@
 package com.todolist.material;
 
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.item.crafting.RecipeType;
 
@@ -53,8 +53,8 @@ public final class MaterialRecipeIndexBuilder {
                 continue;
             }
             for (RecipeType<?> type : resolver.supportedTypes()) {
-                for (Recipe<?> recipe : recipesOf(recipeManager, type)) {
-                    MaterialRecipe mapping = resolver.resolve(recipe, registryAccess);
+                for (RecipeHolder<?> holder : recipesOf(recipeManager, type)) {
+                    MaterialRecipe mapping = resolver.resolve(holder, registryAccess);
                     if (mapping != null) {
                         index.add(mapping);
                     }
@@ -72,20 +72,20 @@ public final class MaterialRecipeIndexBuilder {
      * @return 配方列表；类型无配方时返回空列表
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static List<Recipe<?>> recipesOf(RecipeManager recipeManager, RecipeType<?> type) {
-        List<Recipe<?>> recipes = new ArrayList<>();
+    private static List<RecipeHolder<?>> recipesOf(RecipeManager recipeManager, RecipeType<?> type) {
+        List<RecipeHolder<?>> holders = new ArrayList<>();
         if (type == null) {
-            return recipes;
+            return holders;
         }
         List<?> raw = recipeManager.getAllRecipesFor((RecipeType) type);
         if (raw == null) {
-            return recipes;
+            return holders;
         }
         for (Object entry : raw) {
-            if (entry instanceof Recipe<?> recipe) {
-                recipes.add(recipe);
+            if (entry instanceof RecipeHolder<?> holder) {
+                holders.add(holder);
             }
         }
-        return recipes;
+        return holders;
     }
 }
