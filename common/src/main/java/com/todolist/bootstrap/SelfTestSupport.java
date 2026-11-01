@@ -517,8 +517,9 @@ public final class SelfTestSupport {
                                              String stage) throws Exception {
         int engineProgress = TaskTriggerService.debugPersonalTriggerProgress(
                 server, player.getUUID(), taskId);
-        TodoConstants.LOGGER.info("[selftest] 诊断 {} taskId={} 引擎内存进度={} 期望={}",
-                stage, taskId, engineProgress, progress);
+        TodoConstants.LOGGER.info("[selftest] 诊断 {} taskId={} 引擎内存进度={} 期望={} 桶摘要={}",
+                stage, taskId, engineProgress, progress,
+                TaskTriggerService.debugPersonalBucketSummary(server, player.getUUID()));
         List<Task> tasks = TodoListCommon.getTaskStorage().loadPersonalTasks(server, player.getUUID());
         Task t = tasks.stream().filter(x -> x.getId().equals(taskId)).findFirst().orElse(null);
         check(t != null, stage + ": 任务应存在于存储（引擎内存进度=" + engineProgress + "）");

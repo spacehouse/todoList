@@ -254,6 +254,18 @@ public final class TaskTriggerService {
      * @param taskId 任务 ID
      * @return 桶内触发器进度
      */
+    public static String debugPersonalBucketSummary(MinecraftServer server, UUID uuid) {
+        boolean local = TodoListCommon.getTaskStorage().shouldUseLocalPersonalStorage(server);
+        CachedBucket bucket = peekBucket(personalBucketKey(server, uuid));
+        if (bucket == null) {
+            return "bucket=absent local=" + local;
+        }
+        long selftest = bucket.tasks.stream()
+                .filter(t -> t.getTitle() != null && t.getTitle().startsWith("selftest-")).count();
+        return "bucket=" + bucket.key + " local=" + local + " tasks=" + bucket.tasks.size()
+                + " selftest=" + selftest;
+    }
+
     public static int debugPersonalTriggerProgress(MinecraftServer server, UUID uuid, String taskId) {
         CachedBucket bucket = peekBucket(personalBucketKey(server, uuid));
         if (bucket == null) {
