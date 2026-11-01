@@ -614,6 +614,17 @@ public final class CommandBootstrap {
                                         .executes(ctx -> setCommandAccessMode(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "mode")
+                                        )))))
+                .then(Commands.literal("selftest")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> executeSelfTestList(ctx.getSource())))
+                        .then(Commands.literal("run")
+                                .executes(ctx -> executeSelfTestRun(ctx.getSource(), "all"))
+                                .then(Commands.argument("caseId", StringArgumentType.word())
+                                        .executes(ctx -> executeSelfTestRun(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "caseId")
                                         )))));
 
         LiteralCommandNode<CommandSourceStack> todoRootNode = dispatcher.register(todoRoot);
@@ -862,6 +873,59 @@ public final class CommandBootstrap {
             sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", reasonText, sanitizeStatusMessage(storageStatus.getMessage()));
         }
         return sendCommandSuccess(source, COMMAND_SUCCESS, "command.todolist.h2.status", SIDE_EFFECT_NONE);
+    }
+
+    /**
+     * 列出全部自检场景（区分控制台档与玩家档）。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int executeSelfTestList(CommandSourceStack source) {
+        List<String> console = SelfTestSupport.caseIds(false);
+        List<String> all = SelfTestSupport.caseIds(true);
+        List<String> playerOnly = new ArrayList<>(all);
+        playerOnly.removeAll(console);
+        source.sendSystemMessage(Component.literal(
+                "自检场景 控制台档（" + console.size() + " 个，可在专用服务器控制台执行）："));
+        source.sendSystemMessage(Component.literal("  " + String.join(", ", console)));
+        source.sendSystemMessage(Component.literal(
+                "玩家档（" + playerOnly.size() + " 个，需在游戏内执行以获得玩家上下文）："));
+        source.sendSystemMessage(Component.literal("  " + String.join(", ", playerOnly)));
+        source.sendSystemMessage(Component.literal(
+                "用法：/todo selftest run [场景ID|all]，控制台执行时自动跳过玩家档场景。"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * 执行自检场景套件并输出汇总。
+     *
+     * <p>标签行同时写入服务器日志（供面板 logparse 与 verify-all 解析）与命令反馈。
+     * 自检不是真实命令调用，汇总反馈不产生 COMMAND_RESULT_TRIPLET 行。
+     *
+     * @param source 命令源
+     * @param caseId 场景 ID 或 all
+     * @return 命令执行结果
+     */
+    private static int executeSelfTestRun(CommandSourceStack source, String caseId) {
+        ServerPlayer player = getPlayerOrNull(source);
+        MinecraftServer server = source.getServer();
+        String onlyId = caseId == null || caseId.isBlank() ? "all" : caseId;
+        long start = System.currentTimeMillis();
+        SelfTestSupport.SuiteResult result = SelfTestSupport.runSuite(server, player, onlyId,
+                line -> {
+                    TodoConstants.LOGGER.info(line);
+                    source.sendSystemMessage(Component.literal(line));
+                });
+        long ms = System.currentTimeMillis() - start;
+        if (result.fail() > 0) {
+            source.sendFailure(Component.literal(
+                    "自检完成：" + result.pass() + " 通过 / " + result.fail() + " 失败（" + ms + " ms）"));
+            return 0;
+        }
+        source.sendSystemMessage(Component.literal(
+                "自检全部通过：" + result.pass() + " 个场景（" + ms + " ms）"));
+        return Command.SINGLE_SUCCESS;
     }
 
     /**
