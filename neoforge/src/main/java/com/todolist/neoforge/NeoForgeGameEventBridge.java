@@ -7,7 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.player.AdvancementEarnEvent;
+import net.neoforged.neoforge.event.entity.player.AdvancementEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -66,14 +66,14 @@ public class NeoForgeGameEventBridge {
     /**
      * 转发进度达成事件，推进 ADVANCEMENT 触发器。
      *
-     * NeoForge 21.1 把进度事件拆为 {@link AdvancementEarnEvent}（进度真正完成）与
-     * {@code AdvancementProgressEvent}（criteria 递增）两类，这里只监听前者：
-     * 监听后者会导致同一条进度按条件数重复推进（见 docs/feat-trigger-completion.md 回归 R20）。
+     * NeoForge 21.1 与 Forge 相同，进度事件拆为 {@link AdvancementEvent.AdvancementEarnEvent}
+     * （进度真正完成）与 {@code AdvancementEvent.AdvancementProgressEvent}（criteria 递增）两类，
+     * 这里只监听前者：监听后者会导致同一条进度按条件数重复推进（见 docs/feat-trigger-completion.md 回归 R20）。
      *
      * @param event 进度达成事件
      */
     @SubscribeEvent
-    public void onAdvancement(AdvancementEarnEvent event) {
+    public void onAdvancement(AdvancementEvent.AdvancementEarnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && event.getAdvancement() != null) {
             String advancementId = event.getAdvancement().id().toString();
             TaskTriggerService.handleAdvancementAwarded(player, advancementId);
