@@ -560,6 +560,8 @@ public final class H2TaskQueryServiceTestMain {
             Task parent = createTask("roundtrip-parent", "roundtrip-project", false, Task.Scope.PERSONAL);
             parent.setDescription("全字段往返父任务");
             parent.setPriority(Task.Priority.HIGH);
+            parent.setDueDate(1735689600000L);
+            parent.setCreatorUuid("roundtrip-creator");
             parent.setAssigneeUuid("roundtrip-owner");
             parent.setAssigneeName("往返玩家");
             parent.setTags(java.util.List.of("alpha", "beta"));
@@ -583,6 +585,7 @@ public final class H2TaskQueryServiceTestMain {
                     H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER, parent.getId());
             GuiTestSupport.assertEquals(1, subtasks.size(), "子任务查询应返回 1 条");
             assertTriggerRoundtrip(subtasks.get(0), "子任务查询链路");
+            assertRoundtripColumns(child, subtasks.get(0), "子任务查询链路");
 
             // 链路二：HUD 主查询（parent_task_id 不限定的全列查询）
             H2TaskQueryService.HudTaskQueryResult hud = queryService.queryHudTasks(
@@ -595,6 +598,7 @@ public final class H2TaskQueryServiceTestMain {
                     .filter(t -> t.getId().equals(parent.getId())).findFirst().orElse(null);
             GuiTestSupport.assertTrue(hudParent != null, "HUD 查询应返回父任务");
             assertTriggerRoundtrip(hudParent, "HUD 主查询链路");
+            assertRoundtripColumns(parent, hudParent, "HUD 主查询链路");
 
             // 链路三（线上 bug 的完整链路）：GUI 内存的任务对象来自查询链路（触发器可能缺失），
             // 替换式保存后再经查询加载，触发器必须完整保留。
@@ -608,6 +612,7 @@ public final class H2TaskQueryServiceTestMain {
                     H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER, parent.getId());
             GuiTestSupport.assertEquals(1, reloaded.size(), "替换式保存后子任务查询应仍返回 1 条");
             assertTriggerRoundtrip(reloaded.get(0), "替换式保存往返");
+            assertRoundtripColumns(child, reloaded.get(0), "替换式保存往返");
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 查询链路全字段往返时发生异常", exception);
         } finally {
@@ -618,6 +623,29 @@ public final class H2TaskQueryServiceTestMain {
     /**
      * 断言任务经 H2 查询链路往返后触发器与关键列完整保留。
      */
+    private static void assertRoundtripColumns(Task saved, Task loaded, String stage) {
+        GuiTestSupport.assertEquals(saved.getDescription(), loaded.getDescription(),
+                stage + ": description 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getPriority(), loaded.getPriority(),
+                stage + ": priority 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getDueDate(), loaded.getDueDate(),
+                stage + ": dueDate 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getCreatorUuid(), loaded.getCreatorUuid(),
+                stage + ": creatorUuid 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getAssigneeUuid(), loaded.getAssigneeUuid(),
+                stage + ": assigneeUuid 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getAssigneeName(), loaded.getAssigneeName(),
+                stage + ": assigneeName 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getProjectId(), loaded.getProjectId(),
+                stage + ": projectId 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getParentTaskId(), loaded.getParentTaskId(),
+                stage + ": parentTaskId 应保持（列清单同步回归）");
+        GuiTestSupport.assertTrue(
+                java.util.Objects.equals(saved.getTags(), loaded.getTags())
+                        || (loaded.getTags() != null && loaded.getTags().containsAll(saved.getTags())),
+                stage + ": tags 应保持（列清单同步回归）");
+    }
+
     private static void assertTriggerRoundtrip(Task task, String stage) {
         GuiTestSupport.assertTrue(task.getTrigger() != null,
                 stage + ": " + task.getTitle() + " 的触发器应在往返后保留（缺列回归）");

@@ -208,6 +208,30 @@ tasks.register<JavaExec>("materialPreviewLayoutTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("packetChunkingTest") {
+    group = "verification"
+    description = "Run the team task packet chunking roundtrip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.TaskPacketChunkingTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("packetGuardsTest") {
+    group = "verification"
+    description = "Run the network packet read-guard self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.PacketGuardsTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("permissionCenterTest") {
+    group = "verification"
+    description = "Run the permission center role x operation matrix self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.permission.PermissionCenterTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
@@ -229,6 +253,9 @@ tasks.named("check").configure {
     dependsOn("materialTaskGeneratorTest")
     dependsOn("materialPreviewStateTest")
     dependsOn("materialPreviewLayoutTest")
+    dependsOn("packetChunkingTest")
+    dependsOn("packetGuardsTest")
+    dependsOn("permissionCenterTest")
 }
 
 tasks.withType<Test>().configureEach {
