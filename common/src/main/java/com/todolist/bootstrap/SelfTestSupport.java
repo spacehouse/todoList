@@ -153,6 +153,16 @@ public final class SelfTestSupport {
      */
     public static SuiteResult runSuite(MinecraftServer server, ServerPlayer player,
                                        String onlyId, Consumer<String> lineSink) {
+        // 探针：记录 server.execute 在当前线程的真实调度行为（同步直跑 or 入队延迟）
+        final boolean[] probeRan = {false};
+        long probeSubmit = System.currentTimeMillis();
+        server.execute(() -> {
+            probeRan[0] = true;
+            TodoConstants.LOGGER.info("[selftest] 探针 runnable 线程={} 距提交={}ms",
+                    Thread.currentThread().getName(), System.currentTimeMillis() - probeSubmit);
+        });
+        TodoConstants.LOGGER.info("[selftest] 探针提交线程={} 同步已跑={}",
+                Thread.currentThread().getName(), probeRan[0]);
         boolean includePlayer = player != null;
         List<SelfCase> selected = new ArrayList<>();
         for (SelfCase c : CASES) {
@@ -325,18 +335,18 @@ public final class SelfTestSupport {
             List<ItemStack> backup = snapshotInventory(player);
             try {
                 player.getInventory().clearContent();
-                TaskTriggerService.handleInventoryChanged(player);
+                TaskTriggerService.selftestInventoryChanged(player);
                 TaskTriggerService.flushForPlayer(player);
                 assertStoredProgress(server, player, t.getId(), 0, false, "空背包阶段");
 
                 // 塞入 32 个铁锭 → 真实背包重读 → 推进并完成
                 player.getInventory().add(new ItemStack(Items.IRON_INGOT, 32));
-                TaskTriggerService.handleInventoryChanged(player);
+                TaskTriggerService.selftestInventoryChanged(player);
                 TaskTriggerService.flushForPlayer(player);
                 assertStoredProgress(server, player, t.getId(), 32, true, "塞入 32 铁锭后");
             } finally {
                 restoreInventory(player, backup);
-                TaskTriggerService.handleInventoryChanged(player);
+                TaskTriggerService.selftestInventoryChanged(player);
             }
         } finally {
             cleanupTask(server, player, t.getId());
@@ -353,12 +363,12 @@ public final class SelfTestSupport {
             t = prepareTriggerTask(server, player,
                     new TaskTrigger(TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 32));
             TaskTriggerService.invalidatePersonal(server, player.getUUID());
-            TaskTriggerService.handleInventoryChanged(player);
+            TaskTriggerService.selftestInventoryChanged(player);
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 32, true, "已有存量时建触发器应立即完成");
         } finally {
             restoreInventory(player, backup);
-            TaskTriggerService.handleInventoryChanged(player);
+            TaskTriggerService.selftestInventoryChanged(player);
             if (t != null) {
                 cleanupTask(server, player, t.getId());
             }
@@ -369,8 +379,8 @@ public final class SelfTestSupport {
         Task t = prepareTriggerTask(server, player,
                 new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 5));
         try {
-            TaskTriggerService.handleItemCrafted(player, "minecraft:iron_ingot", 3);
-            TaskTriggerService.handleItemCrafted(player, "minecraft:iron_ingot", 2);
+            TaskTriggerService.selftestItemCrafted(player, "minecraft:iron_ingot", 3);
+            TaskTriggerService.selftestItemCrafted(player, "minecraft:iron_ingot", 2);
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 5, true, "合成 3+2 后");
         } finally {
@@ -383,7 +393,7 @@ public final class SelfTestSupport {
                 new TaskTrigger(TaskTrigger.Type.BREAK_BLOCK, "minecraft:stone", 3));
         try {
             for (int i = 0; i < 3; i++) {
-                TaskTriggerService.handleBlockBroken(player, "minecraft:stone");
+                TaskTriggerService.selftestBlockBroken(player, "minecraft:stone");
             }
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 3, true, "破坏 3 次后");
@@ -396,8 +406,8 @@ public final class SelfTestSupport {
         Task t = prepareTriggerTask(server, player,
                 new TaskTrigger(TaskTrigger.Type.KILL_ENTITY, "minecraft:zombie", 2));
         try {
-            TaskTriggerService.handleEntityKilled(player, "minecraft:zombie");
-            TaskTriggerService.handleEntityKilled(player, "minecraft:zombie");
+            TaskTriggerService.selftestEntityKilled(player, "minecraft:zombie");
+            TaskTriggerService.selftestEntityKilled(player, "minecraft:zombie");
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 2, true, "击杀 2 次后");
         } finally {
@@ -409,7 +419,7 @@ public final class SelfTestSupport {
         Task t = prepareTriggerTask(server, player,
                 new TaskTrigger(TaskTrigger.Type.ADVANCEMENT, "minecraft:story/mine_stone", 1));
         try {
-            TaskTriggerService.handleAdvancementAwarded(player, "minecraft:story/mine_stone");
+            TaskTriggerService.selftestAdvancementAwarded(player, "minecraft:story/mine_stone");
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 1, true, "达成进度后");
         } finally {
@@ -421,11 +431,11 @@ public final class SelfTestSupport {
         Task t = prepareTriggerTask(server, player,
                 new TaskTrigger(TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 10));
         try {
-            TaskTriggerService.handleItemCrafted(player, "minecraft:iron_ingot", 6);
+            TaskTriggerService.selftestItemCrafted(player, "minecraft:iron_ingot", 6);
             TaskTriggerService.flushForPlayer(player);
             // 清引擎桶模拟重进世界，重载后进度应保持且可继续推进
             TaskTriggerService.invalidatePersonal(server, player.getUUID());
-            TaskTriggerService.handleItemCrafted(player, "minecraft:iron_ingot", 4);
+            TaskTriggerService.selftestItemCrafted(player, "minecraft:iron_ingot", 4);
             TaskTriggerService.flushForPlayer(player);
             assertStoredProgress(server, player, t.getId(), 10, true, "桶清空重载后继续推进");
         } finally {

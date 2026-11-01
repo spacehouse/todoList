@@ -15,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.function.Consumer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -264,6 +265,55 @@ public final class TaskTriggerService {
                 .filter(t -> t.getTitle() != null && t.getTitle().startsWith("selftest-")).count();
         return "bucket=" + bucket.key + " local=" + local + " tasks=" + bucket.tasks.size()
                 + " selftest=" + selftest;
+    }
+
+    /**
+     * selftest 专用：在调用线程同步驱动个人桶与团队桶的事件推进（与 dispatch 的
+     * 主线程语义等价，但不经 server.execute 调度）。
+     *
+     * <p>背景：玩家命令上下文中 server.execute 的 runnable 存在不立即执行的观测
+     * （selftest 引擎桶 absent），事件入口直调场景因此拿不到推进结果。仅在主线程调用。
+     *
+     * @param player 目标玩家
+     * @param action 桶动作
+     */
+    public static void runPersonalEventDirect(ServerPlayer player, Consumer<CachedBucket> action) {
+        MinecraftServer server = player.getServer();
+        if (server == null) {
+            return;
+        }
+        String personalKey = personalBucketKey(server, player.getUUID());
+        action.accept(getOrLoadBucket(server, personalKey, player.getUUID()));
+        maybeFlushDebounced(server, personalKey, player);
+        maybePushThrottled(server, personalKey);
+        action.accept(getOrLoadBucket(server, TEAM_BUCKET_KEY, null));
+        maybeFlushDebounced(server, TEAM_BUCKET_KEY, player);
+        maybePushThrottled(server, TEAM_BUCKET_KEY);
+    }
+
+    /** selftest 专用：同步驱动收集类重算（等价 handleInventoryChanged 的主线程语义）。 */
+    public static void selftestInventoryChanged(ServerPlayer player) {
+        runPersonalEventDirect(player, bucket -> recalculateItemCollect(player, bucket));
+    }
+
+    /** selftest 专用：同步驱动合成事件推进。 */
+    public static void selftestItemCrafted(ServerPlayer player, String itemId, int count) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.CRAFT_ITEM, itemId, count));
+    }
+
+    /** selftest 专用：同步驱动破坏方块事件推进。 */
+    public static void selftestBlockBroken(ServerPlayer player, String blockId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.BREAK_BLOCK, blockId, 1));
+    }
+
+    /** selftest 专用：同步驱动击杀事件推进。 */
+    public static void selftestEntityKilled(ServerPlayer player, String entityId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.KILL_ENTITY, entityId, 1));
+    }
+
+    /** selftest 专用：同步驱动进度达成事件推进。 */
+    public static void selftestAdvancementAwarded(ServerPlayer player, String advancementId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.ADVANCEMENT, advancementId, 1));
     }
 
     public static int debugPersonalTriggerProgress(MinecraftServer server, UUID uuid, String taskId) {
