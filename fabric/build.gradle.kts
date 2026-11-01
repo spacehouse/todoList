@@ -142,6 +142,20 @@ tasks.register<JavaExec>("mixinVisibilityTest") {
     dependsOn(fabricTestSourceSet.classesTaskName)
 }
 
+tasks.register<JavaExec>("mixinConfigTest") {
+    group = "verification"
+    description = "Run the mixin registry guard self-tests (registered mixins <-> mixin package classes)."
+    classpath = files(
+        fabricMainSourceSet.output,
+        fabricTestSourceSet.output,
+        fabricMainSourceSet.compileClasspath,
+        fabricTestSourceSet.compileClasspath
+    )
+    mainClass.set("com.todolist.mixin.test.MixinConfigTestMain")
+    dependsOn(fabricTestSourceSet.classesTaskName)
+}
+
 tasks.named("check") {
     dependsOn("mixinVisibilityTest")
+    dependsOn("mixinConfigTest")
 }
