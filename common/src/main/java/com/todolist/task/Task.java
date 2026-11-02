@@ -84,6 +84,14 @@ public class Task {
         this.projectId = source.projectId;
         this.parentTaskId = source.parentTaskId;
         this.subtaskSortOrder = source.subtaskSortOrder;
+        // 触发器必须深拷贝：GUI 后台保存的快照走 copy()，漏拷会把 H2 触发器列清空
+        // （表现为重开界面后触发器消失、引擎不再推进）
+        if (source.trigger != null) {
+            TaskTrigger copied = new TaskTrigger(source.trigger.getType(), source.trigger.getTarget(),
+                    source.trigger.getTargetCount());
+            copied.setProgress(source.trigger.getProgress());
+            this.trigger = copied;
+        }
     }
 
     /**
