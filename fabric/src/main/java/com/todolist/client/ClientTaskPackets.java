@@ -71,6 +71,10 @@ public class ClientTaskPackets {
             }
             if (channelId.equals(TaskPackets.TRIGGER_PROGRESS_ID)) {
                 TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+                if (com.todolist.HudProbe.enabled()) {
+                    com.todolist.HudProbe.log("client received {} entries team={}",
+                            batch.entries().size(), batch.team());
+                }
                 client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
                 return;
             }

@@ -93,6 +93,9 @@ public final class TaskTriggerService {
      * @param player 库存变化的玩家
      */
     public static void handleInventoryChanged(ServerPlayer player) {
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("collect scan dispatch player={}", player.getName().getString());
+        }
         dispatch(player, bucket -> recalculateItemCollect(player, bucket));
     }
 
