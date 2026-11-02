@@ -29,6 +29,7 @@ public final class TaskCompatibilityTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("TaskCompatibilityTestMain.shouldRoundTripAllFieldsThroughNbt", TaskCompatibilityTestMain::shouldRoundTripAllFieldsThroughNbt);
+        GuiTestSupport.runTestCase("TaskCompatibilityTestMain.shouldCopyTriggerToSnapshotCopy", TaskCompatibilityTestMain::shouldCopyTriggerToSnapshotCopy);
         GuiTestSupport.runTestCase(
                 "TaskCompatibilityTestMain.shouldRoundTripSubtaskFieldsWithNbt",
                 TaskCompatibilityTestMain::shouldRoundTripSubtaskFieldsWithNbt
@@ -223,5 +224,37 @@ public final class TaskCompatibilityTestMain {
                 "NBT 往返触发器目标数量应保持");
         GuiTestSupport.assertEquals(source.getTrigger().getProgress(), reloaded.getTrigger().getProgress(),
                 "NBT 往返触发器进度应保持");
+    }
+
+    /**
+     * 回归（2026-11-03 实机深层触发器消失的根因）：Task 拷贝构造曾漏拷 trigger，
+     * GUI 后台保存的快照经 copy() 生成，导致每次自动保存把 H2 触发器列清空——
+     * 表现为刚创建时显示正常、重开界面/HUD 后触发器消失、引擎不再推进。
+     */
+    private static void shouldCopyTriggerToSnapshotCopy() {
+        Task source = new Task("copy-触发器", "");
+        source.setTrigger(new TaskTrigger(TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 72));
+        source.getTrigger().setProgress(31);
+
+        Task copied = source.copy();
+        GuiTestSupport.assertTrue(copied.getTrigger() != null, "copy() 应保留触发器");
+        GuiTestSupport.assertEquals(TaskTrigger.Type.ITEM_COLLECT, copied.getTrigger().getType(),
+                "copy() 后触发器类型应保持");
+        GuiTestSupport.assertEquals("minecraft:raw_iron", copied.getTrigger().getTarget(),
+                "copy() 后触发器目标应保持");
+        GuiTestSupport.assertEquals(72, copied.getTrigger().getTargetCount(),
+                "copy() 后触发器目标数量应保持");
+        GuiTestSupport.assertEquals(31, copied.getTrigger().getProgress(),
+                "copy() 后触发器进度应保持");
+
+        // 快照独立性：修改副本触发器不得影响原任务
+        copied.getTrigger().setProgress(0);
+        GuiTestSupport.assertEquals(31, source.getTrigger().getProgress(),
+                "copy() 应为深拷贝，副本进度变更不影响原任务");
+
+        // 无触发器任务拷贝后仍为无触发器
+        Task plain = new Task("copy-无触发器", "");
+        GuiTestSupport.assertTrue(plain.copy().getTrigger() == null,
+                "无触发器任务拷贝后不应凭空出现触发器");
     }
 }
