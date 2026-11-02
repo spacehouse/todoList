@@ -36,6 +36,7 @@ public final class H2TaskQueryServiceTestMain {
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldTreatLikeWildcardsAsLiteralSearchText", H2TaskQueryServiceTestMain::shouldTreatLikeWildcardsAsLiteralSearchText);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryGuiTaskIdsWithLimitOffsetAndCount", H2TaskQueryServiceTestMain::shouldQueryGuiTaskIdsWithLimitOffsetAndCount);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldPreserveTriggerAndAllColumnsThroughQueryRoundtrip", H2TaskQueryServiceTestMain::shouldPreserveTriggerAndAllColumnsThroughQueryRoundtrip);
+        GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldPreserveTriggersAtEveryDepth", H2TaskQueryServiceTestMain::shouldPreserveTriggersAtEveryDepth);
     }
 
     /**
@@ -667,6 +668,53 @@ public final class H2TaskQueryServiceTestMain {
                     stage + ": 父任务触发器目标数量应保持");
             GuiTestSupport.assertEquals(1, task.getTrigger().getProgress(),
                     stage + ": 父任务触发器进度应保持");
+        }
+    }
+
+    /**
+     * 回归（用户实测"第三层及更深子任务触发器丢失"）：三层任务树经 TaskStore 保存 →
+     * 全桶加载，验证触发器挂接与深度无关。存储链路层级无关成立时，实机深层缺失
+     * 应归因于旧数据被历史缺陷清空（不可恢复），而非当前代码。
+     */
+    private static void shouldPreserveTriggersAtEveryDepth() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-depth-");
+            Task level1 = createTask("depth-l1", "depth-project", false, Task.Scope.PERSONAL);
+            level1.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_block", 8));
+            Task level2 = createSubtask("depth-l2", "depth-project", false, Task.Scope.PERSONAL,
+                    level1.getId(), 0L);
+            level2.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 72));
+            Task level3 = createSubtask("depth-l3", "depth-project", false, Task.Scope.PERSONAL,
+                    level2.getId(), 0L);
+            level3.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 72));
+            Task level4 = createSubtask("depth-l4", "depth-project", false, Task.Scope.PERSONAL,
+                    level3.getId(), 0L);
+            level4.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:deepslate_raw_iron", 96));
+
+            new H2TaskStore().saveLocalTasks(List.of(level1, level2, level3, level4));
+            List<Task> reloaded = new H2TaskStore().loadLocalTasks();
+            GuiTestSupport.assertEquals(4, reloaded.size(), "四层任务应全部加载");
+            for (Task task : reloaded) {
+                GuiTestSupport.assertTrue(task.getTrigger() != null,
+                        task.getTitle() + " 的触发器应在任意深度保留");
+                int expected = switch (task.getTitle()) {
+                    case "depth-l1" -> 8;
+                    case "depth-l2" -> 72;
+                    case "depth-l3" -> 72;
+                    default -> 96;
+                };
+                GuiTestSupport.assertEquals(expected, task.getTrigger().getTargetCount(),
+                        task.getTitle() + " 的触发器目标数量应保持");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证多层任务树触发器往返时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
         }
     }
 }
