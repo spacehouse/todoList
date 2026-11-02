@@ -590,10 +590,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (byId.isEmpty()) {
             return;
         }
-        applyTriggerProgressToTasks(batch.team() ? cachedTeamTasksSnapshot : cachedPersonalTasksSnapshot, byId);
+        boolean snapshotUpdated = applyTriggerProgressToTasks(
+                batch.team() ? cachedTeamTasksSnapshot : cachedPersonalTasksSnapshot, byId);
         TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
-        if (renderer != null) {
-            renderer.applyTriggerProgress(batch.entries(), batch.team());
+        boolean hudUpdated = renderer != null && renderer.applyTriggerProgress(batch.entries(), batch.team());
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("client applied snapshotUpdated={} hudUpdated={} of {} entries",
+                    snapshotUpdated, hudUpdated, byId.size());
         }
         if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
             screen.applyTriggerProgressToOpenScreen(byId, batch.team());

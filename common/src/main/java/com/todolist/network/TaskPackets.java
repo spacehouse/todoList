@@ -336,7 +336,14 @@ public class TaskPackets {
      */
     public static void sendTriggerProgress(ServerPlayer player, java.util.Collection<Task> tasks) {
         if (player == null || tasks == null || tasks.isEmpty()) {
+            if (com.todolist.HudProbe.enabled()) {
+                com.todolist.HudProbe.log("server push skipped: player={} taskCount={}",
+                        player == null ? "null" : player.getName().getString(), tasks == null ? -1 : tasks.size());
+            }
             return;
+        }
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("server push {} entries to {}", tasks.size(), player.getName().getString());
         }
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         writeTriggerProgress(buf, tasks, false);
