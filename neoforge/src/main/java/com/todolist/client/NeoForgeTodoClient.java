@@ -278,13 +278,16 @@ public final class NeoForgeTodoClient {
      * @param event GUI 渲染事件
      */
     private static void onRenderGuiPostEvent(RenderGuiEvent.Post event) {
-        if (hudRenderer == null) {
-            return;
-        }
         float partialTick = event.getPartialTick() != null
                 ? event.getPartialTick().getGameTimeDeltaPartialTick(true)
                 : 0.0f;
-        hudRenderer.render(event.getGuiGraphics(), partialTick);
+        if (hudRenderer != null) {
+            hudRenderer.render(event.getGuiGraphics(), partialTick);
+        }
+        // 触发器完成浮动提示与 HUD 同层渲染（与 Forge/Fabric 端保持一致）；
+        // 此前漏挂导致 NeoForge 端 show() 入队后无人绘制，表现为完成无提示
+        TodoToastRenderer.render(event.getGuiGraphics(), Minecraft.getInstance().font,
+                event.getGuiGraphics().guiWidth());
     }
 
     /**
