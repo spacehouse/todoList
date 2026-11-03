@@ -35,6 +35,8 @@ public final class H2TaskQueryServiceTestMain {
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldKeepParentContextWhenGuiSearchMatchesSubtask", H2TaskQueryServiceTestMain::shouldKeepParentContextWhenGuiSearchMatchesSubtask);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldTreatLikeWildcardsAsLiteralSearchText", H2TaskQueryServiceTestMain::shouldTreatLikeWildcardsAsLiteralSearchText);
         GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldQueryGuiTaskIdsWithLimitOffsetAndCount", H2TaskQueryServiceTestMain::shouldQueryGuiTaskIdsWithLimitOffsetAndCount);
+        GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldPreserveTriggerAndAllColumnsThroughQueryRoundtrip", H2TaskQueryServiceTestMain::shouldPreserveTriggerAndAllColumnsThroughQueryRoundtrip);
+        GuiTestSupport.runTestCase("H2TaskQueryServiceTestMain.shouldPreserveTriggersAtEveryDepth", H2TaskQueryServiceTestMain::shouldPreserveTriggersAtEveryDepth);
     }
 
     /**
@@ -544,5 +546,165 @@ public final class H2TaskQueryServiceTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("无法清理 H2 查询测试临时目录", exception);
         }
+    }
+
+    /**
+     * 回归（2026-11-03 触发器列缺失缺陷）：GUI 的 H2 查询链路（主查询/子任务查询）曾缺
+     * trigger 四列且 readTask 不构建触发器，替换式保存会把触发器清空。本用例对修复后的
+     * 两条查询链路做触发器与全字段往返断言，防止未来再加列时漏同步。
+     */
+    private static void shouldPreserveTriggerAndAllColumnsThroughQueryRoundtrip() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-query-roundtrip-");
+            Task parent = createTask("roundtrip-parent", "roundtrip-project", false, Task.Scope.PERSONAL);
+            parent.setDescription("全字段往返父任务");
+            parent.setPriority(Task.Priority.HIGH);
+            parent.setDueDate(1735689600000L);
+            parent.setCreatorUuid("roundtrip-creator");
+            parent.setAssigneeUuid("roundtrip-owner");
+            parent.setAssigneeName("往返玩家");
+            parent.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.CRAFT_ITEM, "minecraft:iron_ingot", 3));
+            parent.getTrigger().setProgress(1);
+
+            Task child = createSubtask("roundtrip-child", "roundtrip-project", false, Task.Scope.PERSONAL,
+                    parent.getId(), 0L);
+            child.setAssigneeUuid("roundtrip-owner");
+            child.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 27));
+            child.getTrigger().setProgress(9);
+
+            new H2TaskStore().saveLocalTasks(List.of(parent, child));
+            H2TaskQueryService queryService = new H2TaskQueryService();
+
+            List<Task> subtasks = queryService.querySubtasksByParentTaskId(
+                    H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER, parent.getId());
+            GuiTestSupport.assertEquals(1, subtasks.size(), "子任务查询应返回 1 条");
+            assertTriggerRoundtrip(subtasks.get(0), "子任务查询链路");
+            assertRoundtripColumns(child, subtasks.get(0), "子任务查询链路");
+
+            H2TaskQueryService.HudTaskQueryResult hud = queryService.queryHudTasks(
+                    new H2TaskQueryService.HudTaskQuery(
+                            H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER,
+                            List.of("roundtrip-project"), false,
+                            H2TaskQueryService.HudAssigneeFilter.ANY, "", 50, 50));
+            Task hudParent = hud.getPendingTasks().stream()
+                    .filter(t -> t.getId().equals(parent.getId())).findFirst().orElse(null);
+            GuiTestSupport.assertTrue(hudParent != null, "HUD 查询应返回父任务");
+            assertTriggerRoundtrip(hudParent, "HUD 主查询链路");
+            assertRoundtripColumns(parent, hudParent, "HUD 主查询链路");
+
+            // HUD 查询只返回顶层任务（parent_task_id IS NULL），替换式保存必须使用
+            // 完整任务列表（顶层 + 子任务），否则会误删子任务——这是替换式保存的既有契约。
+            Task guiChildCopy = subtasks.get(0);
+            List<Task> guiSnapshot = new java.util.ArrayList<>(hud.getPendingTasks());
+            guiSnapshot.add(guiChildCopy);
+            new H2TaskStore().saveLocalTasks(guiSnapshot);
+            List<Task> reloaded = queryService.querySubtasksByParentTaskId(
+                    H2TaskStore.LOCAL_PERSONAL_BUCKET, H2TaskStore.LOCAL_OWNER, parent.getId());
+            GuiTestSupport.assertEquals(1, reloaded.size(), "替换式保存后子任务查询应仍返回 1 条");
+            assertTriggerRoundtrip(reloaded.get(0), "替换式保存往返");
+            assertRoundtripColumns(child, reloaded.get(0), "替换式保存往返");
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证 H2 查询链路全字段往返时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 回归（用户实测"深层子任务触发器丢失"）：多层任务树经 TaskStore 保存 → 全桶加载，
+     * 验证触发器挂接与深度无关。
+     */
+    private static void shouldPreserveTriggersAtEveryDepth() {
+        Path tempGameDir = null;
+        try {
+            tempGameDir = prepareTempGameDir("todolist-h2-depth-");
+            Task level1 = createTask("depth-l1", "depth-project", false, Task.Scope.PERSONAL);
+            level1.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_block", 8));
+            Task level2 = createSubtask("depth-l2", "depth-project", false, Task.Scope.PERSONAL,
+                    level1.getId(), 0L);
+            level2.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 72));
+            Task level3 = createSubtask("depth-l3", "depth-project", false, Task.Scope.PERSONAL,
+                    level2.getId(), 0L);
+            level3.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:raw_iron", 72));
+            Task level4 = createSubtask("depth-l4", "depth-project", false, Task.Scope.PERSONAL,
+                    level3.getId(), 0L);
+            level4.setTrigger(new com.todolist.task.TaskTrigger(
+                    com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:deepslate_raw_iron", 96));
+
+            new H2TaskStore().saveLocalTasks(List.of(level1, level2, level3, level4));
+            List<Task> reloaded = new H2TaskStore().loadLocalTasks();
+            GuiTestSupport.assertEquals(4, reloaded.size(), "四层任务应全部加载");
+            for (Task task : reloaded) {
+                GuiTestSupport.assertTrue(task.getTrigger() != null,
+                        task.getTitle() + " 的触发器应在任意深度保留");
+                int expected = switch (task.getTitle()) {
+                    case "depth-l1" -> 8;
+                    case "depth-l2" -> 72;
+                    case "depth-l3" -> 72;
+                    default -> 96;
+                };
+                GuiTestSupport.assertEquals(expected, task.getTrigger().getTargetCount(),
+                        task.getTitle() + " 的触发器目标数量应保持");
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("验证多层任务树触发器往返时发生异常", exception);
+        } finally {
+            cleanup(tempGameDir);
+        }
+    }
+
+    /**
+     * 断言任务经 H2 查询链路往返后触发器完整保留。
+     */
+    private static void assertTriggerRoundtrip(Task task, String stage) {
+        GuiTestSupport.assertTrue(task.getTrigger() != null,
+                stage + ": " + task.getTitle() + " 的触发器应在往返后保留（缺列回归）");
+        if (task.getTitle().contains("child")) {
+            GuiTestSupport.assertEquals(com.todolist.task.TaskTrigger.Type.ITEM_COLLECT,
+                    task.getTrigger().getType(), stage + ": 子任务触发器类型应保持");
+            GuiTestSupport.assertEquals("minecraft:raw_iron", task.getTrigger().getTarget(),
+                    stage + ": 子任务触发器目标应保持");
+            GuiTestSupport.assertEquals(27, task.getTrigger().getTargetCount(),
+                    stage + ": 子任务触发器目标数量应保持");
+            GuiTestSupport.assertEquals(9, task.getTrigger().getProgress(),
+                    stage + ": 子任务触发器进度应保持");
+        } else {
+            GuiTestSupport.assertEquals(com.todolist.task.TaskTrigger.Type.CRAFT_ITEM,
+                    task.getTrigger().getType(), stage + ": 父任务触发器类型应保持");
+            GuiTestSupport.assertEquals("minecraft:iron_ingot", task.getTrigger().getTarget(),
+                    stage + ": 父任务触发器目标应保持");
+            GuiTestSupport.assertEquals(3, task.getTrigger().getTargetCount(),
+                    stage + ": 父任务触发器目标数量应保持");
+            GuiTestSupport.assertEquals(1, task.getTrigger().getProgress(),
+                    stage + ": 父任务触发器进度应保持");
+        }
+    }
+
+    /**
+     * 断言任务经 H2 查询链路往返后非触发器列完整保留（列清单同步回归）。
+     */
+    private static void assertRoundtripColumns(Task saved, Task loaded, String stage) {
+        GuiTestSupport.assertEquals(saved.getDescription(), loaded.getDescription(),
+                stage + ": description 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getPriority(), loaded.getPriority(),
+                stage + ": priority 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getDueDate(), loaded.getDueDate(),
+                stage + ": dueDate 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getCreatorUuid(), loaded.getCreatorUuid(),
+                stage + ": creatorUuid 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getAssigneeUuid(), loaded.getAssigneeUuid(),
+                stage + ": assigneeUuid 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getAssigneeName(), loaded.getAssigneeName(),
+                stage + ": assigneeName 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getProjectId(), loaded.getProjectId(),
+                stage + ": projectId 应保持（列清单同步回归）");
+        GuiTestSupport.assertEquals(saved.getParentTaskId(), loaded.getParentTaskId(),
+                stage + ": parentTaskId 应保持（列清单同步回归）");
     }
 }

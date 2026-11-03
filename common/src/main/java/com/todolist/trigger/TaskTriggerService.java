@@ -269,6 +269,97 @@ public final class TaskTriggerService {
      * @param player 目标玩家
      * @return 存在需要扫描的收集触发器时返回 true
      */
+    /**
+     * selftest 专用：在调用线程同步驱动个人桶与团队桶的事件推进（与 dispatch 的
+     * 主线程语义等价，但不经 server.execute 调度）。
+     *
+     * <p>背景：玩家命令上下文中 server.execute 的 runnable 存在不立即执行的观测
+     * （selftest 引擎桶 absent），事件入口直调场景因此拿不到推进结果。仅在主线程调用。
+     *
+     * @param player 目标玩家
+     * @param action 桶动作
+     */
+    static void runPersonalEventDirect(ServerPlayer player, BucketAction action) {
+        MinecraftServer server = player.getServer();
+        if (server == null) {
+            return;
+        }
+        String personalKey = personalBucketKey(server, player.getUUID());
+        action.run(getOrLoadBucket(server, personalKey, player.getUUID()));
+        maybeFlushDebounced(server, personalKey, player);
+        maybePushThrottled(server, personalKey);
+        action.run(getOrLoadBucket(server, TEAM_BUCKET_KEY, null));
+        maybeFlushDebounced(server, TEAM_BUCKET_KEY, player);
+        maybePushThrottled(server, TEAM_BUCKET_KEY);
+    }
+
+    /** selftest 专用：同步驱动收集类重算（等价 handleInventoryChanged 的主线程语义）。 */
+    public static void selftestInventoryChanged(ServerPlayer player) {
+        runPersonalEventDirect(player, bucket -> recalculateItemCollect(player, bucket));
+    }
+
+    /** selftest 专用：同步驱动合成事件推进。 */
+    public static void selftestItemCrafted(ServerPlayer player, String itemId, int count) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.CRAFT_ITEM, itemId, count));
+    }
+
+    /** selftest 专用：同步驱动破坏方块事件推进。 */
+    public static void selftestBlockBroken(ServerPlayer player, String blockId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.BREAK_BLOCK, blockId, 1));
+    }
+
+    /** selftest 专用：同步驱动击杀事件推进。 */
+    public static void selftestEntityKilled(ServerPlayer player, String entityId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.KILL_ENTITY, entityId, 1));
+    }
+
+    /** selftest 专用：同步驱动进度达成事件推进。 */
+    public static void selftestAdvancementAwarded(ServerPlayer player, String advancementId) {
+        runPersonalEventDirect(player, bucket -> advanceMatchingTasks(player, bucket, TaskTrigger.Type.ADVANCEMENT, advancementId, 1));
+    }
+
+    /**
+     * 诊断用：读取指定玩家个人桶内某任务的触发器进度（不触发加载、不落库）。
+     * 仅供 SelfTestSupport 在事件入口直调后区分「引擎未推进」与「落库丢失」。
+     * 桶不存在返回 -1、任务不在桶内返回 -1、任务无触发器返回 -2。
+     *
+     * @param server 当前服务端
+     * @param uuid   玩家 UUID
+     * @param taskId 任务 ID
+     * @return 桶内触发器进度
+     */
+    /**
+     * 诊断用：个人桶摘要（键 / LOCAL 模式 / 任务总数 / selftest 前缀任务数）。
+     *
+     * @param server 当前服务端
+     * @param uuid   玩家 UUID
+     * @return 摘要文本
+     */
+    public static String debugPersonalBucketSummary(MinecraftServer server, UUID uuid) {
+        boolean local = TodoListCommon.getTaskStorage().shouldUseLocalPersonalStorage(server);
+        CachedBucket bucket = peekBucket(personalBucketKey(server, uuid));
+        if (bucket == null) {
+            return "bucket=absent local=" + local;
+        }
+        long selftest = bucket.tasks.stream()
+                .filter(t -> t.getTitle() != null && t.getTitle().startsWith("selftest-")).count();
+        return "bucket=" + bucket.key + " local=" + local + " tasks=" + bucket.tasks.size()
+                + " selftest=" + selftest;
+    }
+
+    public static int debugPersonalTriggerProgress(MinecraftServer server, UUID uuid, String taskId) {
+        CachedBucket bucket = peekBucket(personalBucketKey(server, uuid));
+        if (bucket == null) {
+            return -1;
+        }
+        for (Task task : bucket.tasks) {
+            if (task.getId().equals(taskId)) {
+                return task.getTrigger() == null ? -2 : task.getTrigger().getProgress();
+            }
+        }
+        return -1;
+    }
+
     public static boolean hasItemCollectWork(ServerPlayer player) {
         if (player == null) {
             return false;
