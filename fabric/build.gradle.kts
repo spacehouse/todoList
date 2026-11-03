@@ -32,6 +32,9 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     implementation(project(":common", configuration = "namedElements"))
+    // dev 运行时（runServer/runClient）需要 H2 驱动在 classpath；打包时由 tasks.jar 的
+    // zipTree 嵌入 mod jar，二者不冲突（implementation 只影响 dev classpath 与发布 pom 排除）
+    implementation(files(h2Jar))
     
     modCompileOnly("com.terraformersmc:modmenu:7.2.2")
 }

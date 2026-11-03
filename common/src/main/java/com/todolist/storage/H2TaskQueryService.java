@@ -235,7 +235,8 @@ public final class H2TaskQueryService {
         try (Connection connection = connectionProvider.openConnection();
              PreparedStatement statement = connection.prepareStatement("""
                      SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
-                            due_date, creator_uuid, assignee_uuid, assignee_name
+                            due_date, creator_uuid, assignee_uuid, assignee_name,
+                            trigger_type, trigger_target, trigger_count, trigger_progress
                      FROM tasks
                      WHERE bucket_type = ? AND owner_uuid = ? AND parent_task_id = ?
                      ORDER BY subtask_sort_order, created_at, id
@@ -466,7 +467,8 @@ public final class H2TaskQueryService {
         queryParts.parameters.add(Math.max(0, limit));
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT id, scope, project_id, parent_task_id, subtask_sort_order, title, description, completed, priority, created_at,
-                       due_date, creator_uuid, assignee_uuid, assignee_name
+                       due_date, creator_uuid, assignee_uuid, assignee_name,
+                       trigger_type, trigger_target, trigger_count, trigger_progress
                 FROM tasks
                 """ + queryParts.whereClause + """
                 ORDER BY sort_order, created_at, id
@@ -724,6 +726,15 @@ public final class H2TaskQueryService {
         putOptionalString(taskTag, "creatorUuid", resultSet.getString("creator_uuid"));
         putOptionalString(taskTag, "assigneeUuid", resultSet.getString("assignee_uuid"));
         putOptionalString(taskTag, "assigneeName", resultSet.getString("assignee_name"));
+        String triggerType = resultSet.getString("trigger_type");
+        if (triggerType != null && !triggerType.isEmpty()) {
+            CompoundTag triggerTag = new CompoundTag();
+            triggerTag.putString("type", triggerType);
+            triggerTag.putString("target", resultSet.getString("trigger_target"));
+            triggerTag.putInt("targetCount", resultSet.getInt("trigger_count"));
+            triggerTag.putInt("progress", resultSet.getInt("trigger_progress"));
+            taskTag.put("trigger", triggerTag);
+        }
         taskTag.put("tags", loadTags(connection, bucketType, ownerUuid, resultSet.getString("id")));
         taskTag.put("subtasks", new ListTag());
         return Task.fromNbt(taskTag);
