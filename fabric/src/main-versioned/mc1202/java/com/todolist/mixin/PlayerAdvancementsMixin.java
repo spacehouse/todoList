@@ -29,7 +29,7 @@ public class PlayerAdvancementsMixin {
     /**
      * 进度达成后转发 ADVANCEMENT 触发事件。
      *
-     * @param advancement  本次授奖的进度持有者（1.20.5+ 为 AdvancementHolder）
+     * @param advancement  本次授奖的进度持有者（1.20.2+ 为 AdvancementHolder）
      * @param criterionKey 本次达成的条件键
      * @param callbackInfo 原方法返回值回调
      */

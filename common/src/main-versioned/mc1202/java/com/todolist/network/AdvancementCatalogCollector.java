@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 服务端进度目录收集器。
  *
- * <p>本类为 1.20.5+（Advancement record 化为 {@code AdvancementHolder}）形态：
+ * <p>本类为 1.20.2+（Advancement record 化为 {@code AdvancementHolder}）形态：
  * 遍历 {@code getAllAdvancements()} 得到持有者，展示信息为 Optional。
  * 1.20.1~1.20.4 的实体形态由主源码树提供。
  */

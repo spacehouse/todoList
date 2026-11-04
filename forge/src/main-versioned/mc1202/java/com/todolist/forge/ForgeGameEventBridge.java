@@ -14,8 +14,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 /**
- * Forge 平台游戏事件桥（1.20.5+ 形态：{@code AdvancementEvent#getAdvancement()} 返回
- * {@code AdvancementHolder}，进度 ID 经 {@code holder.id()} 取得；1.20.1~1.20.4 实体形态由主源码树提供）。
+ * Forge 平台游戏事件桥（1.20.2+ 形态：{@code AdvancementEvent#getAdvancement()} 返回
+ * {@code AdvancementHolder}，进度 ID 经 {@code holder.id()} 取得；1.20.1 实体形态由主源码树提供）。
  * 订阅 Forge 事件总线，将击杀、破坏方块、合成、进度与库存变化转发给通用触发引擎。
  */
 public class ForgeGameEventBridge {

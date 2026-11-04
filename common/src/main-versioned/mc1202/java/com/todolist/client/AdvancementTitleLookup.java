@@ -6,7 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * 客户端进度标题解析器。
  *
- * <p>本类为 1.20.5+（进度实体 record 化）形态：经
+ * <p>本类为 1.20.2+（进度实体 record 化）形态：经
  * {@code ClientAdvancements#get(location)} 直接取 {@code AdvancementHolder}。
  * 1.20.1~1.20.4 的映射形态（{@code getAdvancements().get(...)}）由主源码树提供。
  */
