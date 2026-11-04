@@ -1,20 +1,21 @@
 # 项目待办总览
 
-本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成` 四类维护，便于后续排期、分支同步与回归验证。
+本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成`、`已废弃` 五类维护，便于后续排期、分支同步与回归验证。
 
-更新日期：`2026-10-26`
+更新日期：`2026-11-05`
 
 ## 进行中
 
-- 【feat】**已废弃并回退**：同物品任务的额度配额（Phase Z）——实机验证证明"已完成任务永久占用额度"的跨时间台账机制不成立（会让新建同物品任务进度不涨），实现已从工作区回退；保留"排他性"结论与教训记录，见 `docs/feat-trigger-credit-allocation.md` §0
+- (暂无)
 
 ## 待同步
 
-- 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称）（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-item-title-markup.md`）
-- 【feat】游戏内事件触发式完成任务（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，见 `docs/feat-trigger-completion.md`；2026-11-01 文案直观性修订：任务列表进度悬浮提示带类型谓语与回落注记、编辑器加收集范围提示、命令输出目标本地化名）
-- 【fix】幽灵任务源头级联完成（Phase Y1，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度；离线回归与实机验证均通过（2026-10-26，并入材料冒烟清单执行），见 `docs/feat-trigger-completion.md` Phase Y1
-- 【feat】材料反推（点 1，**experimental**，验证分支 `verify/1.20.1-feat-trigger-and-item-title`）：E11-E15 完成并通过离线回归；2026-10-26 轻量实机冒烟**全部通过**（fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md`）；后续开发已冻结（点 2 / 点 3 取消，配方能力转由 JEI/EMI 附属与任务导入格式承接，见 `docs/feat-material-task-generation.md` §0），合入后只修缺陷、不扩配方能力；2026-11-01 文案直观性修订：任务标题统一回「收集」（动作词与收集语义矛盾，见该文档 §0.3）、材料预览两处提示语优化
-- 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（验证分支 `verify/1.20.1-feat-trigger-and-item-title`，**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）；**待 CurseForge 上传审查作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
+> 双基线（1.20.1 / 1.21.1）已于 2026-11-05 全部合入：1.20.1 fast-forward 21 提交至 `d89ff0c`，1.21.1 fast-forward 35 提交至 `49df364`；
+> 1.20.x 多版本分支已于 2026-11-05 完成同批功能全量同步（`verify/1.20.x-sync-from-1.20.1`，1.20.1~1.20.6 六版本构建全绿 + selftest 通过），待合入 1.20.x 基线；
+> 其余条目已随之移入 `已完成`。
+> 本区当前仅剩 H2 TCP 移除一项，等待 CurseForge 人工审核结果作为最终验收（见对应条目）。
+
+- 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）。版本分叉说明：两条主线已发布的 1.4.2（2026-09-11）为"TCP 仅回环加固"版，本条为按 CF 审查要求的"整体移除"版；`fabric-1.20.1-1.4.2.jar` 已上传 CF，初审报 failed processing 后转人工审核中（截至 2026-11-05 已第 7 天），**人工审核结果作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
 
 ## 计划中
 
@@ -76,6 +77,17 @@
 - 【fix】修复团队我的视图下批量操作范围与已完成子任务展示
 - 【refactor】强制使用 H2 存储后端，废弃并禁用 NBT 存储模式，减少双模式维护成本
 - 【chore】移除进入世界后向管理员发送的 H2 存储模式与命令提示
+- 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称），设计见 `docs/feat-item-title-markup.md`
+- 【feat】游戏内事件触发式完成任务，设计见 `docs/feat-trigger-completion.md`
+- 【fix】幽灵任务源头级联完成（Phase Y1）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度，见 `docs/feat-trigger-completion.md` Phase Y1
+- 【feat】材料反推（**experimental**，后续开发已冻结，合入后只修缺陷、不扩配方能力），见 `docs/feat-material-task-generation.md`
+- 【feat】selftest 服务端自检基建：`/todo selftest` 12 场景两档 + verify-all 无头判定 + 测试面板按钮，手测人工项 21→16；顺带修复 H2 查询缺触发器列、Task 拷贝构造漏拷触发器、NeoForge 缺触发器接收与 Toast 渲染三个存量 bug
+
+## 已废弃
+
+验证证伪、实现回退的需求条目在此归档，只保留一行结论与设计文档链接，防止同类需求重复立项。
+
+- 【feat】同物品任务的额度配额（Phase Z）——2026-09-28 实机验证证伪："已完成任务永久占用额度"的跨时间台账机制不成立（会让新建同物品任务进度不涨），实现已从工作区全部回退；保留"排他性"结论与教训记录，见 `docs/feat-trigger-credit-allocation.md` §0
 
 ## 维护约定
 
@@ -83,6 +95,7 @@
 - 开始实际实现后移动到 `进行中`
 - 在当前分支完成开发并通过验证后，先移动到 `待同步`
 - 完成其他维护分支同步后，再从 `待同步` 移动到 `已完成`
+- 实机验证证伪、实现回退的条目移入 `已废弃`，只保留一行结论与设计文档链接，不留排期项
 - 如果后续需要拆分优先级，可在条目前追加 `P0 / P1 / P2`
 
 ### 需求准入三问（2026-10-25 起，进入 `计划中` 前必答）
