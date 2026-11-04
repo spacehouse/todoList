@@ -77,17 +77,17 @@ public class ClientTaskPackets {
             });
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, buf) -> {
             String title = buf.readUtf();
             client.execute(() -> TodoToastRenderer.show(title));
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, buf) -> {
             TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
             client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, handler, buf, responseSender) -> {
+        FabricNetworkingCompat.registerClientReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, buf) -> {
             List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
             String namespaceAtReceive = DataPathProvider.getStorageNamespace();
             client.execute(() -> {
