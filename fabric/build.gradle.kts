@@ -25,6 +25,48 @@ base {
     archivesName.set("$archives_name-fabric-$minecraftVersion")
 }
 
+// 版本覆盖源目录：与 common 的 prepareVersionedMainSources 同规则。
+// tag 命中：mc1202 = 1.20.2~1.20.6，mc1205 = 1.20.5/1.20.6；按 tag 顺序依次覆盖同名文件。
+val generatedVersionedSourcesDir = layout.buildDirectory.dir("generated/sources/versionedMain/java").get().asFile
+val needs1202Overlay = minecraftVersion in setOf("1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6")
+val needs1205Overlay = minecraftVersion in setOf("1.20.5", "1.20.6")
+
+val prepareVersionedSources = tasks.register("prepareVersionedSources") {
+    group = "build setup"
+    description = "Copy platform main sources and apply per-version overlay files."
+    inputs.dir(layout.projectDirectory.dir("src/main/java"))
+    inputs.dir(layout.projectDirectory.dir("src/main-versioned"))
+    inputs.property("needs1202Overlay", needs1202Overlay)
+    inputs.property("needs1205Overlay", needs1205Overlay)
+    outputs.dir(generatedVersionedSourcesDir)
+
+    doLast {
+        val sourceDir = file("src/main/java")
+        delete(generatedVersionedSourcesDir)
+        generatedVersionedSourcesDir.mkdirs()
+        sourceDir.copyRecursively(generatedVersionedSourcesDir, overwrite = true)
+        val overlayTags = buildList {
+            if (needs1202Overlay) add("mc1202")
+            if (needs1205Overlay) add("mc1205")
+        }
+        for (tag in overlayTags) {
+            val overlayDir = file("src/main-versioned/$tag/java")
+            if (overlayDir.exists()) {
+                overlayDir.copyRecursively(generatedVersionedSourcesDir, overwrite = true)
+            }
+        }
+    }
+}
+
+the<SourceSetContainer>()["main"].java.setSrcDirs(listOf(generatedVersionedSourcesDir))
+tasks.named("compileJava") {
+    dependsOn(prepareVersionedSources)
+}
+tasks.named("sourcesJar") {
+    dependsOn(prepareVersionedSources)
+}
+
+
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
     mappings(loom.officialMojangMappings())

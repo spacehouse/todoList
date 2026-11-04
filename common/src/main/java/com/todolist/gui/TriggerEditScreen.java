@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  * 提供触发类型切换、目标资源输入（可打开物品选择器）、目标数量输入，
  * 保存后通过回调交由调用方落库，取消则原样返回父界面。
  */
-public class TriggerEditScreen extends Screen {
+public class TriggerEditScreen extends BaseTodoScreen {
     /** 全部内置触发类型，按按钮轮换顺序排列。 */
     private static final TaskTrigger.Type[] TYPES = TaskTrigger.Type.values();
 
@@ -274,7 +274,7 @@ public class TriggerEditScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderVanillaBackground(context, mouseX, mouseY, delta);
         int w = Math.max(220, Math.min(320, width - 30));
         int h = 202;
         int x = (width - w) / 2;

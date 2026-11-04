@@ -9,7 +9,6 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import com.todolist.task.TaskTrigger;
 import com.todolist.trigger.TaskTriggerService;
-import net.minecraft.advancements.Advancement;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -144,26 +143,13 @@ public class TaskPackets {
     }
 
     /**
-     * 汇总服务端全部带展示信息的进度。
-     * 无展示信息的进度（配方解锁等）不作为可选目标，直接跳过。
+     * 汇总服务端全部带展示信息的进度，委托版本敏感的收集器实现。
      *
      * @param server 当前服务端
      * @return 进度目录条目
      */
     private static List<AdvancementCatalog.Entry> collectAdvancementCatalog(MinecraftServer server) {
-        List<AdvancementCatalog.Entry> entries = new ArrayList<>();
-        if (server.getAdvancements() == null) {
-            return entries;
-        }
-        for (Advancement advancement : server.getAdvancements().getAllAdvancements()) {
-            if (advancement == null || advancement.getDisplay() == null) {
-                continue;
-            }
-            entries.add(new AdvancementCatalog.Entry(
-                    advancement.getId().toString(),
-                    advancement.getDisplay().getTitle().getString()));
-        }
-        return entries;
+        return AdvancementCatalogCollector.collect(server);
     }
 
     /**

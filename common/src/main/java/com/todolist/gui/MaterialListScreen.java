@@ -50,7 +50,7 @@ import java.util.function.Supplier;
  * <p>全部语义落在 {@link MaterialPreviewState} 与 {@link MaterialPreviewLayout}，本类只负责
  * 渲染与事件分发；生成结果通过回调交给调用方（任务列表）走现有保存链路。
  */
-public class MaterialListScreen extends Screen {
+public class MaterialListScreen extends BaseTodoScreen {
 
     /** 面板最小宽度（像素）。 */
     private static final int PANEL_MIN_WIDTH = 300;
@@ -690,10 +690,24 @@ public class MaterialListScreen extends Screen {
     }
 
     /**
+     * 滚轮（1.20.1 三参签名入口，1.20.2+ 由四参入口委托）。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        return handleMouseScrolled(mouseX, mouseY, 0.0D, delta);
+    }
+
+    /**
+     * 滚轮（1.20.2+ 四参签名入口）。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    /**
      * 滚轮：默认纵向滚动，按住 Shift 时横向滚动；弹出列表优先消费。
      */
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double delta = verticalAmount != 0 ? verticalAmount : horizontalAmount;
         if (candidatePopup != null && candidatePopup.contains(mouseX, mouseY)) {
             candidatePopup.scroll = clamp(candidatePopup.scroll + (delta < 0 ? 1 : -1),
                     0, candidatePopup.maxScroll());
@@ -708,7 +722,7 @@ public class MaterialListScreen extends Screen {
             }
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return superMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     /**
@@ -794,7 +808,7 @@ public class MaterialListScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderVanillaBackground(context, mouseX, mouseY, delta);
         int x = panelLeft;
         int y = panelTop;
         int w = panelWidth;

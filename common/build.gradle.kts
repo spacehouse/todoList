@@ -58,6 +58,7 @@ val prepareVersionedMainSources = tasks.register("prepareVersionedMainSources") 
     group = "build setup"
     description = "Copy main sources and inject version-specific Screen members into BaseTodoScreen."
     inputs.dir(layout.projectDirectory.dir("src/main/java"))
+    inputs.dir(layout.projectDirectory.dir("src/main-versioned"))
     inputs.property("needs1202MainShim", needs1202MainShim)
     inputs.property("needs1205MainShim", needs1205MainShim)
     outputs.dir(generatedMainSourcesDir)
@@ -67,6 +68,22 @@ val prepareVersionedMainSources = tasks.register("prepareVersionedMainSources") 
         delete(generatedMainSourcesDir)
         generatedMainSourcesDir.mkdirs()
         sourceDir.copyRecursively(generatedMainSourcesDir, overwrite = true)
+
+        // 版本覆盖源目录：与下方锚点注入并存的版本差异手法。
+        // 约定 src/main-versioned/<tag>/java 目录内与主源码同路径的文件整体覆盖生成树，
+        // tag 命中规则：mc1202 = 1.20.2~1.20.6，mc1205 = 1.20.5/1.20.6；按 tag 顺序依次覆盖。
+        // 用于同一份源码无法同时通过 1.20.1 与 1.20.2+/1.20.5+ 编译的版本敏感小类
+        // （材料配方边界、容器物品扫描、进度目录/标题收集器等），调用方保持版本无关。
+        val mainOverlayTags = buildList {
+            if (needs1202MainShim) add("mc1202")
+            if (needs1205MainShim) add("mc1205")
+        }
+        for (tag in mainOverlayTags) {
+            val overlayDir = file("src/main-versioned/$tag/java")
+            if (overlayDir.exists()) {
+                overlayDir.copyRecursively(generatedMainSourcesDir, overwrite = true)
+            }
+        }
 
         // BaseTodoScreen 的版本相关成员在生成阶段注入：
         // 1.20.2 起 Screen#render 默认实现会先画 renderBackground，必须覆盖为空实现避免覆盖界面内容；
@@ -175,6 +192,7 @@ val prepareVersionedTestSources = tasks.register("prepareVersionedTestSources") 
     group = "build setup"
     description = "Copy test sources and apply target-version constructor shims when needed."
     inputs.dir(layout.projectDirectory.dir("src/test/java"))
+    inputs.dir(layout.projectDirectory.dir("src/test-versioned"))
     inputs.property("minecraftVersion", minecraftVersion)
     inputs.property("needs1202TestShim", needs1202TestShim)
     inputs.property("needs1205TestShim", needs1205TestShim)
@@ -185,6 +203,18 @@ val prepareVersionedTestSources = tasks.register("prepareVersionedTestSources") 
         delete(generatedTestSourcesDir)
         generatedTestSourcesDir.mkdirs()
         sourceDir.copyRecursively(generatedTestSourcesDir, overwrite = true)
+
+        // 版本覆盖测试目录：与主源码覆盖同规则（tag：mc1202 = 1.20.2~1.20.6，mc1205 = 1.20.5/1.20.6）。
+        val testOverlayTags = buildList {
+            if (needs1202TestShim) add("mc1202")
+            if (needs1205TestShim) add("mc1205")
+        }
+        for (tag in testOverlayTags) {
+            val overlayDir = file("src/test-versioned/$tag/java")
+            if (overlayDir.exists()) {
+                overlayDir.copyRecursively(generatedTestSourcesDir, overwrite = true)
+            }
+        }
 
         if (!needs1202TestShim) {
             return@doLast
@@ -396,6 +426,14 @@ tasks.register<JavaExec>("taskTriggerServiceTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("containerItemScannerTest") {
+    group = "verification"
+    description = "Run the container item contents scanning self-tests (per-version overlay)."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.trigger.ContainerItemScannerTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.register<JavaExec>("advancementCatalogTest") {
     group = "verification"
     description = "Run the server-authoritative advancement catalog self-tests."
@@ -484,6 +522,7 @@ tasks.named("check").configure {
     dependsOn("titleMarkupParserTest")
     dependsOn("taskTriggerTest")
     dependsOn("taskTriggerServiceTest")
+    dependsOn("containerItemScannerTest")
     dependsOn("advancementCatalogTest")
     dependsOn("materialRecipeTest")
     dependsOn("materialResolverTest")

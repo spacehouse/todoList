@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * 按 {@link Kind} 列出物品 / 方块 / 实体 / 进度，提供资源 ID 与本地化名称双匹配的搜索
  * （中文名可直接搜索），选中后通过回调返回资源 ID，供标题标记输入与触发器目标设置复用。
  */
-public class ItemSelectorScreen extends Screen {
+public class ItemSelectorScreen extends BaseTodoScreen {
     /** 列表行高（像素）：16px 图标 + 2px 间距。 */
     private static final int ROW_HEIGHT = 18;
     /** 搜索结果最大保留条数，控制渲染与匹配成本。 */
@@ -309,16 +309,30 @@ public class ItemSelectorScreen extends Screen {
     }
 
     /**
-     * 滚轮滚动列表。
+     * 滚轮滚动列表（1.20.1 三参签名入口，1.20.2+ 由四参入口委托）。
      */
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        return handleMouseScrolled(mouseX, mouseY, 0.0D, delta);
+    }
+
+    /**
+     * 滚轮滚动列表（1.20.2+ 四参签名入口）。
+     */
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        return handleMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    /**
+     * 统一处理搜索结果列表滚轮事件。
+     */
+    private boolean handleMouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        double delta = verticalAmount != 0 ? verticalAmount : horizontalAmount;
         if (delta < 0) {
             scrollOffset = Math.min(scrollOffset + 1, Math.max(0, filtered.size() - visibleRows()));
         } else if (delta > 0) {
             scrollOffset = Math.max(0, scrollOffset - 1);
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return superMouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     /**
@@ -386,7 +400,7 @@ public class ItemSelectorScreen extends Screen {
      */
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderVanillaBackground(context, mouseX, mouseY, delta);
         int w = Math.max(220, Math.min(360, width - 40));
         int h = Math.max(200, Math.min(280, height - 40));
         int x = (width - w) / 2;

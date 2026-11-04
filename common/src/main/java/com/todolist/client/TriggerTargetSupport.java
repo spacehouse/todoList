@@ -2,9 +2,7 @@ package com.todolist.client;
 
 import com.todolist.material.MaterialRecipeKind;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.advancements.Advancement;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientAdvancements;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -189,12 +187,9 @@ public final class TriggerTargetSupport {
         if (location != null) {
             Minecraft client = Minecraft.getInstance();
             if (client != null && client.getConnection() != null) {
-                ClientAdvancements advancements = client.getConnection().getAdvancements();
-                if (advancements != null && advancements.getAdvancements() != null) {
-                    Advancement advancement = advancements.getAdvancements().get(location);
-                    if (advancement != null && advancement.getDisplay() != null) {
-                        return advancement.getDisplay().getTitle().getString();
-                    }
+                String title = AdvancementTitleLookup.lookup(client.getConnection().getAdvancements(), location);
+                if (title != null) {
+                    return title;
                 }
             }
         }
