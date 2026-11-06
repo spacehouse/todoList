@@ -11,9 +11,8 @@
 ## 待同步
 
 > 双基线（1.20.1 / 1.21.1）已于 2026-11-05 全部合入：1.20.1 fast-forward 21 提交至 `d89ff0c`，1.21.1 fast-forward 35 提交至 `49df364`；
-> 1.20.x 多版本分支已于 2026-11-05 完成同批功能全量同步（`verify/1.20.x-sync-from-1.20.1`，1.20.1~1.20.6 六版本构建全绿 + selftest 通过），待合入 1.20.x 基线；
-> 其余条目已随之移入 `已完成`。
-> 本区当前仅剩 H2 TCP 移除一项，等待 CurseForge 人工审核结果作为最终验收（见对应条目）。
+> 1.20.x 多版本分支已于 2026-11-07 合入：`verify/1.20.x-sync-from-1.20.1` fast-forward 24 提交至 `b834d6b`（1.20.1~1.20.6 六版本构建全绿 + selftest 通过 + 实机验证通过；1.20.6 Forge 端无 HUD 为平台缺口，发版注明，见 `docs/1.20.x-adaptation-plan.md`）；
+> 本批功能全部分支同步已闭环，待同步区仅剩 H2 TCP 移除一项，等待 CurseForge 人工审核结果作为最终验收（见对应条目）。
 
 - 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）。版本分叉说明：两条主线已发布的 1.4.2（2026-09-11）为"TCP 仅回环加固"版，本条为按 CF 审查要求的"整体移除"版；`fabric-1.20.1-1.4.2.jar` 已上传 CF，初审报 failed processing 后转人工审核中（截至 2026-11-05 已第 7 天），**人工审核结果作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
 
