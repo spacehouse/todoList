@@ -3403,7 +3403,15 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     public static void applyMaterialPlan(String itemId, java.util.List<com.todolist.material.MaterialRecipe> recipes) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || !(minecraft.screen instanceof TodoScreen screen)) {
+        TodoScreen screen = null;
+        if (minecraft != null && minecraft.screen instanceof TodoScreen todoScreen) {
+            screen = todoScreen;
+        } else if (minecraft != null && minecraft.screen instanceof ItemSelectorScreen selector
+                && selector.getParentScreen() instanceof TodoScreen todoScreen) {
+            // 选中物品后仍在选择器界面（服务端响应先于选择器关闭），先切回任务列表再开预览
+            screen = todoScreen;
+            minecraft.setScreen(todoScreen);
+        } else {
             return;
         }
         if (recipes == null || recipes.isEmpty()) {
