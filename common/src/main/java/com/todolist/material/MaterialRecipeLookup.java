@@ -26,6 +26,10 @@ public final class MaterialRecipeLookup {
         if (minecraft == null || minecraft.level == null) {
             return null;
         }
-        return minecraft.level.getRecipeManager();
+        net.minecraft.world.item.crafting.RecipeManager manager = minecraft.level.getRecipeManager();
+        if (manager == null) {
+            com.todolist.TodoConstants.LOGGER.warn("[todolist] client level recipe manager is null");
+        }
+        return manager;
     }
 }

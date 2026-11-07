@@ -119,11 +119,9 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
             if (displays != null) {
                 for (RecipeDisplay display : displays) {
                     SlotDisplay resultSlot = resultSlotOf(display);
-                    if (resultSlot instanceof SlotDisplay.ItemStackSlotDisplay stackDisplay) {
-                        ItemStack stack = stackDisplay.stack();
-                        if (stack != null && !stack.isEmpty()) {
-                            return stack;
-                        }
+                    ItemStack stack = stackOf(resultSlot);
+                    if (stack != null && !stack.isEmpty()) {
+                        return stack;
                     }
                 }
             }
@@ -162,6 +160,23 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
         }
         if (display instanceof net.minecraft.world.item.crafting.display.StonecutterRecipeDisplay stonecutter) {
             return stonecutter.result();
+        }
+        return null;
+    }
+
+    /**
+     * 从产物槽位描述符解析物品堆。
+     * 数据包配方的槽位可能是物品堆形态（直接带数量）或物品形态（数量 1），两种都要识别。
+     *
+     * @param slot 产物槽位描述符
+     * @return 物品堆；无法解析时返回 null
+     */
+    private static ItemStack stackOf(SlotDisplay slot) {
+        if (slot instanceof SlotDisplay.ItemStackSlotDisplay stackDisplay) {
+            return stackDisplay.stack();
+        }
+        if (slot instanceof SlotDisplay.ItemSlotDisplay itemDisplay) {
+            return new ItemStack(itemDisplay.item());
         }
         return null;
     }

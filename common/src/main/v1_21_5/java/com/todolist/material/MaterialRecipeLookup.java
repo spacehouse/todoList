@@ -27,6 +27,12 @@ public final class MaterialRecipeLookup {
             return null;
         }
         RecipeAccess access = minecraft.level.recipeAccess();
-        return access instanceof RecipeManager recipeManager ? recipeManager : null;
+        if (access instanceof RecipeManager recipeManager) {
+            return recipeManager;
+        }
+        com.todolist.TodoConstants.LOGGER.warn(
+                "[todolist] client recipe access is not a RecipeManager: {}",
+                access == null ? "null" : access.getClass().getName());
+        return null;
     }
 }
