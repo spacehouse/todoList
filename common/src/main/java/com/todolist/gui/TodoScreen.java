@@ -3418,6 +3418,11 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             screen.addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
             return;
         }
+        // 材料预览已打开（未关预览继续点中间材料）：按需请求的配方增量并入当前预览
+        if (minecraft.screen instanceof MaterialListScreen materialScreen) {
+            materialScreen.applyAdditionalRecipes(recipes);
+            return;
+        }
         MaterialRecipeIndex index = new MaterialRecipeIndex();
         for (com.todolist.material.MaterialRecipe recipe : recipes) {
             if (recipe != null) {

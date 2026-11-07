@@ -24,6 +24,10 @@ public final class FabricTaskPacketRegistrar {
                 TaskPackets.onReplaceTasksPacket(context.server(), context.player(), buf);
                 return;
             }
+            if (channelId.equals(TaskPackets.MATERIAL_PLAN_REQUEST_ID)) {
+                TaskPackets.onMaterialPlanRequestPacket(context.server(), context.player(), buf);
+                return;
+            }
             if (channelId.equals(TaskPackets.TEAM_REPLACE_TASKS_ID)) {
                 TaskPackets.onTeamReplaceTasksPacket(context.server(), context.player(), buf);
                 return;
