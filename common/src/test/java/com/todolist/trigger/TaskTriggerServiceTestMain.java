@@ -458,7 +458,11 @@ public final class TaskTriggerServiceTestMain {
      */
     private static ItemStack itemStack(String id, int count) {
         Item item = BuiltInRegistries.ITEM.get(
-                ResourceLocation.fromNamespaceAndPath(id.split(":")[0], id.split(":", 2)[1]));
+                ResourceLocation.fromNamespaceAndPath(id.split(":")[0], id.split(":", 2)[1]))
+                .map(net.minecraft.core.Holder::value).orElse(null);
+        if (item == null) {
+            return ItemStack.EMPTY;
+        }
         ItemStack stack = new ItemStack(item, count);
         return stack;
     }

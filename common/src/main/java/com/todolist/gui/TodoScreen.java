@@ -14,6 +14,7 @@ import com.todolist.gui.TodoScreenLayoutSupport.ResponsiveTier;
 import com.todolist.material.MaterialPreviewState;
 import com.todolist.material.MaterialRecipeIndex;
 import com.todolist.material.MaterialRecipeIndexBuilder;
+import com.todolist.material.MaterialRecipeLookup;
 import com.todolist.material.MaterialTaskContext;
 import com.todolist.material.MaterialTaskMode;
 import com.todolist.platform.DataPathProvider;
@@ -3349,7 +3350,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         MaterialRecipeIndex index = MaterialRecipeIndexBuilder.buildDefault(
-                minecraft.level.getRecipeManager(),
+                MaterialRecipeLookup.clientRecipeManager(minecraft),
                 minecraft.level.registryAccess()
         );
         if (index.recipeCount() == 0) {
