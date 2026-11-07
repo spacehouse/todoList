@@ -75,11 +75,17 @@ public final class NeoForgeClientTaskPackets {
 
         NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
             String title = buf.readUtf();
+            if (com.todolist.HudProbe.enabled()) {
+                com.todolist.HudProbe.log("neoforge client received TRIGGER_COMPLETED title={}", title);
+            }
             client.execute(() -> TodoToastRenderer.show(title));
         });
 
         NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
             TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+            if (com.todolist.HudProbe.enabled()) {
+                com.todolist.HudProbe.log("neoforge client received TRIGGER_PROGRESS entries={}", batch.entries().size());
+            }
             client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
         });
 
