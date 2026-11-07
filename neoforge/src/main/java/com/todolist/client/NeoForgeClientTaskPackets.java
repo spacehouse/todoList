@@ -89,6 +89,14 @@ public final class NeoForgeClientTaskPackets {
             client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
         });
 
+        NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.MATERIAL_ITEMS_ID, (client, handler, buf, responseSender) -> {
+            List<String> itemIds = TaskPackets.readMaterialItems(buf);
+            client.execute(() -> com.todolist.material.ClientMaterialCatalog.apply(itemIds));
+        });
+        NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.MATERIAL_PLAN_ID, (client, handler, buf, responseSender) -> {
+            java.util.Map.Entry<String, List<com.todolist.material.MaterialRecipe>> plan = TaskPackets.readMaterialPlan(buf);
+            client.execute(() -> TodoScreen.applyMaterialPlan(plan.getKey(), plan.getValue()));
+        });
         NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, handler, buf, responseSender) -> {
             List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
             String namespaceAtReceive = DataPathProvider.getStorageNamespace();

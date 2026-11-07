@@ -54,6 +54,15 @@ public class ItemSelectorScreen extends Screen {
     private static final Map<Kind, List<ItemEntry>> CACHE = new EnumMap<>(Kind.class);
 
     private final Screen parent;
+
+    /**
+     * 返回父界面。
+     *
+     * @return 打开本选择器前的界面
+     */
+    public Screen getParentScreen() {
+        return parent;
+    }
     private final Kind kind;
     private final Consumer<String> selectCallback;
     private final boolean includeTagWrap;
