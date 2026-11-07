@@ -365,6 +365,7 @@
   "gui.todolist.material_preview.held_enough": " (已够)",
   "gui.todolist.material_preview.held_missing": " (缺 %s)",
   "gui.todolist.material_preview.generate": "生成任务",
+  "gui.todolist.material_preview.preparing": "正在准备配方数据，请稍后再试",
   "gui.todolist.material_preview.empty": "没有可生成的材料",
   "gui.todolist.material_preview.summary": "共 %s 项材料",
   "gui.todolist.material_preview.hint": "点方块图标切换配方，点物品图标选材料或展开，滚轮滚动（Shift 横向）",

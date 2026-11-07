@@ -95,6 +95,24 @@ public class ClientTaskPackets {
      *
      * @param tasks 需要替换的任务列表
      */
+    /**
+     * 向服务端请求目标物品的配方映射（材料反推，1.21.2+ 服务端权威通路）。
+     *
+     * @param itemId 目标物品资源 ID
+     */
+    public static void requestMaterialPlan(String itemId) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null || itemId == null || itemId.isEmpty()) {
+            return;
+        }
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(itemId);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.MATERIAL_PLAN_REQUEST_ID, buf));
+    }
+
     public static void sendReplaceAllTasks(List<Task> tasks) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {

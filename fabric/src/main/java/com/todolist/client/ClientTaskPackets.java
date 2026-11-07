@@ -78,6 +78,17 @@ public class ClientTaskPackets {
                 client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
                 return;
             }
+            if (channelId.equals(TaskPackets.MATERIAL_ITEMS_ID)) {
+                List<String> itemIds = TaskPackets.readMaterialItems(buf);
+                client.execute(() -> com.todolist.material.ClientMaterialCatalog.apply(itemIds));
+                return;
+            }
+            if (channelId.equals(TaskPackets.MATERIAL_PLAN_ID)) {
+                java.util.Map.Entry<String, List<com.todolist.material.MaterialRecipe>> plan =
+                        TaskPackets.readMaterialPlan(buf);
+                client.execute(() -> TodoScreen.applyMaterialPlan(plan.getKey(), plan.getValue()));
+                return;
+            }
             if (channelId.equals(TaskPackets.ADVANCEMENT_CATALOG_ID)) {
                 List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
                 String namespaceAtReceive = DataPathProvider.getStorageNamespace();
@@ -88,6 +99,24 @@ public class ClientTaskPackets {
                 return;
             }
         });
+    }
+
+    /**
+     * 向服务端请求目标物品的配方映射（材料反推，1.21.2+ 服务端权威通路）。
+     *
+     * @param itemId 目标物品资源 ID
+     */
+    public static void requestMaterialPlan(String itemId) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null || itemId == null || itemId.isEmpty()) {
+            return;
+        }
+        if (!ClientPlayNetworking.canSend(FabricTaskPayload.TYPE)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(itemId);
+        ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.MATERIAL_PLAN_REQUEST_ID, buf));
     }
 
     /**

@@ -58,6 +58,12 @@ public class TaskPackets {
     public static final Identifier TRIGGER_PROGRESS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "trigger_progress");
     /** 服务端→客户端：服务端权威进度目录（供「选择进度」列出全部进度，而非仅玩家可见进度）。 */
     public static final Identifier ADVANCEMENT_CATALOG_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "advancement_catalog");
+    /** 服务端→客户端：可反推物品清单（服务端权威配方的去重产物 ID，供 1.21.2+ 客户端材料选择）。 */
+    public static final Identifier MATERIAL_ITEMS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_items");
+    /** 客户端→服务端：材料反推请求（目标物品资源 ID）。 */
+    public static final Identifier MATERIAL_PLAN_REQUEST_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan_request");
+    /** 服务端→客户端：目标物品的配方映射（材料反推结果）。 */
+    public static final Identifier MATERIAL_PLAN_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
 
     public static void setServerPacketSender(ServerPacketSender sender) {
@@ -109,6 +115,7 @@ public class TaskPackets {
             syncTasksToPlayer(player);
             syncTeamTasksToPlayer(player);
             sendAdvancementCatalog(player);
+            sendMaterialItems(player);
         });
     }
 
@@ -183,6 +190,177 @@ public class TaskPackets {
             entries.add(new AdvancementCatalog.Entry(buf.readUtf(), buf.readUtf()));
         }
         return entries;
+    }
+
+    /**
+     * 写出可反推物品清单（服务端权威配方的去重产物 ID）。
+     *
+     * @param buf     目标缓冲
+     * @param itemIds 物品资源 ID 列表
+     */
+    public static void writeMaterialItems(FriendlyByteBuf buf, List<String> itemIds) {
+        List<String> valid = itemIds == null ? List.of() : itemIds;
+        buf.writeVarInt(valid.size());
+        for (String itemId : valid) {
+            buf.writeUtf(itemId == null ? "" : itemId);
+        }
+    }
+
+    /**
+     * 读取可反推物品清单。
+     *
+     * @param buf 来源缓冲
+     * @return 物品资源 ID 列表
+     */
+    public static List<String> readMaterialItems(FriendlyByteBuf buf) {
+        int size = buf.readVarInt();
+        List<String> itemIds = new ArrayList<>(Math.max(0, size));
+        for (int i = 0; i < size; i++) {
+            itemIds.add(buf.readUtf());
+        }
+        return itemIds;
+    }
+
+    /**
+     * 写出目标物品的配方映射（材料反推结果）。
+     *
+     * @param buf     目标缓冲
+     * @param itemId  目标物品资源 ID
+     * @param recipes 配方映射列表
+     */
+    public static void writeMaterialPlan(FriendlyByteBuf buf, String itemId, List<com.todolist.material.MaterialRecipe> recipes) {
+        buf.writeUtf(itemId == null ? "" : itemId);
+        List<com.todolist.material.MaterialRecipe> valid = recipes == null ? List.of() : recipes;
+        buf.writeVarInt(valid.size());
+        for (com.todolist.material.MaterialRecipe recipe : valid) {
+            writeMaterialRecipe(buf, recipe);
+        }
+    }
+
+    /**
+     * 读取目标物品的配方映射。
+     *
+     * @param buf 来源缓冲
+     * @return 目标物品 ID 与配方映射列表
+     */
+    public static java.util.Map.Entry<String, List<com.todolist.material.MaterialRecipe>> readMaterialPlan(FriendlyByteBuf buf) {
+        String itemId = buf.readUtf();
+        int size = buf.readVarInt();
+        List<com.todolist.material.MaterialRecipe> recipes = new ArrayList<>(Math.max(0, size));
+        for (int i = 0; i < size; i++) {
+            recipes.add(readMaterialRecipe(buf));
+        }
+        return java.util.Map.entry(itemId, recipes);
+    }
+
+    /**
+     * 写出单条配方映射。
+     *
+     * @param buf    目标缓冲
+     * @param recipe 配方映射
+     */
+    public static void writeMaterialRecipe(FriendlyByteBuf buf, com.todolist.material.MaterialRecipe recipe) {
+        buf.writeUtf(recipe.kind() == null ? "" : recipe.kind().name());
+        buf.writeUtf(recipe.id() == null ? "" : recipe.id());
+        buf.writeUtf(recipe.outputItemId() == null ? "" : recipe.outputItemId());
+        buf.writeInt(recipe.outputCount());
+        List<com.todolist.material.MaterialIngredient> inputs = recipe.inputs() == null ? List.of() : recipe.inputs();
+        buf.writeVarInt(inputs.size());
+        for (com.todolist.material.MaterialIngredient input : inputs) {
+            List<String> candidates = input == null || input.candidates() == null ? List.of() : input.candidates();
+            buf.writeVarInt(candidates.size());
+            for (String candidate : candidates) {
+                buf.writeUtf(candidate == null ? "" : candidate);
+            }
+            buf.writeInt(input == null ? 1 : input.count());
+        }
+    }
+
+    /**
+     * 读取单条配方映射。
+     *
+     * @param buf 来源缓冲
+     * @return 配方映射；类型未知时返回 null
+     */
+    public static com.todolist.material.MaterialRecipe readMaterialRecipe(FriendlyByteBuf buf) {
+        String kindName = buf.readUtf();
+        com.todolist.material.MaterialRecipeKind kind;
+        try {
+            kind = com.todolist.material.MaterialRecipeKind.valueOf(kindName);
+        } catch (IllegalArgumentException exception) {
+            kind = null;
+        }
+        String id = buf.readUtf();
+        String outputItemId = buf.readUtf();
+        int outputCount = buf.readInt();
+        int inputSize = buf.readVarInt();
+        List<com.todolist.material.MaterialIngredient> inputs = new ArrayList<>(Math.max(0, inputSize));
+        for (int i = 0; i < inputSize; i++) {
+            int candidateSize = buf.readVarInt();
+            List<String> candidates = new ArrayList<>(Math.max(0, candidateSize));
+            for (int j = 0; j < candidateSize; j++) {
+                candidates.add(buf.readUtf());
+            }
+            int count = buf.readInt();
+            if (!candidates.isEmpty()) {
+                inputs.add(new com.todolist.material.MaterialIngredient(candidates, count));
+            }
+        }
+        if (kind == null || id.isEmpty() || inputs.isEmpty()) {
+            return null;
+        }
+        return new com.todolist.material.MaterialRecipe(id, outputItemId, outputCount, inputs, kind);
+    }
+
+    /**
+     * 处理客户端的材料反推请求（1.21.2+ 客户端无配方数据，索引构建与反查在服务端完成）。
+     *
+     * @param server 当前服务端
+     * @param player 请求玩家
+     * @param buf    请求缓冲（目标物品资源 ID）
+     */
+    public static void onMaterialPlanRequestPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        String itemId = buf.readUtf();
+        server.execute(() -> {
+            List<com.todolist.material.MaterialRecipe> recipes =
+                    com.todolist.material.MaterialIndexService.recipesFor(server, itemId);
+            sendMaterialPlan(player, itemId, recipes);
+        });
+    }
+
+    /**
+     * 向玩家下发可反推物品清单（服务端权威配方的去重产物 ID）。
+     * 1.21.2+ 客户端不再持有配方数据，材料反推的物品选择以此清单为数据源。
+     *
+     * @param player 目标玩家
+     */
+    public static void sendMaterialItems(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        MinecraftServer server = player.level().getServer();
+        if (server == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeMaterialItems(buf, com.todolist.material.MaterialIndexService.itemIds(server));
+        serverPacketSender.send(player, MATERIAL_ITEMS_ID, buf);
+    }
+
+    /**
+     * 向玩家下发目标物品的配方映射（材料反推结果）。
+     *
+     * @param player  目标玩家
+     * @param itemId  目标物品资源 ID
+     * @param recipes 配方映射列表
+     */
+    public static void sendMaterialPlan(ServerPlayer player, String itemId, List<com.todolist.material.MaterialRecipe> recipes) {
+        if (player == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeMaterialPlan(buf, itemId, recipes);
+        serverPacketSender.send(player, MATERIAL_PLAN_ID, buf);
     }
 
     /**

@@ -35,6 +35,8 @@ public final class NeoForgeTaskPacketRegistrar {
                 TaskPackets.onToggleTaskPacket(server, player, buf));
         NeoForgeNetworkBridge.registerServerReceiver(TaskPackets.TEAM_TOGGLE_TASK_ID, (server, player, handler, buf, responseSender) ->
                 TaskPackets.onTeamToggleTaskPacket(server, player, buf));
+        NeoForgeNetworkBridge.registerServerReceiver(TaskPackets.MATERIAL_PLAN_REQUEST_ID, (server, player, handler, buf, responseSender) ->
+                TaskPackets.onMaterialPlanRequestPacket(server, player, buf));
 
         NeoForgeNetworkBridge.registerJoinListener((player, sender, server) ->
                 TaskPackets.onPlayerJoin(server, player));

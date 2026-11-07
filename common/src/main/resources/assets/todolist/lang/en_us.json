@@ -365,6 +365,7 @@
   "gui.todolist.material_preview.held_enough": " (ready)",
   "gui.todolist.material_preview.held_missing": " (need %s)",
   "gui.todolist.material_preview.generate": "Create tasks",
+  "gui.todolist.material_preview.preparing": "Preparing recipe data, please try again shortly",
   "gui.todolist.material_preview.empty": "No materials to generate",
   "gui.todolist.material_preview.summary": "%s material types",
   "gui.todolist.material_preview.hint": "Click a block icon to switch recipe, click an item icon to pick materials or expand; scroll wheel (Shift for horizontal)",

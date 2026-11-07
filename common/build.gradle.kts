@@ -268,6 +268,14 @@ tasks.register<JavaExec>("packetChunkingTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("materialPlanRoundTripTest") {
+    group = "verification"
+    description = "Run the material plan network payload round-trip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.MaterialPlanRoundTripTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.register<JavaExec>("packetGuardsTest") {
     group = "verification"
     description = "Run the network packet read-guard self-tests."
@@ -296,6 +304,7 @@ tasks.named("check").configure {
     dependsOn("materialPreviewLayoutTest")
     dependsOn("packetChunkingTest")
     dependsOn("packetGuardsTest")
+    dependsOn("materialPlanRoundTripTest")
     dependsOn("permissionCenterTest")
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")

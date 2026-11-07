@@ -17,6 +17,13 @@ public final class ClientBridge {
      */
     public interface ClientOps {
         /**
+         * 向服务端请求目标物品的配方映射（材料反推，1.21.2+ 服务端权威通路）。
+         *
+         * @param itemId 目标物品资源 ID
+         */
+        default void requestMaterialPlan(String itemId) {
+        }
+        /**
          * 获取团队任务管理器（仅客户端本地缓存，用于渲染与交互）。
          */
         TaskManager getTeamTaskManager();

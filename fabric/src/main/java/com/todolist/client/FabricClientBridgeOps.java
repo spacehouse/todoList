@@ -19,6 +19,11 @@ public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
      * @return 团队任务管理器
      */
     @Override
+    public void requestMaterialPlan(String itemId) {
+        ClientTaskPackets.requestMaterialPlan(itemId);
+    }
+
+    @Override
     public TaskManager getTeamTaskManager() {
         return TodoClient.getTeamTaskManager();
     }

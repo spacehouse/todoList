@@ -12,6 +12,11 @@ import java.util.List;
  * 负责将通用客户端请求转发到 NeoForge 网络与实现层。
  */
 public final class NeoForgeClientBridgeOps implements ClientBridge.ClientOps {
+
+    @Override
+    public void requestMaterialPlan(String itemId) {
+        NeoForgeClientTaskPackets.requestMaterialPlan(itemId);
+    }
     /**
      * 获取团队任务管理器。
      *
