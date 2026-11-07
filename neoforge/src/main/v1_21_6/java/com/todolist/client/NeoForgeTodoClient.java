@@ -144,6 +144,9 @@ public final class NeoForgeTodoClient {
                 ? deltaTracker.getGameTimeDeltaPartialTick(true)
                 : 0.0f;
         hudRenderer.render(guiGraphics, partialTick);
+        // 触发器完成浮动提示与 HUD 同层渲染（与 Forge/Fabric 端保持一致）；
+        // 此前漏挂导致 NeoForge 端 show() 入队后无人绘制，表现为完成无提示
+        TodoToastRenderer.render(guiGraphics, Minecraft.getInstance().font, guiGraphics.guiWidth());
     }
 
     /**

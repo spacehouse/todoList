@@ -825,7 +825,7 @@ public class MaterialListScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
         renderSummary(context, x, y, w, h);
         // 先把树上已提交的绘制刷出去，再画浮层，尽量让浮层落在最上层
-        context.flush();
+        com.todolist.compat.GuiGraphicsCompat.flush(context);
         renderHoverTip(context);
         renderCandidatePopup(context, mouseX, mouseY);
     }
