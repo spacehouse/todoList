@@ -1,9 +1,9 @@
 package com.todolist.storage;
 
+import com.todolist.TodoConstants;
 import com.todolist.config.ModConfig;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -59,13 +59,9 @@ public final class H2StorageBootstrap {
      */
     public void ensureReady() throws IOException {
         Path databasePath = connectionProvider.getDatabaseBasePath().toAbsolutePath().normalize();
+        applyPendingRestoreBeforeOpen(databasePath);
         H2StorageAvailability.ensureAvailable(databasePath);
         synchronized (READY_DATABASES) {
-            H2TcpConfig tcpConfig = H2TcpConfig.load();
-            if (tcpConfig.isTcpEnabled() && !databaseFileExists(databasePath)) {
-                prepareEmbeddedBeforeTcp(databasePath);
-            }
-            H2TcpServerManager.ensureStarted(tcpConfig);
             if (READY_DATABASES.contains(databasePath)) {
                 return;
             }
@@ -97,33 +93,29 @@ public final class H2StorageBootstrap {
     }
 
     /**
-     * TCP 首次启用前用嵌入式连接预创建数据库，避免 H2 TCP 拒绝创建远程库。
+     * 在数据库被打开之前应用一次待恢复的备份。
+     *
+     * <p>只在该库尚未完成初始化时执行：同一进程内库已经打开过就说明文件正在被使用，
+     * 此时覆盖文件会损坏数据，因此留给下次启动再落地。
      *
      * @param databasePath H2 数据库基础路径
-     * @throws IOException 初始化或迁移失败时抛出
      */
-    private void prepareEmbeddedBeforeTcp(Path databasePath) throws IOException {
-        H2TcpServerManager.stop();
-        try (Connection connection = connectionProvider.openEmbeddedBootstrapConnection()) {
-            schemaInitializer.initialize(connection);
-            if (!isMigrationCompleted(connection)) {
-                migrator.migrate(connection, migrationReader.readAll());
+    private void applyPendingRestoreBeforeOpen(Path databasePath) {
+        synchronized (READY_DATABASES) {
+            if (READY_DATABASES.contains(databasePath)) {
+                return;
             }
-            backupOnStartIfEnabled(connection, databasePath);
-            H2StorageAvailability.markAvailable(databasePath);
-            READY_DATABASES.add(databasePath);
-        } catch (SQLException exception) {
-            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, exception.getMessage());
-            throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_INIT_FAILED, "Failed to prepare H2 storage before TCP startup", exception);
-        } catch (H2SchemaUpgradeException exception) {
-            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, exception.getMessage());
-            throw new StorageUnavailableException(H2StorageAvailability.Reason.SCHEMA_UPGRADE_FAILED, "Failed to upgrade H2 schema before TCP startup", exception);
-        } catch (LegacyMigrationException exception) {
-            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.MIGRATION_FAILED, exception.getMessage());
-            throw new StorageUnavailableException(H2StorageAvailability.Reason.MIGRATION_FAILED, "Failed to migrate legacy data before TCP startup", exception);
+        }
+        if (!H2PendingRestore.hasPending()) {
+            return;
+        }
+        try {
+            H2PendingRestore.AppliedRestore applied = H2PendingRestore.applyIfPending(databasePath);
+            if (applied != null) {
+                H2StorageAvailability.markAvailable(databasePath);
+            }
         } catch (IOException exception) {
-            H2StorageAvailability.markUnavailable(databasePath, H2StorageAvailability.Reason.BACKUP_FAILED, exception.getMessage());
-            throw new StorageUnavailableException(H2StorageAvailability.Reason.BACKUP_FAILED, "Failed to backup H2 storage on start before TCP startup", exception);
+            TodoConstants.LOGGER.error("Failed to apply pending H2 restore for {}", databasePath, exception);
         }
     }
 
@@ -139,20 +131,6 @@ public final class H2StorageBootstrap {
             return;
         }
         backupService.backupPreparedDatabase(connection, "startup-" + databasePath.getFileName());
-    }
-
-    /**
-     * 判断 H2 数据库文件是否已经存在。
-     *
-     * @param databasePath H2 数据库基础路径
-     * @return 存在时返回 true
-     */
-    private boolean databaseFileExists(Path databasePath) {
-        Path fileName = databasePath.getFileName();
-        if (fileName == null) {
-            return false;
-        }
-        return Files.exists(databasePath.resolveSibling(fileName + ".mv.db"));
     }
 
     /**

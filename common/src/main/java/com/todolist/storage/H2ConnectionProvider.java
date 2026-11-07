@@ -45,7 +45,7 @@ public final class H2ConnectionProvider {
 
     /**
      * 使当前进程内全部线程缓存的可复用 H2 连接失效。
-     * 用于服务端停止、TCP 重启、命名空间切换等生命周期边界，避免旧 session 被复用到新上下文。
+     * 用于服务端停止、命名空间切换等生命周期边界，避免旧 session 被复用到新上下文。
      */
     public static void invalidateReusableConnections() {
         REUSABLE_CONNECTION_CONTEXT_VERSION.incrementAndGet();
@@ -60,7 +60,7 @@ public final class H2ConnectionProvider {
      * @return H2 数据库基础路径
      */
     public Path getDatabaseBasePath() {
-        H2TcpConfig config = H2TcpConfig.load();
+        H2StorageConfig config = H2StorageConfig.load();
         String override = config.getDatabasePathOverride();
         if (override != null && !override.isBlank()) {
             return Path.of(override).toAbsolutePath().normalize();
@@ -74,10 +74,6 @@ public final class H2ConnectionProvider {
      * @return JDBC URL
      */
     public String getJdbcUrl() {
-        H2TcpServerManager.StatusSnapshot tcpStatus = H2TcpServerManager.getStatus();
-        if (tcpStatus.isTcpActive()) {
-            return H2TcpServerManager.buildTcpJdbcUrl(getDatabaseBasePath());
-        }
         String normalizedPath = getDatabaseBasePath().toString().replace("\\", "/");
         return "jdbc:h2:file:" + normalizedPath + EMBEDDED_JDBC_OPTIONS;
     }
@@ -97,22 +93,15 @@ public final class H2ConnectionProvider {
         } catch (ClassNotFoundException exception) {
             throw new SQLException("H2 driver is not available on the runtime classpath", exception);
         }
-        H2TcpConfig config = H2TcpConfig.load();
-        boolean tcpActive = H2TcpServerManager.getStatus().isTcpActive();
         String jdbcUrl = getJdbcUrl();
         if (Boolean.TRUE.equals(REUSE_BACKGROUND_CONNECTION.get())) {
-            String user = tcpActive ? config.getAdminUser() : "sa";
-            String password = tcpActive ? config.getAdminPassword() : "";
-            return openReusableConnection(jdbcUrl, user, password);
-        }
-        if (tcpActive) {
-            return DriverManager.getConnection(jdbcUrl, config.getAdminUser(), config.getAdminPassword());
+            return openReusableConnection(jdbcUrl, "sa", "");
         }
         return DriverManager.getConnection(jdbcUrl, "sa", "");
     }
 
     /**
-     * 打开 H2 初始化专用连接，用于首次创建 schema 和 TCP 账号。
+     * 打开 H2 初始化专用连接，用于首次创建 schema。
      *
      * @return H2 初始化连接
      * @throws IOException 数据目录创建失败时抛出
@@ -127,26 +116,6 @@ public final class H2ConnectionProvider {
             throw new SQLException("H2 driver is not available on the runtime classpath", exception);
         }
         return DriverManager.getConnection(getJdbcUrl(), "sa", "");
-    }
-
-    /**
-     * 打开强制嵌入式初始化连接，用于 TCP 首次启动前预创建数据库。
-     *
-     * @return H2 嵌入式初始化连接
-     * @throws IOException 数据目录创建失败时抛出
-     * @throws SQLException 连接数据库失败时抛出
-     */
-    public Connection openEmbeddedBootstrapConnection() throws IOException, SQLException {
-        Path databaseBasePath = getDatabaseBasePath();
-        Files.createDirectories(databaseBasePath.getParent());
-        try {
-            Class.forName("org.h2.Driver");
-        } catch (ClassNotFoundException exception) {
-            throw new SQLException("H2 driver is not available on the runtime classpath", exception);
-        }
-        String normalizedPath = databaseBasePath.toString().replace("\\", "/");
-        String jdbcUrl = "jdbc:h2:file:" + normalizedPath + ";AUTO_SERVER=FALSE;DATABASE_TO_UPPER=FALSE;TRACE_LEVEL_FILE=0";
-        return DriverManager.getConnection(jdbcUrl, "sa", "");
     }
 
     /**

@@ -31,6 +31,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldBlockToggleWhenNonOpTeamAllViewEnabled", TaskListWidgetTestMain::shouldBlockToggleWhenNonOpTeamAllViewEnabled);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView", TaskListWidgetTestMain::shouldKeepHoverAndSelectedBackgroundForSelfTaskInTeamAllView);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskByCoordinates", TaskListWidgetTestMain::shouldReturnTaskByCoordinates);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskRowBoundsForInlineEditing", TaskListWidgetTestMain::shouldReturnTaskRowBoundsForInlineEditing);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldRenderPriorityColorBlockInsteadOfPriorityText", TaskListWidgetTestMain::shouldRenderPriorityColorBlockInsteadOfPriorityText);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldPlaceTagsBeforeTaskTitle", TaskListWidgetTestMain::shouldPlaceTagsBeforeTaskTitle);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded", TaskListWidgetTestMain::shouldReturnTaskSectionByCoordinatesWhenCompletedSectionExpanded);
@@ -47,6 +48,7 @@ public final class TaskListWidgetTestMain {
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldReorderOnlySiblingSubtasksWhenDraggingSubtask", TaskListWidgetTestMain::shouldReorderOnlySiblingSubtasksWhenDraggingSubtask);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldKeepCompletedSectionUnchangedAfterReorder", TaskListWidgetTestMain::shouldKeepCompletedSectionUnchangedAfterReorder);
         GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldAutoScrollWhenDraggingNearListEdge", TaskListWidgetTestMain::shouldAutoScrollWhenDraggingNearListEdge);
+        GuiTestSupport.runTestCase("TaskListWidgetTestMain.shouldShowTriggerProgressAndTargetIconInTrailingMeta", TaskListWidgetTestMain::shouldShowTriggerProgressAndTargetIconInTrailingMeta);
     }
 
     /**
@@ -176,6 +178,25 @@ public final class TaskListWidgetTestMain {
         Task task = widget.getTaskAt(30, 30);
 
         GuiTestSupport.assertEquals(beta.getId(), task.getId(), "坐标命中应返回对应行的任务对象");
+    }
+
+    /**
+     * 校验按任务 ID 返回行区域，供双击任务行内联编辑定位。
+     */
+    private static void shouldReturnTaskRowBoundsForInlineEditing() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 220, 60);
+        Task alpha = createTask("task-alpha", "Alpha");
+        widget.setTasks(List.of(alpha));
+
+        TaskListWidget.RowBounds bounds = widget.getTaskRowBounds("task-alpha");
+
+        GuiTestSupport.assertNotNull(bounds, "可见任务应返回行区域");
+        GuiTestSupport.assertEquals(0, bounds.left(), "行区域左边界应与列表对齐");
+        GuiTestSupport.assertEquals(220, bounds.right(), "行区域右边界应与列表对齐");
+        GuiTestSupport.assertTrue(bounds.height() > 0, "行区域高度应为正");
+        GuiTestSupport.assertNull(widget.getTaskRowBounds("missing-task"), "不可见任务应返回空行区域");
     }
 
     /**
@@ -579,6 +600,66 @@ public final class TaskListWidgetTestMain {
         widget.mouseDragged(interactX, targetY, 0, 0, targetY - startY);
 
         GuiTestSupport.assertTrue(widget.getScrollOffsetForTest() > 0, "拖拽靠近底部边缘时应触发自动向下滚动");
+    }
+
+    /**
+     * 校验任务列表右侧会展示触发器进度与目标图标：
+     * 无负责人时仅显示进度；有负责人时「@名字 进度」并存；
+     * 父任务挂触发器时触发器进度优先于子任务进度；无触发器时不显示图标。
+     */
+    private static void shouldShowTriggerProgressAndTargetIconInTrailingMeta() {
+        GuiTestSupport.resetState();
+        FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft();
+        TaskListWidget widget = new TaskListWidget(minecraft, 0, 0, 260, 160);
+
+        Task collect = createTask("task-collect", "Collect Iron");
+        collect.setTrigger(new com.todolist.task.TaskTrigger(
+                com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_ingot", 64));
+        collect.getTrigger().setProgress(12);
+
+        Task kill = createTask("task-kill", "Kill Zombie");
+        kill.setTrigger(new com.todolist.task.TaskTrigger(
+                com.todolist.task.TaskTrigger.Type.KILL_ENTITY, "minecraft:zombie", 3));
+        kill.getTrigger().setProgress(1);
+        kill.setAssigneeUuid("uuid-alice");
+        kill.setAssigneeName("Alice");
+
+        Task plain = createTask("task-plain", "Plain");
+
+        Task parent = createTask("task-parent", "Parent");
+        Task child = createSubtask("task-child", "Child", parent.getId(), 0L);
+        child.setCompleted(true);
+
+        Task triggeredParent = createTask("task-triggered-parent", "Triggered Parent");
+        triggeredParent.setTrigger(new com.todolist.task.TaskTrigger(
+                com.todolist.task.TaskTrigger.Type.ITEM_COLLECT, "minecraft:iron_block", 3));
+        triggeredParent.getTrigger().setProgress(1);
+        Task triggeredChild = createSubtask("task-triggered-child", "Triggered Child", triggeredParent.getId(), 0L);
+        triggeredChild.setCompleted(true);
+
+        widget.setSections(List.of(new TaskListWidget.SectionModel(
+                "active", "未完成（6）",
+                List.of(collect, kill, plain, parent, child, triggeredParent, triggeredChild), true, true)));
+
+        GuiTestSupport.assertEquals("12/64", widget.getTaskTrailingMetaTextForTest(collect.getId()),
+                "有触发器的任务右侧应显示进度");
+        GuiTestSupport.assertEquals("minecraft:iron_ingot", widget.getTaskTrailingTriggerIconIdForTest(collect.getId()),
+                "收集类触发器进度前应显示目标物品图标");
+        GuiTestSupport.assertEquals("@Alice 1/3", widget.getTaskTrailingMetaTextForTest(kill.getId()),
+                "同时有负责人与触发器时应并存展示");
+        GuiTestSupport.assertEquals("", widget.getTaskTrailingMetaTextForTest(plain.getId()),
+                "无触发器且无负责人的任务不应显示右侧元信息");
+        GuiTestSupport.assertNull(widget.getTaskTrailingTriggerIconIdForTest(plain.getId()),
+                "无触发器的任务不应显示图标");
+        GuiTestSupport.assertEquals("1/1", widget.getTaskTrailingMetaTextForTest(parent.getId()),
+                "未挂触发器的父任务仍显示子任务进度");
+        GuiTestSupport.assertNull(widget.getTaskTrailingTriggerIconIdForTest(parent.getId()),
+                "无触发器的父任务不展示触发器图标");
+        GuiTestSupport.assertEquals("1/3", widget.getTaskTrailingMetaTextForTest(triggeredParent.getId()),
+                "挂触发器的父任务应优先展示触发器进度，而不是子任务进度 1/1");
+        GuiTestSupport.assertEquals("minecraft:iron_block",
+                widget.getTaskTrailingTriggerIconIdForTest(triggeredParent.getId()),
+                "挂触发器的父任务应展示触发器目标图标");
     }
 
     /**

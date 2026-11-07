@@ -86,6 +86,7 @@ public class TodoListNeoForge {
         runClientInitIfNeeded();
 
         NeoForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(new com.todolist.neoforge.NeoForgeGameEventBridge());
 
         LOGGER.info("Todo List Mod (NeoForge) initialized!");
     }

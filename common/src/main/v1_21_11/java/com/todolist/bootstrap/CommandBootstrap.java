@@ -2,6 +2,7 @@ package com.todolist.bootstrap;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -22,15 +23,15 @@ import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
+import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
 import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2BackupService;
 import com.todolist.storage.H2HealthCheckService;
 import com.todolist.storage.H2MaintenanceLock;
+import com.todolist.storage.H2PendingRestore;
 import com.todolist.storage.H2StorageAvailability;
-import com.todolist.storage.H2TcpAccountRole;
-import com.todolist.storage.H2TcpConfig;
-import com.todolist.storage.H2TcpServerManager;
 import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.storage.StorageUnavailableException;
 import com.mojang.brigadier.CommandDispatcher;
@@ -46,9 +47,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -125,9 +131,6 @@ public final class CommandBootstrap {
     private static final List<String> COMMAND_ACCESS_MODE_SUGGESTIONS = List.of(
             "op_only", "view_only", "full"
     );
-    private static final List<String> H2_ACCOUNT_ROLE_SUGGESTIONS = List.of(
-            "admin", "readonly", "readwrite"
-    );
     private static final List<String> TASK_CLEAN_SCOPE_SUGGESTIONS = List.of(
             "personal", "team"
     );
@@ -136,6 +139,9 @@ public final class CommandBootstrap {
     );
     private static final List<String> TASK_CLEAN_STATUS_SUGGESTIONS = List.of(
             "incomplete", "completed"
+    );
+    private static final List<String> TASK_TRIGGER_TYPE_SUGGESTIONS = List.of(
+            "kill_entity", "break_block", "craft_item", "item_collect", "advancement"
     );
     private static final ConcurrentHashMap<String, PendingTaskCleanConfirmation> pendingTaskCleanConfirmMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, PendingProjectRemoveConfirmation> pendingProjectRemoveConfirmMap = new ConcurrentHashMap<>();
@@ -347,6 +353,40 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "taskId")
                                         ))))
+                        .then(Commands.literal("trigger")
+                                .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .then(Commands.argument("type", StringArgumentType.word())
+                                                        .suggests(CommandBootstrap::suggestTaskTriggerTypes)
+                                                        .then(Commands.argument("target", net.minecraft.commands.arguments.IdentifierArgument.id())
+                                                                .executes(ctx -> executeTaskTriggerSet(
+                                                                        ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "taskId"),
+                                                                        StringArgumentType.getString(ctx, "type"),
+                                                                        net.minecraft.commands.arguments.IdentifierArgument.getId(ctx, "target").toString(),
+                                                                        1
+                                                                ))
+                                                                .then(Commands.argument("count", IntegerArgumentType.integer(1))
+                                                                        .executes(ctx -> executeTaskTriggerSet(
+                                                                                ctx.getSource(),
+                                                                                StringArgumentType.getString(ctx, "taskId"),
+                                                                                StringArgumentType.getString(ctx, "type"),
+                                                                                net.minecraft.commands.arguments.IdentifierArgument.getId(ctx, "target").toString(),
+                                                                                IntegerArgumentType.getInteger(ctx, "count")
+                                                                        )))))))
+                                .then(Commands.literal("clear")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskTriggerClear(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                ))))
+                                .then(Commands.literal("info")
+                                        .then(Commands.argument("taskId", StringArgumentType.word())
+                                                .executes(ctx -> executeTaskTriggerInfo(
+                                                        ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "taskId")
+                                                )))))
                         .then(Commands.literal("donep")
                                 .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
                                 .then(Commands.argument("projectId", StringArgumentType.word())
@@ -546,8 +586,6 @@ public final class CommandBootstrap {
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
                         .then(Commands.literal("status")
                                 .executes(ctx -> sendH2Status(ctx.getSource())))
-                        .then(Commands.literal("restart-tcp")
-                                .executes(ctx -> restartH2Tcp(ctx.getSource())))
                         .then(Commands.literal("backup")
                                 .executes(ctx -> backupH2(ctx.getSource(), null))
                                 .then(Commands.argument("name", StringArgumentType.word())
@@ -555,17 +593,19 @@ public final class CommandBootstrap {
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "name")
                                         ))))
+                        .then(Commands.literal("backups")
+                                .executes(ctx -> listH2Backups(ctx.getSource())))
+                        .then(Commands.literal("restore")
+                                .executes(ctx -> stageH2Restore(ctx.getSource(), "latest"))
+                                .then(Commands.argument("version", StringArgumentType.word())
+                                        .executes(ctx -> stageH2Restore(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "version")
+                                        ))))
                         .then(Commands.literal("reload-db")
                                 .executes(ctx -> reloadH2Database(ctx.getSource())))
                         .then(Commands.literal("health")
-                                .executes(ctx -> checkH2Health(ctx.getSource())))
-                        .then(Commands.literal("reset-password")
-                                .then(Commands.argument("role", StringArgumentType.word())
-                                        .suggests(CommandBootstrap::suggestH2AccountRoles)
-                                        .executes(ctx -> resetH2Password(
-                                                ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "role")
-                                        )))))
+                                .executes(ctx -> checkH2Health(ctx.getSource()))))
                 .then(Commands.literal("admin")
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
                         .then(Commands.literal("command-access")
@@ -575,6 +615,17 @@ public final class CommandBootstrap {
                                         .executes(ctx -> setCommandAccessMode(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "mode")
+                                        )))))
+                .then(Commands.literal("selftest")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> executeSelfTestList(ctx.getSource())))
+                        .then(Commands.literal("run")
+                                .executes(ctx -> executeSelfTestRun(ctx.getSource(), "all"))
+                                .then(Commands.argument("caseId", StringArgumentType.word())
+                                        .executes(ctx -> executeSelfTestRun(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "caseId")
                                         )))));
 
         LiteralCommandNode<CommandSourceStack> todoRootNode = dispatcher.register(todoRoot);
@@ -694,12 +745,10 @@ public final class CommandBootstrap {
                 "command.todolist.help.todo_hud_toggle",
                 "command.todolist.help.todo_hud_set",
                 "command.todolist.help.todo_h2_status",
-                "command.todolist.help.todo_h2_restart_tcp",
                 "command.todolist.help.todo_h2_backup",
                 "command.todolist.help.todo_h2_reload_db",
                 "command.todolist.help.todo_reload_db",
                 "command.todolist.help.todo_h2_health",
-                "command.todolist.help.todo_h2_reset_password",
                 "command.todolist.help.todo_admin_command_access",
                 "command.todolist.help.todo_join_project",
                 "command.todolist.help.todo_join_accept",
@@ -806,7 +855,7 @@ public final class CommandBootstrap {
     }
 
     /**
-     * 输出 H2 当前连接模式、TCP 状态和最近失败信息。
+     * 输出 H2 当前连接模式与最近失败信息。
      *
      * @param source 命令源
      * @return 命令执行结果
@@ -816,53 +865,68 @@ public final class CommandBootstrap {
             return COMMAND_FAILURE;
         }
         H2ConnectionProvider provider = new H2ConnectionProvider();
-        H2TcpConfig tcpConfig = H2TcpConfig.load();
-        H2TcpServerManager.StatusSnapshot tcpStatus = H2TcpServerManager.getStatus();
         H2StorageAvailability.StatusSnapshot storageStatus = H2StorageAvailability.getStatusSnapshot(provider.getDatabaseBasePath());
         sendFeedbackByTranslationKey(source, "command.todolist.h2.status.backend", ModConfig.getInstance().getStorageBackend().name().toLowerCase(Locale.ROOT));
         sendFeedbackByTranslationKey(source, "command.todolist.h2.status.storage", storageStatus.isAvailable() ? "available" : "unavailable");
-        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.tcp_enabled", tcpConfig.isTcpEnabled() ? "true" : "false");
-        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.mode", tcpStatus.getMode());
-        if (tcpStatus.isTcpActive()) {
-            sendFeedbackByTranslationKey(
-                    source,
-                    "command.todolist.h2.status.tcp_address",
-                    tcpStatus.getBindAddress(),
-                    tcpStatus.getActualPort(),
-                    "local"
-            );
-        }
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.mode", "embedded");
         if (!storageStatus.isAvailable()) {
             String reasonText = storageStatus.getReason() == null ? "UNKNOWN" : storageStatus.getReason().name();
             sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", reasonText, sanitizeStatusMessage(storageStatus.getMessage()));
-        } else if (tcpStatus.getLastFailure() != null && !tcpStatus.getLastFailure().isBlank()) {
-            sendFeedbackByTranslationKey(source, "command.todolist.h2.status.failure", "TCP", sanitizeStatusMessage(tcpStatus.getLastFailure()));
         }
         return sendCommandSuccess(source, COMMAND_SUCCESS, "command.todolist.h2.status", SIDE_EFFECT_NONE);
     }
 
     /**
-     * 重启 H2 TCP Server，并输出新的连接模式。
+     * 列出全部自检场景（区分控制台档与玩家档）。
      *
      * @param source 命令源
      * @return 命令执行结果
      */
-    private static int restartH2Tcp(CommandSourceStack source) {
-        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
-            return COMMAND_FAILURE;
+    private static int executeSelfTestList(CommandSourceStack source) {
+        List<String> console = SelfTestSupport.caseIds(false);
+        List<String> all = SelfTestSupport.caseIds(true);
+        List<String> playerOnly = new ArrayList<>(all);
+        playerOnly.removeAll(console);
+        source.sendSystemMessage(Component.literal(
+                "自检场景 控制台档（" + console.size() + " 个，可在专用服务器控制台执行）："));
+        source.sendSystemMessage(Component.literal("  " + String.join(", ", console)));
+        source.sendSystemMessage(Component.literal(
+                "玩家档（" + playerOnly.size() + " 个，需在游戏内执行以获得玩家上下文）："));
+        source.sendSystemMessage(Component.literal("  " + String.join(", ", playerOnly)));
+        source.sendSystemMessage(Component.literal(
+                "用法：/todo selftest run [场景ID|all]，控制台执行时自动跳过玩家档场景。"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * 执行自检场景套件并输出汇总。
+     *
+     * <p>标签行同时写入服务器日志（供面板 logparse 与 verify-all 解析）与命令反馈。
+     * 自检不是真实命令调用，汇总反馈不产生 COMMAND_RESULT_TRIPLET 行。
+     *
+     * @param source 命令源
+     * @param caseId 场景 ID 或 all
+     * @return 命令执行结果
+     */
+    private static int executeSelfTestRun(CommandSourceStack source, String caseId) {
+        ServerPlayer player = getPlayerOrNull(source);
+        MinecraftServer server = source.getServer();
+        String onlyId = caseId == null || caseId.isBlank() ? "all" : caseId;
+        long start = System.currentTimeMillis();
+        SelfTestSupport.SuiteResult result = SelfTestSupport.runSuite(server, player, onlyId,
+                line -> {
+                    TodoConstants.LOGGER.info(line);
+                    source.sendSystemMessage(Component.literal(line));
+                });
+        long ms = System.currentTimeMillis() - start;
+        if (result.fail() > 0) {
+            source.sendFailure(Component.literal(
+                    "自检完成：" + result.pass() + " 通过 / " + result.fail() + " 失败（" + ms + " ms）"));
+            return 0;
         }
-        H2TcpServerManager.StatusSnapshot status = H2TcpServerManager.restart(H2TcpConfig.load());
-        if (status.isTcpActive()) {
-            return sendCommandSuccess(
-                    source,
-                    COMMAND_SUCCESS,
-                    SIDE_EFFECT_NONE,
-                    "command.todolist.h2.restart_tcp.success",
-                    status.getBindAddress(),
-                    status.getActualPort()
-            );
-        }
-        return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.restart_tcp.fallback", status.getMode());
+        source.sendSystemMessage(Component.literal(
+                "自检全部通过：" + result.pass() + " 个场景（" + ms + " ms）"));
+        return Command.SINGLE_SUCCESS;
     }
 
     /**
@@ -898,6 +962,108 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.warn("Failed to create H2 backup", exception);
             return sendCommandFailure(source, "command.todolist.h2.backup.failed");
         }
+    }
+
+    /**
+     * 列出可用 H2 备份，按时间倒序并给出可直接引用的序号。
+     *
+     * @param source 命令源
+     * @return 命令执行结果
+     */
+    private static int listH2Backups(CommandSourceStack source) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.backups.requires_h2");
+        }
+        try {
+            List<H2BackupService.BackupEntry> entries = new H2BackupService().listBackups();
+            if (entries.isEmpty()) {
+                return sendCommandFailure(source, "command.todolist.h2.backups.empty");
+            }
+            sendFeedbackByTranslationKey(source, "command.todolist.h2.backups.header",
+                    entries.size(), ModConfig.getInstance().getH2BackupRetentionCount());
+            for (H2BackupService.BackupEntry entry : entries) {
+                sendFeedbackByTranslationKey(source, "command.todolist.h2.backups.entry",
+                        entry.index(),
+                        formatBackupTime(entry.modifiedAtMillis()),
+                        formatBackupSize(entry.sizeBytes()),
+                        entry.path().getFileName().toString());
+            }
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE, "command.todolist.h2.backups.hint");
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to list H2 backups", exception);
+            return sendCommandFailure(source, "command.todolist.h2.backups.failed");
+        }
+    }
+
+    /**
+     * 暂存一次「恢复到指定备份」。
+     *
+     * <p>数据库正在使用时无法安全替换文件，因此这里只做校验与暂存；
+     * 实际落地发生在下次启动、数据库被打开之前。
+     *
+     * @param source 命令源
+     * @param target 备份序号、latest 或备份文件名
+     * @return 命令执行结果
+     */
+    private static int stageH2Restore(CommandSourceStack source, String target) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
+            return sendCommandFailure(source, "command.todolist.h2.restore.requires_h2");
+        }
+        if (H2PendingRestore.hasPending()) {
+            return sendCommandFailure(source, "command.todolist.h2.restore.pending_exists",
+                    H2PendingRestore.readPendingSource());
+        }
+        try {
+            Path backup = new H2BackupService().resolveBackup(target);
+            if (backup == null) {
+                return sendCommandFailure(source, "command.todolist.h2.restore.unknown", String.valueOf(target));
+            }
+            H2PendingRestore.stageRestore(backup);
+            return sendCommandSuccess(source, COMMAND_SUCCESS, SIDE_EFFECT_NONE,
+                    "command.todolist.h2.restore.staged", backup.getFileName().toString());
+        } catch (IOException exception) {
+            TodoConstants.LOGGER.warn("Failed to stage H2 restore from {}", target, exception);
+            return sendCommandFailure(source, "command.todolist.h2.restore.invalid", String.valueOf(target));
+        } catch (Exception exception) {
+            TodoConstants.LOGGER.warn("Failed to stage H2 restore", exception);
+            return sendCommandFailure(source, "command.todolist.h2.restore.failed");
+        }
+    }
+
+    /**
+     * 格式化备份时间。
+     *
+     * @param millis 毫秒时间戳
+     * @return 形如 {@code 2026-09-15 00:28:08} 的文本；无效时间返回 {@code -}
+     */
+    private static String formatBackupTime(long millis) {
+        if (millis <= 0L) {
+            return "-";
+        }
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                .format(LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()));
+    }
+
+    /**
+     * 格式化备份文件大小。
+     *
+     * @param bytes 字节数
+     * @return 形如 {@code 4.3 MB} 的文本
+     */
+    private static String formatBackupSize(long bytes) {
+        if (bytes >= 1024L * 1024L) {
+            return String.format(Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0);
+        }
+        if (bytes >= 1024L) {
+            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+        }
+        return bytes + " B";
     }
 
     /**
@@ -960,97 +1126,6 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.warn("Failed to check H2 health", exception);
             return sendCommandFailure(source, "command.todolist.h2.health.failed");
         }
-    }
-
-    /**
-     * 重置 H2 TCP 指定角色密码。
-     *
-     * @param source 命令源
-     * @param role 原始角色文本
-     * @return 命令执行结果
-     */
-    private static int resetH2Password(CommandSourceStack source, String role) {
-        if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
-            return COMMAND_FAILURE;
-        }
-        H2TcpAccountRole accountRole = H2TcpAccountRole.fromCommandValue(role);
-        if (accountRole == null) {
-            return sendCommandFailure(source, "command.todolist.h2.reset_password.invalid_role");
-        }
-        H2TcpConfig config = H2TcpConfig.load();
-        String newPassword = H2TcpConfig.createPassword();
-        try {
-            updateH2AccountPassword(config, accountRole, newPassword);
-            config.setPassword(accountRole, newPassword);
-            config.save();
-        } catch (Exception exception) {
-            TodoConstants.LOGGER.warn("Failed to reset H2 TCP password for role {}", accountRole.commandValue(), exception);
-            return sendCommandFailure(source, "command.todolist.h2.reset_password.failed");
-        }
-        return sendCommandSuccess(
-                source,
-                COMMAND_SUCCESS,
-                SIDE_EFFECT_PERSIST_DATA,
-                "command.todolist.h2.reset_password.success",
-                accountRole.commandValue()
-        );
-    }
-
-    /**
-     * 更新 H2 数据库内指定 TCP 账号密码。
-     *
-     * @param config 当前 H2 TCP 配置
-     * @param role 账号角色
-     * @param newPassword 新密码
-     * @throws IOException 打开管理连接失败时抛出
-     * @throws SQLException 更新数据库用户失败时抛出
-     */
-    private static void updateH2AccountPassword(H2TcpConfig config, H2TcpAccountRole role, String newPassword) throws IOException, SQLException {
-        try (Connection connection = openH2PasswordResetConnection(config);
-             Statement statement = connection.createStatement()) {
-            String user = switch (role) {
-                case ADMIN -> config.getAdminUser();
-                case READONLY -> config.getReadonlyUser();
-                case READWRITE -> config.getReadwriteUser();
-            };
-            statement.execute("ALTER USER " + quoteH2Identifier(user) + " SET PASSWORD '" + escapeH2Sql(newPassword) + "'");
-        }
-    }
-
-    /**
-     * 打开密码重置所需的管理连接。
-     *
-     * @param config 当前 H2 TCP 配置
-     * @return 管理连接
-     * @throws IOException 打开连接失败时抛出
-     * @throws SQLException 打开连接失败时抛出
-     */
-    private static Connection openH2PasswordResetConnection(H2TcpConfig config) throws IOException, SQLException {
-        H2ConnectionProvider provider = new H2ConnectionProvider();
-        if (H2TcpServerManager.getStatus().isTcpActive()) {
-            return java.sql.DriverManager.getConnection(provider.getJdbcUrl(), config.getAdminUser(), config.getAdminPassword());
-        }
-        return provider.openEmbeddedBootstrapConnection();
-    }
-
-    /**
-     * 转义 H2 SQL 字符串。
-     *
-     * @param value 原始值
-     * @return 已转义值
-     */
-    private static String escapeH2Sql(String value) {
-        return value == null ? "" : value.replace("'", "''");
-    }
-
-    /**
-     * 转义 H2 标识符。
-     *
-     * @param value 原始标识符
-     * @return 引号包裹的标识符
-     */
-    private static String quoteH2Identifier(String value) {
-        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
     }
 
     /**
@@ -1587,6 +1662,11 @@ public final class CommandBootstrap {
             List<Task> tasks
     ) throws IOException {
         if (project.getScope() == Project.Scope.TEAM) {
+            // 先合并引擎内存中的触发器进度，避免命令保存旧快照覆盖尚未落库的进度
+            TaskTriggerService.mergeTeamTriggerStateInto(tasks);
+            // 领取/放弃/改派命令后，领取人发生变化的团队任务需要清零触发器进度
+            // （必须在合并之后，否则重置会被引擎进度覆盖）
+            TaskTriggerService.resetTriggerProgressOnAssigneeChange(storage.loadTeamTasks(), tasks);
             storage.saveTeamTasks(tasks);
             TaskPackets.broadcastTeamTasks(source.getServer());
             return;
@@ -3034,6 +3114,209 @@ public final class CommandBootstrap {
     }
 
     /**
+     * 为当前玩家的个人任务设置事件触发器。
+     */
+    private static int executeTaskTriggerSet(CommandSourceStack source, String taskId, String typeName, String target, int count) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        TaskTrigger.Type type = parseTaskTriggerType(typeName);
+        if (type == null) {
+            return sendCommandFailure(source, "command.todolist.task.trigger.set.invalid_type", typeName);
+        }
+        String normalizedTarget = target == null ? "" : target.trim();
+        if (normalizedTarget.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.task.trigger.set.invalid_target");
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            task.setTrigger(new TaskTrigger(type, normalizedTarget, count));
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            TaskTriggerService.invalidatePersonal(source.getServer(), playerUuid);
+            if (type == TaskTrigger.Type.ITEM_COLLECT) {
+                // 玩家可能已持有足量物品，设置后立即评估一次
+                TaskTriggerService.evaluateItemCollectAfterTriggerChange(player);
+            }
+            syncTasksToPlayer(source.getServer(), player);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.trigger.set.success",
+                    task.getTitle(), type.name().toLowerCase(java.util.Locale.ROOT), describeTriggerTargetComponent(type, normalizedTarget), count
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to set task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.set.failed", e);
+        }
+    }
+
+    /**
+     * 清除当前玩家个人任务的事件触发器。
+     */
+    private static int executeTaskTriggerClear(CommandSourceStack source, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            if (task.getTrigger() == null) {
+                return sendCommandSuccess(
+                        source,
+                        COMMAND_SUCCESS,
+                        SIDE_EFFECT_NONE,
+                        "command.todolist.task.trigger.clear.not_set",
+                        task.getTitle()
+                );
+            }
+            task.setTrigger(null);
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            TaskTriggerService.invalidatePersonal(source.getServer(), playerUuid);
+            syncTasksToPlayer(source.getServer(), player);
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.task.trigger.clear.success",
+                    task.getTitle()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to clear task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.clear.failed", e);
+        }
+    }
+
+    /**
+     * 查看当前玩家个人任务的事件触发器配置与进度。
+     */
+    private static int executeTaskTriggerInfo(CommandSourceStack source, String taskId) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        UUID playerUuid = player.getUUID();
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            TaskTriggerService.mergeTriggerStateInto(source.getServer(), playerUuid, tasks);
+            Task task = findTaskById(tasks, taskId);
+            if (task == null) {
+                return sendCommandFailure(source, "command.todolist.task.done.not_found", taskId);
+            }
+            TaskTrigger trigger = task.getTrigger();
+            if (trigger == null) {
+                return sendCommandSuccess(
+                        source,
+                        COMMAND_SUCCESS,
+                        SIDE_EFFECT_NONE,
+                        "command.todolist.task.trigger.info.none",
+                        task.getTitle()
+                );
+            }
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_NONE,
+                    "command.todolist.task.trigger.info.format",
+                    task.getTitle(),
+                    trigger.getType().name().toLowerCase(java.util.Locale.ROOT),
+                    describeTriggerTargetComponent(trigger.getType(), trigger.getTarget()),
+                    trigger.getProgress(),
+                    trigger.getTargetCount()
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to read task trigger for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.task.trigger.info.failed", e);
+        }
+    }
+
+    /**
+     * 构造触发器目标的展示组件：可识别的物品 / 方块 / 实体目标显示本地化名称并附资源 ID，
+     * 识别失败（或进度等无注册表映射的目标）时原样显示资源 ID。
+     * 返回可翻译组件的嵌套结构，由客户端按玩家语言本地化渲染。
+     *
+     * @param type   触发类型
+     * @param target 目标资源 ID
+     * @return 展示组件
+     */
+    private static Component describeTriggerTargetComponent(TaskTrigger.Type type, String target) {
+        String fallbackId = target == null ? "" : target;
+        try {
+            net.minecraft.resources.Identifier location = net.minecraft.resources.Identifier.tryParse(fallbackId);
+            if (location != null && type != null) {
+                switch (type) {
+                    case ITEM_COLLECT, CRAFT_ITEM -> {
+                        net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                                .getOptional(location).orElse(null);
+                        if (item != null && item != net.minecraft.world.item.Items.AIR) {
+                            return Component.translatable(item.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    case BREAK_BLOCK -> {
+                        net.minecraft.world.level.block.Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                                .getOptional(location).orElse(null);
+                        if (block != null) {
+                            return Component.translatable(block.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    case KILL_ENTITY -> {
+                        net.minecraft.world.entity.EntityType<?> entityType = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                                .getOptional(location).orElse(null);
+                        if (entityType != null) {
+                            return Component.translatable(entityType.getDescriptionId()).append(" (" + fallbackId + ")");
+                        }
+                    }
+                    default -> {
+                        // 进度等目标没有注册表显示名，保持原样。
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 解析失败时回退为原始资源 ID。
+        }
+        return Component.literal(fallbackId);
+    }
+
+    /**
+     * 解析触发器类型参数，非法输入返回 null。
+     */
+    private static TaskTrigger.Type parseTaskTriggerType(String typeName) {
+        if (typeName == null) {
+            return null;
+        }
+        try {
+            return TaskTrigger.Type.valueOf(typeName.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    /**
      * 将指定项目中的目标任务标记为完成，并依据项目范围执行对应同步。
      */
     private static int executeTaskDoneByProject(CommandSourceStack source, String projectId, String taskId) {
@@ -3591,6 +3874,13 @@ public final class CommandBootstrap {
         return suggestWords(TASK_CLEAN_STATUS_SUGGESTIONS, builder);
     }
 
+    /**
+     * 为任务触发器类型参数提供候选项。
+     */
+    private static CompletableFuture<Suggestions> suggestTaskTriggerTypes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return suggestWords(TASK_TRIGGER_TYPE_SUGGESTIONS, builder);
+    }
+
     private static CompletableFuture<Suggestions> suggestProjectScopes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(PROJECT_SCOPE_SUGGESTIONS, builder);
     }
@@ -3612,17 +3902,6 @@ public final class CommandBootstrap {
      */
     private static CompletableFuture<Suggestions> suggestCommandAccessModes(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
         return suggestWords(COMMAND_ACCESS_MODE_SUGGESTIONS, builder);
-    }
-
-    /**
-     * 为 H2 TCP 账号角色参数提供自动补全。
-     *
-     * @param ctx 命令上下文
-     * @param builder 补全构建器
-     * @return 补全结果
-     */
-    private static CompletableFuture<Suggestions> suggestH2AccountRoles(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
-        return suggestWords(H2_ACCOUNT_ROLE_SUGGESTIONS, builder);
     }
 
     private static CompletableFuture<Suggestions> suggestSelectableProjectIds(CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
@@ -3992,9 +4271,18 @@ public final class CommandBootstrap {
 
     /**
      * 根据存储异常类型发送命令失败反馈。
+     *
+     * <p>存储不可用时给出具体原因与数据库文件路径，并附上查看/恢复备份的命令提示。
      */
     private static int sendStorageAwareCommandFailure(CommandSourceStack source, String fallbackTranslationKey, Throwable throwable) {
-        return sendCommandFailure(source, StorageFailureNotifier.toCommandMessageKey(throwable, fallbackTranslationKey));
+        StorageUnavailableException unavailable = StorageUnavailableException.find(throwable);
+        if (unavailable != null) {
+            return sendCommandFailure(source,
+                    StorageFailureNotifier.COMMAND_STORAGE_UNAVAILABLE_DETAIL_MESSAGE_KEY,
+                    StorageFailureNotifier.describeReason(unavailable.getReason()),
+                    StorageFailureNotifier.describeDatabaseFile());
+        }
+        return sendCommandFailure(source, fallbackTranslationKey);
     }
 
     /**

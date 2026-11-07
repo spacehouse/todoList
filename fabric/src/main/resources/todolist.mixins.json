@@ -1,8 +1,12 @@
 {
   "required": true,
   "package": "com.todolist.mixin",
-  "compatibilityLevel": "JAVA_17",
-  "mixins": [],
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "todolist.mixins.refmap.json",
+  "mixins": [
+    "ResultSlotMixin",
+    "PlayerAdvancementsMixin"
+  ],
   "client": [],
   "injectors": {
     "defaultRequire": 1

@@ -1,10 +1,12 @@
 package com.todolist.client;
 
 import com.todolist.TodoListNeoForge;
+import com.todolist.client.AdvancementCatalog;
 import com.todolist.gui.TodoScreen;
 import com.todolist.neoforge.network.NeoForgeNetworkBridge;
 import com.todolist.network.TaskPackets;
 import com.todolist.platform.DataPathProvider;
+import com.todolist.client.TodoToastRenderer;
 import com.todolist.task.Task;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -69,6 +71,25 @@ public final class NeoForgeClientTaskPackets {
             String taskId = buf.readUtf();
             boolean success = buf.readBoolean();
             client.execute(() -> TodoListNeoForge.LOGGER.info("Task {} {} (id={})", action, success ? "succeeded" : "failed", taskId));
+        });
+
+        NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_COMPLETED_ID, (client, handler, buf, responseSender) -> {
+            String title = buf.readUtf();
+            client.execute(() -> TodoToastRenderer.show(title));
+        });
+
+        NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.TRIGGER_PROGRESS_ID, (client, handler, buf, responseSender) -> {
+            TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+            client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
+        });
+
+        NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.ADVANCEMENT_CATALOG_ID, (client, handler, buf, responseSender) -> {
+            List<AdvancementCatalog.Entry> entries = TaskPackets.readAdvancementCatalog(buf);
+            String namespaceAtReceive = DataPathProvider.getStorageNamespace();
+            client.execute(() -> {
+                AdvancementCatalog.apply(namespaceAtReceive, entries);
+                TodoListNeoForge.LOGGER.info("Received {} advancements from server catalog", entries.size());
+            });
         });
     }
 

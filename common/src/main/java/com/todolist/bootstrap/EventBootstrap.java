@@ -15,12 +15,28 @@ public final class EventBootstrap {
     /**
      * 处理服务端启动阶段事件。
      *
+     * <p>自动模式（-Dtodolist.selftest.auto=1）下，起守护线程延迟等待世界加载完成后
+     * 自动执行控制台档自检（输出 [CMD][CASE] 标签行与 SELFTEST SUMMARY 汇总，
+     * 供 verify-all 无头判定），不影响正常启动流程。
+     *
      * @param server     MinecraftServer 实例
      * @param onStarting 服务端启动时的回调
      */
     public static void handleServerStarting(MinecraftServer server, Consumer<MinecraftServer> onStarting) {
         if (onStarting != null) {
             onStarting.accept(server);
+        }
+        if (SelfTestSupport.isAutoMode()) {
+            Thread worker = new Thread(() -> {
+                try {
+                    Thread.sleep(8000);
+                } catch (InterruptedException ignored) {
+                    return;
+                }
+                SelfTestSupport.runConsoleSuite(server);
+            }, "todolist-selftest-auto");
+            worker.setDaemon(true);
+            worker.start();
         }
     }
 
@@ -34,6 +50,7 @@ public final class EventBootstrap {
         if (onStopped != null) {
             onStopped.accept(server);
         }
+        com.todolist.trigger.TaskTriggerService.flushAll(server);
         TodoListCommon.closeStorageContext();
     }
 }

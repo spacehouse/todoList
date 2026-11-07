@@ -6,10 +6,17 @@ import com.todolist.client.ClientBridge;
 import com.todolist.client.ClientTaskStorageHelper;
 import com.todolist.client.ClientPlatformAdapter;
 import com.todolist.client.TodoHudRenderer;
+import com.todolist.client.TriggerTargetSupport;
 import com.todolist.config.ModConfig;
 import com.todolist.gui.TodoScreenLayoutSupport.LayoutRect;
 import com.todolist.gui.TodoScreenLayoutSupport.MainLayoutMetrics;
 import com.todolist.gui.TodoScreenLayoutSupport.ResponsiveTier;
+import com.todolist.material.MaterialPreviewState;
+import com.todolist.material.MaterialRecipeIndex;
+import com.todolist.material.MaterialRecipeIndexBuilder;
+import com.todolist.material.MaterialRecipeLookup;
+import com.todolist.material.MaterialTaskContext;
+import com.todolist.material.MaterialTaskMode;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.storage.H2ConnectionProvider;
 import com.todolist.storage.H2TaskQueryService;
@@ -28,6 +35,9 @@ import com.todolist.permission.PermissionCenter.ViewScope;
 import com.todolist.task.Task;
 import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
+import com.todolist.task.TaskTrigger;
+import com.todolist.trigger.TaskTriggerService;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -61,6 +71,8 @@ import org.lwjgl.glfw.GLFW;
  */
 public class TodoScreen extends Screen implements ProjectManager.ProjectChangeListener {
     private static final Component TITLE = Component.translatable("gui.todolist.title");
+    /** 双击任务行进入行内编辑的时间窗口（毫秒）。 */
+    private static final long TASK_ROW_DOUBLE_CLICK_MS = 300L;
     private static final ExecutorService GUI_STORAGE_LOADER = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "TodoList GUI Storage Loader");
         thread.setDaemon(true);
@@ -99,9 +111,38 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     // 输入框
     private EditBox searchField;
     private EditBox quickAddField;
+    private Button quickAddItemButton;
+    private Button quickAddTriggerButton;
+    private Button quickAddMaterialButton;
+    /** 打开物品选择器前暂存的快速新增文本，用于选择器返回后回填输入框。 */
+    private String pendingQuickAddText;
+    /** 快速新增行的待插入光标位置，-1 表示追加到末尾。 */
+    private int pendingQuickAddInsertPos = -1;
     private EditBox titleField;
     private MultiLineEditBox descField;
     private EditBox tagField;
+
+    // 任务行内标题编辑（双击任务项触发）
+    /** 行内标题编辑框；为 null 表示当前没有行内编辑。 */
+    private EditBox inlineTitleField;
+    /** 行内编辑时用于插入物品标记的「+」按钮。 */
+    private Button inlineInsertItemButton;
+    /** 行内正在编辑的任务 ID。 */
+    private String inlineEditingTaskId;
+    /** 打开物品选择器前行内编辑的暂存文本。 */
+    private String pendingInlineTitleText;
+    /** 行内编辑的待插入光标位置，-1 表示追加到末尾。 */
+    private int pendingInlineInsertPos = -1;
+    /** 从物品选择器返回后是否需要恢复行内编辑。 */
+    private boolean pendingInlineEditingRestore;
+    /** 触发器优先创建流程暂存的触发器，待界面重建后据此创建任务。 */
+    private TaskTrigger pendingTriggerTaskToCreate;
+    /** 触发器优先创建流程的目标父任务 ID：非空时创建为子任务（跟随触发时的选中任务）。 */
+    private String pendingTriggerParentTaskId;
+    /** 上一次点击任务行的时间戳（毫秒），用于双击判定。 */
+    private long lastTaskRowClickTime;
+    /** 上一次点击的任务行 ID，用于双击判定。 */
+    private String lastTaskRowClickTaskId;
 
     // 按钮
     private Button detailCloseButton;
@@ -530,6 +571,102 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
             screen.applySyncedPersonalTasksToOpenScreen(safeTasks);
         }
+    }
+
+    /**
+     * 应用服务端下发的触发器进度增量。
+     * 与 {@link #applySyncedPersonalTasks} 不同：这里只就地更新命中任务的进度与完成态，
+     * 不替换任务列表、不写本地存储，避免每次事件触发都触发上千行落库与界面重建导致卡顿。
+     *
+     * @param minecraft 当前客户端实例
+     * @param batch     进度变化批次（含个人/团队标记）
+     */
+    public static void applyTriggerProgress(Minecraft minecraft, com.todolist.network.TaskPackets.TriggerProgressBatch batch) {
+        if (batch == null || batch.entries().isEmpty()) {
+            return;
+        }
+        Map<String, com.todolist.network.TaskPackets.TriggerProgress> byId = new HashMap<>();
+        for (com.todolist.network.TaskPackets.TriggerProgress entry : batch.entries()) {
+            if (entry != null && entry.taskId() != null) {
+                byId.put(entry.taskId(), entry);
+            }
+        }
+        if (byId.isEmpty()) {
+            return;
+        }
+        boolean snapshotUpdated = applyTriggerProgressToTasks(
+                batch.team() ? cachedTeamTasksSnapshot : cachedPersonalTasksSnapshot, byId);
+        TodoHudRenderer renderer = ClientPlatformAdapter.getHudRenderer();
+        boolean hudUpdated = renderer != null && renderer.applyTriggerProgress(batch.entries(), batch.team());
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("client applied snapshotUpdated={} hudUpdated={} of {} entries",
+                    snapshotUpdated, hudUpdated, byId.size());
+        }
+        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+            screen.applyTriggerProgressToOpenScreen(byId, batch.team());
+        }
+    }
+
+    /**
+     * 把进度条目就地写入任务列表（只改进度与完成态，不新增/删除任务）。
+     *
+     * @param tasks 目标任务列表
+     * @param byId  任务 ID 到进度条目的映射
+     * @return 是否有任务被更新
+     */
+    private static boolean applyTriggerProgressToTasks(List<Task> tasks, Map<String, com.todolist.network.TaskPackets.TriggerProgress> byId) {
+        if (tasks == null || tasks.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        for (Task task : tasks) {
+            if (task == null || task.getId() == null) {
+                continue;
+            }
+            com.todolist.network.TaskPackets.TriggerProgress entry = byId.get(task.getId());
+            if (entry == null) {
+                continue;
+            }
+            if (task.getTrigger() != null) {
+                task.getTrigger().setProgress(entry.progress());
+            }
+            task.setCompleted(entry.completed());
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * 将触发器进度增量应用到当前打开的界面（仅刷新受影响的视图，不重建任务列表）。
+     *
+     * @param byId 任务 ID 到进度条目的映射
+     * @param team 是否为团队任务桶
+     */
+    private void applyTriggerProgressToOpenScreen(Map<String, com.todolist.network.TaskPackets.TriggerProgress> byId, boolean team) {
+        if (team && teamHasUnsavedChanges) {
+            return;
+        }
+        if (!team && personalHasUnsavedChanges) {
+            return;
+        }
+        TaskManager manager = team ? teamTaskManager : personalTaskManager;
+        if (manager == null) {
+            return;
+        }
+        boolean changed = applyTriggerProgressToTasks(manager.getAllTasks(), byId);
+        if (selectedTask != null) {
+            changed |= applyTriggerProgressToTasks(List.of(selectedTask), byId);
+        }
+        if (!changed) {
+            return;
+        }
+        // 子任务完成态由触发器推进改变后，父任务完成态需要重新聚合
+        manager.markParentCompletionDirty();
+        if (selectedTask != null && !isSelectedTaskValid()) {
+            clearSelectedTask();
+        }
+        filterTasks();
+        updateButtonStates();
     }
 
     /**
@@ -1300,10 +1437,24 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 contentControlX,
                 inputRowY,
                 Math.max(60, contentControlWidth),
-                inputRowHeight);
+                inputRowHeight,
+                this::onInsertItemIntoQuickAdd,
+                this::onCreateTaskFromTrigger,
+                this::openMaterialPreview
+        );
         taskListWidget = taskAreaWidgets.taskListWidget;
         quickAddField = taskAreaWidgets.quickAddField;
+        quickAddItemButton = taskAreaWidgets.quickAddItemButton;
+        quickAddTriggerButton = taskAreaWidgets.quickAddTriggerButton;
+        quickAddMaterialButton = taskAreaWidgets.quickAddMaterialButton;
         this.addRenderableWidget(quickAddField);
+        this.addRenderableWidget(quickAddItemButton);
+        this.addRenderableWidget(quickAddTriggerButton);
+        this.addRenderableWidget(quickAddMaterialButton);
+        if (pendingQuickAddText != null) {
+            quickAddField.setValue(pendingQuickAddText);
+            pendingQuickAddText = null;
+        }
         Component clearCompletedText = Component.translatable("gui.todolist.completed.clear");
         int clearCompletedButtonWidth = Math.max(52, this.font.width(clearCompletedText) + 12);
         clearCompletedButton = Button.builder(clearCompletedText, button -> openClearCompletedConfirmScreen())
@@ -1367,6 +1518,18 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         syncDetailWidgetsFromState();
         this.setFocused(quickAddField);
         updateButtonStates();
+        createPendingTriggerTask();
+        if (pendingInlineEditingRestore) {
+            pendingInlineEditingRestore = false;
+            Task restoreTask = findTaskById(inlineEditingTaskId);
+            String restoreText = pendingInlineTitleText;
+            int restorePos = pendingInlineInsertPos;
+            pendingInlineTitleText = null;
+            pendingInlineInsertPos = -1;
+            if (restoreTask != null) {
+                beginInlineTitleEditing(restoreTask, restoreText, restorePos);
+            }
+        }
     }
 
     /**
@@ -1445,6 +1608,29 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (quickAddField != null) {
             quickAddField.visible = true;
             quickAddField.active = true;
+        }
+        if (quickAddItemButton != null) {
+            boolean quickAddButtonVisible = TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name());
+            quickAddItemButton.visible = quickAddButtonVisible;
+            quickAddItemButton.active = quickAddButtonVisible;
+        }
+        if (quickAddTriggerButton != null) {
+            boolean quickAddTriggerVisible = TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name());
+            quickAddTriggerButton.visible = quickAddTriggerVisible;
+            quickAddTriggerButton.active = quickAddTriggerVisible;
+            // 选中可承载子任务的顶层任务时，按钮语义变为「为其新增子触发任务」，让层级意图在点击前可见
+            boolean asSubtask = quickAddTriggerVisible && resolveTriggerCreationParentTaskId() != null;
+            quickAddTriggerButton.setMessage(Component.translatable(asSubtask
+                    ? "gui.todolist.quick_add.trigger.subtask"
+                    : "gui.todolist.quick_add.trigger"));
+            quickAddTriggerButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(asSubtask
+                    ? "gui.todolist.quick_add.trigger.subtask.tooltip"
+                    : "gui.todolist.quick_add.trigger.tooltip")));
+        }
+        if (quickAddMaterialButton != null) {
+            boolean quickAddMaterialVisible = TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name());
+            quickAddMaterialButton.visible = quickAddMaterialVisible;
+            quickAddMaterialButton.active = quickAddMaterialVisible;
         }
         applyDetailWidgetEditability();
         if (claimButton != null) {
@@ -1566,6 +1752,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         String currentPlayerUuid = TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft);
         if ("TEAM_ASSIGNED".equals(viewMode.name())
+                && !task.hasTrigger()
                 && TaskAssignmentSupport.hasDirectSubtasks(task, allTasks)
                 && currentPlayerUuid != null
                 && !currentPlayerUuid.isEmpty()) {
@@ -1581,7 +1768,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
 
     /**
      * 在"我的"视图下切换父任务中属于当前玩家的直属子任务的完成状态。
-     * 仅影响分配给当前玩家的子任务，不影响其他玩家的子任务。
+     * 仅影响分配给当前玩家的子任务，不影响其他玩家的子任务；
+     * 挂有触发器的子任务跳过，避免覆盖触发器的完成态与进度。
      *
      * @param parentTask 父任务
      * @param allTasks 同作用域的任务列表
@@ -1592,9 +1780,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         boolean anyIncomplete = playerSubtasks.stream()
                 .anyMatch(t -> t != null
                         && playerUuid.equals(t.getAssigneeUuid())
+                        && !t.hasTrigger()
                         && !t.isCompleted());
         for (Task subtask : playerSubtasks) {
-            if (subtask == null || !playerUuid.equals(subtask.getAssigneeUuid())) {
+            if (subtask == null || subtask.hasTrigger() || !playerUuid.equals(subtask.getAssigneeUuid())) {
                 continue;
             }
             if (subtask.isCompleted() == anyIncomplete) {
@@ -1704,6 +1893,16 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     public boolean keyPressed(KeyEvent event) {
         // 1.21.9：按键事件改为 KeyEvent 记录，解构键码保持原逻辑不变
         int keyCode = event.key();
+        if (inlineTitleField != null) {
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+                commitInlineTitleEditing();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                cancelInlineTitleEditing();
+                return true;
+            }
+        }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE
                 && TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             closeTaskContextMenu();
@@ -1761,6 +1960,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         syncTaskListReorderState();
         if (handleContextMenuClick(mouseX, mouseY, button)) {
             return true;
+        }
+        if (isInsideInlineEditArea(mouseX, mouseY)) {
+            return super.mouseClicked(event, doubleClick);
+        }
+        if (inlineTitleField != null) {
+            commitInlineTitleEditing();
         }
         boolean prefixDropdownVisible = TodoScreenProjectSearchSupport.shouldShowProjectSearchPrefixDropdown(
                 projectSearchPrefixDropdownOpen,
@@ -1912,6 +2117,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                         && !Objects.equals(clickedTask.getId(), selectedTask.getId())) {
                     discardSelectedEmptyPlaceholderSubtask();
                 }
+                boolean rowDoubleClick = button == 0
+                        && clickedTask.getId() != null
+                        && clickedTask.getId().equals(lastTaskRowClickTaskId)
+                        && (System.currentTimeMillis() - lastTaskRowClickTime) <= TASK_ROW_DOUBLE_CLICK_MS;
+                lastTaskRowClickTaskId = clickedTask.getId();
+                lastTaskRowClickTime = System.currentTimeMillis();
+                if (rowDoubleClick) {
+                    resetTaskRowDragState();
+                    selectTask(clickedTask);
+                    closeTaskContextMenu();
+                    startInlineTitleEditing(clickedTask);
+                    return true;
+                }
                 if (button == 0
                         && sectionHit != null
                         && (sectionHit.getRowType() == TaskListWidget.RowType.TASK
@@ -1972,6 +2190,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 descField,
                 tagField,
                 false,
+                quickAddItemButton,
+                quickAddTriggerButton,
+                quickAddMaterialButton,
                 detailCloseButton,
                 addSubtaskButton,
                 claimButton,
@@ -2128,48 +2349,148 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * 在当前视图下快速新增一条任务，并同步写入项目、作用域和默认指派信息。
      */
     private void onAddTask() {
-        if (currentProject == null) {
-            addNotification(Component.translatable("message.todolist.select_project_first").getString());
-            return;
-        }
-        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
-            addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
-            return;
-        }
-        if (!TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name())) {
-            addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
+        if (!canCreateTaskInCurrentView()) {
             return;
         }
         String title = getFieldValue(quickAddField, "");
-        if (title.isEmpty()) {
-            return;
+        String desc = "";
+
+        if (!title.isEmpty()) {
+            Task task = taskManager.addTask(title, desc);
+            applyNewTaskDefaults(task);
+
+            clearSelectedTask();
+            selectedPriority = Task.Priority.MEDIUM;
+            if (quickAddField != null) {
+                quickAddField.setValue("");
+            }
+
+            markUnsaved();
+            filterTasks();
+            if (isGuiAutoSaveEnabled()) {
+                persistCurrentViewTasksInBackground("auto_add");
+            }
         }
-        Task task = taskManager.addTask(title, "");
+    }
+
+    /**
+     * 校验当前视图是否允许新增任务；不允许时给出提示。
+     *
+     * @return 允许新增时返回 true
+     */
+    private boolean canCreateTaskInCurrentView() {
+        if (currentProject == null) {
+            addNotification(Component.translatable("message.todolist.select_project_first").getString());
+            return false;
+        }
+        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
+            addNotification(Component.translatable("message.todolist.add_not_allowed_in_view").getString());
+            return false;
+        }
+        if (!TodoScreenPermissionSupport.canAddTaskInView(this.minecraft, currentProject, viewMode.name())) {
+            addNotification(Component.translatable("message.todolist.no_permission_add_team").getString());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 为新任务填充优先级、所属项目与团队归属等默认字段。
+     *
+     * @param task 新任务
+     */
+    private void applyNewTaskDefaults(Task task) {
         task.setPriority(selectedPriority);
         if (currentProject != null) {
             task.setProjectId(currentProject.getId());
         }
         if (viewMode != ViewMode.PERSONAL) {
-            task.setScope(Task.Scope.TEAM);
             if (this.minecraft != null && this.minecraft.player != null) {
                 String uuid = this.minecraft.player.getUUID().toString();
                 String name = this.minecraft.player.getName().getString();
+                task.setScope(Task.Scope.TEAM);
                 task.setCreatorUuid(uuid);
                 if (viewMode == ViewMode.TEAM_ASSIGNED) {
                     task.setAssigneeUuid(uuid);
                     task.setAssigneeName(name);
                 }
+            } else {
+                task.setScope(Task.Scope.TEAM);
             }
         }
-        clearSelectedTask();
-        selectedPriority = Task.Priority.MEDIUM;
-        if (quickAddField != null) {
-            quickAddField.setValue("");
+    }
+
+    /**
+     * 打开触发器编辑界面，用「先设触发器、再自动建任务」的方式创建任务。
+     * 触发器确认后暂存，等 TodoScreen 重新初始化（任务管理器就绪）时再建任务。
+     *
+     * 当前已选中可承载子任务的顶层任务时，新建的任务会成为该任务的子任务
+     * （无需先建子任务再双击进入编辑器），否则创建为顶层任务。
+     */
+    private void onCreateTaskFromTrigger() {
+        if (minecraft == null || !canCreateTaskInCurrentView()) {
+            return;
         }
+        String parentTaskId = resolveTriggerCreationParentTaskId();
+        minecraft.setScreen(new TriggerEditScreen(this, null, trigger -> {
+            if (trigger != null && trigger.isValid()) {
+                pendingTriggerTaskToCreate = trigger;
+                pendingTriggerParentTaskId = parentTaskId;
+            }
+        }));
+    }
+
+    /**
+     * 解析「触发优先创建」应挂在哪个父任务下：仅当当前选中项允许新增子任务时返回其 ID。
+     *
+     * @return 目标父任务 ID；不适用时返回 null（表示创建顶层任务）
+     */
+    private String resolveTriggerCreationParentTaskId() {
+        Task selected = selectedTask;
+        if (selected == null) {
+            return null;
+        }
+        if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
+            return null;
+        }
+        if (!canAddSubtaskToParent(selected)) {
+            return null;
+        }
+        return selected.getId();
+    }
+
+    /**
+     * 依据暂存的触发器创建任务，并直接进入行内重命名。
+     * 必须在界面上所有控件与任务列表重建完成后调用。
+     */
+    private void createPendingTriggerTask() {
+        if (pendingTriggerTaskToCreate == null || taskManager == null) {
+            return;
+        }
+        TaskTrigger trigger = pendingTriggerTaskToCreate;
+        String parentTaskId = pendingTriggerParentTaskId;
+        pendingTriggerTaskToCreate = null;
+        pendingTriggerParentTaskId = null;
+
+        Task parentTask = parentTaskId == null ? null : findTaskById(parentTaskId);
+        Task task;
+        if (parentTask != null) {
+            task = taskManager.addTask("", "");
+            inheritFieldsFromParentForSubtask(task, parentTask);
+        } else {
+            task = taskManager.addTask(TriggerTargetSupport.buildDefaultTaskTitle(trigger).getString(), "");
+            applyNewTaskDefaults(task);
+        }
+        task.setTitle(TriggerTargetSupport.buildDefaultTaskTitle(trigger).getString());
+        task.setTrigger(trigger);
+
+        selectedPriority = Task.Priority.MEDIUM;
         markUnsaved();
         filterTasks();
+        selectTask(task, false);
+        beginInlineTitleEditing(task, task.getTitle(), -1);
         if (isGuiAutoSaveEnabled()) {
-            persistCurrentViewTasksInBackground("auto_add");
+            persistCurrentViewTasksInBackground("auto_add_trigger_task");
         }
     }
 
@@ -2204,7 +2525,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param parentTask 父任务
      */
     private void createSubtaskFromParent(Task parentTask) {
-        if (parentTask == null || !parentTask.isTopLevelTask()) {
+        if (parentTask == null) {
             return;
         }
         if (currentProject == null) {
@@ -2220,6 +2541,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         Task subtask = taskManager.addTask("", "");
+        inheritFieldsFromParentForSubtask(subtask, parentTask);
+
+        markUnsaved();
+        applySearchFilter();
+        selectTask(subtask, false);
+        beginDetailTitleEditing();
+        closeTaskContextMenu();
+    }
+
+    /**
+     * 把父任务的作用域、优先级、项目与归属等字段复制到新建的空白子任务。
+     *
+     * @param subtask    新建子任务
+     * @param parentTask 父任务
+     */
+    private void inheritFieldsFromParentForSubtask(Task subtask, Task parentTask) {
         subtask.setPriority(parentTask.getPriority());
         subtask.setProjectId(parentTask.getProjectId());
         subtask.setScope(parentTask.getScope());
@@ -2228,12 +2565,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         subtask.setAssigneeName(parentTask.getAssigneeName());
         subtask.setParentTaskId(parentTask.getId());
         subtask.setSubtaskSortOrder(resolveNextSubtaskSortOrder(parentTask.getId()));
-
-        markUnsaved();
-        applySearchFilter();
-        selectTask(subtask, false);
-        beginDetailTitleEditing();
-        closeTaskContextMenu();
     }
 
     private void selectTask(Task task) {
@@ -2287,7 +2618,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private boolean shouldShowAddSubtaskButton() {
         return selectedTask != null
-                && selectedTask.isTopLevelTask()
                 && canAddSubtaskToSelectedParent();
     }
 
@@ -2303,12 +2633,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     /**
      * 判断给定父任务是否允许继续创建子任务。
      *
+     * <p>层级不限：子任务同样可以作为父任务再挂子任务，仅要求同项目、未完成且有权限。
+     *
      * @param parentTask 父任务
      * @return true 表示允许创建子任务
      */
     private boolean canAddSubtaskToParent(Task parentTask) {
         if (parentTask == null
-                || !parentTask.isTopLevelTask()
                 || currentProject == null
                 || taskManager == null
                 || parentTask.isCompleted()
@@ -2318,7 +2649,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         Task latestParent = taskManager.getTask(parentTask.getId());
         return latestParent != null
-                && latestParent.isTopLevelTask()
                 && !latestParent.isCompleted()
                 && currentProject.getId() != null
                 && currentProject.getId().equals(latestParent.getProjectId());
@@ -2533,6 +2863,198 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         detailDraft.titleEditing = false;
         applyDetailWidgetEditability();
+    }
+
+    /**
+     * 打开物品选择器，把选中的物品标记插入快速新增框的光标位置。
+     * 选择器关闭后 TodoScreen 重新初始化，届时由暂存文本回填输入框。
+     */
+    private void onInsertItemIntoQuickAdd() {
+        if (minecraft == null || quickAddField == null) {
+            return;
+        }
+        String current = quickAddField.getValue() == null ? "" : quickAddField.getValue();
+        pendingQuickAddInsertPos = Math.max(0, Math.min(quickAddField.getCursorPosition(), current.length()));
+        pendingQuickAddText = current;
+        minecraft.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoQuickAdd, true));
+    }
+
+    /**
+     * 将物品标记插入快速新增暂存文本的待插入位置。
+     *
+     * @param markup 物品标记，形如 [item:minecraft:iron_ingot]
+     */
+    private void insertItemMarkupIntoQuickAdd(String markup) {
+        if (markup == null || markup.isEmpty()) {
+            return;
+        }
+        String current = pendingQuickAddText == null ? "" : pendingQuickAddText;
+        int position = pendingQuickAddInsertPos < 0 ? current.length() : Math.min(pendingQuickAddInsertPos, current.length());
+        pendingQuickAddInsertPos = -1;
+        pendingQuickAddText = current.substring(0, position) + markup + current.substring(position);
+    }
+
+    /**
+     * 双击任务行时进入行内标题编辑。
+     *
+     * @param task 目标任务
+     */
+    private void startInlineTitleEditing(Task task) {
+        if (task == null || !canEditSelectedTaskDetails()) {
+            return;
+        }
+        beginInlineTitleEditing(task, task.getTitle(), -1);
+    }
+
+    /**
+     * 在任务行上创建行内标题编辑框与插入物品按钮。
+     *
+     * @param task        目标任务
+     * @param initialText 初始文本
+     * @param cursorPos   初始光标位置，-1 表示末尾
+     */
+    private void beginInlineTitleEditing(Task task, String initialText, int cursorPos) {
+        if (task == null || taskListWidget == null) {
+            return;
+        }
+        TaskListWidget.RowBounds bounds = taskListWidget.getTaskRowBounds(task.getId());
+        if (bounds == null) {
+            return;
+        }
+        clearInlineTitleEditingWidgets();
+        inlineEditingTaskId = task.getId();
+        int buttonSize = 16;
+        int fieldLeft = bounds.left() + 18;
+        int buttonX = Math.max(fieldLeft + 40, bounds.right() - 4 - buttonSize);
+        int fieldHeight = Math.max(14, bounds.height() - 2);
+        int fieldY = bounds.top() + 1;
+        int fieldWidth = Math.max(40, buttonX - 4 - fieldLeft);
+
+        inlineTitleField = new EditBox(this.font, fieldLeft, fieldY, fieldWidth, fieldHeight, Component.empty());
+        inlineTitleField.setMaxLength(100);
+        inlineTitleField.setValue(initialText == null ? "" : initialText);
+        inlineTitleField.setHint(Component.translatable("gui.todolist.input.title.inline.hint"));
+
+        inlineInsertItemButton = Button.builder(Component.literal("+"), b -> onInsertItemIntoInlineTitle())
+                .bounds(buttonX, fieldY, buttonSize, fieldHeight)
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(
+                        Component.translatable("gui.todolist.detail.insert_item.tooltip")))
+                .build();
+
+        this.addRenderableWidget(inlineTitleField);
+        this.addRenderableWidget(inlineInsertItemButton);
+        this.setFocused(inlineTitleField);
+        inlineTitleField.setFocused(true);
+        if (cursorPos >= 0) {
+            inlineTitleField.setCursorPosition(Math.min(cursorPos, inlineTitleField.getValue().length()));
+        }
+    }
+
+    /**
+     * 提交行内标题编辑：写回任务标题并按需刷新列表。
+     */
+    private void commitInlineTitleEditing() {
+        if (inlineTitleField == null) {
+            return;
+        }
+        String text = inlineTitleField.getValue() == null ? "" : inlineTitleField.getValue();
+        String taskId = inlineEditingTaskId;
+        clearInlineTitleEditingWidgets();
+        Task task = findTaskById(taskId);
+        if (task == null) {
+            return;
+        }
+        if (!text.equals(task.getTitle())) {
+            task.setTitle(text);
+            markUnsaved();
+        }
+        applySearchFilter();
+    }
+
+    /**
+     * 取消行内标题编辑，不写回任何修改。
+     */
+    private void cancelInlineTitleEditing() {
+        if (inlineTitleField == null) {
+            return;
+        }
+        clearInlineTitleEditingWidgets();
+        applySearchFilter();
+    }
+
+    /**
+     * 移除行内编辑控件并清空编辑状态。
+     */
+    private void clearInlineTitleEditingWidgets() {
+        if (inlineTitleField != null) {
+            this.removeWidget(inlineTitleField);
+            inlineTitleField = null;
+        }
+        if (inlineInsertItemButton != null) {
+            this.removeWidget(inlineInsertItemButton);
+            inlineInsertItemButton = null;
+        }
+        inlineEditingTaskId = null;
+    }
+
+    /**
+     * 判断点击坐标是否落在行内编辑区域（编辑框或插入按钮）内。
+     *
+     * @param mouseX 鼠标 X 坐标
+     * @param mouseY 鼠标 Y 坐标
+     * @return 命中行内编辑区域时返回 true
+     */
+    private boolean isInsideInlineEditArea(double mouseX, double mouseY) {
+        if (inlineTitleField == null) {
+            return false;
+        }
+        if (inlineTitleField.isMouseOver(mouseX, mouseY)) {
+            return true;
+        }
+        return inlineInsertItemButton != null && inlineInsertItemButton.isMouseOver(mouseX, mouseY);
+    }
+
+    /**
+     * 打开物品选择器，把选中的物品标记插入行内编辑框的光标位置。
+     * 选择器关闭后 TodoScreen 会重新初始化，届时由暂存文本恢复行内编辑。
+     */
+    private void onInsertItemIntoInlineTitle() {
+        if (minecraft == null || inlineTitleField == null) {
+            return;
+        }
+        String current = inlineTitleField.getValue() == null ? "" : inlineTitleField.getValue();
+        pendingInlineTitleText = current;
+        pendingInlineInsertPos = Math.max(0, Math.min(inlineTitleField.getCursorPosition(), current.length()));
+        pendingInlineEditingRestore = true;
+        minecraft.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoInlineTitle, true));
+    }
+
+    /**
+     * 将物品标记插入行内编辑暂存文本的待插入位置；实际回填在 init() 中完成。
+     *
+     * @param markup 物品标记，形如 [item:minecraft:iron_ingot]
+     */
+    private void insertItemMarkupIntoInlineTitle(String markup) {
+        if (markup == null || markup.isEmpty()) {
+            return;
+        }
+        String current = pendingInlineTitleText == null ? "" : pendingInlineTitleText;
+        int position = pendingInlineInsertPos < 0 ? current.length() : Math.min(pendingInlineInsertPos, current.length());
+        pendingInlineInsertPos = -1;
+        pendingInlineTitleText = current.substring(0, position) + markup + current.substring(position);
+    }
+
+    /**
+     * 在当前任务管理器中按 ID 查找任务。
+     *
+     * @param taskId 任务 ID
+     * @return 目标任务；不存在时返回 null
+     */
+    private Task findTaskById(String taskId) {
+        if (taskId == null || taskManager == null) {
+            return null;
+        }
+        return taskManager.getTask(taskId);
     }
 
     /**
@@ -2782,15 +3304,123 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.high"), canEdit, () -> applyTaskPriority(task, Task.Priority.HIGH)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.medium"), canEdit, () -> applyTaskPriority(task, Task.Priority.MEDIUM)));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.priority.low"), canEdit, () -> applyTaskPriority(task, Task.Priority.LOW)));
-        if (task.isTopLevelTask()) {
+        if (canEdit) {
             items.add(new ContextMenuItem(
-                    Component.translatable("gui.todolist.subtask.add"),
-                    canAddSubtaskToParent(task),
-                    () -> createSubtaskFromParent(task)
+                    Component.translatable(task.hasTrigger()
+                            ? "gui.todolist.trigger.edit"
+                            : "gui.todolist.trigger.set"),
+                    true,
+                    () -> openTriggerEditScreen(task)
             ));
         }
+        if (canEdit && task.hasTrigger()) {
+            items.add(new ContextMenuItem(
+                    Component.translatable("gui.todolist.trigger.clear"),
+                    true,
+                    () -> applyTriggerFromEditor(task, null)
+            ));
+        }
+        items.add(new ContextMenuItem(
+                Component.translatable("gui.todolist.subtask.add"),
+                canAddSubtaskToParent(task),
+                () -> createSubtaskFromParent(task)
+        ));
         items.add(new ContextMenuItem(Component.translatable("gui.todolist.delete"), canDelete, () -> deleteTaskFromContextMenu(task)));
         return items;
+    }
+
+    /**
+     * 打开触发器编辑界面，保存后按回调结果更新任务触发器。
+     *
+     * @param task 目标任务
+     */
+    private void openTriggerEditScreen(Task task) {
+        closeTaskContextMenu();
+        if (minecraft == null || task == null) {
+            return;
+        }
+        minecraft.setScreen(new TriggerEditScreen(this, task.getTrigger(), trigger -> applyTriggerFromEditor(task, trigger)));
+    }
+
+    /**
+     * 应用触发器编辑结果：null 表示清除触发器，否则更新配置并走当前视图保存链路。
+     *
+     * @param task    目标任务
+     * @param trigger 编辑结果，可为 null
+     */
+    private void applyTriggerFromEditor(Task task, TaskTrigger trigger) {
+        if (task == null) {
+            return;
+        }
+        task.setTrigger(trigger);
+        markUnsaved();
+        applySearchFilter();
+        persistCurrentViewTasksInBackground(trigger == null ? "trigger_clear" : "trigger_edit");
+    }
+
+    /**
+     * 打开材料反推流程：先构建配方索引，再复用物品选择器让玩家选定目标物品。
+     */
+    private void openMaterialPreview() {
+        closeTaskContextMenu();
+        if (minecraft == null || minecraft.level == null || currentProject == null) {
+            return;
+        }
+        MaterialRecipeIndex index = MaterialRecipeIndexBuilder.buildDefault(
+                MaterialRecipeLookup.clientRecipeManager(minecraft),
+                minecraft.level.registryAccess()
+        );
+        if (index.recipeCount() == 0) {
+            addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
+            return;
+        }
+        minecraft.setScreen(new ItemSelectorScreen(this, itemId -> openMaterialPreviewFor(itemId, index), false));
+    }
+
+    /**
+     * 为目标物品打开材料反推预览界面。
+     *
+     * @param itemId 目标物品资源 ID
+     * @param index  配方反查索引
+     */
+    private void openMaterialPreviewFor(String itemId, MaterialRecipeIndex index) {
+        if (minecraft == null || itemId == null || itemId.isEmpty()) {
+            return;
+        }
+        Task.Scope scope = currentProject != null && currentProject.getScope() == Project.Scope.TEAM
+                ? Task.Scope.TEAM
+                : Task.Scope.PERSONAL;
+        MaterialTaskContext context = new MaterialTaskContext(
+                currentProject == null ? null : currentProject.getId(),
+                scope,
+                TodoScreenPermissionSupport.getCurrentPlayerUuid(this.minecraft),
+                null,
+                null,
+                (materialItemId, materialCount, recipeKind) ->
+                        TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount).getString()
+        );
+        MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
+        minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks));
+    }
+
+    /**
+     * 把材料反推生成的任务加入当前项目并走现有保存链路。
+     *
+     * @param tasks 生成的任务列表
+     */
+    private void applyGeneratedMaterialTasks(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty() || taskManager == null) {
+            return;
+        }
+        for (Task task : tasks) {
+            taskManager.addTask(task);
+        }
+        markUnsaved();
+        applySearchFilter();
+        addNotification(Component.translatable("message.todolist.material_preview.generated", tasks.size()).getString());
+        if (isGuiAutoSaveEnabled()) {
+            persistCurrentViewTasksInBackground("material_generate");
+        }
     }
 
     private void applyTaskPriority(Task task, Task.Priority priority) {
@@ -3610,8 +4240,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     private int assignPendingTaskTargets(Task task, List<Task> managedTasks, String assigneeUuid, String assigneeName) {
         List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
         if (directSubtasks.isEmpty()) {
-            task.setAssigneeUuid(assigneeUuid);
-            task.setAssigneeName(assigneeName);
+            assignAssigneeWithTriggerReset(task, assigneeUuid, assigneeName);
             return 1;
         }
         int changedCount = 0;
@@ -3619,8 +4248,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (TaskAssignmentSupport.isDirectlyAssigned(subtask)) {
                 continue;
             }
-            subtask.setAssigneeUuid(assigneeUuid);
-            subtask.setAssigneeName(assigneeName);
+            assignAssigneeWithTriggerReset(subtask, assigneeUuid, assigneeName);
             changedCount++;
         }
         return changedCount;
@@ -3640,8 +4268,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         List<Task> directSubtasks = getDirectSubtasksForBatchAction(task, managedTasks);
         if (directSubtasks.isEmpty()) {
             boolean wasAssigned = TaskAssignmentSupport.isDirectlyAssigned(task);
-            task.setAssigneeUuid(null);
-            task.setAssigneeName(null);
+            assignAssigneeWithTriggerReset(task, null, null);
             return wasAssigned ? 1 : 0;
         }
         boolean scopeToPlayer = "TEAM_ASSIGNED".equals(viewModeName)
@@ -3655,8 +4282,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             if (scopeToPlayer && !currentPlayerUuid.equals(subtask.getAssigneeUuid())) {
                 continue;
             }
-            subtask.setAssigneeUuid(null);
-            subtask.setAssigneeName(null);
+            assignAssigneeWithTriggerReset(subtask, null, null);
             changedCount++;
         }
         return changedCount;
@@ -3686,6 +4312,26 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return null;
         }
         return taskManager.getTask(taskId);
+    }
+
+    /**
+     * 变更任务领取人，并在领取人发生变化时清零团队任务的触发器进度。
+     *
+     * 局域网主机（已发布局域网）下 GUI 保存会直接写入本地存储、不经过服务端保存包，
+     * 因此必须在变更领取人的当口就地清零，否则进度会延续给下一位领取者。
+     *
+     * @param task         目标任务
+     * @param assigneeUuid 新领取人 UUID，null 表示取消领取
+     * @param assigneeName 新领取人名称，null 表示取消领取
+     */
+    private void assignAssigneeWithTriggerReset(Task task, String assigneeUuid, String assigneeName) {
+        if (task == null) {
+            return;
+        }
+        String previousAssignee = task.getAssigneeUuid();
+        task.setAssigneeUuid(assigneeUuid);
+        task.setAssigneeName(assigneeName);
+        TaskTriggerService.resetTriggerProgressIfAssigneeChanged(previousAssignee, task);
     }
 
     private void onClaimTask() {
@@ -3952,9 +4598,9 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
         return TodoScreenTaskSupport.buildTaskPaneSections(
-                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(activeTasks, scopedProjectTasks),
+                TodoScreenTaskSupport.buildSectionTasksWithDescendants(activeTasks, scopedProjectTasks),
                 activeTotalCount,
-                TodoScreenTaskSupport.buildSectionTasksWithDirectChildren(dedupedCompletedTasks, completedScopedTasks),
+                TodoScreenTaskSupport.buildSectionTasksWithDescendants(dedupedCompletedTasks, completedScopedTasks),
                 dedupedCompletedTasks.size() == 0 ? 0 : completedTotalCount,
                 activeExpanded,
                 completedExpanded

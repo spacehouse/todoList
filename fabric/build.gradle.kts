@@ -20,6 +20,14 @@ val enableModMenu = (findProperty("enable_modmenu") as String?)?.toBoolean()
 val effectiveModMenu = enableModMenu
 val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
+loom {
+    mixin {
+        defaultRefmapName.set("todolist.mixins.refmap.json")
+        // loom 1.17 默认关闭 mixin 注解处理器；本项目 mixin 依赖 refmap 生成，显式沿用旧版 AP
+        useLegacyMixinAp = true
+    }
+}
+
 base {
     archivesName.set("$archives_name-fabric-$minecraftVersion")
 }
@@ -29,6 +37,10 @@ dependencies {
     mappings(loom.officialMojangMappings())
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+
+    // dev 运行时（runServer/runClient）需要 H2 驱动在 classpath；打包时由 tasks.jar 的
+    // zipTree 嵌入 mod jar，二者不冲突（implementation 只影响 dev classpath 与发布 pom 排除）
+    implementation(files(h2Jar))
 
     implementation(project(":common", configuration = "namedElements"))
 
@@ -114,4 +126,45 @@ tasks.jar {
     from(zipTree(h2Jar)) {
         exclude("META-INF/MANIFEST.MF")
     }
+}
+
+val fabricSourceSets = the<SourceSetContainer>()
+val fabricMainSourceSet = fabricSourceSets["main"]
+val fabricTestSourceSet = fabricSourceSets["test"]
+
+tasks.register<JavaExec>("mixinVisibilityTest") {
+    group = "verification"
+    description = "Run the offline Mixin visibility self-tests guarding against InvalidMixinException regressions."
+    classpath = files(
+        fabricMainSourceSet.output,
+        fabricTestSourceSet.output,
+        fabricMainSourceSet.compileClasspath,
+        fabricTestSourceSet.compileClasspath
+    )
+    mainClass.set("com.todolist.mixin.test.MixinVisibilityTestMain")
+    dependsOn(fabricTestSourceSet.classesTaskName)
+}
+
+tasks.register<JavaExec>("mixinConfigTest") {
+    group = "verification"
+    description = "Run the mixin registry guard self-tests (registered mixins <-> mixin package classes)."
+    classpath = files(
+        fabricMainSourceSet.output,
+        fabricTestSourceSet.output,
+        fabricMainSourceSet.compileClasspath,
+        fabricTestSourceSet.compileClasspath
+    )
+    mainClass.set("com.todolist.mixin.test.MixinConfigTestMain")
+    dependsOn(fabricTestSourceSet.classesTaskName)
+}
+
+tasks.named("check") {
+    dependsOn("mixinVisibilityTest")
+    dependsOn("mixinConfigTest")
+}
+
+// fabric 侧无 JUnit 测试（自检走独立 JavaExec 任务）；搬入测试类后禁用默认 test 任务，
+// 避免 Gradle 9 的“有测试源但未发现测试”校验失败
+tasks.named("test") {
+    enabled = false
 }

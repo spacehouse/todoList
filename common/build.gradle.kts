@@ -162,13 +162,6 @@ tasks.register<JavaExec>("h2StorageAvailabilityTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
-tasks.register<JavaExec>("h2TcpAccessTest") {
-    group = "verification"
-    description = "Run the M2 H2 TCP access self-tests."
-    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
-    mainClass.set("com.todolist.storage.H2TcpAccessTestMain")
-    dependsOn(tasks.named(testSourceSet.classesTaskName))
-}
 
 tasks.register<JavaExec>("h2CommandIntegrationTest") {
     group = "verification"
@@ -194,7 +187,116 @@ tasks.register<JavaExec>("h2TaskQueryServiceTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+
+tasks.register<JavaExec>("titleMarkupParserTest") {
+    group = "verification"
+    description = "Run the title item markup parser self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.task.TitleMarkupParserTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("taskTriggerTest") {
+    group = "verification"
+    description = "Run the task trigger entity and NBT round-trip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.task.TaskTriggerTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("taskTriggerServiceTest") {
+    group = "verification"
+    description = "Run the five event-driven trigger engine semantics self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.trigger.TaskTriggerServiceTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("advancementCatalogTest") {
+    group = "verification"
+    description = "Run the server-authoritative advancement catalog self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.client.AdvancementCatalogTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialRecipeTest") {
+    group = "verification"
+    description = "Run the material reverse-derivation recipe index and selector self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialRecipeTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialResolverTest") {
+    group = "verification"
+    description = "Run the material reverse-derivation resolver self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialResolverTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialTaskGeneratorTest") {
+    group = "verification"
+    description = "Run the material task generation self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialTaskGeneratorTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialPreviewStateTest") {
+    group = "verification"
+    description = "Run the material preview state self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialPreviewStateTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("materialPreviewLayoutTest") {
+    group = "verification"
+    description = "Run the material preview horizontal tree layout self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.material.MaterialPreviewLayoutTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("packetChunkingTest") {
+    group = "verification"
+    description = "Run the team task packet chunking roundtrip self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.TaskPacketChunkingTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("packetGuardsTest") {
+    group = "verification"
+    description = "Run the network packet read-guard self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.network.PacketGuardsTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
+tasks.register<JavaExec>("permissionCenterTest") {
+    group = "verification"
+    description = "Run the permission center role x operation matrix self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.permission.PermissionCenterTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.named("check").configure {
+    dependsOn("titleMarkupParserTest")
+    dependsOn("taskTriggerTest")
+    dependsOn("taskTriggerServiceTest")
+    dependsOn("advancementCatalogTest")
+    dependsOn("materialRecipeTest")
+    dependsOn("materialResolverTest")
+    dependsOn("materialTaskGeneratorTest")
+    dependsOn("materialPreviewStateTest")
+    dependsOn("materialPreviewLayoutTest")
+    dependsOn("packetChunkingTest")
+    dependsOn("packetGuardsTest")
+    dependsOn("permissionCenterTest")
     dependsOn("commandSystemTest")
     dependsOn("guiSystemTest")
     dependsOn("h2DiagnosticTest")
@@ -203,7 +305,6 @@ tasks.named("check").configure {
     dependsOn("h2LegacyMigrationTest")
     dependsOn("h2StorageBackendIntegrationTest")
     dependsOn("h2StorageAvailabilityTest")
-    dependsOn("h2TcpAccessTest")
     dependsOn("h2CommandIntegrationTest")
     dependsOn("h2MaintenanceBackupTest")
     dependsOn("h2TaskQueryServiceTest")
@@ -211,4 +312,9 @@ tasks.named("check").configure {
 
 tasks.withType<Test>().configureEach {
     enabled = false
+    // Gradle 9 起“存在测试源 + 任务禁用 + 无过滤器”为配置错误，这里挂恒假过滤器满足校验
+    filter {
+        isFailOnNoMatchingTests = false
+        includeTestsMatching("com.todolist.disabled.junit.**")
+    }
 }
