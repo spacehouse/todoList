@@ -49,12 +49,14 @@ public final class MaterialRecipeIndexBuilder {
         if (recipeManager == null || resolvers == null) {
             return index;
         }
+        int scanned = 0;
         for (MaterialRecipeResolver resolver : resolvers) {
             if (resolver == null) {
                 continue;
             }
             for (RecipeType<?> type : resolver.supportedTypes()) {
                 for (RecipeHolder<?> holder : recipesOf(recipeManager, type)) {
+                    scanned++;
                     MaterialRecipe mapping = resolver.resolve(holder, registryAccess);
                     if (mapping != null) {
                         index.add(mapping);
@@ -62,6 +64,9 @@ public final class MaterialRecipeIndexBuilder {
                 }
             }
         }
+        com.todolist.TodoConstants.LOGGER.info(
+                "[todolist] material index built: scanned={} holders, resolved={} recipes (manager={})",
+                scanned, index.recipeCount(), recipeManager.getClass().getSimpleName());
         return index;
     }
 
