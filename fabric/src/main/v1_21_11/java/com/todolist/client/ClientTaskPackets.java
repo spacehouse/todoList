@@ -69,6 +69,17 @@ public class ClientTaskPackets {
                 client.execute(() -> TodoToastRenderer.show(title));
                 return;
             }
+            if (channelId.equals(TaskPackets.MATERIAL_ITEMS_ID)) {
+                List<String> itemIds = TaskPackets.readMaterialItems(buf);
+                client.execute(() -> com.todolist.material.ClientMaterialCatalog.apply(itemIds));
+                return;
+            }
+            if (channelId.equals(TaskPackets.MATERIAL_PLAN_ID)) {
+                java.util.Map.Entry<String, List<com.todolist.material.MaterialRecipe>> plan =
+                        TaskPackets.readMaterialPlan(buf);
+                client.execute(() -> TodoScreen.applyMaterialPlan(plan.getKey(), plan.getValue()));
+                return;
+            }
             if (channelId.equals(TaskPackets.TRIGGER_PROGRESS_ID)) {
                 TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
                 if (com.todolist.HudProbe.enabled()) {

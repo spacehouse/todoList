@@ -3443,7 +3443,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                         TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount).getString()
         );
         MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
-        minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks));
+        java.util.function.Consumer<String> materialRequester =
+                requestItemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(requestItemId);
+        minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks,
+                materialRequester));
     }
 
     /**

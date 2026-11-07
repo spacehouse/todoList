@@ -96,6 +96,10 @@ public class MaterialListScreen extends Screen {
 
     private final Screen parent;
     private final MaterialRecipeIndex index;
+    /** 1.21.2+ 服务端权威通路：中间材料无配方时的按需请求回调（1.20.x/1.21.1 本地索引为 null）。 */
+    private final java.util.function.Consumer<String> materialRequester;
+    /** 已发起过按需请求的物品，防止重复请求。 */
+    private final java.util.Set<String> pendingRequests = new java.util.HashSet<>();
     private final MaterialPreviewState state;
     private final MaterialTaskContext context;
     private final Consumer<List<Task>> generateCallback;
@@ -248,9 +252,29 @@ public class MaterialListScreen extends Screen {
                               MaterialPreviewState state,
                               MaterialTaskContext context,
                               Consumer<List<Task>> generateCallback) {
+        this(parent, index, state, context, generateCallback, null);
+    }
+
+    /**
+     * 创建材料预览界面（含 1.21.2+ 按需请求回调的完整形态）。
+     *
+     * @param parent            父界面
+     * @param index             配方映射索引（服务端权威通路下初始仅含目标物品，随请求增量扩充）
+     * @param state             预览状态
+     * @param context           任务生成上下文
+     * @param generateCallback  生成任务回调
+     * @param materialRequester 中间材料按需请求回调；1.20.x/1.21.1 本地索引传 null
+     */
+    public MaterialListScreen(Screen parent,
+                              MaterialRecipeIndex index,
+                              MaterialPreviewState state,
+                              MaterialTaskContext context,
+                              Consumer<List<Task>> generateCallback,
+                              java.util.function.Consumer<String> materialRequester) {
         super(Component.translatable("gui.todolist.material_preview.title"));
         this.parent = parent;
         this.index = index;
+        this.materialRequester = materialRequester;
         this.state = state;
         this.context = context;
         this.generateCallback = generateCallback;
@@ -636,6 +660,7 @@ public class MaterialListScreen extends Screen {
      * @param node 物品节点
      */
     private void toggleExpandFor(MaterialNode node) {
+        requestRecipesIfNeeded(node == null ? null : node.itemId());
         if (state.toggleExpand(node)) {
             refreshPlan();
         }
@@ -1248,6 +1273,44 @@ public class MaterialListScreen extends Screen {
      * @param owner 物品节点
      * @return 有多条配方时返回 true
      */
+    /**
+     * 应用服务端按需下发的中间材料配方并刷新预览。
+     * 由网络接收线程经 {@code client.execute} 调入主线程。
+     *
+     * @param recipes 配方映射列表
+     */
+    public void applyAdditionalRecipes(java.util.List<com.todolist.material.MaterialRecipe> recipes) {
+        if (recipes == null || index == null) {
+            return;
+        }
+        for (com.todolist.material.MaterialRecipe recipe : recipes) {
+            if (recipe != null) {
+                index.add(recipe);
+            }
+        }
+        pendingRequests.clear();
+        refreshPlan();
+    }
+
+    /**
+     * 中间材料在本索引中无配方且存在按需请求回调时，向服务端发起一次请求。
+     *
+     * @param itemId 中间材料物品资源 ID
+     */
+    private void requestRecipesIfNeeded(String itemId) {
+        if (itemId == null || itemId.isEmpty() || materialRequester == null || index == null) {
+            return;
+        }
+        List<com.todolist.material.MaterialRecipe> known = index.findByOutput(itemId);
+        if (known != null && !known.isEmpty()) {
+            return;
+        }
+        if (!pendingRequests.add(itemId)) {
+            return;
+        }
+        materialRequester.accept(itemId);
+    }
+
     private boolean hasRecipeAlternatives(MaterialNode owner) {
         if (index == null || owner == null) {
             return false;
