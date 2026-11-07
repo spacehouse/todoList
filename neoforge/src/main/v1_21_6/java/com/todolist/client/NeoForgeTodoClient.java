@@ -143,7 +143,18 @@ public final class NeoForgeTodoClient {
      */
     private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (hudRenderer == null) {
-            return;
+            // FML 构造期 Minecraft 实例可能尚未就绪，initialize 阶段的 registerHudRenderer
+            // 可能静默跳过；渲染层兜底惰性创建
+            if (Minecraft.getInstance() == null) {
+                return;
+            }
+            try {
+                hudRenderer = new TodoHudRenderer(Minecraft.getInstance());
+                ClientPlatformAdapter.setHudRendererSupplier(() -> hudRenderer);
+            } catch (Exception e) {
+                TodoListNeoForge.LOGGER.warn("Failed to initialize NeoForge HUD renderer", e);
+                return;
+            }
         }
         if (!hudLayerFirstRenderLogged) {
             hudLayerFirstRenderLogged = true;
