@@ -26,6 +26,21 @@ public final class NeoForgeClientTaskPackets {
     /**
      * 注册客户端接收的任务数据包。
      */
+    /**
+     * 向服务端请求目标物品的配方映射（材料反推，1.21.2+ 服务端权威通路）。
+     *
+     * @param itemId 目标物品资源 ID
+     */
+    public static void requestMaterialPlan(String itemId) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getConnection() == null || itemId == null || itemId.isEmpty()) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeUtf(itemId);
+        NeoForgeNetworkBridge.sendToServer(TaskPackets.MATERIAL_PLAN_REQUEST_ID, buf);
+    }
+
     public static void registerClientPackets() {
         NeoForgeNetworkBridge.registerClientReceiver(TaskPackets.SYNC_TASKS_ID, (client, handler, buf, responseSender) -> {
             if (handler == null) {

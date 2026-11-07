@@ -13,6 +13,11 @@ import java.util.List;
  * 用于将跨平台的客户端操作桥接到 Fabric 客户端网络与状态实现。
  */
 public final class FabricClientBridgeOps implements ClientBridge.ClientOps {
+
+    @Override
+    public void requestMaterialPlan(String itemId) {
+        ClientTaskPackets.requestMaterialPlan(itemId);
+    }
     /**
      * 获取团队任务管理器。
      *
