@@ -62,6 +62,9 @@ public final class TodoToastRenderer {
         if (title == null || title.isEmpty()) {
             return;
         }
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("toast enqueue title={}", title);
+        }
         synchronized (ENTRIES) {
             if (ENTRIES.size() >= MAX_ENTRIES) {
                 ENTRIES.remove(0);
@@ -78,6 +81,9 @@ public final class TodoToastRenderer {
      * @param screenWidth 当前画面宽度
      */
     public static void render(GuiGraphics context, Font font, int screenWidth) {
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("toast render call entries={}", ENTRIES.size());
+        }
         if (context == null || font == null) {
             return;
         }
