@@ -3403,10 +3403,21 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     public static void applyMaterialPlan(String itemId, java.util.List<com.todolist.material.MaterialRecipe> recipes) {
         Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null) {
+            return;
+        }
+        // 材料预览已打开（未关预览继续点中间材料）：按需请求的配方增量并入当前预览后刷新，
+        // 必须先于下方的 TodoScreen/选择器上下文判定，否则预览界面会被提前 return 拦截
+        if (minecraft.screen instanceof MaterialListScreen materialScreen) {
+            if (recipes != null && !recipes.isEmpty()) {
+                materialScreen.applyAdditionalRecipes(recipes);
+            }
+            return;
+        }
         TodoScreen screen = null;
-        if (minecraft != null && minecraft.screen instanceof TodoScreen todoScreen) {
+        if (minecraft.screen instanceof TodoScreen todoScreen) {
             screen = todoScreen;
-        } else if (minecraft != null && minecraft.screen instanceof ItemSelectorScreen selector
+        } else if (minecraft.screen instanceof ItemSelectorScreen selector
                 && selector.getParentScreen() instanceof TodoScreen todoScreen) {
             // 选中物品后仍在选择器界面（服务端响应先于选择器关闭），先切回任务列表再开预览
             screen = todoScreen;
@@ -3416,11 +3427,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         if (recipes == null || recipes.isEmpty()) {
             screen.addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
-            return;
-        }
-        // 材料预览已打开（未关预览继续点中间材料）：按需请求的配方增量并入当前预览
-        if (minecraft.screen instanceof MaterialListScreen materialScreen) {
-            materialScreen.applyAdditionalRecipes(recipes);
             return;
         }
         MaterialRecipeIndex index = new MaterialRecipeIndex();
