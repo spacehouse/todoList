@@ -3349,15 +3349,58 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (minecraft == null || minecraft.level == null || currentProject == null) {
             return;
         }
-        MaterialRecipeIndex index = MaterialRecipeIndexBuilder.buildDefault(
-                MaterialRecipeLookup.clientRecipeManager(minecraft),
-                minecraft.level.registryAccess()
-        );
-        if (index.recipeCount() == 0) {
+        net.minecraft.world.item.crafting.RecipeManager manager = MaterialRecipeLookup.clientRecipeManager(minecraft);
+        if (manager != null) {
+            // 1.20.x/1.21.1：客户端持有配方数据，本地构建索引
+            MaterialRecipeIndex index = MaterialRecipeIndexBuilder.buildDefault(manager, minecraft.level.registryAccess());
+            if (index.recipeCount() == 0) {
+                addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
+                return;
+            }
+            minecraft.setScreen(new ItemSelectorScreen(this, itemId -> openMaterialPreviewFor(itemId, index), false));
+            return;
+        }
+        // 1.21.2+：客户端无配方数据（服务端权威），清单就绪时打开受限选择器，
+        // 选中后向服务端请求该物品的配方映射
+        if (!com.todolist.material.ClientMaterialCatalog.available()) {
+            addNotification(Component.translatable("gui.todolist.material_preview.preparing").getString());
+            return;
+        }
+        if (com.todolist.material.ClientMaterialCatalog.snapshot().isEmpty()) {
             addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
             return;
         }
-        minecraft.setScreen(new ItemSelectorScreen(this, itemId -> openMaterialPreviewFor(itemId, index), false));
+        java.util.Set<String> allowedItems = java.util.Set.copyOf(com.todolist.material.ClientMaterialCatalog.snapshot());
+        minecraft.setScreen(new ItemSelectorScreen(this,
+                ItemSelectorScreen.Kind.ITEM,
+                itemId -> ClientBridge.ops().requestMaterialPlan(itemId),
+                false,
+                allowedItems));
+    }
+
+    /**
+     * 应用服务端下发的材料反推结果：以收到的配方映射构建局部索引并打开预览。
+     * 由网络接收线程经 {@code client.execute} 调入主线程。
+     *
+     * @param itemId  目标物品资源 ID
+     * @param recipes 配方映射列表
+     */
+    public static void applyMaterialPlan(String itemId, java.util.List<com.todolist.material.MaterialRecipe> recipes) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || !(minecraft.screen instanceof TodoScreen screen)) {
+            return;
+        }
+        if (recipes == null || recipes.isEmpty()) {
+            screen.addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
+            return;
+        }
+        MaterialRecipeIndex index = new MaterialRecipeIndex();
+        for (com.todolist.material.MaterialRecipe recipe : recipes) {
+            if (recipe != null) {
+                index.add(recipe);
+            }
+        }
+        screen.openMaterialPreviewFor(itemId, index);
     }
 
     /**
