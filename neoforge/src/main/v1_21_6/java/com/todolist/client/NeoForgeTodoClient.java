@@ -104,6 +104,9 @@ public final class NeoForgeTodoClient {
         modEventBus.addListener(NeoForgeTodoClient::onRegisterKeyMappingsEvent);
         // v1_21_6 覆盖：HUD 改走 mod 总线的 GUI 层注册事件，不再监听 RenderGuiEvent.Post
         modEventBus.addListener(NeoForgeTodoClient::onRegisterGuiLayersEvent);
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("v16 client: gui layers listener registered on mod bus");
+        }
     }
 
     /**
@@ -123,7 +126,13 @@ public final class NeoForgeTodoClient {
      * @param event GUI 层注册事件
      */
     private static void onRegisterGuiLayersEvent(RegisterGuiLayersEvent event) {
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("v16 client: RegisterGuiLayersEvent fired, registering layer");
+        }
         event.registerAboveAll(HUD_LAYER_ID, NeoForgeTodoClient::renderHudLayer);
+        if (com.todolist.HudProbe.enabled()) {
+            com.todolist.HudProbe.log("v16 client: HUD layer registered id={}", HUD_LAYER_ID);
+        }
     }
 
     /**
