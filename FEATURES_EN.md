@@ -6,6 +6,9 @@ TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collabo
 
 - Create, edit, delete, and complete/uncomplete tasks in an in-game GUI
 - Subtasks are supported, so larger goals can be broken down into smaller steps
+- Subtasks can be nested to any depth — break a large task into as many levels of smaller steps as you need
+- Double-click a task row to quickly edit its title (Enter to save, Esc to cancel)
+- Right-click a task row to open a menu for quick priority changes and adding / editing / clearing triggers
 - Task fields: title, description, priority (Low/Medium/High), and tags (comma-separated)
 - Search & filters: real-time filtering by status, priority, text (title/description), and tags
 - Unfinished tasks can be reordered directly with drag-and-drop
