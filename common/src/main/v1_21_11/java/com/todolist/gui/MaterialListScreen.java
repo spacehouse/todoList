@@ -1283,12 +1283,21 @@ public class MaterialListScreen extends Screen {
         if (recipes == null || index == null) {
             return;
         }
+        java.util.Set<String> arrivedItems = new java.util.LinkedHashSet<>();
         for (com.todolist.material.MaterialRecipe recipe : recipes) {
             if (recipe != null) {
                 index.add(recipe);
+                if (recipe.outputItemId() != null && !recipe.outputItemId().isEmpty()) {
+                    arrivedItems.add(recipe.outputItemId());
+                }
             }
         }
         pendingRequests.clear();
+        // 本次按需到达的物品自动展开：与本地索引版一致的单次点击体验
+        // （否则首次点击只发请求，响应到达后节点仍处于默认折叠态，需要再点一次才出配方树）
+        for (String itemId : arrivedItems) {
+            state.setForceExpand(itemId, true);
+        }
         refreshPlan();
     }
 
