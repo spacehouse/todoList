@@ -15,6 +15,7 @@
 > 本区当前仅剩 H2 TCP 移除一项，等待 CurseForge 人工审核结果作为最终验收（见对应条目）。
 
 - 【refactor】移除 H2 TCP 服务端，外部排查改走备份文件路线（**CurseForge 审查硬约束**）：TCP 服务端、账号凭据体系、`restart-tcp` / `reset-password` 命令与 TCP 测试已删除；`H2TcpConfig` 精简为仅含路径覆盖的 `H2StorageConfig`（遗留 tcp 字段静默忽略，兼容用例固化）；指南改写为备份副本路线；AGENTS 15/16 同步修订；`:common:check` 全绿 + dev-fabric 启动冒烟通过（2026-10-28）。版本分叉说明：两条主线已发布的 1.4.2（2026-09-11）为"TCP 仅回环加固"版，本条为按 CF 审查要求的"整体移除"版；`fabric-1.20.1-1.4.2.jar` 已上传 CF，初审报 failed processing 后转人工审核中（截至 2026-11-05 已第 7 天），**人工审核结果作为最终验收**，设计见 `docs/h2-tcp-server-removal.md`
+  - 后续（2026-11-08）：H2 引擎打包已五分支改为 Jar-in-Jar（嵌套 jar 替代千余散装类，消除 CF 自动扫描 failed processing 误报的主因；实机验证通过已合入），随 1.4.3 发布；受审中的 1.4.2 文件不受影响、无需替换
 
 ## 计划中
 
