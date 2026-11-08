@@ -18,7 +18,6 @@ val apiGroup = (findProperty("target_api_group") as String?) ?: "v1_21_1"
 val enableModMenu = (findProperty("enable_modmenu") as String?)?.toBoolean()
     ?: !gradle.startParameter.isOffline
 val effectiveModMenu = enableModMenu
-val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
 loom {
     mixin {
@@ -38,9 +37,10 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
-    // dev 运行时（runServer/runClient）需要 H2 驱动在 classpath；打包时由 tasks.jar 的
-    // zipTree 嵌入 mod jar，二者不冲突（implementation 只影响 dev classpath 与发布 pom 排除）
-    implementation(files(h2Jar))
+    // H2 引擎走 Jar-in-Jar：dev classpath 用 Maven Central 坐标（离线走 Gradle 缓存），
+    // 打包经 loom include 以嵌套 jar 交付，避免千余个散装类触发 CurseForge 自动扫描误报
+    implementation("com.h2database:h2:2.2.220")
+    include("com.h2database:h2:2.2.220")
 
     implementation(project(":common", configuration = "namedElements"))
 
@@ -123,9 +123,6 @@ val commonMainOutput = commonProject.extensions
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(commonMainOutput)
-    from(zipTree(h2Jar)) {
-        exclude("META-INF/MANIFEST.MF")
-    }
 }
 
 val fabricSourceSets = the<SourceSetContainer>()
