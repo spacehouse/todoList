@@ -8,9 +8,9 @@ Date format: `YYYY-MM-DD`
 
 ### New Features
 
-- **Task triggers**: Tasks can now auto-complete via five event types — collect items, kill entities, break blocks, craft items, and earn advancements. A GUI trigger editor is included; team tasks must be claimed before they participate; completing a parent cascades to all unfinished descendants (also fixes ghost tasks left behind after parent completion).
+- **Task triggers**: Tasks can now auto-complete via five event types — collect items, kill entities, break blocks, craft items, and earn advancements. A GUI trigger editor is included (add / edit / clear via the task right-click menu); team tasks must be claimed before they participate; completing a parent cascades to all unfinished descendants (also fixes ghost tasks left behind after parent completion).
 - **Material reverse-derivation task generation (experimental)**: Derive all required materials from a target item and generate collect tasks in one click, with a horizontal recipe-tree preview supporting node expansion, recipe switching, and held-item counts; accessible from the quick-add row.
-- **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names.
+- **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names; double-click a task row to quickly edit its title.
 - **Server self-test command**: New `/todo selftest` command family (admin) covering storage round-trips and trigger semantics across 12 scenarios for quick post-upgrade verification.
 
 ### Improvements & Fixes
