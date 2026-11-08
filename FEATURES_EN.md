@@ -1,6 +1,6 @@
-# Features (v1.4.1)
+# Features (v1.4.3)
 
-TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collaboration. This page is written for regular players and focuses on what you can directly use in v1.4.1.
+TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collaboration. This page is written for regular players and focuses on what you can directly use in v1.4.3.
 
 ## Task Management
 
@@ -13,6 +13,14 @@ TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collabo
 - Completed tasks now have a clearer split from open tasks, can be folded, and support one-click cleanup within the current project
 - Both task deletion and completed-task cleanup now use explicit confirmation steps to reduce accidental operations
 - Detail editing now supports an auto-save toggle; when enabled, edits can be saved on blur, task switch, project switch, and screen close
+
+## Task Triggers & Material Reverse-derivation
+
+- Tasks can carry triggers that auto-complete on five in-game event types: collect items, kill entities, break blocks, craft items, and earn advancements
+- A GUI trigger editor is included (commands work too); team tasks must be claimed before they respond to events
+- Trigger progress shows in real time on titles and the HUD; completing a parent cascades to all unfinished descendants
+- Material reverse-derivation (experimental): derive all required materials from a target item and generate collect tasks in one click; the recipe-tree preview supports node expansion, recipe switching, and held-item counts
+- Task titles support `[item:<id>]` markup that renders the matching item icon in lists and the HUD
 
 ## Projects & Views
 
@@ -43,6 +51,7 @@ TodoList is a Minecraft todo mod for single-player, LAN, and multiplayer collabo
 ## HUD Display & Config
 
 - The top-right HUD shows tasks for the current view, supports expand/collapse (H key), and displays count summaries
+- Visible counts for pending/done entries and the list source (all projects / current project / starred projects) are configurable in the HUD settings; defaults to 12 pending and 5 done entries, sourced from the current project
 - The HUD title changes with the current view, so it is easier to tell whether you are looking at personal or team tasks
 - In true single-player worlds, the HUD stays on personal tasks and hides team views
 - The built-in HUD config screen lets you adjust width, height, item limits, default expanded state, empty-list display, and draggable position, then apply the settings directly
