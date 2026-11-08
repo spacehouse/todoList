@@ -14,7 +14,6 @@ val commonProject = project(":common")
 val forgeVersion = (findProperty("target_forge_version") as String?) ?: (property("forge_version") as String)
 val forgeLoaderRange = (findProperty("target_forge_loader_range") as String?) ?: "[52,)"
 val minecraftVersionRange = (findProperty("target_minecraft_version_range") as String?) ?: "[1.21.1]"
-val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
 base {
     archivesName.set("$archives_name-forge-$minecraftVersion")
@@ -32,6 +31,10 @@ dependencies {
     mappings(loom.officialMojangMappings())
     forge("net.minecraftforge:forge:$minecraftVersion-$forgeVersion")
     implementation(project(":common", configuration = "namedElements"))
+    // H2 引擎走 Jar-in-Jar：dev classpath 用 Maven Central 坐标，
+    // 打包经 loom include 转换为 jarjar 嵌套 jar（无散装类）
+    implementation("com.h2database:h2:2.2.220")
+    include("com.h2database:h2:2.2.220")
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
     compileOnly("net.minecraftforge:fmlloader:$minecraftVersion-$forgeVersion")
     compileOnly("net.minecraftforge:javafmllanguage:$minecraftVersion-$forgeVersion")
@@ -66,7 +69,4 @@ val commonMainOutput = commonProject.extensions
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(commonMainOutput)
-    from(zipTree(h2Jar)) {
-        exclude("META-INF/MANIFEST.MF")
-    }
 }
