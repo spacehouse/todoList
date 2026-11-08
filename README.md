@@ -6,11 +6,14 @@ A simple and practical todo list mod for Minecraft, built for single-player, LAN
 
 ## Features / 功能
 
-### v1.4.1 Capability Overview / 1.4.1 版本能力概览
+### v1.4.3 Capability Overview / 1.4.3 版本能力概览
+- Task triggers: auto-complete tasks via five in-game event types (collect / kill / break / craft / advancement), with a GUI trigger editor and real-time progress in lists and HUD / 任务触发器：支持收集物品、击杀实体、破坏方块、合成物品、达成进度五类事件自动完成任务，提供 GUI 触发器编辑器，进度实时显示
+- Material reverse-derivation (experimental): derive all required materials from a target item and generate collect tasks in one click, with a recipe-tree preview / 材料反推（实验性）：从目标物品反推全部所需材料并一键生成收集任务，支持配方树预览
+- Item markup in task titles: `[item:<id>]` renders the matching item icon in lists and HUD / 任务标题物品标记：标题支持 `[item:物品ID]` 语法并显示对应物品图标
 - In-game GUI task management: create, edit, delete, complete, search, filter, drag-sort unfinished tasks, clean completed tasks per project, and optionally auto-save detail edits / 游戏内 GUI 任务管理：支持创建、编辑、删除、完成、搜索、筛选、拖拽排序未完成任务、按项目一键清理已完成项，并可按需开启详情自动保存
 - Personal and team projects: switch between personal and team workspaces, search projects with hints, manage members, and organize tasks by project / 个人与团队项目：支持在个人与团队工作区之间切换，提供项目搜索提示、成员管理能力，并按项目维度组织任务
 - Expanded command system: `/todo` covers task, project, HUD, join, admin, and H2 maintenance operations for both gameplay and server workflows / 命令系统增强：`/todo` 已覆盖任务、项目、HUD、加入审批、管理项与 H2 运维操作，兼顾日常使用与服主管理
-- H2 storage backend: supports NBT-to-H2 migration, SQL-backed query optimization, online backup, health checks, TCP external access, and maintenance commands / H2 存储后端：支持 NBT 到 H2 迁移、SQL 查询优化、在线备份、健康检查、TCP 外部访问与维护命令
+- H2 storage backend: supports NBT-to-H2 migration, SQL-backed query optimization, online backup, health checks, backup-based external inspection, and maintenance commands / H2 存储后端：支持 NBT 到 H2 迁移、SQL 查询优化、在线备份、健康检查、基于备份副本的外部排查与维护命令
 - HUD display and config: configurable HUD list with synchronized priority colors, hidden-count summary, view sync, and current-project source selection / HUD 显示与配置：可配置 HUD 列表，并同步优先级色块、隐藏数量提示、视图状态及项目来源
 - Safer persistence and recovery: tasks, projects, player project state, and config files use backup-aware persistence with safer recovery paths / 更安全的持久化与恢复：任务、项目、玩家项目状态与配置文件已统一使用带备份与恢复保护的持久化链路
 
@@ -96,13 +99,13 @@ More details / 更多说明：
 - Tasks, projects, player project state, and config files now use safer temp-write plus backup recovery flow / 任务、项目、玩家项目状态和配置文件现在使用更安全的临时写入加备份恢复流程
 - When a main data file is corrupted, the mod can attempt to recover from the latest backup automatically / 当主数据文件损坏时，模组会自动尝试从最近一次备份恢复
 - Local singleplayer personal-task files now keep local and player-specific copies in sync to reduce accidental rollback / 本地单人个人任务文件会同步维护本地与玩家副本，减少意外回滚
-- The storage backend can switch between `NBT` and `H2`; H2 mode adds migration, TCP access, backup, health checks, and external tooling support / 底层存储可在 `NBT` 与 `H2` 间切换；H2 模式额外提供迁移、TCP 访问、备份、健康检查与外部工具支持
+- The mod stores all data in an embedded H2 database (legacy NBT data migrates automatically on first run); external inspection goes through the backup-copy route / 底层存储统一为内嵌 H2 数据库（旧 NBT 数据首次启动自动迁移）；外部排查走备份副本路线
 
 ### Commands / 命令
 - `/todo` is the main command entry, with `/todolist` kept as an alias / `/todo` 是主命令入口，`/todolist` 仍保留为别名
 - Task commands support listing, pagination, quick add, done, remove, assign, claim, abandon, and batch cleanup / 任务命令支持列表查询、分页、快速新增、完成、删除、指派、领取、放弃与批量清理
 - Project commands support create, remove, select, star, rename, and member management / 项目命令支持创建、删除、选择、星标、重命名与成员管理
-- H2 commands support status, backup, health checks, TCP restart, database reload, and password reset / H2 命令支持状态检查、在线备份、健康检查、TCP 重启、数据库重载与密码重置
+- H2 commands support status, backup, health checks, and database reload / H2 命令支持状态检查、在线备份、健康检查与数据库重载
 
 ## Permission System / 权限系统
 
