@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.4.3] - 2026-11-08
+
+### New Features
+
+- **Task triggers**: Tasks can now auto-complete via five event types — collect items, kill entities, break blocks, craft items, and earn advancements. A GUI trigger editor is included; team tasks must be claimed before they participate; completing a parent cascades to all unfinished descendants (also fixes ghost tasks left behind after parent completion).
+- **Material reverse-derivation task generation (experimental)**: Derive all required materials from a target item and generate collect tasks in one click, with a horizontal recipe-tree preview supporting node expansion, recipe switching, and held-item counts; accessible from the quick-add row.
+- **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names.
+- **Server self-test command**: New `/todo selftest` command family (admin) covering storage round-trips and trigger semantics across 12 scenarios for quick post-upgrade verification.
+- **Server-authoritative material data (1.21.2+ adaptation)**: Since Minecraft 1.21.2 clients no longer receive full recipe data, the material item list and recipe mappings are now built server-side and delivered on demand; clicking an intermediate material in the preview fetches its recipes automatically.
+
+### Improvements & Fixes
+
+- **Trigger data reliability fixes**: Backfilled missing trigger columns in the H2 GUI query path and fixed the task copy constructor dropping triggers (auto-save could wipe them); affected tasks need their triggers re-configured.
+- **HUD default adjustments**: Pending visible count default 5 → 12 (done count unchanged); HUD list source now defaults to "current project", initially the default personal project; existing configs are unaffected.
+- **H2 engine repackaged as Jar-in-Jar**: Delivered as a nested jar instead of a thousand loose classes — avoids class conflicts with other mods embedding H2 and reduces platform auto-scan false positives.
+
+
+## [1.4.2] - 2026-09-11
+
+### New Features
+
+- **Added Minecraft 1.21.9 / 1.21.10 / 1.21.11 support**: covering both Fabric and NeoForge.
+
+### Improvements & Fixes
+
+- **Removed world-entry system hints**: The mod no longer pushes H2 storage mode and admin command hints to admins after joining a world; the commands remain available via `/todolist h2 status`, `/todolist h2 backup`, `/todolist h2 reload-db`, and `/todolist h2 health`.
+- **Removed H2 TCP external access**: To satisfy CurseForge security review requirements, the H2 TCP server and its external account system have been removed entirely, along with the `/todo h2 restart-tcp` and `/todo h2 reset-password` commands. Legacy fields (`tcpEnabled`, `port`, `accounts`, ...) in `config/todolist-h2.json` are deprecated and silently ignored (`databasePathOverride` is kept). For external inspection use the backup-copy route: `/todo h2 backup` then open the copy read-only in H2 embedded mode.
+- **GUI auto-save enabled by default**: The GUI edit auto-save toggle now defaults to on.
+
 ## [1.4.1] - 2026-08-16
 
 ### New Features
