@@ -69,7 +69,7 @@ public class ModConfig {
     private static final String[] H2_BACKUP_ON_START_COMMENT_FALLBACK_EN = new String[] {
             "h2BackupOnStart notes:",
             "false: do not create a startup backup",
-            "true: create one H2 backup after H2 initializes on startup (default, only effective when storageBackend is h2)"
+            "true: create one H2 backup after H2 initializes on startup (default; only effective when storageBackend is h2)"
     };
     private static final String[] H2_BACKUP_RETENTION_COMMENT_KEYS = new String[] {
             "config.todolist.h2_backup_retention.comment.title",
