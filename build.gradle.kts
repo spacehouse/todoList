@@ -69,7 +69,7 @@ tasks.register<Copy>("distReleaseJars") {
 
 tasks.register("h2JarContentCheck") {
     group = "verification"
-    description = "Check Fabric and Forge release jars contain exactly one org/h2/Driver.class entry."
+    description = "Check release jars deliver H2 as exactly one nested jar with zero raw org/h2 entries."
 
     dependsOn("distReleaseJars")
     outputs.file(h2JarContentReport)
@@ -86,12 +86,26 @@ tasks.register("h2JarContentCheck") {
             if (!jarFile.isFile) {
                 throw GradleException("Missing $loader release jar: ${jarFile.absolutePath}")
             }
-            val driverCount = ZipFile(jarFile).use { zipFile ->
-                zipFile.entries().asSequence().count { it.name == "org/h2/Driver.class" }
+            val rawH2Count: Int
+            val nestedH2Count: Int
+            ZipFile(jarFile).use { zipFile ->
+                val entries = zipFile.entries().asSequence().map { it.name }.toList()
+                rawH2Count = entries.count { it.startsWith("org/h2/") }
+                nestedH2Count = entries.count { it.startsWith("META-INF/jars/") && it.endsWith(".jar") && it.contains("h2-") }
+                val jarsDeclared = if (loader == "fabric") {
+                    entries.contains("fabric.mod.json") &&
+                        zipFile.getInputStream(zipFile.getEntry("fabric.mod.json"))
+                            .readBytes().decodeToString().contains("META-INF/jars/")
+                } else {
+                    entries.any { it == "META-INF/jarjar/metadata.json" }
+                }
+                if (!jarsDeclared) {
+                    throw GradleException("$loader release jar must declare the nested H2 jar (fabric.mod.json jars section / jarjar metadata)")
+                }
             }
-            reportLines += "$loader=${jarFile.name}, org/h2/Driver.class=$driverCount"
-            if (driverCount != 1) {
-                throw GradleException("$loader release jar must contain exactly one org/h2/Driver.class, actual: $driverCount")
+            reportLines += "$loader=${jarFile.name}, rawOrgH2=$rawH2Count, nestedH2Jar=$nestedH2Count"
+            if (rawH2Count != 0 || nestedH2Count != 1) {
+                throw GradleException("$loader release jar must contain zero raw org/h2 entries and exactly one nested H2 jar, actual: raw=$rawH2Count nested=$nestedH2Count")
             }
         }
 
