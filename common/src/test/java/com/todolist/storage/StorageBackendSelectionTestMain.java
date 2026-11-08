@@ -106,8 +106,8 @@ public final class StorageBackendSelectionTestMain {
             assertContainsEither(savedConfig, "// h2BackupOnStart notes:", "// h2BackupOnStart 说明：", "配置文件应写入 h2BackupOnStart 标题注释");
             assertContainsEither(
                     savedConfig,
-                    "// true: create one H2 backup after H2 initializes on startup (default, only effective when storageBackend is h2)",
-                    "// true：启动初始化 H2 后自动创建一次备份（默认；仅在 storageBackend 为 h2 时生效）",
+                    "// true: create one H2 backup after H2 initializes on startup",
+                    "// true：启动初始化 H2 后自动创建一次备份",
                     "配置文件应写入 h2BackupOnStart 的启用说明注释"
             );
             assertContainsEither(
