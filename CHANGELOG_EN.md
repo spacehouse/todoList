@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
+## [1.4.3] - 2026-11-08
+
+### New Features
+
+- **Task triggers**: Tasks can now auto-complete via five event types — collect items, kill entities, break blocks, craft items, and earn advancements. A GUI trigger editor is included; team tasks must be claimed before they participate; completing a parent cascades to all unfinished descendants (also fixes ghost tasks left behind after parent completion).
+- **Material reverse-derivation task generation (experimental)**: Derive all required materials from a target item and generate collect tasks in one click, with a horizontal recipe-tree preview supporting node expansion, recipe switching, and held-item counts; accessible from the quick-add row.
+- **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names.
+- **Server self-test command**: New `/todo selftest` command family (admin) covering storage round-trips and trigger semantics across 12 scenarios for quick post-upgrade verification.
+- **Server-authoritative material data (1.21.2+ adaptation)**: Since Minecraft 1.21.2 clients no longer receive full recipe data, the material item list and recipe mappings are now built server-side and delivered on demand; clicking an intermediate material in the preview fetches its recipes automatically.
+
+### Improvements & Fixes
+
+- **Trigger data reliability fixes**: Backfilled missing trigger columns in the H2 GUI query path and fixed the task copy constructor dropping triggers (auto-save could wipe them); affected tasks need their triggers re-configured.
+- **HUD default adjustments**: Pending visible count default 5 → 12 (done count unchanged); HUD list source now defaults to "current project", initially the default personal project; existing configs are unaffected.
+- **H2 engine repackaged as Jar-in-Jar**: Delivered as a nested jar instead of a thousand loose classes — avoids class conflicts with other mods embedding H2 and reduces platform auto-scan false positives.
+- **Multi-version rendering & network fixes**: Fixed NeoForge 1.21.5–1.21.8 HUD not rendering, 1.21.11 completion toast missing, and Fabric 1.21.11 trigger progress not updating in real time.
+
+
 ## [1.4.2] - 2026-10-28
 
 ### Improvements & Fixes
