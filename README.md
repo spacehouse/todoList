@@ -6,12 +6,15 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 
 ## 🌟 Features / 功能
 
-### v1.4.1 Capability Overview / 1.4.1 版本能力概览
-- ✅ Minecraft 1.21.1 multi-loader support (Fabric / Forge / NeoForge), client & server / Minecraft 1.21.1 多加载器支持（Fabric / Forge / NeoForge），覆盖客户端与服务端
+### v1.4.3 Capability Overview / 1.4.3 版本能力概览
+- ✅ Task triggers: auto-complete tasks via five in-game event types (collect / kill / break / craft / advancement), with a GUI trigger editor and real-time progress in lists and HUD / 任务触发器：支持收集物品、击杀实体、破坏方块、合成物品、达成进度五类事件自动完成任务，提供 GUI 触发器编辑器，进度实时显示
+- ✅ Material reverse-derivation (experimental): derive all required materials from a target item and generate collect tasks in one click, with a recipe-tree preview / 材料反推（实验性）：从目标物品反推全部所需材料并一键生成收集任务，支持配方树预览
+- ✅ Item markup in task titles: `[item:<id>]` renders the matching item icon in lists and HUD / 任务标题物品标记：标题支持 `[item:物品ID]` 语法并显示对应物品图标
+- ✅ Minecraft 1.21.1 – 1.21.8 multi-version support (Fabric / NeoForge; Forge on 1.21.1), client & server / Minecraft 1.21.1–1.21.8 多版本支持（Fabric / NeoForge，Forge 仅 1.21.1），覆盖客户端与服务端
 - ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks, current-project completed-task cleanup, and optional detail auto-save / 游戏内 GUI 任务管理：支持增删改查、优先级、标签、筛选搜索、未完成任务拖拽排序、当前项目一键清理已完成项，以及可选的详情自动保存
 - ✅ Personal and team projects: project hints, member management, join approval, and all-player team mode / 个人与团队项目：支持项目提示、成员管理、加入审批，以及可选的团队全服任务模式
 - ✅ Expanded command system: `/todo` covers tasks, projects, HUD, join flow, admin operations, and H2 maintenance / 命令系统增强：`/todo` 已覆盖任务、项目、HUD、加入流程、管理操作与 H2 运维入口
-- ✅ H2 storage backend: NBT/H2 switching, migration, SQL-backed query optimization, online backup, health checks, and TCP external access / H2 存储后端：支持 NBT/H2 切换、迁移、SQL 查询优化、在线备份、健康检查与 TCP 外部访问
+- ✅ H2 storage backend: NBT/H2 switching, migration, SQL-backed query optimization, online backup, health checks, and backup-based external inspection / H2 存储后端：支持强制 H2 与旧数据自动迁移、SQL 查询优化、在线备份、健康检查与基于备份副本的外部排查
 - ✅ HUD improvements: expand/collapse, visibility toggle, synchronized priority colors, hidden-count summary, and current-view sync / HUD 增强：支持展开/收起、显示切换、优先级色块、隐藏数量摘要与当前视图同步
 - ✅ Safer persistence and recovery: backup-aware persistence for tasks, projects, player project state, and config data / 更安全的持久化与恢复：任务、项目、玩家项目状态与配置文件统一使用带备份保护的持久化链路
 
@@ -55,11 +58,10 @@ More details / 更多说明：
 ## 🚀 Installation / 安装
 
 ### Requirements / 要求
-- Minecraft 1.21.1
+- Minecraft 1.21.1 ~ 1.21.8 / Minecraft 1.21.1 ~ 1.21.8
 - Java 21+
-- **Fabric**: Fabric Loader `0.18.1+` & Fabric API `0.116.9+1.21.1`
-- **Forge**: Forge `52.1.10+`
-- **NeoForge**: NeoForge `21.1.219+`
+- Download the JAR matching your Minecraft version and loader; each release covers all supported versions / 下载与你的 Minecraft 版本和加载器对应的 JAR，每个发布都会覆盖全部受支持版本
+- Forge is only available on 1.21.1 / Forge 仅在 1.21.1 提供
 
 ### Steps / 步骤
 

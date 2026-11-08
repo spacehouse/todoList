@@ -12,7 +12,6 @@ Date format: `YYYY-MM-DD`
 - **Material reverse-derivation task generation (experimental)**: Derive all required materials from a target item and generate collect tasks in one click, with a horizontal recipe-tree preview supporting node expansion, recipe switching, and held-item counts; accessible from the quick-add row.
 - **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names.
 - **Server self-test command**: New `/todo selftest` command family (admin) covering storage round-trips and trigger semantics across 12 scenarios for quick post-upgrade verification.
-- **Server-authoritative material data (1.21.2+ adaptation)**: Since Minecraft 1.21.2 clients no longer receive full recipe data, the material item list and recipe mappings are now built server-side and delivered on demand; clicking an intermediate material in the preview fetches its recipes automatically.
 
 ### Improvements & Fixes
 
