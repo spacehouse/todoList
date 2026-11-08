@@ -15,10 +15,9 @@ Date format: `YYYY-MM-DD`
 
 ### Improvements & Fixes
 
-- **Trigger data reliability fixes**: Backfilled missing trigger columns in the H2 GUI query path and fixed the task copy constructor dropping triggers (auto-save could wipe them); affected tasks need their triggers re-configured.
+- **Fixed ghost tasks**: manually checking off or auto-completing a parent no longer leaves subtasks invisible in both the pending and done lists.
 - **HUD default adjustments**: Pending visible count default 5 → 12 (done count unchanged); HUD list source now defaults to "current project", initially the default personal project; existing configs are unaffected.
 - **H2 engine repackaged as Jar-in-Jar**: Delivered as a nested jar instead of a thousand loose classes — avoids class conflicts with other mods embedding H2 and reduces platform auto-scan false positives.
-- **Multi-version rendering & network fixes**: Fixed NeoForge 1.21.5–1.21.8 HUD not rendering, 1.21.11 completion toast missing, and Fabric 1.21.11 trigger progress not updating in real time.
 
 
 ## [1.4.2] - 2026-10-28
