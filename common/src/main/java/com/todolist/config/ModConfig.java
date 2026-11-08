@@ -193,7 +193,7 @@ public class ModConfig {
         private String hudPosition = "TOP_RIGHT";
         private int hudWidth = 200;
         private int hudMaxHeight = 400;
-        private int hudTodoLimit = 5;
+        private int hudTodoLimit = 12;
         private int hudDoneLimit = 5;
         private boolean hudDefaultExpanded = true;
         private Double hudOpacity = 0.85;
@@ -209,7 +209,7 @@ public class ModConfig {
         private boolean hudShowWhenEmpty = false;
         private boolean hudShowSubtasks = true;
         private String hudDefaultView = "PERSONAL";
-        private String hudProjectSource = "ALL";
+        private String hudProjectSource = "CURRENT";
         private List<String> hudStarredProjectIds = new ArrayList<>();
         private Map<String, String> lastActiveProjectIdsByNamespace = new HashMap<>();
         
@@ -333,7 +333,7 @@ public class ModConfig {
             changed = true;
         }
         if (gui.hudProjectSource == null || gui.hudProjectSource.isEmpty()) {
-            gui.hudProjectSource = "ALL";
+            gui.hudProjectSource = "CURRENT";
             changed = true;
         }
         if (gui.hudStarredProjectIds == null) {
@@ -1157,7 +1157,7 @@ public class ModConfig {
 
     public String getHudProjectSource() {
         if (gui.hudProjectSource == null || gui.hudProjectSource.isEmpty()) {
-            gui.hudProjectSource = "ALL";
+            gui.hudProjectSource = "CURRENT";
         }
         return gui.hudProjectSource;
     }
