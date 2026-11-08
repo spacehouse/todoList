@@ -7,7 +7,7 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 ## 🌟 Features / 功能
 
 ### v1.4.3 Capability Overview / 1.4.3 版本能力概览
-- ✅ Task triggers: auto-complete tasks via five in-game event types (collect / kill / break / craft / advancement), with a GUI trigger editor and real-time progress in lists and HUD / 任务触发器：支持收集物品、击杀实体、破坏方块、合成物品、达成进度五类事件自动完成任务，提供 GUI 触发器编辑器，进度实时显示
+- ✅ Task triggers: auto-complete tasks via five in-game event types (collect / kill / break / craft / advancement), with a GUI trigger editor (add / edit from the task right-click menu) and real-time progress in lists and HUD / 任务触发器：支持收集物品、击杀实体、破坏方块、合成物品、达成进度五类事件自动完成任务，任务右键菜单即可添加 / 编辑触发器，进度实时显示
 - ✅ Material reverse-derivation (experimental): derive all required materials from a target item and generate collect tasks in one click, with a recipe-tree preview / 材料反推（实验性）：从目标物品反推全部所需材料并一键生成收集任务，支持配方树预览
 - ✅ Item markup in task titles: `[item:<id>]` renders the matching item icon in lists and HUD / 任务标题物品标记：标题支持 `[item:物品ID]` 语法并显示对应物品图标
 - ✅ Minecraft 1.21.9 – 1.21.11 support (Fabric / NeoForge), client & server / Minecraft 1.21.9–1.21.11 支持（Fabric / NeoForge），覆盖客户端与服务端
