@@ -11,7 +11,6 @@ val minecraftVersion = property("minecraft_version") as String
 val loaderVersion = property("loader_version") as String
 val neoforgeVersion = property("neoforge_version") as String
 val commonProject = project(":common")
-val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
 base {
     archivesName.set("$archives_name-neoforge-$minecraftVersion")
@@ -32,6 +31,10 @@ dependencies {
         ?: configurations.maybeCreate("forge")
     add(neoForgeConfig.name, "net.neoforged:neoforge:$neoforgeVersion")
     implementation(project(":common", configuration = "namedElements"))
+    // H2 引擎走 Jar-in-Jar：dev classpath 用 Maven Central 坐标，
+    // 打包经 loom include 转换为 jarjar 嵌套 jar（无散装类）
+    implementation("com.h2database:h2:2.2.220")
+    include("com.h2database:h2:2.2.220")
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
 }
 
@@ -55,7 +58,4 @@ val commonMainOutput = commonProject.extensions
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(commonMainOutput)
-    from(zipTree(h2Jar)) {
-        exclude("META-INF/MANIFEST.MF")
-    }
 }
