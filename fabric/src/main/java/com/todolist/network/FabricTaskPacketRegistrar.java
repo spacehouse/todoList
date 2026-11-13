@@ -4,21 +4,21 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class FabricTaskPacketRegistrar {
     private FabricTaskPacketRegistrar() {
     }
 
     public static void register() {
-        PayloadTypeRegistry.playC2S().register(FabricTaskPayload.TYPE, FabricTaskPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(FabricTaskPayload.TYPE, FabricTaskPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FabricTaskPayload.TYPE, FabricTaskPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(FabricTaskPayload.TYPE, FabricTaskPayload.CODEC);
 
         TaskPackets.setServerPacketSender((player, channelId, buf) ->
                 ServerPlayNetworking.send(player, FabricTaskPayload.of(channelId, buf)));
 
         ServerPlayNetworking.registerGlobalReceiver(FabricTaskPayload.TYPE, (payload, context) -> {
-            ResourceLocation channelId = payload.channel();
+            Identifier channelId = payload.channel();
             FriendlyByteBuf buf = payload.toBuf();
             if (channelId.equals(TaskPackets.REPLACE_TASKS_ID)) {
                 TaskPackets.onReplaceTasksPacket(context.server(), context.player(), buf);

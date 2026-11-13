@@ -2,18 +2,18 @@ import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginExtension
 
 plugins {
-    id("dev.architectury.loom")
+    id("dev.architectury.loom-no-remap")
     id("maven-publish")
 }
 
 val archives_name: String by project
-// 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties
+// 版本矩阵入口：build-local-26x.bat 注入 target_* 属性；未注入时回退 gradle.properties
 val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
 val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
 val neoforgeVersion = (findProperty("target_neoforge_version") as String?) ?: (property("neoforge_version") as String)
 val neoforgeLoaderRange = (findProperty("target_neoforge_loader_range") as String?) ?: "[21.1,)"
 val minecraftVersionRange = (findProperty("target_minecraft_version_range") as String?) ?: "[1.21.1]"
-val apiGroup = (findProperty("target_api_group") as String?) ?: "v1_21_1"
+val apiGroup = (findProperty("target_api_group") as String?) ?: "baseline"
 val commonProject = project(":common")
 
 base {
@@ -29,17 +29,15 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    mappings(loom.officialMojangMappings())
     val neoForgeConfig = configurations.findByName("neoForge")
         ?: configurations.findByName("forge")
         ?: configurations.maybeCreate("forge")
     add(neoForgeConfig.name, "net.neoforged:neoforge:$neoforgeVersion")
-    implementation(project(":common", configuration = "namedElements"))
+    implementation(project(":common"))
     // H2 引擎走 Jar-in-Jar：dev classpath 用 Maven Central 坐标，
     // 打包经 loom include 转换为 jarjar 嵌套 jar（无散装类）
     implementation("com.h2database:h2:2.2.220")
     include("com.h2database:h2:2.2.220")
-    compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
 }
 
 tasks.processResources {
@@ -58,9 +56,9 @@ tasks.processResources {
 sourceSets {
     named("main") {
         java {
-            // 兼容组覆盖源集：api_group != v1_21_1 时，src/main/<api_group>/java
+            // 兼容组覆盖源集：api_group != baseline 时，src/main/<api_group>/java
             // 中的同名类覆盖基线源码，用于隔离 1.21.2+ 编译期 API 差异
-            if (apiGroup != "v1_21_1") {
+            if (apiGroup != "baseline") {
                 val overrideDir = layout.projectDirectory.dir("src/main/$apiGroup/java")
                 if (overrideDir.asFile.exists()) {
                     val baselineDir = file("src/main/java")
@@ -89,10 +87,6 @@ sourceSets {
             }
         }
     }
-}
-
-tasks.named("build") {
-    dependsOn("remapJar")
 }
 
 // NeoForge 网络反射探测离线自测（方案 8.2-1）：直调四参 playBidirectional 探测，

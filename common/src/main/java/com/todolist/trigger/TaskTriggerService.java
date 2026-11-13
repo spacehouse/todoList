@@ -694,7 +694,7 @@ public final class TaskTriggerService {
         if (container == null) {
             return;
         }
-        for (ItemStack inner : container.nonEmptyItems()) {
+        for (ItemStack inner : container.nonEmptyItemCopyStream().toList()) {
             if (inner == null || inner.isEmpty()) {
                 continue;
             }

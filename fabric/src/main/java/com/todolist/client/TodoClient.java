@@ -12,14 +12,14 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -34,7 +34,7 @@ public class TodoClient implements ClientModInitializer {
     // 1.21.9：按键类目由字符串改为 KeyMapping.Category 记录，注册模组自定义类目；
     // 显示名走翻译键 key.category.todolist.main（语言文件已同步补键）。
     private static final KeyMapping.Category KEY_CATEGORY =
-            KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("todolist", "main"));
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("todolist", "main"));
     private static KeyMapping openTodoKeyBinding;
     private static KeyMapping toggleHudKeyBinding;
     private static KeyMapping toggleHudVisibilityKeyBinding;
@@ -81,7 +81,7 @@ public class TodoClient implements ClientModInitializer {
      */
     private void registerKeyBindings() {
         // Key: K key to open todo list
-        openTodoKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        openTodoKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.open",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
@@ -89,14 +89,14 @@ public class TodoClient implements ClientModInitializer {
         ));
 
         // Key: H key to toggle HUD expanded state
-        toggleHudKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        toggleHudKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.togglehud",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_H,
                 KEY_CATEGORY
         ));
 
-        toggleHudVisibilityKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        toggleHudVisibilityKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.togglehudvisibility",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_J,
@@ -128,7 +128,7 @@ public class TodoClient implements ClientModInitializer {
         hudRenderer = new TodoHudRenderer(client);
         ClientPlatformAdapter.setHudRendererSupplier(() -> hudRenderer);
 
-        HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("todolist", "hud"), (drawContext, tickDelta) -> {
             if (client.player != null) {
                 hudRenderer.render(drawContext, 0.0F);
                 TodoToastRenderer.render(drawContext, client.font, drawContext.guiWidth());

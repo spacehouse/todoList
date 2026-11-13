@@ -75,8 +75,29 @@ public final class GuiTestSupport {
         }
         SharedConstants.setVersion(DetectedVersion.BUILT_IN);
         Bootstrap.bootStrap();
+        bindBuiltInItemComponents();
         DataPathProvider.setGameDirSupplier(() -> TEST_GAME_DIR);
         bootstrapped = true;
+    }
+
+    /**
+     * 26.1：ItemStack(Item, count) 要求 Item 的 Holder 已绑定组件。
+     * 测试环境只执行 Bootstrap，不会走正式资源的组件绑定流程；
+     * Item.components() 本身也依赖该绑定，故这里绑定空组件表即可满足构造需求。
+     */
+    private static void bindBuiltInItemComponents() {
+        // ItemInstance.getMaxStackSize() 在组件缺失时回退为 1，ItemStackTemplate.create()
+        // 的校验会把 count>1 的测试堆栈判为空；测试环境统一按 64 绑定。
+        net.minecraft.core.component.DataComponentMap components =
+                net.minecraft.core.component.DataComponentMap.builder()
+                        .set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE, 64)
+                        .build();
+        for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            net.minecraft.core.Holder.Reference<net.minecraft.world.item.Item> holder = item.builtInRegistryHolder();
+            if (!holder.areComponentsBound()) {
+                holder.bindComponents(components);
+            }
+        }
     }
 
     /**
@@ -157,6 +178,13 @@ public final class GuiTestSupport {
         setObjectField(Minecraft.class, minecraft, "font", font);
         setObjectField(Minecraft.class, minecraft, "player", player);
         setObjectField(Minecraft.class, minecraft, "window", window);
+        // 26.1：EditBox.setFocused 会经 Minecraft.onTextInputFocusChange 委托给
+        // textInputManager；fake 客户端没有构造流程，需显式注入实例。
+        setObjectField(Minecraft.class, minecraft, "textInputManager",
+                new com.mojang.blaze3d.platform.TextInputManager(window));
+        // 26.1：焦点切换会触发 keyboardHandler.resubmitLastPreeditEvent；
+        // fake 客户端无真实 IME 状态，注入空实现避免 NPE。
+        setObjectField(Minecraft.class, minecraft, "keyboardHandler", new NoopKeyboardHandler(minecraft));
         setObjectField(Minecraft.class, minecraft, "options", options);
         setObjectField(Minecraft.class, minecraft, "soundManager", soundManager);
         setStaticObjectField(Minecraft.class, "instance", minecraft);
@@ -185,7 +213,9 @@ public final class GuiTestSupport {
         if (minecraft.getLastInputType() == null) {
             minecraft.setTestLastInputType(InputType.KEYBOARD_TAB);
         }
-        screen.init(minecraft, width, height);
+        // v1_21_11 覆盖：Screen 改为构造器内捕获 Minecraft.getInstance()（假客户端已注入 instance），
+        // init 仅收宽高；此处不再传入 minecraft
+        screen.init(width, height);
     }
 
     /**
@@ -602,6 +632,20 @@ public final class GuiTestSupport {
                 return text.substring(text.length() - maxChars);
             }
             return text.substring(0, maxChars);
+        }
+    }
+
+    /**
+     * 26.1 测试用键盘处理器：屏蔽 pre-edit 重提交，避免 fake 客户端缺失输入状态。
+     */
+    private static final class NoopKeyboardHandler extends net.minecraft.client.KeyboardHandler {
+        private NoopKeyboardHandler(net.minecraft.client.Minecraft minecraft) {
+            super(minecraft);
+        }
+
+        @Override
+        public void resubmitLastPreeditEvent(net.minecraft.client.gui.components.events.GuiEventListener listener) {
+            // 测试环境没有真实 IME 状态，直接忽略。
         }
     }
 }

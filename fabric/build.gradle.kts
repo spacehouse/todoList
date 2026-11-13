@@ -2,29 +2,25 @@ import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.JavaPluginExtension
 
 plugins {
-    id("dev.architectury.loom")
+    id("dev.architectury.loom-no-remap")
 }
 
 val archives_name: String by project
 val commonProject = project(":common")
-// 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties
+// 版本矩阵入口：build-local-26x.bat 注入 target_* 属性；未注入时回退 gradle.properties
 val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
 val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
 val fabricApiVersion = (findProperty("target_fabric_api_version") as String?) ?: (property("fabric_api_version") as String)
 val modmenuVersion = (findProperty("target_modmenu_version") as String?) ?: (property("modmenu_version") as String)
 val fabricLoaderDependency = (findProperty("target_fabric_loader_dependency") as String?) ?: ">=0.18.1"
 val fabricMinecraftDependency = (findProperty("target_fabric_minecraft_dependency") as String?) ?: minecraftVersion
-val apiGroup = (findProperty("target_api_group") as String?) ?: "v1_21_1"
+val apiGroup = (findProperty("target_api_group") as String?) ?: "baseline"
 val enableModMenu = (findProperty("enable_modmenu") as String?)?.toBoolean()
     ?: !gradle.startParameter.isOffline
 val effectiveModMenu = enableModMenu
 
 loom {
-    mixin {
-        defaultRefmapName.set("todolist.mixins.refmap.json")
-        // loom 1.17 默认关闭 mixin 注解处理器；本项目 mixin 依赖 refmap 生成，显式沿用旧版 AP
-        useLegacyMixinAp = true
-    }
+    // Minecraft 26.1+ 已去混淆，mixin 直接使用官方名，不再生成 refmap。
 }
 
 base {
@@ -33,19 +29,18 @@ base {
 
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    mappings(loom.officialMojangMappings())
-    modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
-    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+    implementation("net.fabricmc:fabric-loader:$loaderVersion")
+    implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     // H2 引擎走 Jar-in-Jar：dev classpath 用 Maven Central 坐标（离线走 Gradle 缓存），
     // 打包经 loom include 以嵌套 jar 交付，避免千余个散装类触发 CurseForge 自动扫描误报
     implementation("com.h2database:h2:2.2.220")
     include("com.h2database:h2:2.2.220")
 
-    implementation(project(":common", configuration = "namedElements"))
+    implementation(project(":common"))
 
     if (effectiveModMenu) {
-        modCompileOnly("com.terraformersmc:modmenu:$modmenuVersion")
+        compileOnly("com.terraformersmc:modmenu:$modmenuVersion")
     }
 }
 
@@ -81,9 +76,9 @@ sourceSets {
             if (!effectiveModMenu) {
                 exclude("com/todolist/client/ModMenuIntegration.java")
             }
-            // 兼容组覆盖源集：api_group != v1_21_1 时，src/main/<api_group>/java
+            // 兼容组覆盖源集：api_group != baseline 时，src/main/<api_group>/java
             // 中的同名类覆盖基线源码，用于隔离 1.21.2+ 编译期 API 差异
-            if (apiGroup != "v1_21_1") {
+            if (apiGroup != "baseline") {
                 val overrideDir = layout.projectDirectory.dir("src/main/$apiGroup/java")
                 if (overrideDir.asFile.exists()) {
                     val baselineDir = file("src/main/java")

@@ -4,7 +4,7 @@ import com.todolist.client.TodoHudRenderer;
 import com.todolist.gui.testsupport.ClassFileMethodScanner;
 import com.todolist.gui.testsupport.FakeMinecraftClient;
 import com.todolist.gui.testsupport.GuiTestSupport;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -103,26 +103,26 @@ public final class GuiScenarioTestMain {
     }
 
     /**
-     * 渲染守卫：检测运行时框架层 Screen.renderWithTooltip 是否已内置背景渲染
-     * （1.21.6+ 行为），并据此断言各 GUI 屏幕的 render 方法不得再次调用
-     * renderBackground，防止同一帧双 blur 触发
+     * 渲染守卫：检测运行时框架层 Screen.extractRenderStateWithTooltipAndSubtitles
+     * 是否已内置背景渲染（26.1 行为），并据此断言各 GUI 屏幕的 extractRenderState
+     * 方法不得再次调用 extractBackground，防止同一帧双 blur 触发
      * "Can only blur once per frame" 崩溃；框架不渲染背景的版本则要求
-     * ConfigScreen.render 保留自行调用，避免背景缺失回归。
+     * ConfigScreen.extractRenderState 保留自行调用，避免背景缺失回归。
      */
     private static void shouldGuardScreensAgainstDoubleBlurBackground() {
         boolean frameworkRendersBackground = ClassFileMethodScanner
-                .findInvokes(Screen.class, "renderWithTooltipAndSubtitles").stream()
-                .anyMatch(ref -> "renderBackground".equals(ref.name()));
+                .findInvokes(Screen.class, "extractRenderStateWithTooltipAndSubtitles").stream()
+                .anyMatch(ref -> "extractBackground".equals(ref.name()));
 
         boolean configCallsRenderBackground = ClassFileMethodScanner
-                .findInvokes(ConfigScreen.class, "render").stream()
-                .anyMatch(ref -> "renderBackground".equals(ref.name()));
+                .findInvokes(ConfigScreen.class, "extractRenderState").stream()
+                .anyMatch(ref -> "extractBackground".equals(ref.name()));
         if (frameworkRendersBackground) {
             GuiTestSupport.assertFalse(configCallsRenderBackground,
-                    "框架层已渲染背景时 ConfigScreen.render 不得再调用 renderBackground（双 blur 崩溃）");
+                    "框架层已渲染背景时 ConfigScreen.extractRenderState 不得再调用 extractBackground（双 blur 崩溃）");
         } else {
             GuiTestSupport.assertTrue(configCallsRenderBackground,
-                    "框架层不渲染背景时 ConfigScreen.render 必须自行调用 renderBackground（保持背景）");
+                    "框架层不渲染背景时 ConfigScreen.extractRenderState 必须自行调用 extractBackground（保持背景）");
         }
 
         List<Class<?>> overlayBackgroundScreens = List.of(
@@ -134,10 +134,10 @@ public final class GuiScenarioTestMain {
                 TodoScreen.class);
         for (Class<?> screenClass : overlayBackgroundScreens) {
             boolean callsRenderBackground = ClassFileMethodScanner
-                    .findInvokes(screenClass, "render").stream()
-                    .anyMatch(ref -> "renderBackground".equals(ref.name()));
+                    .findInvokes(screenClass, "extractRenderState").stream()
+                    .anyMatch(ref -> "extractBackground".equals(ref.name()));
             GuiTestSupport.assertFalse(callsRenderBackground,
-                    screenClass.getSimpleName() + ".render 不得调用 renderBackground（其背景由 override 自绘）");
+                    screenClass.getSimpleName() + ".extractRenderState 不得调用 extractBackground（其背景由 override 自绘）");
         }
     }
 
@@ -163,7 +163,7 @@ public final class GuiScenarioTestMain {
     }
 
     /**
-     * 渲染守卫：检测运行时框架层 GuiGraphics.drawString 是否带 alpha==0 早退语义
+     * 渲染守卫：检测运行时框架层 GuiGraphicsExtractor.drawString 是否带 alpha==0 早退语义
      * （1.21.6+ 行为），并据此断言本 mod 渲染类字节码中不存在无 alpha 的灰白
      * 颜色字面量，防止 1.21.6 起 "颜色字面量漏写 alpha 导致文字不渲染" 的
      * 回归（实机表现为配置项标签/预览文字空白）；框架无早退语义的旧版本跳过
@@ -171,7 +171,7 @@ public final class GuiScenarioTestMain {
      */
     private static void shouldGuardTextColorsCarryAlpha() {
         boolean frameworkSkipsAlphaZero = ClassFileMethodScanner
-                .findInvokes(GuiGraphics.class, "drawString").stream()
+                .findInvokes(GuiGraphicsExtractor.class, "drawString").stream()
                 .anyMatch(ref -> "net/minecraft/util/ARGB".equals(ref.owner())
                         && "alpha".equals(ref.name()));
         if (!frameworkSkipsAlphaZero) {
@@ -241,7 +241,7 @@ public final class GuiScenarioTestMain {
      */
     private static void typeText(Screen screen, String text) {
         for (int i = 0; i < text.length(); i++) {
-            screen.charTyped(new CharacterEvent(text.charAt(i), 0));
+            screen.charTyped(new CharacterEvent(text.charAt(i)));
         }
     }
 

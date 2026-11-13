@@ -4,7 +4,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * 注册 Fabric 平台项目相关网络包的收发入口。
@@ -20,14 +20,14 @@ public final class FabricProjectPacketRegistrar {
      * 注册 Fabric 项目网络包的类型、接收器与玩家进服同步逻辑。
      */
     public static void register() {
-        PayloadTypeRegistry.playC2S().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(FabricProjectPayload.TYPE, FabricProjectPayload.CODEC);
 
         ProjectPackets.setServerPacketSender((player, channelId, buf) ->
                 ServerPlayNetworking.send(player, FabricProjectPayload.of(channelId, buf)));
 
         ServerPlayNetworking.registerGlobalReceiver(FabricProjectPayload.TYPE, (payload, context) -> {
-            ResourceLocation channelId = payload.channel();
+            Identifier channelId = payload.channel();
             FriendlyByteBuf buf = payload.toBuf();
             if (channelId.equals(ProjectPackets.ADD_PROJECT_ID)) {
                 ProjectPackets.onAddProjectPacket(context.server(), context.player(), buf);

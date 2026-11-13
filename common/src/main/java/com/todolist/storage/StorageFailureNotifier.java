@@ -95,7 +95,7 @@ public final class StorageFailureNotifier {
      */
     public static void notifyPlayer(ServerPlayer player, Throwable throwable, String fallbackMessageKey) {
         if (player != null) {
-            player.displayClientMessage(toUserMessage(throwable, fallbackMessageKey), false);
+            player.sendOverlayMessage(toUserMessage(throwable, fallbackMessageKey));
         }
     }
 }

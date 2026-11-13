@@ -4,7 +4,7 @@ import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.the
 
 plugins {
-    id("dev.architectury.loom")
+    id("dev.architectury.loom-no-remap")
 }
 
 val archives_name: String by project
@@ -13,22 +13,18 @@ base {
 }
 
 dependencies {
-    // 版本矩阵入口：build-local-121x.bat 注入 target_* 属性；未注入时回退 gradle.properties
+    // 版本矩阵入口：build-local-26x.bat 注入 target_* 属性；未注入时回退 gradle.properties
     val minecraftVersion = (findProperty("target_minecraft_version") as String?) ?: (property("minecraft_version") as String)
     val loaderVersion = (findProperty("target_loader_version") as String?) ?: (property("loader_version") as String)
     val h2Jar = rootProject.file("libs/h2-2.2.220.jar")
 
     minecraft("com.mojang:minecraft:$minecraftVersion")
-    mappings(loom.officialMojangMappings())
+    // 仅用于 @Environment(EnvType.CLIENT) 注解的编译期解析；运行时由各加载器提供。
     compileOnly("net.fabricmc:fabric-loader:$loaderVersion")
     testCompileOnly("net.fabricmc:fabric-loader:$loaderVersion")
 
     compileOnly("org.slf4j:slf4j-api:2.0.7")
     testImplementation(files(h2Jar))
-}
-
-loom {
-    accessWidenerPath.set(file("src/main/resources/todolist.accesswidener"))
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -49,11 +45,11 @@ val sourceSets = the<SourceSetContainer>()
 val mainSourceSet = sourceSets["main"]
 val testSourceSet = sourceSets["test"]
 
-// 兼容组覆盖源集：api_group != v1_21_1 时，src/<sourceSet>/<api_group>/java 中的同名类
+// 兼容组覆盖源集：api_group != baseline 时，src/<sourceSet>/<api_group>/java 中的同名类
 // 覆盖基线源码（main 与 test 同步覆盖），用于隔离 1.21.2+ 的编译期 API 差异；
-// 目录不存在时跳过，v1_21_1 走原生 srcDir，行为与现状完全一致。
-val apiGroup = (findProperty("target_api_group") as String?) ?: "v1_21_1"
-if (apiGroup != "v1_21_1") {
+// 目录不存在时跳过，baseline 走原生 srcDir，行为与现状完全一致。
+val apiGroup = (findProperty("target_api_group") as String?) ?: "baseline"
+if (apiGroup != "baseline") {
     fun applyOverrideSourceSet(sourceSetName: String) {
         val overrideDir = layout.projectDirectory.dir("src/$sourceSetName/$apiGroup/java")
         if (!overrideDir.asFile.exists()) return

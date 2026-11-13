@@ -1,7 +1,7 @@
 package com.todolist.gui;
 
 import com.todolist.config.ModConfig;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -77,7 +77,7 @@ public class ConfirmActionScreen extends Screen {
      * @param delta 帧间隔
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
@@ -90,7 +90,7 @@ public class ConfirmActionScreen extends Screen {
      * @param delta 帧间隔
      */
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
         int dialogWidth = Math.max(220, Math.min(360, width - 20));
@@ -99,11 +99,11 @@ public class ConfirmActionScreen extends Screen {
         int dialogY = (height - dialogHeight) / 2;
 
         context.fill(dialogX, dialogY, dialogX + dialogWidth, dialogY + dialogHeight, 0xFF202020);
-        context.submitOutline(dialogX, dialogY, dialogWidth, dialogHeight, 0xFFFFFFFF);
+        context.outline(dialogX, dialogY, dialogWidth, dialogHeight, 0xFFFFFFFF);
 
-        context.drawString(font, title, dialogX + 10, dialogY + 10, 0xFFFFFFFF, false);
-        context.drawWordWrap(font, message, dialogX + 10, dialogY + 35, dialogWidth - 20, 0xFFDDDDDD);
+        context.text(font, title, dialogX + 10, dialogY + 10, 0xFFFFFFFF, false);
+        context.textWithWordWrap(font, message, dialogX + 10, dialogY + 35, dialogWidth - 20, 0xFFDDDDDD);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 }

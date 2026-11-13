@@ -6,7 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientAdvancements;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -96,7 +96,7 @@ public final class TriggerTargetSupport {
             case ITEM_COLLECT:
             case CRAFT_ITEM: {
                 Item item = resolveItem(target);
-                return item == null ? target : item.getName(new ItemStack(item)).getString();
+                return item == null ? target : item.getName(ItemStack.EMPTY).getString();
             }
             case BREAK_BLOCK: {
                 Block block = resolveBlock(target);
@@ -184,7 +184,7 @@ public final class TriggerTargetSupport {
      * @return 进度标题；无法解析时返回 null
      */
     private static String resolveAdvancementTitle(String advancementId) {
-        ResourceLocation location = ResourceLocation.tryParse(advancementId);
+        Identifier location = Identifier.tryParse(advancementId);
         if (location != null) {
             Minecraft client = Minecraft.getInstance();
             if (client != null && client.getConnection() != null) {
@@ -240,11 +240,11 @@ public final class TriggerTargetSupport {
      * @return 刷怪蛋物品 ID；不存在时返回 null
      */
     private static String resolveSpawnEggId(String entityId) {
-        ResourceLocation location = ResourceLocation.tryParse(entityId);
+        Identifier location = Identifier.tryParse(entityId);
         if (location == null) {
             return null;
         }
-        ResourceLocation eggId = ResourceLocation.fromNamespaceAndPath(location.getNamespace(), location.getPath() + SPAWN_EGG_SUFFIX);
+        Identifier eggId = Identifier.fromNamespaceAndPath(location.getNamespace(), location.getPath() + SPAWN_EGG_SUFFIX);
         return BuiltInRegistries.ITEM.containsKey(eggId) ? eggId.toString() : null;
     }
 
@@ -255,7 +255,7 @@ public final class TriggerTargetSupport {
      * @return 物品实例；无法解析时返回 null
      */
     private static Item resolveItem(String itemId) {
-        ResourceLocation location = ResourceLocation.tryParse(itemId);
+        Identifier location = Identifier.tryParse(itemId);
         if (location == null) {
             return null;
         }
@@ -270,7 +270,7 @@ public final class TriggerTargetSupport {
      * @return 方块实例；无法解析时返回 null
      */
     private static Block resolveBlock(String blockId) {
-        ResourceLocation location = ResourceLocation.tryParse(blockId);
+        Identifier location = Identifier.tryParse(blockId);
         if (location == null) {
             return null;
         }
@@ -284,7 +284,7 @@ public final class TriggerTargetSupport {
      * @return 实体类型；无法解析时返回 null
      */
     private static EntityType<?> resolveEntityType(String entityId) {
-        ResourceLocation location = ResourceLocation.tryParse(entityId);
+        Identifier location = Identifier.tryParse(entityId);
         if (location == null) {
             return null;
         }

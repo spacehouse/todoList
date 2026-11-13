@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -286,7 +286,7 @@ public class TodoHudRenderer {
      * @param context 绘制上下文
      * @param delta 帧间隔
      */
-    public void render(GuiGraphics context, float delta) {
+    public void render(GuiGraphicsExtractor context, float delta) {
         if (client.options.hideGui) return;
 
         ModConfig config = ModConfig.getInstance();
@@ -991,7 +991,7 @@ public class TodoHudRenderer {
      * @param config 模组配置
      * @param viewLabel 当前视图标签
      */
-    private void renderTaskList(GuiGraphics context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done,
+    private void renderTaskList(GuiGraphicsExtractor context, int x, int y, int width, int panelHeight, List<Task> pending, List<Task> done,
             HudRenderPlan renderPlan, ModConfig config, HudViewMode viewMode) {
         int currentY = y;
         float opacity = (float) config.getHudOpacity();
@@ -1000,20 +1000,20 @@ public class TodoHudRenderer {
         int headerHeight = 14;
 
         // v1_21_6 覆盖：1.21.5 渲染管线重构移除 RenderSystem.enableBlend/defaultBlendFunc，
-        // 1.21.6 进一步移除 RenderSystem.setShaderColor，着色器颜色由 GuiGraphics 统一管理，
+        // 1.21.6 进一步移除 RenderSystem.setShaderColor，着色器颜色由 GuiGraphicsExtractor 统一管理，
         // 此处均省略原调用，fill/drawString 自带透明度合成，保持基线绘制表现
 
         Component title = buildHeaderTitle(viewMode);
 
         context.fill(x, y, x + width, y + panelHeight, panelColor);
         int headerTextY = y + (headerHeight - client.font.lineHeight) / 2;
-        context.drawString(client.font, title, x + 4, headerTextY, toOpaqueColor(0xFFE0B240));
+        context.text(client.font, title, x + 4, headerTextY, toOpaqueColor(0xFFE0B240));
         currentY += headerHeight;
 
         if (!expanded) {
             Component summary = buildCollapsedSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount);
             int summaryY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, summary, x + 4, summaryY, toOpaqueColor(0xFFDDDDDD));
+            context.text(client.font, summary, x + 4, summaryY, toOpaqueColor(0xFFDDDDDD));
             return;
         }
 
@@ -1024,7 +1024,7 @@ public class TodoHudRenderer {
 
         if (renderPlan.showDoneSection) {
             int separatorY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xFFAAAAAA));
+            context.text(client.font, SEPARATOR_COMPLETED, x + 4, separatorY, toOpaqueColor(0xFFAAAAAA));
             currentY += rowHeight;
             for (int i = 0; i < renderPlan.shownDone; i++) {
                 drawTaskRow(context, x, currentY, width, rowHeight, done.get(i));
@@ -1034,7 +1034,7 @@ public class TodoHudRenderer {
 
         if (renderPlan.showMore) {
             int moreY = currentY + (rowHeight - client.font.lineHeight) / 2;
-            context.drawString(
+            context.text(
                     client.font,
                     buildExpandedFooterSummaryText(cachedPendingSummaryCount, cachedDoneSummaryCount),
                     x + 4,
@@ -1051,7 +1051,7 @@ public class TodoHudRenderer {
      * @param opacity HUD 透明度（用于同步文本与背景的显示效果）
      * @param task 待绘制任务
      */
-    private void drawTaskRow(GuiGraphics context, int x, int y, int width, int rowHeight, Task task) {
+    private void drawTaskRow(GuiGraphicsExtractor context, int x, int y, int width, int rowHeight, Task task) {
         RowRenderCache rowCache = rowRenderCacheByTaskId.get(task.getId());
         if (!isRowRenderCacheValid(rowCache, task, width)) {
             rowCache = buildRowRenderCache(task, width);
@@ -1081,11 +1081,11 @@ public class TodoHudRenderer {
                 drawMiniItemIcon(context, part.getItemId(), partX, iconY, part.getIconSize());
                 partX += part.getIconSize();
                 if (part.getText() != null) {
-                    context.drawString(client.font, part.getText(), partX + ICON_TEXT_GAP, titleTextY, textColor);
+                    context.text(client.font, part.getText(), partX + ICON_TEXT_GAP, titleTextY, textColor);
                     partX += ICON_TEXT_GAP + client.font.width(part.getText());
                 }
             } else if (part.getText() != null) {
-                context.drawString(client.font, part.getText(), partX, titleTextY, textColor);
+                context.text(client.font, part.getText(), partX, titleTextY, textColor);
                 partX += part.getAdvance();
             }
         }
@@ -1096,7 +1096,7 @@ public class TodoHudRenderer {
                 drawMiniItemIcon(context, rowVisual.progressIconId, progressX, iconY, HUD_TITLE_ICON_SIZE);
                 progressX += HUD_TITLE_ICON_SIZE + 2;
             }
-            context.drawString(client.font, rowVisual.progressText, progressX, titleTextY, textColor);
+            context.text(client.font, rowVisual.progressText, progressX, titleTextY, textColor);
         }
     }
 
@@ -1112,7 +1112,7 @@ public class TodoHudRenderer {
      * @param rowY      行起始 y
      * @param rowHeight 行高
      */
-    private void renderTreeLines(GuiGraphics context, Task task, int rowLeft, int rowY, int rowHeight) {
+    private void renderTreeLines(GuiGraphicsExtractor context, Task task, int rowLeft, int rowY, int rowHeight) {
         String taskId = task == null ? "" : valueOrEmpty(task.getId());
         if (taskId.isEmpty()) {
             return;
@@ -1155,7 +1155,7 @@ public class TodoHudRenderer {
      * @param y        图标左上角 y
      * @param size     目标尺寸（像素）
      */
-    private void drawMiniItemIcon(GuiGraphics context, String itemId, int x, int y, int size) {
+    private void drawMiniItemIcon(GuiGraphicsExtractor context, String itemId, int x, int y, int size) {
         net.minecraft.world.item.ItemStack stack = ItemTitleRenderer.resolveItemStack(itemId);
         if (stack == null) {
             return;
@@ -1164,7 +1164,7 @@ public class TodoHudRenderer {
         context.pose().pushMatrix();
         context.pose().translate(x, y);
         context.pose().scale(scale, scale);
-        context.renderItem(stack, 0, 0);
+        context.item(stack, 0, 0);
         context.pose().popMatrix();
     }
 
@@ -1545,16 +1545,16 @@ public class TodoHudRenderer {
      * @param color 文本颜色
      * @param scale 绘制缩放
      */
-    private void drawScaledString(GuiGraphics context, String text, int x, int y, int color, float scale) {
+    private void drawScaledString(GuiGraphicsExtractor context, String text, int x, int y, int color, float scale) {
         if (text == null || text.isEmpty()) {
             return;
         }
-        // v1_21_6 覆盖：GuiGraphics.pose() 返回 joml Matrix3x2fStack，
+        // v1_21_6 覆盖：GuiGraphicsExtractor.pose() 返回 joml Matrix3x2fStack，
         // pushPose/popPose 改为 pushMatrix/popMatrix，translate/scale 收敛为二维参数
         context.pose().pushMatrix();
         context.pose().translate(x, y);
         context.pose().scale(scale, scale);
-        context.drawString(client.font, text, 0, 0, color, false);
+        context.text(client.font, text, 0, 0, color, false);
         context.pose().popMatrix();
     }
 

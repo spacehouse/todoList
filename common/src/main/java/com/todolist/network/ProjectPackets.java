@@ -18,16 +18,17 @@ import com.todolist.storage.StorageFailureNotifier;
 import com.todolist.task.Task;
 import com.todolist.task.TaskStorage;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,21 +42,21 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ProjectPackets {
     // Packet IDs
-    public static final ResourceLocation SYNC_PROJECTS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_projects");
-    public static final ResourceLocation ADD_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_project");
-    public static final ResourceLocation UPDATE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_project");
-    public static final ResourceLocation DELETE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_project");
-    public static final ResourceLocation ADD_MEMBER_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_member");
-    public static final ResourceLocation REMOVE_MEMBER_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "remove_member");
-    public static final ResourceLocation UPDATE_MEMBER_ROLE_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_member_role");
-    public static final ResourceLocation REQUEST_JOIN_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_join_project");
-    public static final ResourceLocation REQUEST_SYNC_PROJECTS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_sync_projects");
-    public static final ResourceLocation SET_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_active_project");
-    public static final ResourceLocation SYNC_ACTIVE_PROJECT_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_active_project");
-    public static final ResourceLocation SET_HUD_STARRED_PROJECT_IDS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
-    public static final ResourceLocation SET_HUD_VISIBILITY_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_visibility");
-    public static final ResourceLocation SYNC_HUD_STARRED_PROJECT_IDS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_starred_project_ids");
-    public static final ResourceLocation SYNC_HUD_VISIBILITY_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_visibility");
+    public static final Identifier SYNC_PROJECTS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_projects");
+    public static final Identifier ADD_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_project");
+    public static final Identifier UPDATE_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_project");
+    public static final Identifier DELETE_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_project");
+    public static final Identifier ADD_MEMBER_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_member");
+    public static final Identifier REMOVE_MEMBER_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "remove_member");
+    public static final Identifier UPDATE_MEMBER_ROLE_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_member_role");
+    public static final Identifier REQUEST_JOIN_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_join_project");
+    public static final Identifier REQUEST_SYNC_PROJECTS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "request_sync_projects");
+    public static final Identifier SET_ACTIVE_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_active_project");
+    public static final Identifier SYNC_ACTIVE_PROJECT_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_active_project");
+    public static final Identifier SET_HUD_STARRED_PROJECT_IDS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_starred_project_ids");
+    public static final Identifier SET_HUD_VISIBILITY_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "set_hud_visibility");
+    public static final Identifier SYNC_HUD_STARRED_PROJECT_IDS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_starred_project_ids");
+    public static final Identifier SYNC_HUD_VISIBILITY_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_hud_visibility");
     private static volatile TaskPackets.ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
     private static final ConcurrentHashMap<String, String> playerActiveProjectIdMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<String>> playerHudStarredProjectIdsMap = new ConcurrentHashMap<>();
@@ -417,7 +418,7 @@ public class ProjectPackets {
         if (isSingleplayerServer(server)) {
             return;
         }
-        if (!player.hasPermissions(2)) {
+        if (!player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return;
         }
         ProjectManager manager = TodoListCommon.getProjectManager();
@@ -801,24 +802,24 @@ public class ProjectPackets {
             return;
         }
         if (isSingleplayerServer(server)) {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.singleplayer_forbidden"), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.singleplayer_forbidden"));
             return;
         }
         ProjectManager manager = TodoListCommon.getProjectManager();
         Project project = manager.getProject(projectId);
         if (project == null || project.getScope() != Project.Scope.TEAM) {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.invalid_project"), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.invalid_project"));
             return;
         }
         String applicantUuid = player.getStringUUID();
         if (isExistingProjectMember(project, applicantUuid)) {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.already_member"));
             return;
         }
         MutableComponent projectName = getProjectDisplayName(project);
         String joinRequestKey = buildJoinRequestKey(projectId, applicantUuid);
         if (pendingJoinRequestMap.containsKey(joinRequestKey)) {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.already_requested", projectName), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.already_requested", projectName));
             return;
         }
         pendingJoinRequestMap.put(joinRequestKey, Boolean.TRUE);
@@ -849,7 +850,7 @@ public class ProjectPackets {
             try {
                 ServerPlayer owner = server.getPlayerList().getPlayer(UUID.fromString(ownerUuid));
                 if (owner != null) {
-                    owner.displayClientMessage(msg, false);
+                    owner.sendOverlayMessage(msg);
                     notified = true;
                     notifiedUuids.add(ownerUuid);
                 }
@@ -869,7 +870,7 @@ public class ProjectPackets {
                 try {
                     ServerPlayer lead = server.getPlayerList().getPlayer(UUID.fromString(entry.getKey()));
                     if (lead != null) {
-                        lead.displayClientMessage(msg, false);
+                        lead.sendOverlayMessage(msg);
                         notified = true;
                         notifiedUuids.add(entry.getKey());
                     }
@@ -881,23 +882,23 @@ public class ProjectPackets {
 
         if (!notified) {
             for (ServerPlayer online : server.getPlayerList().getPlayers()) {
-                if (online == null || !online.hasPermissions(2)) {
+                if (online == null || !online.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
                     continue;
                 }
                 String uuid = online.getStringUUID();
                 if (notifiedUuids.contains(uuid)) {
                     continue;
                 }
-                online.displayClientMessage(msg, false);
+                online.sendOverlayMessage(msg);
                 notified = true;
             }
         }
 
         if (notified) {
             MutableComponent copyName = applyCopyStyle(projectName.copy().withStyle(s -> s.withColor(ChatFormatting.GOLD).withBold(true)), projectId, Component.translatable("message.todolist.project.join.copy_hint", projectId));
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.sent_named", copyName), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.sent_named", copyName));
         } else {
-            player.displayClientMessage(Component.translatable("message.todolist.project.join.no_reviewer_online"), false);
+            player.sendOverlayMessage(Component.translatable("message.todolist.project.join.no_reviewer_online"));
         }
     }
 
@@ -911,29 +912,29 @@ public class ProjectPackets {
         ProjectManager manager = TodoListCommon.getProjectManager();
         Project project = manager.getProject(projectId);
         if (project == null || project.getScope() != Project.Scope.TEAM) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.invalid_project"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.invalid_project"));
             return false;
         }
         if (approver.getStringUUID().equals(applicantUuid)) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.cannot_approve_self"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.cannot_approve_self"));
             return false;
         }
 
         Role role = getRole(approver, project);
         Context ctx = new Context(ViewScope.TEAM_ALL, false, false, false);
         if (!PermissionCenter.canPerform(Operation.ADD_MEMBER, role, ctx)) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.no_permission"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.no_permission"));
             return false;
         }
 
         boolean alreadyMember = isExistingProjectMember(project, applicantUuid);
         if (alreadyMember) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.already_member"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.already_member"));
             return false;
         }
         String joinRequestKey = buildJoinRequestKey(projectId, applicantUuid);
         if (!pendingJoinRequestMap.containsKey(joinRequestKey)) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.no_pending_request"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.no_pending_request"));
             return false;
         }
 
@@ -945,7 +946,7 @@ public class ProjectPackets {
             return false;
         }
         if (applicant == null) {
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.applicant_offline"), false);
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.applicant_offline"));
             return false;
         }
 
@@ -959,12 +960,12 @@ public class ProjectPackets {
             manager.updateProject(project);
             saveProjects(server, project.getScope());
             broadcastProjects(server);
-            applicant.displayClientMessage(Component.translatable("message.todolist.project.join.accepted", projectName), false);
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.approved", applicant.getName().getString()), false);
+            applicant.sendOverlayMessage(Component.translatable("message.todolist.project.join.accepted", projectName));
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.approved", applicant.getName().getString()));
         } else {
             pendingJoinRequestMap.remove(joinRequestKey);
-            applicant.displayClientMessage(Component.translatable("message.todolist.project.join.denied", projectName), false);
-            approver.displayClientMessage(Component.translatable("message.todolist.project.join.rejected", applicant.getName().getString()), false);
+            applicant.sendOverlayMessage(Component.translatable("message.todolist.project.join.denied", projectName));
+            approver.sendOverlayMessage(Component.translatable("message.todolist.project.join.rejected", applicant.getName().getString()));
         }
         return true;
     }
@@ -1045,7 +1046,7 @@ public class ProjectPackets {
         if (player == null) {
             return Role.MEMBER;
         }
-        if (player.hasPermissions(2)) {
+        if (player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return Role.OP;
         }
         if (project == null || project.getScope() == Project.Scope.PERSONAL) {

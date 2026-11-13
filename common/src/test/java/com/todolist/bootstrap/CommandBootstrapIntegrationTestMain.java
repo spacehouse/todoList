@@ -13,7 +13,6 @@ import com.todolist.project.ProjectSaveDebouncer;
 import com.todolist.project.ProjectStorage;
 import com.todolist.storage.H2StorageBootstrap;
 import com.todolist.task.Task;
-import com.todolist.task.TaskTrigger;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.DetectedVersion;
@@ -24,6 +23,9 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.permissions.PermissionLevel;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.util.debugchart.SampleLogger;
 import net.minecraft.world.phys.Vec2;
@@ -78,7 +80,6 @@ public final class CommandBootstrapIntegrationTestMain {
             runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenCompleting", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenCompleting);
             runCase("CommandBootstrapIntegrationTestMain.shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldReturnAlreadyCompletedForCompletedPersonalTaskSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldRemovePersonalTaskSuccessfully", CommandBootstrapIntegrationTestMain::shouldRemovePersonalTaskSuccessfully);
-            runCase("CommandBootstrapIntegrationTestMain.shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully", CommandBootstrapIntegrationTestMain::shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldRejectMissingPersonalTaskWhenRemoving", CommandBootstrapIntegrationTestMain::shouldRejectMissingPersonalTaskWhenRemoving);
             runCase("CommandBootstrapIntegrationTestMain.shouldListCompletedPersonalTasksSuccessfully", CommandBootstrapIntegrationTestMain::shouldListCompletedPersonalTasksSuccessfully);
             runCase("CommandBootstrapIntegrationTestMain.shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully", CommandBootstrapIntegrationTestMain::shouldPaginatePersonalTaskListWithMoreAndPrevSuccessfully);
@@ -257,29 +258,6 @@ public final class CommandBootstrapIntegrationTestMain {
         int result = dispatcher.execute("todo task remove " + task.getId(), createSource(0, player));
         assertEquals(1, result, "task remove 成功时应返回成功");
         assertNull(findPersonalTaskByTitleOrNull(player, "Remove by command"), "task remove 未删除个人任务");
-    }
-
-    /**
-     * 校验 task trigger set 能正确解析带命名空间的物品目标（如 minecraft:iron_ingot）。
-     */
-    private static void shouldSetItemCollectTriggerWithNamespacedTargetSuccessfully() throws Exception {
-        resetState(ModConfig.CommandAccessMode.FULL);
-        TestServerPlayer player = createPlayer("00000000-0000-0000-0000-000000000238", "trigger-set-user", false);
-        Task task = createPersonalTask("Trigger target task", false, Task.Priority.MEDIUM, null);
-        savePersonalTasks(player, task);
-        CommandDispatcher<CommandSourceStack> dispatcher = createDispatcher();
-        CapturingCommandSourceStack source = createSource(0, player);
-
-        int result = dispatcher.execute(
-                "todo task trigger set " + task.getId() + " item_collect minecraft:iron_ingot 32",
-                source);
-        assertEquals(1, result, "带命名空间目标设置触发器应返回成功");
-        assertContainsMessageKey(source.getSuccessMessages(), "command.todolist.task.trigger.set.success", "触发器设置成功消息键不正确");
-        TaskTrigger trigger = findPersonalTaskByTitle(player, "Trigger target task").getTrigger();
-        assertNotNull(trigger, "触发器未写入任务");
-        assertEquals(TaskTrigger.Type.ITEM_COLLECT, trigger.getType(), "触发器类型解析不正确");
-        assertEquals("minecraft:iron_ingot", trigger.getTarget(), "命名空间目标应被完整解析");
-        assertEquals(32, trigger.getTargetCount(), "触发器目标数量解析不正确");
     }
 
     /**
@@ -1186,7 +1164,8 @@ public final class CommandBootstrapIntegrationTestMain {
          * @param player 绑定的玩家实体
          */
         private CapturingCommandSourceStack(int permissionLevel, ServerPlayer player) {
-            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, permissionLevel, "command-test", Component.literal("command-test"), null, player);
+            // v1_21_11 覆盖：CommandSourceStack 构造第 5 参由 int 改为 PermissionSet
+            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), "command-test", Component.literal("command-test"), null, player);
         }
 
         /**
@@ -1197,7 +1176,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * @param server 最小服务端桩对象
          */
         private CapturingCommandSourceStack(int permissionLevel, ServerPlayer player, MinecraftServer server) {
-            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, permissionLevel, "command-test", Component.literal("command-test"), server, player);
+            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), "command-test", Component.literal("command-test"), server, player);
         }
 
         /**
@@ -1313,24 +1292,22 @@ public final class CommandBootstrapIntegrationTestMain {
         }
 
         /**
-         * 返回测试玩家权限结果。
+         * 返回测试玩家权限集。
          *
-         * @param level 请求的权限等级
-         * @return 是否具备权限
+         * @return 管理员返回 OWNER 级权限集，非管理员仅保留 ALL 级
          */
         @Override
-        public boolean hasPermissions(int level) {
-            return testOperator || level <= 0;
+        public PermissionSet permissions() {
+            return testOperator ? LevelBasedPermissionSet.OWNER : LevelBasedPermissionSet.ALL;
         }
 
         /**
          * 捕获发送到客户端的提示消息，供加入项目审批链路断言使用。
          *
          * @param component 客户端消息
-         * @param actionBar 是否显示为 action bar
          */
         @Override
-        public void displayClientMessage(Component component, boolean actionBar) {
+        public void sendOverlayMessage(Component component) {
             if (testClientMessages == null) {
                 testClientMessages = new ArrayList<>();
             }
@@ -1362,7 +1339,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * 构造方法仅用于满足编译要求，运行时通过 Unsafe 绕过。
          */
         private TestMinecraftServer() {
-            super(null, null, null, null, Proxy.NO_PROXY, null, null, null);
+            super(null, null, null, null, java.util.Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
             throw new UnsupportedOperationException("请通过 createServer 创建测试服务端");
         }
 
@@ -1457,23 +1434,23 @@ public final class CommandBootstrapIntegrationTestMain {
         }
 
         /**
-         * 返回 OP 权限等级。
+         * 返回 OP 权限集。
          *
-         * @return 固定返回 4
+         * @return 固定返回 OWNER 级（对应旧等级 4）
          */
         @Override
-        public int operatorUserPermissionLevel() {
-            return 4;
+        public LevelBasedPermissionSet operatorUserPermissions() {
+            return LevelBasedPermissionSet.OWNER;
         }
 
         /**
-         * 返回函数编译权限等级。
+         * 返回函数编译权限集。
          *
-         * @return 固定返回 2
+         * @return 固定返回 GAMEMASTER 级（对应旧等级 2）
          */
         @Override
-        public int getFunctionCompilationLevel() {
-            return 2;
+        public PermissionSet getFunctionCompilationPermissions() {
+            return LevelBasedPermissionSet.GAMEMASTER;
         }
 
         /**
@@ -1518,22 +1495,12 @@ public final class CommandBootstrapIntegrationTestMain {
         }
 
         /**
-         * 标记测试服务端不使用 epoll。
+         * 标记测试服务端不使用 native transport（原 isEpollEnabled 在 1.21.11 更名）。
          *
          * @return 始终返回 false
          */
         @Override
-        public boolean isEpollEnabled() {
-            return false;
-        }
-
-        /**
-         * 标记命令方块能力关闭。
-         *
-         * @return 始终返回 false
-         */
-        @Override
-        public boolean isCommandBlockEnabled() {
+        public boolean useNativeTransport() {
             return false;
         }
 

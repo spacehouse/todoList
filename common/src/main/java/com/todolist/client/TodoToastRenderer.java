@@ -3,7 +3,7 @@ package com.todolist.client;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -80,7 +80,7 @@ public final class TodoToastRenderer {
      * @param font        字体
      * @param screenWidth 当前画面宽度
      */
-    public static void render(GuiGraphics context, Font font, int screenWidth) {
+    public static void render(GuiGraphicsExtractor context, Font font, int screenWidth) {
         if (com.todolist.HudProbe.enabled()) {
             com.todolist.HudProbe.log("toast render call entries={}", ENTRIES.size());
         }
@@ -117,7 +117,7 @@ public final class TodoToastRenderer {
                 context.fill(x, y, x + ACCENT_WIDTH, y + boxHeight, ACCENT_COLOR);
 
                 int contentX = x + ACCENT_WIDTH + PADDING_X;
-                context.drawString(font, label, contentX, y + PADDING_Y, ACCENT_COLOR, false);
+                context.text(font, label, contentX, y + PADDING_Y, ACCENT_COLOR, false);
                 int titleY = y + PADDING_Y + font.lineHeight + LINE_GAP;
                 int iconY = titleY + Math.max(0, (titleLineHeight - ICON_SIZE) / 2);
                 drawParts(context, font, parts, contentX, iconY, innerWidth, titleY);
@@ -138,7 +138,7 @@ public final class TodoToastRenderer {
      * @param maxWidth   可用最大宽度
      * @param textY      文本基线 y
      */
-    private static void drawParts(GuiGraphics context, Font font, List<ItemTitleRenderer.Part> parts,
+    private static void drawParts(GuiGraphicsExtractor context, Font font, List<ItemTitleRenderer.Part> parts,
                                   int startX, int iconY, int maxWidth, int textY) {
         List<ItemTitleRenderer.Part> visible = ItemTitleRenderer.truncate(parts, maxWidth, font);
         int cursorX = startX;
@@ -147,11 +147,11 @@ public final class TodoToastRenderer {
                 drawItemIcon(context, part.getItemId(), cursorX, iconY, part.getIconSize());
                 cursorX += part.getIconSize();
                 if (part.getText() != null) {
-                    context.drawString(font, part.getText(), cursorX + ICON_TEXT_GAP, textY, TITLE_COLOR, false);
+                    context.text(font, part.getText(), cursorX + ICON_TEXT_GAP, textY, TITLE_COLOR, false);
                     cursorX += ICON_TEXT_GAP + font.width(part.getText());
                 }
             } else if (part.getText() != null) {
-                context.drawString(font, part.getText(), cursorX, textY, TITLE_COLOR, false);
+                context.text(font, part.getText(), cursorX, textY, TITLE_COLOR, false);
                 cursorX += part.getAdvance();
             }
         }
@@ -180,7 +180,7 @@ public final class TodoToastRenderer {
      * @param y       图标左上角 y
      * @param size    目标尺寸（像素）
      */
-    private static void drawItemIcon(GuiGraphics context, String itemId, int x, int y, int size) {
+    private static void drawItemIcon(GuiGraphicsExtractor context, String itemId, int x, int y, int size) {
         ItemStack stack = ItemTitleRenderer.resolveItemStack(itemId);
         if (stack == null) {
             return;
@@ -189,7 +189,7 @@ public final class TodoToastRenderer {
         context.pose().pushMatrix();
         context.pose().translate(x, y);
         context.pose().scale(scale, scale);
-        context.renderItem(stack, 0, 0);
+        context.item(stack, 0, 0);
         context.pose().popMatrix();
     }
 

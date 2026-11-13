@@ -5,7 +5,7 @@ import com.todolist.client.ClientBridge;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectNameFormatter;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -365,17 +365,17 @@ public class ConfigScreen extends Screen {
      * @param delta 帧间插值
      */
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // v1_21_6 覆盖：1.21.6 起 Screen.renderWithTooltip 框架层默认实现已先渲染
         // renderBackground（含模糊背景），此处再手动调用会触发第二次 blur，
         // 抛出 "Can only blur once per frame"，故省略该调用。
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
 
         int guiWidth = clampInt(this.width - 40, 360, 560);
         int x = (this.width - guiWidth) / 2;
         int y = Math.max(36, this.height / 6 + 10);
         int textHeight = this.font.lineHeight;
-        context.drawString(this.font, title, x, y - 36, 0xFFFFFFFF, false);
+        context.text(this.font, title, x, y - 36, 0xFFFFFFFF, false);
 
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_width"), hudWidthField, textHeight);
         drawLabelForWidget(context, Component.translatable("gui.todolist.config.hud_max_height"), hudMaxHeightField, textHeight);
@@ -402,7 +402,7 @@ public class ConfigScreen extends Screen {
         double opacity = hudOpacitySlider == null ? ModConfig.getInstance().getHudOpacity() : hudOpacitySlider.getDoubleValue();
         int alpha = (int) Math.round(clampRatio(opacity) * 255.0D);
         context.fill(previewHudX, previewHudY, previewHudX + previewHudWidth, previewHudY + previewHudHeight, alpha << 24);
-        context.submitOutline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
+        context.outline(previewHudX, previewHudY, previewHudWidth, previewHudHeight, 0xFFFFFFFF);
 
         Component previewTitle = Component.translatable("gui.todolist.config.hud_preview.title");
         Component previewHint = Component.translatable("gui.todolist.config.hud_preview.hint");
@@ -410,10 +410,10 @@ public class ConfigScreen extends Screen {
         int centerY = previewHudY + previewHudHeight / 2;
         int totalTextHeight = textHeight * 2 + 2;
         int startY = centerY - totalTextHeight / 2;
-        // v1_21_6 覆盖：1.21.6 起 GuiGraphics.drawString 对 alpha==0 的颜色直接跳过渲染，
+        // v1_21_6 覆盖：1.21.6 起 GuiGraphicsExtractor.drawString 对 alpha==0 的颜色直接跳过渲染，
         // 颜色字面量必须显式携带 alpha（旧版本对 RGB 颜色默认补齐 alpha=255 的兜底已移除）。
-        context.drawString(this.font, previewTitle, centerX - this.font.width(previewTitle) / 2, startY, 0xFFFFFFFF, false);
-        context.drawString(this.font, previewHint, centerX - this.font.width(previewHint) / 2, startY + textHeight + 2, 0xFFFFFFFF, false);
+        context.text(this.font, previewTitle, centerX - this.font.width(previewTitle) / 2, startY, 0xFFFFFFFF, false);
+        context.text(this.font, previewHint, centerX - this.font.width(previewHint) / 2, startY + textHeight + 2, 0xFFFFFFFF, false);
     }
 
     /**
@@ -808,14 +808,14 @@ public class ConfigScreen extends Screen {
      * @param widget 目标控件
      * @param textHeight 文本高度
      */
-    private void drawLabelForWidget(GuiGraphics context, Component label, AbstractWidget widget, int textHeight) {
+    private void drawLabelForWidget(GuiGraphicsExtractor context, Component label, AbstractWidget widget, int textHeight) {
         if (widget == null || !widget.visible) {
             return;
         }
         int labelY = widget.getY() + (widget.getHeight() - textHeight) / 2;
         int labelX = Math.max(8, widget.getX() - this.font.width(label) - 8);
         // v1_21_6 覆盖：颜色必须显式携带 alpha，否则 1.21.6 起 drawString 直接跳过渲染
-        context.drawString(this.font, label, labelX, labelY, 0xFFFFFFFF, false);
+        context.text(this.font, label, labelX, labelY, 0xFFFFFFFF, false);
     }
 
     /**

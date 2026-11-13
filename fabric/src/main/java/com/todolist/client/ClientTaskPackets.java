@@ -9,7 +9,7 @@ import com.todolist.task.Task;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.List;
 
@@ -22,7 +22,7 @@ public class ClientTaskPackets {
      */
     public static void registerClientPackets() {
         ClientPlayNetworking.registerGlobalReceiver(FabricTaskPayload.TYPE, (payload, context) -> {
-            ResourceLocation channelId = payload.channel();
+            Identifier channelId = payload.channel();
             FriendlyByteBuf buf = payload.toBuf();
             Minecraft client = context.client();
             if (channelId.equals(TaskPackets.SYNC_TASKS_ID)) {
@@ -69,15 +69,6 @@ public class ClientTaskPackets {
                 client.execute(() -> TodoToastRenderer.show(title));
                 return;
             }
-            if (channelId.equals(TaskPackets.TRIGGER_PROGRESS_ID)) {
-                TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
-                if (com.todolist.HudProbe.enabled()) {
-                    com.todolist.HudProbe.log("client received {} entries team={}",
-                            batch.entries().size(), batch.team());
-                }
-                client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
-                return;
-            }
             if (channelId.equals(TaskPackets.MATERIAL_ITEMS_ID)) {
                 List<String> itemIds = TaskPackets.readMaterialItems(buf);
                 client.execute(() -> com.todolist.material.ClientMaterialCatalog.apply(itemIds));
@@ -87,6 +78,15 @@ public class ClientTaskPackets {
                 java.util.Map.Entry<String, List<com.todolist.material.MaterialRecipe>> plan =
                         TaskPackets.readMaterialPlan(buf);
                 client.execute(() -> TodoScreen.applyMaterialPlan(plan.getKey(), plan.getValue()));
+                return;
+            }
+            if (channelId.equals(TaskPackets.TRIGGER_PROGRESS_ID)) {
+                TaskPackets.TriggerProgressBatch batch = TaskPackets.readTriggerProgress(buf);
+                if (com.todolist.HudProbe.enabled()) {
+                    com.todolist.HudProbe.log("client received {} entries team={}",
+                            batch.entries().size(), batch.team());
+                }
+                client.execute(() -> TodoScreen.applyTriggerProgress(client, batch));
                 return;
             }
             if (channelId.equals(TaskPackets.ADVANCEMENT_CATALOG_ID)) {
@@ -101,6 +101,11 @@ public class ClientTaskPackets {
         });
     }
 
+    /**
+     * 向服务端发送“用本地列表替换个人任务”的请求。
+     *
+     * @param tasks 需要替换的任务列表
+     */
     /**
      * 向服务端请求目标物品的配方映射（材料反推，1.21.2+ 服务端权威通路）。
      *
@@ -119,11 +124,6 @@ public class ClientTaskPackets {
         ClientPlayNetworking.send(FabricTaskPayload.of(TaskPackets.MATERIAL_PLAN_REQUEST_ID, buf));
     }
 
-    /**
-     * 向服务端发送“用本地列表替换个人任务”的请求。
-     *
-     * @param tasks 需要替换的任务列表
-     */
     public static void sendReplaceAllTasks(List<Task> tasks) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {

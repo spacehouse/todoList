@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -309,7 +309,7 @@ public class AddMemberScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
@@ -317,12 +317,12 @@ public class AddMemberScreen extends Screen {
      * 渲染新增成员弹窗标题和搜索标签。
      */
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
-        context.drawString(font, title, listX, 10, 0xFFFFFFFF, false);
-        context.drawString(font, Component.translatable("gui.todolist.label.member_name"),
+        context.text(font, title, listX, 10, 0xFFFFFFFF, false);
+        context.text(font, Component.translatable("gui.todolist.label.member_name"),
                 listX, searchField.getY() - 10, 0xFFAAAAAA, false);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 }

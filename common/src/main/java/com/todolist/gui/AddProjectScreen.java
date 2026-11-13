@@ -6,7 +6,7 @@ import com.todolist.project.Project;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -191,12 +191,12 @@ public class AddProjectScreen extends Screen {
      * 渲染新建项目弹窗与标题文本。
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
         int w = Math.max(180, Math.min(320, width - 20));
         int h = Math.max(140, Math.min(180, height - 20));
@@ -204,11 +204,11 @@ public class AddProjectScreen extends Screen {
         int y = (height - h) / 2;
 
         context.fill(x, y, x + w, y + h, 0xFF202020);
-        context.submitOutline(x, y, w, h, 0xFFFFFFFF);
+        context.outline(x, y, w, h, 0xFFFFFFFF);
 
-        context.drawString(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
-        context.drawString(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
+        context.text(font, title, x + 10, y + 10, 0xFFFFFFFF, false);
+        context.text(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 }

@@ -101,7 +101,7 @@ public class ResultSlotMixin {
                     resultSlot = shapeless.result();
                 }
                 if (resultSlot instanceof net.minecraft.world.item.crafting.display.SlotDisplay.ItemStackSlotDisplay stackDisplay) {
-                    ItemStack stack = stackDisplay.stack();
+                    ItemStack stack = stackDisplay.stack().create();
                     if (stack != null && !stack.isEmpty()) {
                         return stack;
                     }

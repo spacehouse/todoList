@@ -513,7 +513,7 @@ public final class NeoForgeClientProjectPackets {
      * @param channelId 通道 ID
      * @return 是否需要回退
      */
-    private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.ResourceLocation channelId) {
+    private static boolean shouldUseLocalProjectFallback(net.minecraft.resources.Identifier channelId) {
         return !NeoForgeNetworkBridge.canSend(channelId);
     }
 }

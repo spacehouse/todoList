@@ -12,7 +12,7 @@ import com.todolist.material.MaterialStopReason;
 import com.todolist.material.MaterialTaskContext;
 import com.todolist.task.Task;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -830,22 +830,22 @@ public class MaterialListScreen extends Screen {
      * 渲染面板、横向配方树、悬浮提示与候选材料弹出列表。
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, com.todolist.config.ModConfig.getInstance().getBackgroundColor());
         int x = panelLeft;
         int y = panelTop;
         int w = panelWidth;
         int h = panelHeight;
         context.fill(x, y, x + w, y + h, 0xE6161616);
-        context.submitOutline(x, y, w, h, 0xFF606060);
+        context.outline(x, y, w, h, 0xFF606060);
 
-        context.drawString(font, title, x + 10, y + 8, 0xFFE0B240, false);
+        context.text(font, title, x + 10, y + 8, 0xFFE0B240, false);
         renderTargetRow(context, x, y, w);
-        context.drawString(font, Component.translatable("gui.todolist.material_preview.count_label"),
+        context.text(font, Component.translatable("gui.todolist.material_preview.count_label"),
                 x + 12, y + 46, 0xFFAAAAAA, false);
 
         // 先定下本帧浮层（可选材料列表优先，其次悬浮提示）：
@@ -859,7 +859,7 @@ public class MaterialListScreen extends Screen {
         }
 
         renderTree(context, mouseX, mouseY);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         renderSummary(context, x, y, w, h);
         // 先把树上已提交的绘制刷出去，再画浮层，尽量让浮层落在最上层
         com.todolist.compat.GuiGraphicsCompat.flush(context);
@@ -875,14 +875,14 @@ public class MaterialListScreen extends Screen {
      * @param y       面板左上角 y
      * @param w       面板宽度
      */
-    private void renderTargetRow(GuiGraphics context, int x, int y, int w) {
+    private void renderTargetRow(GuiGraphicsExtractor context, int x, int y, int w) {
         String itemId = state.getTargetItemId();
         if (itemId == null || itemId.isEmpty()) {
             return;
         }
         ItemStack icon = TriggerTargetSupport.resolveIconStack(TaskTrigger.Type.ITEM_COLLECT, itemId);
         if (icon != null && !icon.isEmpty()) {
-            context.renderItem(icon, x + w - 26, y + 5);
+            context.item(icon, x + w - 26, y + 5);
         }
         String name = resolveItemName(itemId);
         int requiredCount = state.getTargetCount();
@@ -896,10 +896,10 @@ public class MaterialListScreen extends Screen {
         }
         int textX = x + w - 30 - textWidth;
         int countX = textX + font.width(name);
-        context.drawString(font, name, textX, y + 9, 0xFFFFFFFF, false);
-        context.drawString(font, countText, countX, y + 9, resolveCountColor(heldCount, requiredCount), false);
+        context.text(font, name, textX, y + 9, 0xFFFFFFFF, false);
+        context.text(font, countText, countX, y + 9, resolveCountColor(heldCount, requiredCount), false);
         if (!heldSuffix.isEmpty()) {
-            context.drawString(font, heldSuffix, countX + font.width(countText), y + 9,
+            context.text(font, heldSuffix, countX + font.width(countText), y + 9,
                     resolveSuffixColor(heldCount, requiredCount), false);
         }
     }
@@ -911,7 +911,7 @@ public class MaterialListScreen extends Screen {
      * @param mouseX  鼠标 x
      * @param mouseY  鼠标 y
      */
-    private void renderTree(GuiGraphics context, int mouseX, int mouseY) {
+    private void renderTree(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         context.fill(listLeft, listTop, listRight, listBottom, 0x30000000);
         context.enableScissor(listLeft, listTop, listRight, listBottom);
         int originX = listLeft - scrollX;
@@ -946,7 +946,7 @@ public class MaterialListScreen extends Screen {
      * @param originX 内容原点屏幕 X
      * @param originY 内容原点屏幕 Y
      */
-    private void renderConnectors(GuiGraphics context, int originX, int originY) {
+    private void renderConnectors(GuiGraphicsExtractor context, int originX, int originY) {
         for (MaterialPreviewLayout.ItemCell cell : layout.itemCells()) {
             MaterialNode node = cell.node();
             MaterialPreviewLayout.StationCell station = layout.stationOf(node);
@@ -1011,7 +1011,7 @@ public class MaterialListScreen extends Screen {
      * @param mouseX  鼠标 x
      * @param mouseY  鼠标 y
      */
-    private void renderStationCell(GuiGraphics context,
+    private void renderStationCell(GuiGraphicsExtractor context,
                                    MaterialPreviewLayout.StationCell cell,
                                    int originX,
                                    int originY,
@@ -1026,7 +1026,7 @@ public class MaterialListScreen extends Screen {
         // 功能方块节点统一画成「有底 + 有框」的方块格，与只画图标的物品节点一眼可分
         context.fill(cellX, cellY, right, bottom,
                 hovered && switchable ? ICON_HOVER_COLOR : STATION_BACKGROUND_COLOR);
-        context.submitOutline(cellX, cellY, MaterialPreviewLayout.CELL_SIZE, MaterialPreviewLayout.CELL_SIZE,
+        context.outline(cellX, cellY, MaterialPreviewLayout.CELL_SIZE, MaterialPreviewLayout.CELL_SIZE,
                 switchable ? STATION_BORDER_ACTIVE_COLOR : STATION_BORDER_COLOR);
         if (switchable) {
             context.fill(right - 5, cellY + 1, right - 1, cellY + 5, STATION_MARKER_COLOR);
@@ -1039,7 +1039,7 @@ public class MaterialListScreen extends Screen {
         }
         ItemStack icon = TriggerTargetSupport.resolveIconStack(TaskTrigger.Type.ITEM_COLLECT, cell.stationItemId());
         if (icon != null && !icon.isEmpty()) {
-            context.renderItem(icon, iconX, iconY);
+            context.item(icon, iconX, iconY);
         }
     }
 
@@ -1053,7 +1053,7 @@ public class MaterialListScreen extends Screen {
      * @param mouseX  鼠标 x
      * @param mouseY  鼠标 y
      */
-    private void renderItemCell(GuiGraphics context,
+    private void renderItemCell(GuiGraphicsExtractor context,
                                 MaterialPreviewLayout.ItemCell cell,
                                 int originX,
                                 int originY,
@@ -1080,24 +1080,24 @@ public class MaterialListScreen extends Screen {
             // 图标落在浮层下：不画图标；名称与数量走普通批次，会被浮层正常盖住
             ItemStack icon = TriggerTargetSupport.resolveIconStack(TaskTrigger.Type.ITEM_COLLECT, node.itemId());
             if (icon != null && !icon.isEmpty()) {
-                context.renderItem(icon, iconX, iconY);
+                context.item(icon, iconX, iconY);
             }
         }
 
         String name = font.plainSubstrByWidth(resolveItemName(node.itemId()), MaterialPreviewLayout.LABEL_MAX_WIDTH);
         int nameX = cellX + (MaterialPreviewLayout.CELL_SIZE - font.width(name)) / 2;
-        context.drawString(font, name, nameX, cellY + MaterialPreviewLayout.CELL_SIZE, 0xFFFFFFFF, false);
+        context.text(font, name, nameX, cellY + MaterialPreviewLayout.CELL_SIZE, 0xFFFFFFFF, false);
 
         int heldCount = allocatedHeldCount(node);
         String countText = "×" + node.requiredCount();
         String heldSuffix = buildHeldSuffix(heldCount, node.requiredCount());
         String countLine = countText + heldSuffix;
         int countX = cellX + (MaterialPreviewLayout.CELL_SIZE - font.width(countLine)) / 2;
-        context.drawString(font, countText, countX,
+        context.text(font, countText, countX,
                 cellY + MaterialPreviewLayout.CELL_SIZE + font.lineHeight,
                 resolveCountColor(heldCount, node.requiredCount()), false);
         if (!heldSuffix.isEmpty()) {
-            context.drawString(font, heldSuffix, countX + font.width(countText),
+            context.text(font, heldSuffix, countX + font.width(countText),
                     cellY + MaterialPreviewLayout.CELL_SIZE + font.lineHeight,
                     resolveSuffixColor(heldCount, node.requiredCount()), false);
         }
@@ -1112,7 +1112,7 @@ public class MaterialListScreen extends Screen {
      * @param w       面板宽度
      * @param h       面板高度
      */
-    private void renderSummary(GuiGraphics context, int x, int y, int w, int h) {
+    private void renderSummary(GuiGraphicsExtractor context, int x, int y, int w, int h) {
         String summary;
         if (plan == null || plan.isEmpty()) {
             summary = Component.translatable("gui.todolist.material_preview.empty").getString();
@@ -1124,7 +1124,7 @@ public class MaterialListScreen extends Screen {
             }
             summary = summary + "  " + Component.translatable("gui.todolist.material_preview.hint").getString();
         }
-        context.drawString(font, summary, x + 10, y + h - 42, 0xFFAAAAAA, false);
+        context.text(font, summary, x + 10, y + h - 42, 0xFFAAAAAA, false);
     }
 
     /**
@@ -1213,16 +1213,16 @@ public class MaterialListScreen extends Screen {
      *
      * @param context 绘制上下文
      */
-    private void renderHoverTip(GuiGraphics context) {
+    private void renderHoverTip(GuiGraphicsExtractor context) {
         OverlayRect rect = overlayRect;
         if (rect == null || hoverTipLines.isEmpty() || candidatePopup != null) {
             return;
         }
         context.fill(rect.left(), rect.top(), rect.left() + rect.width(), rect.top() + rect.height(), 0xF0100010);
-        context.submitOutline(rect.left(), rect.top(), rect.width(), rect.height(), 0xFF5050A0);
+        context.outline(rect.left(), rect.top(), rect.width(), rect.height(), 0xFF5050A0);
         int textY = rect.top() + 3;
         for (String line : hoverTipLines) {
-            context.drawString(font, line, rect.left() + 4, textY, 0xFFFFFFFF, false);
+            context.text(font, line, rect.left() + 4, textY, 0xFFFFFFFF, false);
             textY += font.lineHeight + 2;
         }
     }
@@ -1234,13 +1234,13 @@ public class MaterialListScreen extends Screen {
      * @param mouseX  鼠标 x
      * @param mouseY  鼠标 y
      */
-    private void renderCandidatePopup(GuiGraphics context, int mouseX, int mouseY) {
+    private void renderCandidatePopup(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         CandidatePopup popup = candidatePopup;
         if (popup == null) {
             return;
         }
         context.fill(popup.left, popup.top, popup.left + popup.width, popup.top + popup.height, 0xF0202020);
-        context.submitOutline(popup.left, popup.top, popup.width, popup.height, 0xFF808080);
+        context.outline(popup.left, popup.top, popup.width, popup.height, 0xFF808080);
         int hoveredRow = popup.contains(mouseX, mouseY) ? popup.rowAt(mouseY) : -1;
         int end = Math.min(popup.candidates.size(), popup.scroll + POPUP_MAX_ROWS);
         int rowY = popup.top + 2;
@@ -1251,11 +1251,11 @@ public class MaterialListScreen extends Screen {
             }
             ItemStack icon = TriggerTargetSupport.resolveIconStack(TaskTrigger.Type.ITEM_COLLECT, itemId);
             if (icon != null && !icon.isEmpty()) {
-                context.renderItem(icon, popup.left + 3, rowY + 1);
+                context.item(icon, popup.left + 3, rowY + 1);
             }
             String name = font.plainSubstrByWidth(resolveItemName(itemId), popup.width - 24);
             boolean selected = itemId != null && itemId.equals(popup.selectedItemId);
-            context.drawString(font, name, popup.left + 22, rowY + 5,
+            context.text(font, name, popup.left + 22, rowY + 5,
                     selected ? MATERIAL_SUFFICIENT_COLOR : 0xFFFFFFFF, false);
             rowY += POPUP_ROW_HEIGHT;
         }

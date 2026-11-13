@@ -2,7 +2,7 @@ package com.todolist.material;
 
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.PlacementInfo;
@@ -31,7 +31,7 @@ import java.util.Set;
  *   <li>产物：{@link Recipe#display()} 的首个 {@code SlotDisplay.ItemStackSlotDisplay}（原版标准
  *       配方的展示结果即产物堆）；</li>
  *   <li>配方 ID：{@code holder.id()} 在 1.21.2+ 返回 {@code ResourceKey}，经 {@code location()} 取
- *       {@link ResourceLocation}。</li>
+ *       {@link Identifier}。</li>
  * </ul>
  */
 public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolver {
@@ -96,7 +96,7 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
         if (inputs.isEmpty()) {
             return null;
         }
-        ResourceLocation recipeId = holder.id().location();
+        Identifier recipeId = holder.id().identifier();
         return new MaterialRecipe(
                 recipeId == null ? "" : recipeId.toString(),
                 outputItemId,
@@ -129,8 +129,7 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
             if (recipe instanceof net.minecraft.world.item.crafting.SmithingRecipe smithing) {
                 ItemStack assembled = smithing.assemble(
                         new net.minecraft.world.item.crafting.SmithingRecipeInput(
-                                ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY),
-                        null);
+                                ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY));
                 if (assembled != null && !assembled.isEmpty()) {
                     return assembled;
                 }
@@ -173,7 +172,7 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
      */
     private static ItemStack stackOf(SlotDisplay slot) {
         if (slot instanceof SlotDisplay.ItemStackSlotDisplay stackDisplay) {
-            return stackDisplay.stack();
+            return stackDisplay.stack().create();
         }
         if (slot instanceof SlotDisplay.ItemSlotDisplay itemDisplay) {
             return new ItemStack(itemDisplay.item());
@@ -238,7 +237,7 @@ public final class VanillaMaterialRecipeResolver implements MaterialRecipeResolv
      * @return 资源 ID；无法解析时返回空串
      */
     private static String itemId(ItemStack stack) {
-        ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        Identifier key = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return key == null ? "" : key.toString();
     }
 }

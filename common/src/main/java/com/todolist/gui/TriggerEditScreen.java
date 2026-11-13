@@ -2,7 +2,7 @@ package com.todolist.gui;
 
 import com.todolist.client.TriggerTargetSupport;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -274,31 +274,31 @@ public class TriggerEditScreen extends Screen {
      * 渲染编辑面板与字段标签。
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, com.todolist.config.ModConfig.getInstance().getBackgroundColor());
         int w = Math.max(220, Math.min(320, width - 30));
         int h = 202;
         int x = (width - w) / 2;
         int y = (height - h) / 2;
         context.fill(x, y, x + w, y + h, 0xE6161616);
-        context.submitOutline(x, y, w, h, 0xFF606060);
+        context.outline(x, y, w, h, 0xFF606060);
 
-        context.drawString(font, title, x + 10, y + 10, 0xFFE0B240, false);
-        context.drawString(font, Component.translatable("gui.todolist.trigger.edit.type_label"), x + 10, y + 30, 0xFFAAAAAA, false);
-        context.drawString(font, Component.translatable("gui.todolist.trigger.edit.target_label"), x + 10, y + 70, 0xFFAAAAAA, false);
+        context.text(font, title, x + 10, y + 10, 0xFFE0B240, false);
+        context.text(font, Component.translatable("gui.todolist.trigger.edit.type_label"), x + 10, y + 30, 0xFFAAAAAA, false);
+        context.text(font, Component.translatable("gui.todolist.trigger.edit.target_label"), x + 10, y + 70, 0xFFAAAAAA, false);
         renderResolvedTargetName(context, x, y, w);
-        context.drawString(font, Component.translatable("gui.todolist.trigger.edit.count_label"), x + 10, y + 118, 0xFFAAAAAA, false);
+        context.text(font, Component.translatable("gui.todolist.trigger.edit.count_label"), x + 10, y + 118, 0xFFAAAAAA, false);
         if (countField != null && countField.getValue().trim().isEmpty()) {
-            context.drawString(font, Component.translatable("gui.todolist.trigger.edit.count_hint"), x + 96, y + 132, 0xFF777777, false);
+            context.text(font, Component.translatable("gui.todolist.trigger.edit.count_hint"), x + 96, y + 132, 0xFF777777, false);
         }
         if (type == TaskTrigger.Type.ITEM_COLLECT) {
-            context.drawString(font, Component.translatable("gui.todolist.trigger.edit.collect_scope_hint"), x + 10, y + h - 12, 0xFF777777, false);
+            context.text(font, Component.translatable("gui.todolist.trigger.edit.collect_scope_hint"), x + 10, y + h - 12, 0xFF777777, false);
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     /**
@@ -310,7 +310,7 @@ public class TriggerEditScreen extends Screen {
      * @param y       面板左上角 y
      * @param w       面板宽度
      */
-    private void renderResolvedTargetName(GuiGraphics context, int x, int y, int w) {
+    private void renderResolvedTargetName(GuiGraphicsExtractor context, int x, int y, int w) {
         String trimmed = target == null ? "" : target.trim();
         if (trimmed.isEmpty()) {
             return;
@@ -325,7 +325,7 @@ public class TriggerEditScreen extends Screen {
         if (drawX < x + 10) {
             drawX = x + 10;
         }
-        context.drawString(font, text, drawX, y + 101, 0xFF9CDF9C, false);
+        context.text(font, text, drawX, y + 101, 0xFF9CDF9C, false);
     }
 
     /**

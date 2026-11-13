@@ -2,7 +2,6 @@ package com.todolist.gui.testsupport;
 
 import net.minecraft.client.Options;
 import net.minecraft.client.resources.sounds.SoundInstance;
-import net.minecraft.client.sounds.MusicManager;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 
@@ -14,8 +13,8 @@ public final class FakeSoundManager extends SoundManager {
      * 构造方法仅用于满足继承要求，测试中通过 Unsafe 分配实例，不会真正执行。
      */
     private FakeSoundManager() {
-        // v1_21_6 覆盖：SoundManager 构造新增 MusicManager 参数
-        super((Options) null, (MusicManager) null);
+        // v1_21_11 覆盖：SoundManager 构造移除 MusicManager 参数
+        super((Options) null);
         throw new UnsupportedOperationException("请通过 FakeSoundManager.create 创建测试音效管理器");
     }
 

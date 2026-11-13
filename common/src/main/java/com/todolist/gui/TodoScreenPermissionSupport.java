@@ -12,6 +12,7 @@ import com.todolist.task.TaskAssignmentSupport;
 import java.util.List;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.permissions.Permissions;
 
 /**
  * TodoScreen 权限支持类，集中处理角色解析、成员关系与任务操作权限判定。
@@ -41,7 +42,7 @@ final class TodoScreenPermissionSupport {
     }
 
     static Role getCurrentRole(Minecraft minecraft, Project currentProject) {
-        if (minecraft != null && minecraft.player != null && minecraft.player.hasPermissions(2)) {
+        if (minecraft != null && minecraft.player != null && minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return Role.OP;
         }
         if (minecraft == null || minecraft.player == null) {
@@ -62,7 +63,7 @@ final class TodoScreenPermissionSupport {
     }
 
     static boolean isCurrentPlayerProjectMember(Minecraft minecraft, Project currentProject) {
-        if (minecraft != null && minecraft.player != null && minecraft.player.hasPermissions(2)) {
+        if (minecraft != null && minecraft.player != null && minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         if (minecraft == null || minecraft.player == null) {

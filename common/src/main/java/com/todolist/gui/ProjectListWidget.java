@@ -228,13 +228,13 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
      * @param delta 帧间隔
      */
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
         Font textRenderer = client.font;
 
         context.fill(x, y, x + width, y + height, 0xFF0D1115);
         context.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF111820);
-        context.submitOutline(x, y, width, height, config.getBorderColor());
+        context.outline(x, y, width, height, config.getBorderColor());
 
         int visibleItems = height / itemHeight;
         for (int i = 0; i < visibleItems; i++) {
@@ -270,7 +270,7 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
             boolean starred = config.isHudProjectStarred(project.getId());
             int starX = rowRight - ITEM_STAR_WIDTH - 1;
             int starColor = starred ? 0xFFFFD700 : 0xFF666666;
-            context.drawString(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
+            context.text(textRenderer, starred ? "★" : "☆", starX, itemY + (itemHeight - 8) / 2, starColor, false);
 
             String name = ProjectNameFormatter.toDisplayText(project).getString();
             String taskCountText = getProjectTaskCountText(project);
@@ -281,8 +281,8 @@ public class ProjectListWidget implements Renderable, GuiEventListener, Narratab
             int nameX = rowLeft + nameLeadInset;
             int nameWidth = Math.max(16, countX - 4 - nameX);
             String displayName = textRenderer.plainSubstrByWidth(name, nameWidth);
-            context.drawString(textRenderer, displayName, nameX, itemY + (itemHeight - 8) / 2, nameColor, false);
-            context.drawString(textRenderer, taskCountText, countX, itemY + (itemHeight - 8) / 2, countColor, false);
+            context.text(textRenderer, displayName, nameX, itemY + (itemHeight - 8) / 2, nameColor, false);
+            context.text(textRenderer, taskCountText, countX, itemY + (itemHeight - 8) / 2, countColor, false);
         }
 
         if (projects.size() > visibleItems) {

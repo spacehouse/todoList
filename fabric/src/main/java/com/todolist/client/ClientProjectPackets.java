@@ -12,7 +12,7 @@ import com.todolist.project.ProjectNameFormatter;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ public class ClientProjectPackets {
      */
     public static void registerClientPackets() {
         ClientPlayNetworking.registerGlobalReceiver(FabricProjectPayload.TYPE, (payload, context) -> {
-            ResourceLocation channelId = payload.channel();
+            Identifier channelId = payload.channel();
             FriendlyByteBuf buf = payload.toBuf();
             Minecraft client = context.client();
             if (channelId.equals(ProjectPackets.SYNC_PROJECTS_ID)) {
@@ -504,7 +504,7 @@ public class ClientProjectPackets {
      * @param channelId 目标业务频道 ID
      * @return 无法发送网络包时返回 true
      */
-    private static boolean shouldUseLocalProjectFallback(ResourceLocation channelId) {
+    private static boolean shouldUseLocalProjectFallback(Identifier channelId) {
         return !ClientPlayNetworking.canSend(FabricProjectPayload.TYPE);
     }
 }

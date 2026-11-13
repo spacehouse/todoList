@@ -6,6 +6,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.ClientRecipeBook;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.world.entity.player.Input;
 
@@ -27,8 +29,9 @@ public class FakeClientPlayer extends LocalPlayer {
      * 构造方法仅用于满足编译要求，测试运行时通过 Unsafe 绕过。
      */
     protected FakeClientPlayer() {
-        // v1_21_6 覆盖：LocalPlayer 构造第 6 参由 boolean 改为 Input
-        super(null, (ClientLevel) null, (ClientPacketListener) null, (StatsCounter) null, (ClientRecipeBook) null, (Input) null, false);
+        // 26.1：LocalPlayer 构造器新增 ChatAbilities 参数
+        super(null, (ClientLevel) null, (ClientPacketListener) null, (StatsCounter) null, (ClientRecipeBook) null, (Input) null, false,
+                (net.minecraft.client.multiplayer.chat.ChatAbilities) null);
         throw new UnsupportedOperationException("请通过 FakeClientPlayer.create 创建测试玩家");
     }
 
@@ -81,24 +84,22 @@ public class FakeClientPlayer extends LocalPlayer {
     }
 
     /**
-     * 返回测试玩家权限结果。
+     * 返回测试玩家权限集。
      *
-     * @param level 请求的权限等级
-     * @return true 表示具备对应权限
+     * @return 管理员返回 OWNER 级权限集，非管理员仅保留 ALL 级
      */
     @Override
-    public boolean hasPermissions(int level) {
-        return operator || level <= 0;
+    public PermissionSet permissions() {
+        return operator ? LevelBasedPermissionSet.OWNER : LevelBasedPermissionSet.ALL;
     }
 
     /**
      * 捕获客户端提示消息，供后续断言使用。
      *
      * @param component 客户端消息
-     * @param actionBar 是否为 action bar
      */
     @Override
-    public void displayClientMessage(Component component, boolean actionBar) {
+    public void sendOverlayMessage(Component component) {
         if (clientMessages == null) {
             clientMessages = new ArrayList<>();
         }

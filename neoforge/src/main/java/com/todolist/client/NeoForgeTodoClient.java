@@ -16,9 +16,9 @@ import com.todolist.task.TaskManager;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
@@ -42,7 +42,7 @@ public final class NeoForgeTodoClient {
     // 1.21.9：按键类目由字符串改为 KeyMapping.Category 记录，注册模组自定义类目；
     // 显示名走翻译键 key.category.todolist.main（语言文件已同步补键）。
     private static final KeyMapping.Category KEY_CATEGORY =
-            KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath("todolist", "main"));
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("todolist", "main"));
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
@@ -55,8 +55,8 @@ public final class NeoForgeTodoClient {
     private static boolean pendingRemoteResync;
     private static boolean pendingLocalWorldInitialization;
     private static Boolean lastLocalPublishedState;
-    private static final ResourceLocation HUD_LAYER_ID =
-            ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "todo_hud");
+    private static final Identifier HUD_LAYER_ID =
+            Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "todo_hud");
     private static boolean hudLayerFirstRenderLogged;
     private static boolean hudRendererInitFailed;
 
@@ -137,7 +137,7 @@ public final class NeoForgeTodoClient {
      * @param guiGraphics 绘制上下文
      * @param deltaTracker 帧间插值跟踪器
      */
-    private static void renderHudLayer(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
+    private static void renderHudLayer(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker) {
         if (hudRenderer == null) {
             // FML 10（21.9+）下 mod 构造期 Minecraft 实例可能尚未就绪，
             // initialize 阶段的 registerHudRenderer 可能静默跳过；渲染层兜底惰性创建
@@ -161,8 +161,7 @@ public final class NeoForgeTodoClient {
                 ? deltaTracker.getGameTimeDeltaPartialTick(true)
                 : 0.0f;
         hudRenderer.render(guiGraphics, partialTick);
-        // 触发器完成浮动提示与 HUD 同层渲染（与 Forge/Fabric 端保持一致）；
-        // 此前漏挂导致 NeoForge 端 show() 入队后无人绘制，表现为完成无提示
+        // 触发器完成浮动提示与 HUD 同层渲染（与 Forge/Fabric 端保持一致）
         TodoToastRenderer.render(guiGraphics, Minecraft.getInstance().font, guiGraphics.guiWidth());
     }
 

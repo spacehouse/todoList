@@ -5,7 +5,7 @@ import com.todolist.task.Task;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
  * TodoScreen 右键菜单支持类，集中管理菜单命中与尺寸计算。
@@ -56,7 +56,7 @@ final class TodoScreenContextMenuSupport {
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      */
-    static void renderMenu(GuiGraphics context,
+    static void renderMenu(GuiGraphicsExtractor context,
                            Font font,
                            List<ContextMenuItem> items,
                            int contextMenuX,
@@ -70,7 +70,7 @@ final class TodoScreenContextMenuSupport {
         }
         int menuHeight = resolveMenuHeight(items.size(), itemHeight);
         context.fill(contextMenuX, contextMenuY, contextMenuX + contextMenuWidth, contextMenuY + menuHeight, 0xEE111111);
-        context.submitOutline(contextMenuX, contextMenuY, contextMenuWidth, menuHeight, 0xFFFFFFFF);
+        context.outline(contextMenuX, contextMenuY, contextMenuWidth, menuHeight, 0xFFFFFFFF);
         for (int i = 0; i < items.size(); i++) {
             ContextMenuItem item = items.get(i);
             if (item == null) {
@@ -85,7 +85,7 @@ final class TodoScreenContextMenuSupport {
             }
             int textColor = item.enabled ? 0xFFFFFFFF : 0xFF777777;
             int textY = itemTop + (itemHeight - font.lineHeight) / 2;
-            context.drawString(font, item.text, contextMenuX + 6, textY, textColor, false);
+            context.text(font, item.text, contextMenuX + 6, textY, textColor, false);
         }
     }
 

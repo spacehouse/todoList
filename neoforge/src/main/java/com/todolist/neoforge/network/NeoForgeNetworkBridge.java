@@ -7,7 +7,7 @@ import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -113,7 +113,7 @@ public final class NeoForgeNetworkBridge {
      * @param channelId 通道 ID
      * @param receiver 接收器
      */
-    public static void registerServerReceiver(ResourceLocation channelId, ServerReceiver receiver) {
+    public static void registerServerReceiver(Identifier channelId, ServerReceiver receiver) {
         init();
         SERVER_RECEIVERS.put(channelId.toString(), receiver);
     }
@@ -124,7 +124,7 @@ public final class NeoForgeNetworkBridge {
      * @param channelId 通道 ID
      * @param receiver 接收器
      */
-    public static void registerClientReceiver(ResourceLocation channelId, ClientReceiver receiver) {
+    public static void registerClientReceiver(Identifier channelId, ClientReceiver receiver) {
         init();
         CLIENT_RECEIVERS.put(channelId.toString(), receiver);
     }
@@ -145,7 +145,7 @@ public final class NeoForgeNetworkBridge {
      * @param channelId 通道 ID
      * @return 是否可发送
      */
-    public static boolean canSend(ResourceLocation channelId) {
+    public static boolean canSend(Identifier channelId) {
         init();
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getConnection() == null) {
@@ -172,7 +172,7 @@ public final class NeoForgeNetworkBridge {
      * @param channelId 通道 ID
      * @param buf 数据缓冲
      */
-    public static void sendToServer(ResourceLocation channelId, FriendlyByteBuf buf) {
+    public static void sendToServer(Identifier channelId, FriendlyByteBuf buf) {
         init();
         // v1_21_6 覆盖：NeoForge 21.7 起 PacketDistributor 移除 sendToServer，
         // 改为经客户端连接监听器直接发送 ServerboundCustomPayloadPacket（21.6 与 21.7+ 通用）
@@ -190,7 +190,7 @@ public final class NeoForgeNetworkBridge {
      * @param channelId 通道 ID
      * @param buf 数据缓冲
      */
-    public static void sendToPlayer(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf) {
+    public static void sendToPlayer(ServerPlayer player, Identifier channelId, FriendlyByteBuf buf) {
         init();
         PacketDistributor.sendToPlayer(player, new NeoForgeDispatchPayload(channelId.toString(), toByteArray(buf)));
     }

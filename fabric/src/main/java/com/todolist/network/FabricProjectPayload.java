@@ -5,14 +5,14 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Fabric 侧项目数据通道的自定义负载，负责打包与解包网络数据。
  */
 public record FabricProjectPayload(String channelId, byte[] data) implements CustomPacketPayload {
     public static final Type<FabricProjectPayload> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "project_bridge"));
+            new Type<>(Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "project_bridge"));
 
     public static final StreamCodec<FriendlyByteBuf, FabricProjectPayload> CODEC =
             StreamCodec.composite(
@@ -24,7 +24,7 @@ public record FabricProjectPayload(String channelId, byte[] data) implements Cus
     /**
      * 从缓冲区读取数据并构建负载实例。
      */
-    public static FabricProjectPayload of(ResourceLocation channelId, FriendlyByteBuf buf) {
+    public static FabricProjectPayload of(Identifier channelId, FriendlyByteBuf buf) {
         byte[] bytes = new byte[buf.readableBytes()];
         buf.getBytes(buf.readerIndex(), bytes);
         return new FabricProjectPayload(channelId.toString(), bytes);
@@ -33,8 +33,8 @@ public record FabricProjectPayload(String channelId, byte[] data) implements Cus
     /**
      * 将字符串通道还原为资源定位符。
      */
-    public ResourceLocation channel() {
-        return ResourceLocation.parse(channelId);
+    public Identifier channel() {
+        return Identifier.parse(channelId);
     }
 
     /**

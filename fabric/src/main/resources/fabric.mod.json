@@ -27,15 +27,14 @@
   "mixins": [
     "todolist.mixins.json"
   ],
-  "accessWidener": "todolist.accesswidener",
   "depends": {
     "fabricloader": "${fabric_loader_dependency}",
     "minecraft": "${fabric_minecraft_dependency}",
-    "java": ">=21",
+    "java": ">=25",
     "fabric-api": "*"
   },
   "suggests": {
-    "modmenu": ">=7.0.0"
+    "modmenu": ">=18.0.0"
   },
   "custom": {
     "modmenu": {

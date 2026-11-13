@@ -45,6 +45,7 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -358,12 +359,12 @@ public final class CommandBootstrap {
                                         .then(Commands.argument("taskId", StringArgumentType.word())
                                                 .then(Commands.argument("type", StringArgumentType.word())
                                                         .suggests(CommandBootstrap::suggestTaskTriggerTypes)
-                                                        .then(Commands.argument("target", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                                                        .then(Commands.argument("target", net.minecraft.commands.arguments.IdentifierArgument.id())
                                                                 .executes(ctx -> executeTaskTriggerSet(
                                                                         ctx.getSource(),
                                                                         StringArgumentType.getString(ctx, "taskId"),
                                                                         StringArgumentType.getString(ctx, "type"),
-                                                                        net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "target").toString(),
+                                                                        net.minecraft.commands.arguments.IdentifierArgument.getId(ctx, "target").toString(),
                                                                         1
                                                                 ))
                                                                 .then(Commands.argument("count", IntegerArgumentType.integer(1))
@@ -371,7 +372,7 @@ public final class CommandBootstrap {
                                                                                 ctx.getSource(),
                                                                                 StringArgumentType.getString(ctx, "taskId"),
                                                                                 StringArgumentType.getString(ctx, "type"),
-                                                                                net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "target").toString(),
+                                                                                net.minecraft.commands.arguments.IdentifierArgument.getId(ctx, "target").toString(),
                                                                                 IntegerArgumentType.getInteger(ctx, "count")
                                                                         )))))))
                                 .then(Commands.literal("clear")
@@ -1640,7 +1641,7 @@ public final class CommandBootstrap {
         if (player == null || project == null) {
             return false;
         }
-        if (player.hasPermissions(2)) {
+        if (player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         if (project.getScope() == Project.Scope.PERSONAL) {
@@ -1825,7 +1826,7 @@ public final class CommandBootstrap {
             return null;
         }
 
-        boolean op = source.hasPermission(2);
+        boolean op = source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
         ProjectManager projectManager = TodoListCommon.getProjectManager();
         String playerUuid = player.getStringUUID();
         List<String> projectIds = new ArrayList<>();
@@ -2602,7 +2603,7 @@ public final class CommandBootstrap {
         if (player == null || project == null) {
             return false;
         }
-        if (source.hasPermission(2)) {
+        if (source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         String playerUuid = player.getStringUUID();
@@ -2757,7 +2758,7 @@ public final class CommandBootstrap {
         if (player == null || project == null) {
             return false;
         }
-        if (source.hasPermission(2)) {
+        if (source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         String playerUuid = player.getStringUUID();
@@ -2995,7 +2996,7 @@ public final class CommandBootstrap {
             Task task,
             Operation operation
     ) {
-        if (source.hasPermission(2)) {
+        if (source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         if (project == null || task == null) {
@@ -3266,7 +3267,7 @@ public final class CommandBootstrap {
     private static Component describeTriggerTargetComponent(TaskTrigger.Type type, String target) {
         String fallbackId = target == null ? "" : target;
         try {
-            net.minecraft.resources.ResourceLocation location = net.minecraft.resources.ResourceLocation.tryParse(fallbackId);
+            net.minecraft.resources.Identifier location = net.minecraft.resources.Identifier.tryParse(fallbackId);
             if (location != null && type != null) {
                 switch (type) {
                     case ITEM_COLLECT, CRAFT_ITEM -> {
@@ -3655,11 +3656,11 @@ public final class CommandBootstrap {
      */
     private static boolean hasCommandPermission(CommandSourceStack source, CommandPermissionSemantic semantic, String projectId) {
         if (semantic == CommandPermissionSemantic.ADMIN) {
-            return source.hasPermission(2);
+            return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
         }
 
         ModConfig.CommandAccessMode accessMode = ModConfig.getInstance().getCommandAccessMode();
-        boolean op = source.hasPermission(2);
+        boolean op = source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
         ServerPlayer player = getPlayerOrNull(source);
         if (player == null) {
             return false;
@@ -3760,7 +3761,7 @@ public final class CommandBootstrap {
             String ownerUuid = project.getOwnerUuid();
             return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(player.getStringUUID());
         }
-        if (player.hasPermissions(2)) {
+        if (player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         boolean projectMember = isTeamProjectMember(player, project);
@@ -3784,7 +3785,7 @@ public final class CommandBootstrap {
             String ownerUuid = project.getOwnerUuid();
             return ownerUuid == null || ownerUuid.isEmpty() || ownerUuid.equals(playerUuid);
         }
-        if (player.hasPermissions(2)) {
+        if (player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         if (playerUuid.equals(project.getOwnerUuid())) {
@@ -3833,7 +3834,7 @@ public final class CommandBootstrap {
      * 判断玩家是否具备团队项目管理员语义权限（项目经理/负责人/OP）。
      */
     private static boolean hasProjectAdminPermission(CommandSourceStack source, ServerPlayer player, String projectId) {
-        if (source.hasPermission(2)) {
+        if (source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         if (projectId == null || projectId.isBlank()) {
@@ -4039,7 +4040,7 @@ public final class CommandBootstrap {
                     || ProjectNameFormatter.DEFAULT_TEAM_PROJECT_ID.equals(project.getId())) {
                 continue;
             }
-            boolean removable = source.hasPermission(2)
+            boolean removable = source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)
                     || (project.getScope() == Project.Scope.PERSONAL
                         ? project.getOwnerUuid() == null || project.getOwnerUuid().isEmpty() || playerUuid.equals(project.getOwnerUuid())
                         : playerUuid.equals(project.getOwnerUuid()));

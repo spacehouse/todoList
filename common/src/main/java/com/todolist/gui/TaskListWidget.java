@@ -396,12 +396,12 @@ public class TaskListWidget implements Renderable {
     }
 
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         ModConfig config = ModConfig.getInstance();
 
         // 绘制背景
         context.fill(x, y, x + width, y + height, config.getBackgroundColor());
-        context.submitOutline(x, y, width, height, config.getBorderColor());
+        context.outline(x, y, width, height, config.getBorderColor());
 
         // 将任务内容限制在列表矩形内部，避免末行覆盖到底部输入区域。
         pendingTriggerTooltip = List.of();
@@ -429,7 +429,7 @@ public class TaskListWidget implements Renderable {
         }
     }
 
-    private void renderTasks(net.minecraft.client.gui.GuiGraphics context, int mouseX, int mouseY) {
+    private void renderTasks(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Font textRenderer = client.font;
         ModConfig config = ModConfig.getInstance();
         int scrollOffset = scrollBar.getValue();
@@ -453,14 +453,14 @@ public class TaskListWidget implements Renderable {
     /**
      * 渲染分组标题行。
      */
-    private void renderSectionHeader(net.minecraft.client.gui.GuiGraphics context, Font textRenderer, DisplayRow row,
+    private void renderSectionHeader(net.minecraft.client.gui.GuiGraphicsExtractor context, Font textRenderer, DisplayRow row,
                                      int rowIndex, int rowY, int rowHeight, int mouseX, int mouseY) {
         int bgColor = rowIndex == selectedTaskIndex ? 0xFF252525 : 0xFF161616;
         if (mouseX >= x && mouseX < x + width && mouseY >= rowY && mouseY < rowY + rowHeight) {
             bgColor = 0xFF202020;
         }
         context.fill(x + 1, rowY, x + width - 1, rowY + rowHeight, bgColor);
-        context.drawString(textRenderer, Component.nullToEmpty(buildSectionHeaderText(row)),
+        context.text(textRenderer, Component.nullToEmpty(buildSectionHeaderText(row)),
                 x + SECTION_HEADER_LEFT_PADDING, rowY + (rowHeight - textRenderer.lineHeight) / 2,
                 0xFFAAAAAA, false);
     }
@@ -485,7 +485,7 @@ public class TaskListWidget implements Renderable {
     /**
      * 渲染任务行。
      */
-    private void renderTaskRow(net.minecraft.client.gui.GuiGraphics context, Font textRenderer, ModConfig config,
+    private void renderTaskRow(net.minecraft.client.gui.GuiGraphicsExtractor context, Font textRenderer, ModConfig config,
                                DisplayRow row, int rowIndex, int taskY, int rowHeight, int mouseX, int mouseY) {
         Task task = row.task;
         int bgColor = getTaskBackgroundColor(rowIndex, taskY, rowHeight, mouseX, mouseY);
@@ -502,7 +502,7 @@ public class TaskListWidget implements Renderable {
 
         int disclosureX = getDisclosureLeft(row);
         if (row.taskExpandable) {
-            context.drawString(
+            context.text(
                     textRenderer,
                     Component.nullToEmpty(row.taskExpanded ? "v" : ">"),
                     disclosureX,
@@ -515,7 +515,7 @@ public class TaskListWidget implements Renderable {
         int checkboxX = getCheckboxLeft(row);
         int checkboxY = taskY + (rowHeight - TASK_CHECKBOX_SIZE) / 2;
         context.fill(checkboxX, checkboxY, checkboxX + TASK_CHECKBOX_SIZE, checkboxY + TASK_CHECKBOX_SIZE, 0xFF000000);
-        context.submitOutline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
+        context.outline(checkboxX, checkboxY, TASK_CHECKBOX_SIZE, TASK_CHECKBOX_SIZE, 0xFFFFFFFF);
 
         if (task.isCompleted()) {
             context.fill(checkboxX + 3, checkboxY + 5, checkboxX + 5, checkboxY + 7, 0xFF00FF00);
@@ -548,7 +548,7 @@ public class TaskListWidget implements Renderable {
             if (maxLeadingWidth > 0) {
                 truncatedLeadingMeta = trimWithEllipsis(textRenderer, leadingMeta, maxLeadingWidth);
                 leadingMetaWidth = textRenderer.width(truncatedLeadingMeta);
-                context.drawString(textRenderer, Component.nullToEmpty(truncatedLeadingMeta), textLeft, textBaselineY, TASK_META_TEXT_COLOR, false);
+                context.text(textRenderer, Component.nullToEmpty(truncatedLeadingMeta), textLeft, textBaselineY, TASK_META_TEXT_COLOR, false);
             }
         }
 
@@ -573,7 +573,7 @@ public class TaskListWidget implements Renderable {
                     drawMiniItemIcon(context, trailingIconId, iconX, iconY, TASK_TITLE_ICON_SIZE);
                 }
             }
-            context.drawString(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingTextX, textBaselineY, TASK_META_TEXT_COLOR, false);
+            context.text(textRenderer, Component.nullToEmpty(truncatedTrailingMeta), trailingTextX, textBaselineY, TASK_META_TEXT_COLOR, false);
         }
 
         if (task.hasTrigger()
@@ -638,7 +638,7 @@ public class TaskListWidget implements Renderable {
      * @param rowHeight 行高
      * @param textColor 文本颜色
      */
-    private void drawTitleParts(net.minecraft.client.gui.GuiGraphics context, Font textRenderer,
+    private void drawTitleParts(net.minecraft.client.gui.GuiGraphicsExtractor context, Font textRenderer,
                                 List<com.todolist.client.ItemTitleRenderer.Part> titleParts,
                                 int startX, int rowTop, int rowHeight, int textColor) {
         int partX = startX;
@@ -649,11 +649,11 @@ public class TaskListWidget implements Renderable {
                 drawMiniItemIcon(context, part.getItemId(), partX, iconY, part.getIconSize());
                 partX += part.getIconSize();
                 if (part.getText() != null) {
-                    context.drawString(textRenderer, part.getText(), partX + TASK_TITLE_ICON_GAP, textBaselineY, textColor, false);
+                    context.text(textRenderer, part.getText(), partX + TASK_TITLE_ICON_GAP, textBaselineY, textColor, false);
                     partX += TASK_TITLE_ICON_GAP + textRenderer.width(part.getText());
                 }
             } else if (part.getText() != null) {
-                context.drawString(textRenderer, part.getText(), partX, textBaselineY, textColor, false);
+                context.text(textRenderer, part.getText(), partX, textBaselineY, textColor, false);
                 partX += part.getAdvance();
             }
         }
@@ -668,7 +668,7 @@ public class TaskListWidget implements Renderable {
      * @param y       图标左上角 y
      * @param size    目标尺寸（像素）
      */
-    private void drawMiniItemIcon(net.minecraft.client.gui.GuiGraphics context, String itemId, int x, int y, int size) {
+    private void drawMiniItemIcon(net.minecraft.client.gui.GuiGraphicsExtractor context, String itemId, int x, int y, int size) {
         net.minecraft.world.item.ItemStack stack = com.todolist.client.ItemTitleRenderer.resolveItemStack(itemId);
         if (stack == null) {
             return;
@@ -677,7 +677,7 @@ public class TaskListWidget implements Renderable {
         context.pose().pushMatrix();
         context.pose().translate(x, y);
         context.pose().scale(scale, scale);
-        context.renderItem(stack, 0, 0);
+        context.item(stack, 0, 0);
         context.pose().popMatrix();
     }
 
@@ -936,7 +936,7 @@ public class TaskListWidget implements Renderable {
      *
      * @param context 当前绘制上下文
      */
-    private void renderDragIndicator(net.minecraft.client.gui.GuiGraphics context) {
+    private void renderDragIndicator(net.minecraft.client.gui.GuiGraphicsExtractor context) {
         if (draggedTask == null || dragTargetIndex < 0) {
             return;
         }

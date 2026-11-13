@@ -10,7 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -459,7 +459,7 @@ public final class TaskTriggerServiceTestMain {
      */
     private static ItemStack itemStack(String id, int count) {
         Item item = BuiltInRegistries.ITEM.get(
-                ResourceLocation.fromNamespaceAndPath(id.split(":")[0], id.split(":", 2)[1]))
+                Identifier.fromNamespaceAndPath(id.split(":")[0], id.split(":", 2)[1]))
                 .map(net.minecraft.core.Holder::value).orElse(null);
         if (item == null) {
             return ItemStack.EMPTY;

@@ -3,13 +3,13 @@ package com.todolist.gui;
 import com.todolist.client.AdvancementCatalog;
 import com.todolist.client.TriggerTargetSupport;
 import com.todolist.task.TaskTrigger;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -200,7 +200,7 @@ public class ItemSelectorScreen extends Screen {
             if (item == null || item == Items.AIR) {
                 continue;
             }
-            ResourceLocation key = BuiltInRegistries.ITEM.getKey(item);
+            Identifier key = BuiltInRegistries.ITEM.getKey(item);
             if (key == null) {
                 continue;
             }
@@ -221,7 +221,7 @@ public class ItemSelectorScreen extends Screen {
             if (block == null) {
                 continue;
             }
-            ResourceLocation key = BuiltInRegistries.BLOCK.getKey(block);
+            Identifier key = BuiltInRegistries.BLOCK.getKey(block);
             if (key == null) {
                 continue;
             }
@@ -243,7 +243,7 @@ public class ItemSelectorScreen extends Screen {
             if (entityType == null) {
                 continue;
             }
-            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+            Identifier key = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
             if (key == null) {
                 continue;
             }
@@ -398,21 +398,21 @@ public class ItemSelectorScreen extends Screen {
      * 渲染搜索框、结果列表（图标 + 名称 + ID）与滚动指示。
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, com.todolist.config.ModConfig.getInstance().getBackgroundColor());
         int w = Math.max(220, Math.min(360, width - 40));
         int h = Math.max(200, Math.min(280, height - 40));
         int x = (width - w) / 2;
         int y = (height - h) / 2;
         context.fill(x, y, x + w, y + h, 0xE6161616);
-        context.submitOutline(x, y, w, h, 0xFF606060);
+        context.outline(x, y, w, h, 0xFF606060);
 
-        context.drawString(font, title, x + 8, y + 10, 0xFFE0B240, false);
-        super.render(context, mouseX, mouseY, delta);
+        context.text(font, title, x + 8, y + 10, 0xFFE0B240, false);
+        super.extractRenderState(context, mouseX, mouseY, delta);
 
         int rows = visibleRows();
         int endIndex = Math.min(filtered.size(), scrollOffset + rows);
@@ -424,21 +424,21 @@ public class ItemSelectorScreen extends Screen {
                 context.fill(listLeft, rowY, listRight, rowY + ROW_HEIGHT, 0x40FFFFFF);
             }
             if (!entry.stack().isEmpty()) {
-                context.renderItem(entry.stack(), listLeft + 1, rowY + 1);
+                context.item(entry.stack(), listLeft + 1, rowY + 1);
             }
             int textY = rowY + (ROW_HEIGHT - font.lineHeight) / 2;
-            context.drawString(font, entry.displayName(), listLeft + 22, textY, 0xFFFFFFFF, false);
+            context.text(font, entry.displayName(), listLeft + 22, textY, 0xFFFFFFFF, false);
             String idText = entry.id();
             int idWidth = font.width(idText);
             if (idWidth <= listRight - listLeft - 130) {
-                context.drawString(font, idText, listRight - idWidth - 2, textY, 0xFF888888, false);
+                context.text(font, idText, listRight - idWidth - 2, textY, 0xFF888888, false);
             }
         }
         context.disableScissor();
 
         int total = filtered.size();
         String summary = total > MAX_RESULTS ? MAX_RESULTS + "+" : String.valueOf(total);
-        context.drawString(font, Component.translatable("gui.todolist.item_selector.count", summary),
+        context.text(font, Component.translatable("gui.todolist.item_selector.count", summary),
                 x + 8, y + h - 22, 0xFFAAAAAA, false);
 
         if (total > rows) {

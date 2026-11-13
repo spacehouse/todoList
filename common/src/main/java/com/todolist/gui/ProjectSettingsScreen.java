@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.EditBox;
@@ -27,6 +27,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.Permissions;
 
 /**
  * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
@@ -413,7 +414,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
      *
      * @param context 当前绘制上下文
      */
-    private void renderScopeBadge(GuiGraphics context) {
+    private void renderScopeBadge(GuiGraphicsExtractor context) {
         if (layout == null) {
             return;
         }
@@ -422,8 +423,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 : Component.translatable("gui.todolist.scope.personal");
         context.fill(layout.scopeBadgeX, layout.scopeBadgeY,
                 layout.scopeBadgeX + layout.scopeBadgeWidth, layout.scopeBadgeY + layout.scopeBadgeHeight, 0xFF303030);
-        context.submitOutline(layout.scopeBadgeX, layout.scopeBadgeY, layout.scopeBadgeWidth, layout.scopeBadgeHeight, 0xFF888888);
-        context.drawCenteredString(font, badgeText,
+        context.outline(layout.scopeBadgeX, layout.scopeBadgeY, layout.scopeBadgeWidth, layout.scopeBadgeHeight, 0xFF888888);
+        context.centeredText(font, badgeText,
                 layout.scopeBadgeX + layout.scopeBadgeWidth / 2,
                 layout.scopeBadgeY + 3, 0xFFFFFFFF);
     }
@@ -480,7 +481,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     private boolean isOpClient() {
-        return minecraft != null && minecraft.player != null && minecraft.player.hasPermissions(2);
+        return minecraft != null && minecraft.player != null && minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
     }
 
     private Role getCurrentRole() {
@@ -572,28 +573,28 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     }
 
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
         boolean isTeam = project.getScope() == Project.Scope.TEAM;
         layout = computeResponsiveLayout(isTeam);
         
         context.fill(layout.dialogX, layout.dialogY, layout.dialogX + layout.dialogWidth, layout.dialogY + layout.dialogHeight, 0xFF202020);
-        context.submitOutline(layout.dialogX, layout.dialogY, layout.dialogWidth, layout.dialogHeight, 0xFFFFFFFF);
+        context.outline(layout.dialogX, layout.dialogY, layout.dialogWidth, layout.dialogHeight, 0xFFFFFFFF);
         
-        context.drawString(font, title, layout.dialogX + 10, layout.dialogY + 10, 0xFFFFFFFF, false);
-        context.drawString(font, Component.translatable("gui.todolist.label.name"), layout.dialogX + 10, layout.dialogY + 25, 0xFFAAAAAA, false);
+        context.text(font, title, layout.dialogX + 10, layout.dialogY + 10, 0xFFFFFFFF, false);
+        context.text(font, Component.translatable("gui.todolist.label.name"), layout.dialogX + 10, layout.dialogY + 25, 0xFFAAAAAA, false);
         renderScopeBadge(context);
         
         if (isTeam) {
-            context.drawString(font, Component.translatable("gui.todolist.label.members"), layout.dialogX + 10, layout.dialogY + 76, 0xFFAAAAAA, false);
+            context.text(font, Component.translatable("gui.todolist.label.members"), layout.dialogX + 10, layout.dialogY + 76, 0xFFAAAAAA, false);
         }
         
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     private class MemberListWidget extends ContainerObjectSelectionList<MemberListWidget.MemberEntry> {
@@ -720,16 +721,16 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             }
 
             @Override
-            public void renderContent(GuiGraphics context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+            public void extractContent(GuiGraphicsExtractor context, int mouseX, int mouseY, boolean hovered, float tickDelta) {
                 // 1.21.9：列表项渲染基类签名改为 renderContent，行位置改由 Entry 布局接口获取
                 int x = this.getContentX();
                 int y = this.getContentY();
                 int entryWidth = this.getContentWidth();
                 int entryHeight = this.getContentHeight();
-                context.drawString(font, name, x + 2, y + 4, 0xFFFFFFFF, false);
+                context.text(font, name, x + 2, y + 4, 0xFFFFFFFF, false);
                 syncButtonLayout(x, y, entryWidth, entryHeight);
-                this.removeBtn.render(context, mouseX, mouseY, tickDelta);
-                this.roleBtn.render(context, mouseX, mouseY, tickDelta);
+                this.removeBtn.extractRenderState(context, mouseX, mouseY, tickDelta);
+                this.roleBtn.extractRenderState(context, mouseX, mouseY, tickDelta);
             }
 
             /**
@@ -795,7 +796,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                         memberList.updateEntries(search);
                     }
                     if (minecraft.player != null) {
-                        minecraft.player.displayClientMessage(Component.translatable("message.todolist.role_update_failed"), false);
+                        minecraft.player.sendOverlayMessage(Component.translatable("message.todolist.role_update_failed"));
                     }
                     return;
                 }

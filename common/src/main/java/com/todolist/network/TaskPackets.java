@@ -20,9 +20,10 @@ import net.minecraft.advancements.Advancement;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,34 +36,34 @@ import java.util.UUID;
  * 任务同步相关的网络包定义与服务端处理逻辑。
  */
 public class TaskPackets {
-    public static final ResourceLocation SYNC_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_tasks");
-    public static final ResourceLocation TEAM_SYNC_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_sync_tasks");
-    public static final ResourceLocation TASK_CONFIRMED_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "task_confirmed");
-    public static final ResourceLocation REPLACE_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "replace_tasks");
-    public static final ResourceLocation TEAM_REPLACE_TASKS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_replace_tasks");
-    public static final ResourceLocation TEAM_REQUEST_SYNC_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_request_sync");
-    public static final ResourceLocation ADD_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_task");
-    public static final ResourceLocation UPDATE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_task");
-    public static final ResourceLocation DELETE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_task");
-    public static final ResourceLocation TOGGLE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "toggle_task");
-    public static final ResourceLocation TEAM_TOGGLE_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_toggle_task");
-    public static final ResourceLocation TEAM_ASSIGN_TASK_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_assign_task");
+    public static final Identifier SYNC_TASKS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "sync_tasks");
+    public static final Identifier TEAM_SYNC_TASKS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_sync_tasks");
+    public static final Identifier TASK_CONFIRMED_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "task_confirmed");
+    public static final Identifier REPLACE_TASKS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "replace_tasks");
+    public static final Identifier TEAM_REPLACE_TASKS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_replace_tasks");
+    public static final Identifier TEAM_REQUEST_SYNC_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_request_sync");
+    public static final Identifier ADD_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "add_task");
+    public static final Identifier UPDATE_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "update_task");
+    public static final Identifier DELETE_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "delete_task");
+    public static final Identifier TOGGLE_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "toggle_task");
+    public static final Identifier TEAM_TOGGLE_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_toggle_task");
+    public static final Identifier TEAM_ASSIGN_TASK_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_assign_task");
     /** 服务端→客户端：分块下发团队任务。 */
-    public static final ResourceLocation TEAM_SYNC_TASKS_CHUNKED_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_sync_tasks_chunked");
+    public static final Identifier TEAM_SYNC_TASKS_CHUNKED_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_sync_tasks_chunked");
     /** 客户端→服务端：分块提交团队任务替换/合并。 */
-    public static final ResourceLocation TEAM_REPLACE_TASKS_CHUNKED_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_replace_tasks_chunked");
+    public static final Identifier TEAM_REPLACE_TASKS_CHUNKED_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "team_replace_tasks_chunked");
     /** 服务端→客户端：事件触发器自动完成任务提示（携带任务标题原文）。 */
-    public static final ResourceLocation TRIGGER_COMPLETED_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "trigger_completed");
+    public static final Identifier TRIGGER_COMPLETED_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "trigger_completed");
     /** 服务端→客户端：触发器进度轻量推送（仅变化任务 ID/进度/完成态，避免全量快照的网络与落库开销）。 */
-    public static final ResourceLocation TRIGGER_PROGRESS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "trigger_progress");
+    public static final Identifier TRIGGER_PROGRESS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "trigger_progress");
     /** 服务端→客户端：服务端权威进度目录（供「选择进度」列出全部进度，而非仅玩家可见进度）。 */
-    public static final ResourceLocation ADVANCEMENT_CATALOG_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "advancement_catalog");
+    public static final Identifier ADVANCEMENT_CATALOG_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "advancement_catalog");
     /** 服务端→客户端：可反推物品清单（服务端权威配方的去重产物 ID，供 1.21.2+ 客户端材料选择）。 */
-    public static final ResourceLocation MATERIAL_ITEMS_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_items");
+    public static final Identifier MATERIAL_ITEMS_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_items");
     /** 客户端→服务端：材料反推请求（目标物品资源 ID）。 */
-    public static final ResourceLocation MATERIAL_PLAN_REQUEST_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan_request");
+    public static final Identifier MATERIAL_PLAN_REQUEST_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan_request");
     /** 服务端→客户端：目标物品的配方映射（材料反推结果）。 */
-    public static final ResourceLocation MATERIAL_PLAN_ID = ResourceLocation.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan");
+    public static final Identifier MATERIAL_PLAN_ID = Identifier.fromNamespaceAndPath(TodoConstants.MOD_ID, "material_plan");
     private static volatile ServerPacketSender serverPacketSender = (player, channelId, buf) -> { };
 
     public static void setServerPacketSender(ServerPacketSender sender) {
@@ -119,22 +120,6 @@ public class TaskPackets {
     }
 
     /**
-     * 处理客户端的材料反推请求（1.21.2+ 客户端无配方数据，索引构建与反查在服务端完成）。
-     *
-     * @param server 当前服务端
-     * @param player 请求玩家
-     * @param buf    请求缓冲（目标物品资源 ID）
-     */
-    public static void onMaterialPlanRequestPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
-        String itemId = buf.readUtf();
-        server.execute(() -> {
-            List<com.todolist.material.MaterialRecipe> recipes =
-                    com.todolist.material.MaterialIndexService.recipesFor(server, itemId);
-            sendMaterialPlan(player, itemId, recipes);
-        });
-    }
-
-    /**
      * 向玩家下发服务端权威进度目录。
      * 客户端自带的进度列表只含「已解锁 / 可见」进度，无法用于选择任意进度作为触发目标，
      * 因此这里把服务端全部带展示信息的进度（ID + 展示名）一次性下发，由客户端缓存。
@@ -152,41 +137,6 @@ public class TaskPackets {
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         writeAdvancementCatalog(buf, collectAdvancementCatalog(server));
         serverPacketSender.send(player, ADVANCEMENT_CATALOG_ID, buf);
-    }
-
-    /**
-     * 向玩家下发可反推物品清单（服务端权威配方的去重产物 ID）。
-     * 1.21.2+ 客户端不再持有配方数据，材料反推的物品选择以此清单为数据源。
-     *
-     * @param player 目标玩家
-     */
-    public static void sendMaterialItems(ServerPlayer player) {
-        if (player == null) {
-            return;
-        }
-        MinecraftServer server = player.level().getServer();
-        if (server == null) {
-            return;
-        }
-        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        writeMaterialItems(buf, com.todolist.material.MaterialIndexService.itemIds(server));
-        serverPacketSender.send(player, MATERIAL_ITEMS_ID, buf);
-    }
-
-    /**
-     * 向玩家下发目标物品的配方映射（材料反推结果）。
-     *
-     * @param player  目标玩家
-     * @param itemId  目标物品资源 ID
-     * @param recipes 配方映射列表
-     */
-    public static void sendMaterialPlan(ServerPlayer player, String itemId, List<com.todolist.material.MaterialRecipe> recipes) {
-        if (player == null) {
-            return;
-        }
-        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        writeMaterialPlan(buf, itemId, recipes);
-        serverPacketSender.send(player, MATERIAL_PLAN_ID, buf);
     }
 
     /**
@@ -360,6 +310,57 @@ public class TaskPackets {
             return null;
         }
         return new com.todolist.material.MaterialRecipe(id, outputItemId, outputCount, inputs, kind);
+    }
+
+    /**
+     * 处理客户端的材料反推请求（1.21.2+ 客户端无配方数据，索引构建与反查在服务端完成）。
+     *
+     * @param server 当前服务端
+     * @param player 请求玩家
+     * @param buf    请求缓冲（目标物品资源 ID）
+     */
+    public static void onMaterialPlanRequestPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        String itemId = buf.readUtf();
+        server.execute(() -> {
+            List<com.todolist.material.MaterialRecipe> recipes =
+                    com.todolist.material.MaterialIndexService.recipesFor(server, itemId);
+            sendMaterialPlan(player, itemId, recipes);
+        });
+    }
+
+    /**
+     * 向玩家下发可反推物品清单（服务端权威配方的去重产物 ID）。
+     * 1.21.2+ 客户端不再持有配方数据，材料反推的物品选择以此清单为数据源。
+     *
+     * @param player 目标玩家
+     */
+    public static void sendMaterialItems(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        MinecraftServer server = player.level().getServer();
+        if (server == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeMaterialItems(buf, com.todolist.material.MaterialIndexService.itemIds(server));
+        serverPacketSender.send(player, MATERIAL_ITEMS_ID, buf);
+    }
+
+    /**
+     * 向玩家下发目标物品的配方映射（材料反推结果）。
+     *
+     * @param player  目标玩家
+     * @param itemId  目标物品资源 ID
+     * @param recipes 配方映射列表
+     */
+    public static void sendMaterialPlan(ServerPlayer player, String itemId, List<com.todolist.material.MaterialRecipe> recipes) {
+        if (player == null) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        writeMaterialPlan(buf, itemId, recipes);
+        serverPacketSender.send(player, MATERIAL_PLAN_ID, buf);
     }
 
     /**
@@ -930,7 +931,7 @@ public class TaskPackets {
         if (player == null) {
             return Role.MEMBER;
         }
-        if (player.hasPermissions(2)) {
+        if (player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return Role.OP;
         }
         if (project == null || project.getScope() != Project.Scope.TEAM) {
@@ -1185,6 +1186,6 @@ public class TaskPackets {
 
     @FunctionalInterface
     public interface ServerPacketSender {
-        void send(ServerPlayer player, ResourceLocation channelId, FriendlyByteBuf buf);
+        void send(ServerPlayer player, Identifier channelId, FriendlyByteBuf buf);
     }
 }

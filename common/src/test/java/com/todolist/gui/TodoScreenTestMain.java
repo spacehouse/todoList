@@ -4418,7 +4418,7 @@ public final class TodoScreenTestMain {
          * 测试中通过 Unsafe 分配对象，不会真正走到这条路径。
          */
         private PublishedIntegratedServer() {
-            super(null, null, null, null, null, null, null);
+            super(null, null, null, null, null, java.util.Optional.empty(), null, null);
         }
 
         /**

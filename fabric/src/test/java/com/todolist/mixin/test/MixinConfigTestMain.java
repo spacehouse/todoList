@@ -58,9 +58,6 @@ public final class MixinConfigTestMain {
                 problems.append("注册项类无法加载: ").append(name).append("; ");
             }
         }
-        if (root.get("refmap") == null || root.get("refmap").getAsString().isEmpty()) {
-            problems.append("refmap 缺失; ");
-        }
         if (problems.length() > 0) {
             throw new AssertionError("mixin 注册表守护失败: " + problems);
         }

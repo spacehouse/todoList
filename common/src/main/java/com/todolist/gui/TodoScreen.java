@@ -52,7 +52,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -63,6 +63,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.server.permissions.Permissions;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -1802,17 +1803,17 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param delta 帧间隔
      */
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Background is drawn manually in render to keep cross-loader consistency.
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         refreshClearCompletedButtonState();
         context.fill(0, 0, this.width, this.height, ModConfig.getInstance().getBackgroundColor());
 
         Component title = hasUnsavedChanges ? Component.translatable("gui.todolist.title.unsaved") : TITLE;
-        context.drawString(this.font, title, (this.width - this.font.width(title)) / 2, 10, 0xFFFFFFFF, false);
+        context.text(this.font, title, (this.width - this.font.width(title)) / 2, 10, 0xFFFFFFFF, false);
 
         TodoScreenRenderSupport.renderLayoutPanels(
                 context,
@@ -1829,12 +1830,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 currentProject,
                 configButton,
                 sidebarToggleButton);
-        if (taskListWidget != null) taskListWidget.render(context, mouseX, mouseY, delta);
+        if (taskListWidget != null) taskListWidget.extractRenderState(context, mouseX, mouseY, delta);
         if (projectListWidget != null && isSidebarPanelVisible()) {
-            projectListWidget.render(context, mouseX, mouseY, delta);
+            projectListWidget.extractRenderState(context, mouseX, mouseY, delta);
         }
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
 
         int color = 0xFFFFFFFF;
         int textH = this.font.lineHeight;
@@ -1844,19 +1845,19 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             int dy = descField.getY() - textH - 2;
             if (parentContext != null) {
                 int parentY = dy - textH - 4;
-                context.drawString(this.font, parentContext, descField.getX(), parentY, color, false);
+                context.text(this.font, parentContext, descField.getX(), parentY, color, false);
             }
-            context.drawString(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
+            context.text(this.font, Component.translatable("gui.todolist.label.description"), descField.getX(), dy, color, false);
         }
         if (tagField != null && tagField.visible) {
             int zy = tagField.getY() - textH - 2;
-            context.drawString(this.font, Component.translatable("gui.todolist.label.tags"), tagField.getX(), zy, color, false);
+            context.text(this.font, Component.translatable("gui.todolist.label.tags"), tagField.getX(), zy, color, false);
         }
         /*
         if (searchField != null) {
             int sy = searchField.getY() + (searchField.getHeight() - textH) / 2;
             int searchLabelX = searchField.getX() - 40;
-            context.drawString(this.font, Component.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
+            context.text(this.font, Component.translatable("gui.todolist.label.search"), searchLabelX, sy, color, false);
         }
         */
         TodoScreenRenderSupport.renderProjectSearchPrefixDropdown(
@@ -3159,7 +3160,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (currentProject.getScope() == Project.Scope.PERSONAL) {
             return true;
         }
-        if (this.minecraft.player.hasPermissions(2)) {
+        if (this.minecraft.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
             return true;
         }
         String ownerUuid = currentProject.getOwnerUuid();
@@ -3389,7 +3390,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         java.util.Set<String> allowedItems = java.util.Set.copyOf(com.todolist.material.ClientMaterialCatalog.snapshot());
         minecraft.setScreen(new ItemSelectorScreen(this,
                 ItemSelectorScreen.Kind.ITEM,
-                itemId -> ClientBridge.ops().requestMaterialPlan(itemId),
+                itemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(itemId),
                 false,
                 allowedItems));
     }
@@ -3461,8 +3462,10 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                         TriggerTargetSupport.buildMaterialTaskTitle(materialItemId, materialCount).getString()
         );
         MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
+        java.util.function.Consumer<String> materialRequester =
+                requestItemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(requestItemId);
         minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks,
-                requestItemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(requestItemId)));
+                materialRequester));
     }
 
     /**
@@ -3916,7 +3919,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             TodoConstants.LOGGER.error("Failed to persist task {} in background", operationName, failure);
             Component failureMessage = resolveSaveFailureMessage(failure);
             if (this.minecraft != null && this.minecraft.player != null) {
-                this.minecraft.player.displayClientMessage(failureMessage, false);
+                this.minecraft.player.sendOverlayMessage(failureMessage);
             } else {
                 addNotification(failureMessage.getString());
             }
@@ -3957,7 +3960,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         updateButtonStates();
         if (closeAfterSave && !hasUnsavedChanges && !taskSaveInFlight) {
             if (this.minecraft != null && this.minecraft.player != null) {
-                this.minecraft.player.displayClientMessage(Component.translatable("message.todolist.saved"), false);
+                this.minecraft.player.sendOverlayMessage(Component.translatable("message.todolist.saved"));
             }
             onClose();
         }
@@ -4036,7 +4039,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      * @param mouseX 鼠标 X 坐标
      * @param mouseY 鼠标 Y 坐标
      */
-    private void renderTaskContextMenu(GuiGraphics context, int mouseX, int mouseY) {
+    private void renderTaskContextMenu(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             return;
         }

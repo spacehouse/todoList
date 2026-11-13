@@ -8,7 +8,7 @@ import com.todolist.project.Project;
 import java.util.List;
 
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
@@ -26,7 +26,7 @@ final class TodoScreenRenderSupport {
     /**
      * 绘制项目搜索前缀下拉菜单。
      */
-    static void renderProjectSearchPrefixDropdown(GuiGraphics context,
+    static void renderProjectSearchPrefixDropdown(GuiGraphicsExtractor context,
                                                   int mouseX,
                                                   int mouseY,
                                                   Font font,
@@ -53,7 +53,7 @@ final class TodoScreenRenderSupport {
             return;
         }
         context.fill(bounds[0], bounds[1], bounds[0] + bounds[2], bounds[1] + bounds[3], 0xEE0F141B);
-        context.submitOutline(bounds[0], bounds[1], bounds[2], bounds[3], 0xFF506070);
+        context.outline(bounds[0], bounds[1], bounds[2], bounds[3], 0xFF506070);
 
         List<TodoScreenProjectSearchSupport.ProjectSearchPrefixOption> options =
                 TodoScreenProjectSearchSupport.getProjectSearchPrefixOptions();
@@ -72,8 +72,8 @@ final class TodoScreenRenderSupport {
             }
             int textY = itemBounds[1] + Math.max(0, (itemBounds[3] - font.lineHeight) / 2);
             TodoScreenProjectSearchSupport.ProjectSearchPrefixOption option = options.get(i);
-            context.drawString(font, option.prefix, itemBounds[0] + 4, textY, 0xFFE0B240, false);
-            context.drawString(
+            context.text(font, option.prefix, itemBounds[0] + 4, textY, 0xFFE0B240, false);
+            context.text(
                     font,
                     TodoScreenProjectSearchSupport.getProjectSearchPrefixOptionDescription(option),
                     itemBounds[0] + 34,
@@ -87,7 +87,7 @@ final class TodoScreenRenderSupport {
     /**
      * 绘制内容区顶部摘要文本。
      */
-    static void renderContentHeaderSummary(GuiGraphics context,
+    static void renderContentHeaderSummary(GuiGraphicsExtractor context,
                                            Font font,
                                            MainLayoutMetrics layoutMetrics,
                                            ResponsiveTier responsiveTier,
@@ -123,18 +123,18 @@ final class TodoScreenRenderSupport {
         }
         int textHeight = Math.max(1, Math.round(font.lineHeight * scale));
         int drawY = configButton.getY() + Math.max(0, (configButton.getHeight() - textHeight) / 2);
-        // v1_21_6 覆盖：GuiGraphics.pose() 返回 joml Matrix3x2fStack，
+        // v1_21_6 覆盖：GuiGraphicsExtractor.pose() 返回 joml Matrix3x2fStack，
         // pushPose/popPose 改为 pushMatrix/popMatrix，scale 收敛为二维参数
         context.pose().pushMatrix();
         context.pose().scale(scale, scale);
-        context.drawString(font, displayText, Math.round(startX / scale), Math.round(drawY / scale), 0xFFFFFFFF, false);
+        context.text(font, displayText, Math.round(startX / scale), Math.round(drawY / scale), 0xFFFFFFFF, false);
         context.pose().popMatrix();
     }
 
     /**
      * 绘制主界面三个面板（侧栏、内容、详情）的背景。
      */
-    static void renderLayoutPanels(GuiGraphics context,
+    static void renderLayoutPanels(GuiGraphicsExtractor context,
                                    MainLayoutMetrics layoutMetrics,
                                    boolean sidebarPanelVisible,
                                    boolean detailPanelVisible) {
@@ -153,20 +153,20 @@ final class TodoScreenRenderSupport {
     /**
      * 绘制单个面板背景和描边。
      */
-    private static void renderPanelBackground(GuiGraphics context, LayoutRect bounds, boolean overlay) {
+    private static void renderPanelBackground(GuiGraphicsExtractor context, LayoutRect bounds, boolean overlay) {
         if (bounds == null || bounds.width <= 0 || bounds.height <= 0) {
             return;
         }
         int fillColor = overlay ? 0xD91A1A1A : 0x8C111111;
         int outlineColor = overlay ? 0xCCB8B8B8 : 0x66888888;
         context.fill(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, fillColor);
-        context.submitOutline(bounds.x, bounds.y, bounds.width, bounds.height, outlineColor);
+        context.outline(bounds.x, bounds.y, bounds.width, bounds.height, outlineColor);
     }
 
     /**
      * 绘制通知并同步清理已过期通知项。
      */
-    static void renderNotifications(GuiGraphics context,
+    static void renderNotifications(GuiGraphicsExtractor context,
                                     Font font,
                                     int screenWidth,
                                     MainLayoutMetrics layoutMetrics,
@@ -193,10 +193,10 @@ final class TodoScreenRenderSupport {
             int bx2 = bx1 + boxWidth;
             int by2 = by1 + boxHeight;
             context.fill(bx1, by1, bx2, by2, TodoScreenNotificationSupport.BOX_BG_COLOR);
-            context.submitOutline(bx1, by1, boxWidth, boxHeight, TodoScreenNotificationSupport.BOX_OUTLINE_COLOR);
+            context.outline(bx1, by1, boxWidth, boxHeight, TodoScreenNotificationSupport.BOX_OUTLINE_COLOR);
             int tx = bx1 + TodoScreenNotificationSupport.TEXT_LEFT_PADDING;
             int ty = by1 + (boxHeight - font.lineHeight) / 2;
-            context.drawString(font, Component.nullToEmpty(notification.text), tx, ty, TodoScreenNotificationSupport.TEXT_COLOR, false);
+            context.text(font, Component.nullToEmpty(notification.text), tx, ty, TodoScreenNotificationSupport.TEXT_COLOR, false);
             dy += boxHeight + TodoScreenNotificationSupport.BOX_GAP;
         }
     }
