@@ -20,6 +20,9 @@ import net.minecraft.network.chat.Component;
  * 任务指派弹窗，负责展示当前项目成员、执行搜索过滤并完成成员指派。
  */
 final class AssignPlayerScreen extends Screen {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     /**
      * 表示一个可被指派的成员。
      */
@@ -127,7 +130,8 @@ final class AssignPlayerScreen extends Screen {
         searchField.setResponder(text -> updateFilteredPlayers());
         updateFilteredPlayers();
         this.setFocused(searchField);
-    }
+        textInputReassert.armAfterInit();
+}
 
     /**
      * 构建成员选择弹窗的布局参数。
@@ -398,5 +402,15 @@ final class AssignPlayerScreen extends Screen {
      */
     double getListCenterYForTest() {
         return dialogLayout == null ? listY + (listHeight / 2.0D) : dialogLayout.getListCenterY();
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, searchField);
     }
 }

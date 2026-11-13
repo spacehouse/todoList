@@ -18,6 +18,9 @@ import net.minecraft.client.input.KeyEvent;
  * 保存后通过回调交由调用方落库，取消则原样返回父界面。
  */
 public class TriggerEditScreen extends Screen {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     /** 全部内置触发类型，按按钮轮换顺序排列。 */
     private static final TaskTrigger.Type[] TYPES = TaskTrigger.Type.values();
 
@@ -106,6 +109,7 @@ public class TriggerEditScreen extends Screen {
         applyTypeDependentWidgetState();
         refreshSaveState();
         setFocused(targetField);
+        textInputReassert.armAfterInit();
     }
 
     /**
@@ -344,5 +348,15 @@ public class TriggerEditScreen extends Screen {
      */
     EditBox getTargetFieldForTest() {
         return targetField;
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, targetField);
     }
 }

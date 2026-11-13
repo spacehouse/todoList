@@ -17,6 +17,9 @@ import net.minecraft.network.chat.Component;
  * 新建项目界面，负责输入项目名称、切换项目范围并提交创建请求。
  */
 public class AddProjectScreen extends Screen {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     private final Screen parent;
     private EditBox nameField;
     private Project.Scope scope = Project.Scope.PERSONAL;
@@ -82,6 +85,7 @@ public class AddProjectScreen extends Screen {
         addRenderableWidget(cancelButton);
 
         setFocused(nameField);
+        textInputReassert.armAfterInit();
     }
 
     /**
@@ -210,5 +214,15 @@ public class AddProjectScreen extends Screen {
         context.text(font, Component.translatable("gui.todolist.label.name"), x + 10, y + 25, 0xFFAAAAAA, false);
 
         super.extractRenderState(context, mouseX, mouseY, delta);
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, nameField);
     }
 }

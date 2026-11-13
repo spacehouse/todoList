@@ -31,6 +31,9 @@ import net.minecraft.client.input.MouseButtonEvent;/**
  * （中文名可直接搜索），选中后通过回调返回资源 ID，供标题标记输入与触发器目标设置复用。
  */
 public class ItemSelectorScreen extends Screen {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     /** 列表行高（像素）：16px 图标 + 2px 间距。 */
     private static final int ROW_HEIGHT = 18;
     /** 搜索结果最大保留条数，控制渲染与匹配成本。 */
@@ -148,6 +151,7 @@ public class ItemSelectorScreen extends Screen {
         ensureCache();
         refreshFilter();
         setFocused(searchField);
+        textInputReassert.armAfterInit();
     }
 
     /**
@@ -485,5 +489,15 @@ public class ItemSelectorScreen extends Screen {
      * @param display 本地化显示名
      */
     public record ItemEntry(String id, ItemStack stack, String lowerId, String lowerName, String displayName) {
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, searchField);
     }
 }

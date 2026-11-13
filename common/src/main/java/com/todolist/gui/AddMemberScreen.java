@@ -20,6 +20,9 @@ import net.minecraft.network.chat.Component;
  * 新增成员界面，负责从在线玩家列表中搜索候选成员并提交添加请求。
  */
 public class AddMemberScreen extends Screen {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     private final Screen parent;
     private final String projectId;
     private EditBox searchField;
@@ -146,6 +149,7 @@ public class AddMemberScreen extends Screen {
         searchField.setResponder(text -> updateFilteredPlayers());
         updateFilteredPlayers();
         this.setFocused(searchField);
+        textInputReassert.armAfterInit();
     }
 
     /**
@@ -324,5 +328,15 @@ public class AddMemberScreen extends Screen {
                 listX, searchField.getY() - 10, 0xFFAAAAAA, false);
 
         super.extractRenderState(context, mouseX, mouseY, delta);
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, searchField);
     }
 }

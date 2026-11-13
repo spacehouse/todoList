@@ -33,6 +33,9 @@ import net.minecraft.server.permissions.Permissions;
  * 项目设置界面：编辑项目名称，并在团队项目中进行成员管理与角色调整。
  */
 public class ProjectSettingsScreen extends Screen implements ProjectManager.ProjectChangeListener {
+
+    /** 26.x 屏幕切换后文本输入重新拉起辅助（见 ScreenTextInputSupport）。 */
+    private final ScreenTextInputSupport textInputReassert = new ScreenTextInputSupport();
     /**
      * 项目设置页布局快照，统一保存弹窗和成员区域的边界信息。
      */
@@ -382,7 +385,8 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
         
         if (canEdit) {
             setFocused(nameField);
-        }
+            textInputReassert.armAfterInit();
+}
     }
 
     /**
@@ -865,5 +869,15 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
                 removeBtn.onPress(new KeyEvent(0, 0, 0));
             }
         }
+    }
+
+
+    /**
+     * 每帧回调：首帧重新拉起预聚焦输入框的文本输入（26.x setScreen 会无条件关闭，见 ScreenTextInputSupport）。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        textInputReassert.tickAfterInit(this, nameField);
     }
 }
