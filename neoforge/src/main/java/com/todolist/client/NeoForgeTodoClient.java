@@ -340,8 +340,8 @@ public final class NeoForgeTodoClient {
      * @param current 当前客户端实例
      */
     private static void openTodoScreen(Minecraft current) {
-        if (current.screen == null) {
-            current.setScreen(new TodoScreen(current.screen));
+        if (current.gui.screen() == null) {
+            current.gui.setScreen(new TodoScreen(current.gui.screen()));
         }
     }
 

@@ -86,7 +86,7 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 设置测试选项实例，供直接读取 `options.hideGui` 的逻辑使用。
+     * 设置测试选项实例（26.2 起 hideGui 状态已移入 Gui.hud，本字段仅保留兜底引用）。
      *
      * @param options 测试选项实例
      */
@@ -133,13 +133,13 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 设置 `options.hideGui` 测试状态，供验证 HUD 显示开关方向的逻辑使用。
+     * 设置 `options.hideGui` 测试状态（26.2 起状态位于 Gui.hud#isHidden），供验证 HUD 显示开关方向的逻辑使用。
      *
      * @param hideGui true 表示隐藏 HUD
      */
     public void setHideGui(boolean hideGui) {
-        if (testOptions != null) {
-            testOptions.hideGui = hideGui;
+        if (this.gui != null && this.gui.hud instanceof FakeHud fakeHud) {
+            fakeHud.setTestHidden(hideGui);
         }
     }
 
@@ -195,14 +195,25 @@ public class FakeMinecraftClient extends Minecraft {
     }
 
     /**
-     * 记录界面切换，并同步到父类 screen 字段。
+     * 记录界面切换，并同步到 26.2 的 Gui.screen 字段（经 FakeGui 拦截语义）。
      *
      * @param guiScreen 新界面
      */
-    @Override
     public void setScreen(Screen guiScreen) {
+        if (this.gui instanceof FakeGui fakeGui) {
+            fakeGui.setScreen(guiScreen);
+        } else {
+            recordLastScreen(guiScreen);
+        }
+    }
+
+    /**
+     * 仅记录最近一次界面切换（由 FakeGui 回调，避免与 setScreen 互相递归）。
+     *
+     * @param guiScreen 新界面
+     */
+    void recordLastScreen(Screen guiScreen) {
         this.lastScreen = guiScreen;
-        GuiTestSupport.setObjectField(Minecraft.class, this, "screen", guiScreen);
     }
 
     /**

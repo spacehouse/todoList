@@ -365,8 +365,8 @@ public class ItemSelectorScreen extends Screen {
             selectCallback.accept(value);
         }
         // 回调可能已经切到别的界面（例如材料反推预览），此时不能再把它覆盖回父界面
-        if (minecraft != null && minecraft.screen == this) {
-            minecraft.setScreen(parent);
+        if (minecraft != null && minecraft.gui.screen() == this) {
+            minecraft.gui.setScreen(parent);
         }
     }
 
@@ -394,7 +394,7 @@ public class ItemSelectorScreen extends Screen {
     @Override
     public void onClose() {
         if (minecraft != null) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }
     }
 

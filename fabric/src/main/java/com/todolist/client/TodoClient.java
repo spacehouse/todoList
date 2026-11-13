@@ -227,8 +227,8 @@ public class TodoClient implements ClientModInitializer {
      * 打开主 Todo 界面。
      */
     private void openTodoScreen() {
-        if (client.screen == null) {
-            client.setScreen(new TodoScreen(client.screen));
+        if (client.gui.screen() == null) {
+            client.gui.setScreen(new TodoScreen(client.gui.screen()));
         }
     }
 

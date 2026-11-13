@@ -933,7 +933,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("parent"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         access(screen).switchProjectForTest(teamProject);
         access(screen).switchToTeamAllViewForTest();
         Task task = requireTaskByTitle(screen, "Late Old Sync Task");
@@ -3072,7 +3072,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         access(screen).switchProjectForTest(teamProject);
         access(screen).switchToTeamAllViewForTest();
         addTaskViaInput(screen, "Local Dirty Before Close");
@@ -3082,7 +3082,7 @@ public final class TodoScreenTestMain {
 
         TodoScreen reopenedScreen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
         ScreenDriver.init(minecraft, reopenedScreen);
-        minecraft.setScreen(reopenedScreen);
+        minecraft.gui.setScreen(reopenedScreen);
         access(reopenedScreen).switchProjectForTest(teamProject);
         access(reopenedScreen).switchToTeamAllViewForTest();
         addTaskViaInput(reopenedScreen, "Fresh Team Save After Close");
@@ -3877,7 +3877,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         TodoScreen.applySyncedPersonalTasks(minecraft, List.of(createPersonalTask("Before Command Clean", personalProject.getId(), false)));
         TodoScreen.applySyncedPersonalTasks(minecraft, List.of(createPersonalTask("After Command Sync", personalProject.getId(), false)));
 
@@ -3908,7 +3908,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         access(screen).switchProjectForTest(teamProject);
         restoreTasksToManager(ops.getTeamTaskManager(), List.of(createTeamTask("Before Team Command Clean", teamProject.getId(), false)));
         TodoScreen.applySyncedTeamTasks(minecraft);
@@ -3937,7 +3937,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         access(screen).switchProjectForTest(teamProject);
         access(screen).switchToTeamAllViewForTest();
         addTaskViaInput(screen, "Local Dirty Team Task");
@@ -3963,7 +3963,7 @@ public final class TodoScreenTestMain {
         TodoScreen screen = new TodoScreen(ScreenDriver.createParentScreen("sync"));
 
         ScreenDriver.init(minecraft, screen);
-        minecraft.setScreen(screen);
+        minecraft.gui.setScreen(screen);
         access(screen).switchProjectForTest(teamProject);
         access(screen).switchToTeamAllViewForTest();
         Task task = requireTaskByTitle(screen, "Deferred Local Base");

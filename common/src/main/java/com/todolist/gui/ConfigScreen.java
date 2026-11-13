@@ -349,7 +349,7 @@ public class ConfigScreen extends Screen {
         saveButton = Button.builder(Component.translatable("gui.todolist.config.save_apply"), button -> applyAndReturn())
                 .bounds(x, buttonY, guiWidth / 2 - 5, 20)
                 .build();
-        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> this.minecraft.setScreen(parent))
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), button -> this.minecraft.gui.setScreen(parent))
                 .bounds(x + guiWidth / 2 + 5, buttonY, guiWidth / 2 - 5, 20)
                 .build();
         this.addRenderableWidget(saveButton);
@@ -519,7 +519,7 @@ public class ConfigScreen extends Screen {
             config.setHudUseCustomPosition(false);
         }
         ClientBridge.ops().setHudVisible(hudVisibleValue);
-        this.minecraft.setScreen(parent);
+        this.minecraft.gui.setScreen(parent);
     }
 
     /**

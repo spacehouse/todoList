@@ -438,7 +438,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         updateCachedPersonalTasksSnapshot(namespace, loadedTasks);
-        if (this.minecraft == null || this.minecraft.screen != this || personalHasUnsavedChanges) {
+        if (this.minecraft == null || this.minecraft.gui.screen() != this || personalHasUnsavedChanges) {
             return;
         }
         replacePersonalTasks(loadedTasks);
@@ -568,7 +568,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (renderer != null) {
             renderer.syncPersonalTasksFromGui(safeTasks);
         }
-        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+        if (minecraft != null && minecraft.gui.screen() instanceof TodoScreen screen) {
             screen.applySyncedPersonalTasksToOpenScreen(safeTasks);
         }
     }
@@ -602,7 +602,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             com.todolist.HudProbe.log("client applied snapshotUpdated={} hudUpdated={} of {} entries",
                     snapshotUpdated, hudUpdated, byId.size());
         }
-        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+        if (minecraft != null && minecraft.gui.screen() instanceof TodoScreen screen) {
             screen.applyTriggerProgressToOpenScreen(byId, batch.team());
         }
     }
@@ -694,7 +694,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         if (minecraft != null
-                && minecraft.screen instanceof TodoScreen screen
+                && minecraft.gui.screen() instanceof TodoScreen screen
                 && (teamHasUnsavedChanges || screen.teamTaskSaveInFlight)) {
             deferredTeamTasksSnapshot = safeTasks;
             deferredTeamTasksNamespace = DataPathProvider.getStorageNamespace();
@@ -841,7 +841,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (renderer != null) {
             renderer.forceRefreshTasks();
         }
-        if (minecraft != null && minecraft.screen instanceof TodoScreen screen) {
+        if (minecraft != null && minecraft.gui.screen() instanceof TodoScreen screen) {
             screen.refreshAfterExternalTaskSync(Project.Scope.TEAM);
         }
     }
@@ -1321,7 +1321,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     filterTasks();
                 },
                 this::toggleSidebarOverlay,
-                () -> this.minecraft.setScreen(new ConfigScreen(this)));
+                () -> this.minecraft.gui.setScreen(new ConfigScreen(this)));
         sidebarToggleButton = contentWidgets.sidebarToggleButton;
         configButton = contentWidgets.configButton;
         filterPriorityButton = contentWidgets.filterPriorityButton;
@@ -2291,7 +2291,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             teamHasUnsavedChanges = false;
         }
         hasUnsavedChanges = personalHasUnsavedChanges || teamHasUnsavedChanges;
-        this.minecraft.setScreen(parent);
+        this.minecraft.gui.setScreen(parent);
     }
 
     /**
@@ -2432,7 +2432,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         String parentTaskId = resolveTriggerCreationParentTaskId();
-        minecraft.setScreen(new TriggerEditScreen(this, null, trigger -> {
+        minecraft.gui.setScreen(new TriggerEditScreen(this, null, trigger -> {
             if (trigger != null && trigger.isValid()) {
                 pendingTriggerTaskToCreate = trigger;
                 pendingTriggerParentTaskId = parentTaskId;
@@ -2876,7 +2876,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         String current = quickAddField.getValue() == null ? "" : quickAddField.getValue();
         pendingQuickAddInsertPos = Math.max(0, Math.min(quickAddField.getCursorPosition(), current.length()));
         pendingQuickAddText = current;
-        minecraft.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoQuickAdd, true));
+        minecraft.gui.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoQuickAdd, true));
     }
 
     /**
@@ -3026,7 +3026,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         pendingInlineTitleText = current;
         pendingInlineInsertPos = Math.max(0, Math.min(inlineTitleField.getCursorPosition(), current.length()));
         pendingInlineEditingRestore = true;
-        minecraft.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoInlineTitle, true));
+        minecraft.gui.setScreen(new ItemSelectorScreen(this, this::insertItemMarkupIntoInlineTitle, true));
     }
 
     /**
@@ -3339,7 +3339,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (minecraft == null || task == null) {
             return;
         }
-        minecraft.setScreen(new TriggerEditScreen(this, task.getTrigger(), trigger -> applyTriggerFromEditor(task, trigger)));
+        minecraft.gui.setScreen(new TriggerEditScreen(this, task.getTrigger(), trigger -> applyTriggerFromEditor(task, trigger)));
     }
 
     /**
@@ -3374,7 +3374,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 addNotification(Component.translatable("gui.todolist.material_preview.empty").getString());
                 return;
             }
-            minecraft.setScreen(new ItemSelectorScreen(this, itemId -> openMaterialPreviewFor(itemId, index), false));
+            minecraft.gui.setScreen(new ItemSelectorScreen(this, itemId -> openMaterialPreviewFor(itemId, index), false));
             return;
         }
         // 1.21.2+：客户端无配方数据（服务端权威），清单就绪时打开受限选择器，
@@ -3388,7 +3388,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return;
         }
         java.util.Set<String> allowedItems = java.util.Set.copyOf(com.todolist.material.ClientMaterialCatalog.snapshot());
-        minecraft.setScreen(new ItemSelectorScreen(this,
+        minecraft.gui.setScreen(new ItemSelectorScreen(this,
                 ItemSelectorScreen.Kind.ITEM,
                 itemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(itemId),
                 false,
@@ -3409,20 +3409,20 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         // 材料预览已打开（未关预览继续点中间材料）：按需请求的配方增量并入当前预览后刷新，
         // 必须先于下方的 TodoScreen/选择器上下文判定，否则预览界面会被提前 return 拦截
-        if (minecraft.screen instanceof MaterialListScreen materialScreen) {
+        if (minecraft.gui.screen() instanceof MaterialListScreen materialScreen) {
             if (recipes != null && !recipes.isEmpty()) {
                 materialScreen.applyAdditionalRecipes(recipes);
             }
             return;
         }
         TodoScreen screen = null;
-        if (minecraft.screen instanceof TodoScreen todoScreen) {
+        if (minecraft.gui.screen() instanceof TodoScreen todoScreen) {
             screen = todoScreen;
-        } else if (minecraft.screen instanceof ItemSelectorScreen selector
+        } else if (minecraft.gui.screen() instanceof ItemSelectorScreen selector
                 && selector.getParentScreen() instanceof TodoScreen todoScreen) {
             // 选中物品后仍在选择器界面（服务端响应先于选择器关闭），先切回任务列表再开预览
             screen = todoScreen;
-            minecraft.setScreen(todoScreen);
+            minecraft.gui.setScreen(todoScreen);
         } else {
             return;
         }
@@ -3464,7 +3464,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         MaterialPreviewState state = new MaterialPreviewState(itemId, 1);
         java.util.function.Consumer<String> materialRequester =
                 requestItemId -> com.todolist.client.ClientBridge.ops().requestMaterialPlan(requestItemId);
-        minecraft.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks,
+        minecraft.gui.setScreen(new MaterialListScreen(this, index, state, context, this::applyGeneratedMaterialTasks,
                 materialRequester));
     }
 
@@ -3551,7 +3551,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         String taskId = task.getId();
         String taskTitle = task.getTitle() == null ? "" : task.getTitle();
         Component message = Component.translatable("gui.todolist.task.delete_confirm.message", taskTitle);
-        minecraft.setScreen(new ConfirmActionScreen(
+        minecraft.gui.setScreen(new ConfirmActionScreen(
                 this,
                 Component.translatable("gui.todolist.task.delete_confirm.title"),
                 message,
@@ -3584,7 +3584,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 projectName,
                 Integer.toString(completedTaskCount)
         );
-        minecraft.setScreen(new ConfirmActionScreen(
+        minecraft.gui.setScreen(new ConfirmActionScreen(
                 this,
                 Component.translatable("gui.todolist.completed.clear_confirm.title"),
                 message,
@@ -4553,7 +4553,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable("message.todolist.no_permission_toggle_team").getString());
             return;
         }
-        this.minecraft.setScreen(createAssignPlayerScreen(taskToAssign));
+        this.minecraft.gui.setScreen(createAssignPlayerScreen(taskToAssign));
     }
 
     private void filterTasks() {
@@ -5035,7 +5035,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (defaultScope == Project.Scope.TEAM && !ClientBridge.ops().isTeamProjectsEnabled()) {
             defaultScope = Project.Scope.PERSONAL;
         }
-        minecraft.setScreen(new AddProjectScreen(this, defaultScope));
+        minecraft.gui.setScreen(new AddProjectScreen(this, defaultScope));
     }
     
     private void onProjectSettings() {
@@ -5044,7 +5044,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             addNotification(Component.translatable("message.todolist.team_disabled").getString());
             return;
         }
-        minecraft.setScreen(new ProjectSettingsScreen(this, currentProject));
+        minecraft.gui.setScreen(new ProjectSettingsScreen(this, currentProject));
     }
 
     private void onApplyJoinProject() {
@@ -5079,7 +5079,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         }
         String projectName = ProjectNameFormatter.toDisplayText(currentProject).getString();
         Component message = Component.translatable("gui.todolist.project.delete_confirm.message", projectName);
-        minecraft.setScreen(new ConfirmDeleteProjectScreen(this, message, () -> {
+        minecraft.gui.setScreen(new ConfirmDeleteProjectScreen(this, message, () -> {
             ClientBridge.ops().sendDeleteProject(currentProject.getId());
         }));
     }

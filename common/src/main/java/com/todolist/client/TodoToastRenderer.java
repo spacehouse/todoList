@@ -88,7 +88,7 @@ public final class TodoToastRenderer {
             return;
         }
         Minecraft client = Minecraft.getInstance();
-        if (client != null && client.options != null && client.options.hideGui) {
+        if (client != null && client.options != null && client.gui.hud.isHidden()) {
             return;
         }
         long now = System.currentTimeMillis();

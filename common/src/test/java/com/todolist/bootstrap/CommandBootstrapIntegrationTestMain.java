@@ -1339,8 +1339,30 @@ public final class CommandBootstrapIntegrationTestMain {
          * 构造方法仅用于满足编译要求，运行时通过 Unsafe 绕过。
          */
         private TestMinecraftServer() {
-            super(null, null, null, null, java.util.Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
+            super(null, null, null, null, java.util.Optional.empty(), Proxy.NO_PROXY, null, null, null, false, null);
             throw new UnsupportedOperationException("请通过 createServer 创建测试服务端");
+        }
+
+        /**
+         * 返回聊天刷屏阈值（26.2 新增抽象方法）。
+         * 测试桩不读取该值，返回 0 表示不设阈值。
+         *
+         * @return 阈值秒数
+         */
+        @Override
+        public int getChatSpamThresholdSeconds() {
+            return 0;
+        }
+
+        /**
+         * 返回命令刷屏阈值（26.2 新增抽象方法）。
+         * 测试桩不读取该值，返回 0 表示不设阈值。
+         *
+         * @return 阈值秒数
+         */
+        @Override
+        public int getCommandSpamThresholdSeconds() {
+            return 0;
         }
 
         /**

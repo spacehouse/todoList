@@ -14,6 +14,7 @@ import net.minecraft.client.InputType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GlyphSource;
 import net.minecraft.client.gui.font.glyphs.EffectGlyph;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -174,7 +175,13 @@ public final class GuiTestSupport {
         // 句柄为 0 会被 LWJGL Checks.check 视为空指针抛 NPE，故注入非零假句柄。
         // GLFW 未初始化时 glfwGetKey 在 C 层安全返回 RELEASE，不会真正使用该句柄。
         setLongField(Window.class, window, "handle", 1L);
-        options.hideGui = false;
+        // 26.2：屏幕状态移入 Minecraft.gui（Gui）、F1 可见性移入 Gui.hud（Hud）；
+        // fake 客户端注入替身实例，setScreen/isHidden 均走测试拦截语义。
+        FakeGui gui = allocate(FakeGui.class);
+        FakeHud hud = allocate(FakeHud.class);
+        setObjectField(Gui.class, gui, "hud", hud);
+        setObjectField(Minecraft.class, minecraft, "gui", gui);
+        gui.bindOwner(minecraft);
         setObjectField(Minecraft.class, minecraft, "font", font);
         setObjectField(Minecraft.class, minecraft, "player", player);
         setObjectField(Minecraft.class, minecraft, "window", window);

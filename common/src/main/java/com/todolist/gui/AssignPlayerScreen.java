@@ -121,7 +121,7 @@ final class AssignPlayerScreen extends Screen {
             playerButtons[i] = button;
         }
 
-        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> minecraft.setScreen(parentScreen))
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> minecraft.gui.setScreen(parentScreen))
                 .bounds(dialogLayout.cancelX(), dialogLayout.cancelY(),
                         dialogLayout.cancelWidth(), dialogLayout.cancelHeight())
                 .build();
@@ -297,7 +297,7 @@ final class AssignPlayerScreen extends Screen {
             assignCallback.accept(uuid, name);
         }
         if (minecraft != null) {
-            minecraft.setScreen(parentScreen);
+            minecraft.gui.setScreen(parentScreen);
         }
     }
 

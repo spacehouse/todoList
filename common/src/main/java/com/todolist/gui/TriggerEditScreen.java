@@ -175,7 +175,7 @@ public class TriggerEditScreen extends Screen {
         if (minecraft == null) {
             return;
         }
-        minecraft.setScreen(new ItemSelectorScreen(this, selectorKind(type), selected -> {
+        minecraft.gui.setScreen(new ItemSelectorScreen(this, selectorKind(type), selected -> {
             target = selected;
             if (targetField != null) {
                 targetField.setValue(selected);
@@ -270,7 +270,7 @@ public class TriggerEditScreen extends Screen {
     @Override
     public void onClose() {
         if (minecraft != null) {
-            minecraft.setScreen(parent);
+            minecraft.gui.setScreen(parent);
         }
     }
 

@@ -140,7 +140,7 @@ public class AddMemberScreen extends Screen {
             playerButtons[i] = btn;
         }
 
-        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> minecraft.setScreen(parent))
+        cancelButton = Button.builder(Component.translatable("gui.todolist.cancel"), b -> minecraft.gui.setScreen(parent))
                 .bounds(dialogLayout.cancelX(), dialogLayout.cancelY(),
                         dialogLayout.cancelWidth(), dialogLayout.cancelHeight())
                 .build();
@@ -288,7 +288,7 @@ public class AddMemberScreen extends Screen {
      */
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     /**

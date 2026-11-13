@@ -287,7 +287,7 @@ public class TodoHudRenderer {
      * @param delta 帧间隔
      */
     public void render(GuiGraphicsExtractor context, float delta) {
-        if (client.options.hideGui) return;
+        if (client.gui.hud.isHidden()) return;
 
         ModConfig config = ModConfig.getInstance();
         if (!config.isEnableHud() || !ClientBridge.ops().isHudVisible()) return;
@@ -1991,7 +1991,7 @@ public class TodoHudRenderer {
                 return part.getText().getStyle().isStrikethrough();
             }
             return part.getText().getStyle().getColor() != null
-                    && part.getText().getStyle().getColor().getValue() == ChatFormatting.GRAY.getColor();
+                    && part.getText().getStyle().getColor().getValue() == 0xAAAAAA;
         }
         return false;
     }

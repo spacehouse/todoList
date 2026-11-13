@@ -367,7 +367,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
             addRenderableWidget(memberList);
 
             addMemberBtn = Button.builder(Component.translatable("gui.todolist.add_member"), button -> {
-                minecraft.setScreen(new AddMemberScreen(this, project.getId()));
+                minecraft.gui.setScreen(new AddMemberScreen(this, project.getId()));
             }).bounds(contentRight - 70, layout.dialogY + 73, 60, 16).build();
             addMemberBtn.active = checkAdminPermission();
             addRenderableWidget(addMemberBtn);
@@ -558,7 +558,7 @@ public class ProjectSettingsScreen extends Screen implements ProjectManager.Proj
     @Override
     public void onClose() {
         TodoListCommon.getProjectManager().removeListener(this);
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override
