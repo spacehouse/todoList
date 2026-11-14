@@ -10,6 +10,7 @@
 | Stable | `1.21.1` | Fabric + NeoForge | 下一主线基线，作为 1.21 系列扩展起点 |
 | Progressive | `1.20.x` | Fabric + Forge | 按子版本分批纳入，逐批执行差异评估与回归 |
 | Progressive | `1.21.x` | Fabric + NeoForge | 按子版本分批纳入，并执行阈值评分决定是否拆簇 |
+| Stable | `26.1.x`（26.1 / 26.1.1 / 26.1.2） | Fabric + NeoForge | 26.x 首条交付线，Java 25 + 去混淆工具链（loom-no-remap） |
 | Deferred | `1.21.x` | Forge | 同期暂缓，避免与 NeoForge 双轨重复投入 |
 
 ## 本轮按阶段执行记录（2026-03-03）
