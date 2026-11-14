@@ -4,22 +4,16 @@ All notable changes to this project will be documented in this file.
 
 Date format: `YYYY-MM-DD`
 
-## [1.4.3] - 2026-11-08
+## [1.4.3] - 2026-11-14
 
-### New Features
+### Added
 
-- **Task triggers**: Tasks can now auto-complete via five event types — collect items, kill entities, break blocks, craft items, and earn advancements. A GUI trigger editor is included (add / edit / clear via the task right-click menu); team tasks must be claimed before they participate; completing a parent cascades to all unfinished descendants.
-- **Material reverse-derivation task generation (experimental)**: Derive all required materials from a target item and generate collect tasks in one click, with a horizontal recipe-tree preview supporting node expansion, recipe switching, and held-item counts; accessible from the quick-add row.
-- **Item markup in task titles**: Titles support `[item:<id>]` syntax and render the matching item icon in lists and HUD; the item picker supports searching by localized names; double-click a task row to quickly edit its title.
-- **Server self-test command**: New `/todo selftest` command family (admin) covering storage round-trips and trigger semantics across 12 scenarios for quick post-upgrade verification.
+- **Minecraft 26.1 / 26.1.1 / 26.1.2 support** (Java 25 required): feature parity with 1.4.3 — five trigger event types, material reverse-crafting task generation, item title markup, server self-test commands, H2 storage.
+- **Unobfuscated toolchain migration**: Minecraft 26.1+ ships unobfuscated; the build chain moved to architectury-loom-no-remap and the version override system was rebuilt.
 
-### Improvements & Fixes
+### Known Issues
 
-- **Fixed ghost tasks**: manually checking off or auto-completing a parent no longer leaves subtasks invisible in both the pending and done lists.
-- **HUD default adjustments**: Pending visible count default 5 → 12 (done count unchanged); HUD list source now defaults to "current project", initially the default personal project; existing configs are unaffected.
-- **H2 engine repackaged as Jar-in-Jar**: Delivered as a nested jar instead of a thousand loose classes — avoids class conflicts with other mods embedding H2 and reduces platform auto-scan false positives.
-
-
+- **Chinese IME candidate list not shown (Fabric)**: an upstream Fabric loader defect on MC 26.x windowing (reproducible in vanilla); only the pinyin string renders without a candidate list. Use the NeoForge build for Chinese input; NeoForge is verified working.
 ## [1.4.2] - 2026-09-11
 
 ### New Features
