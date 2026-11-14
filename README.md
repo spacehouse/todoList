@@ -11,6 +11,7 @@ A simple and powerful todo list mod for Minecraft, supporting both single-player
 - ✅ Material reverse-derivation (experimental): derive all required materials from a target item and generate collect tasks in one click, with a recipe-tree preview / 材料反推（实验性）：从目标物品反推全部所需材料并一键生成收集任务，支持配方树预览
 - ✅ Item markup in task titles: `[item:<id>]` renders the matching item icon in lists and HUD / 任务标题物品标记：标题支持 `[item:物品ID]` 语法并显示对应物品图标
 - ✅ Minecraft 1.21.9 – 1.21.11 support (Fabric / NeoForge), client & server / Minecraft 1.21.9–1.21.11 支持（Fabric / NeoForge），覆盖客户端与服务端
+- ✅ Minecraft 26.3 support (Fabric / NeoForge), client & server (Java 25) / Minecraft 26.3 支持（Fabric / NeoForge），覆盖客户端与服务端（需要 Java 25）
 - ✅ In-game GUI task management: CRUD, priority, tags, filter & search, drag-sort unfinished tasks, current-project completed-task cleanup, and optional detail auto-save / 游戏内 GUI 任务管理：支持增删改查、优先级、标签、筛选搜索、未完成任务拖拽排序、当前项目一键清理已完成项，以及可选的详情自动保存
 - ✅ Personal and team projects: project hints, member management, join approval, and all-player team mode / 个人与团队项目：支持项目提示、成员管理、加入审批，以及可选的团队全服任务模式
 - ✅ Expanded command system: `/todo` covers tasks, projects, HUD, join flow, admin operations, and H2 maintenance / 命令系统增强：`/todo` 已覆盖任务、项目、HUD、加入流程、管理操作与 H2 运维入口
