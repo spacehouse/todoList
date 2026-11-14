@@ -4,7 +4,6 @@ import com.todolist.TodoListCommon;
 import com.todolist.client.ClientBridge;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collection;

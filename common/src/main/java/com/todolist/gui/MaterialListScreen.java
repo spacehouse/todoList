@@ -19,7 +19,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,6 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import com.mojang.blaze3d.platform.InputConstants;
 /**
  * 材料反推预览界面（横向配方树）。
  *
@@ -682,10 +682,10 @@ public class MaterialListScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int keyCode = event.key();
-        if (keyCode == GLFW.GLFW_KEY_LEFT_SHIFT || keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+        if (event.hasShiftDown() && (event.key() == InputConstants.KEY_LSHIFT || event.key() == InputConstants.KEY_RSHIFT)) {
             shiftHeld = true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.isEscape()) {
             if (candidatePopup != null) {
                 closeCandidatePopup();
                 return true;
@@ -693,7 +693,7 @@ public class MaterialListScreen extends Screen {
             onClose();
             return true;
         }
-        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+        if ((event.isConfirmation())
                 && countField != null && countField.isFocused()) {
             int parsed = parseCount(countField.getValue());
             if (parsed > 0) {
@@ -711,7 +711,7 @@ public class MaterialListScreen extends Screen {
     @Override
     public boolean keyReleased(KeyEvent event) {
         int keyCode = event.key();
-        if (keyCode == GLFW.GLFW_KEY_LEFT_SHIFT || keyCode == GLFW.GLFW_KEY_RIGHT_SHIFT) {
+        if (event.hasShiftDown() && (event.key() == InputConstants.KEY_LSHIFT || event.key() == InputConstants.KEY_RSHIFT)) {
             shiftHeld = false;
         }
         return super.keyReleased(event);
@@ -748,7 +748,7 @@ public class MaterialListScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (button != 0) {
+        if (button != 1) {
             return super.mouseClicked(event, doubleClick);
         }
         if (candidatePopup != null) {
@@ -803,7 +803,7 @@ public class MaterialListScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (dragging && button == 0) {
+        if (dragging && button == 1) {
             scrollX = clamp(dragStartScrollX - (int) (mouseX - dragStartX), 0, maxScrollX());
             scrollY = clamp(dragStartScrollY - (int) (mouseY - dragStartY), 0, maxScrollY());
             return true;
@@ -819,7 +819,7 @@ public class MaterialListScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (dragging && button == 0) {
+        if (dragging && button == 1) {
             dragging = false;
             return true;
         }
@@ -1493,7 +1493,7 @@ public class MaterialListScreen extends Screen {
         }
         return mouseClicked(new net.minecraft.client.input.MouseButtonEvent(
                 itemIconCenterX(cell), itemIconCenterY(cell),
-                new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
+                new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
     }
 
     /**
@@ -1510,7 +1510,7 @@ public class MaterialListScreen extends Screen {
         return mouseClicked(new net.minecraft.client.input.MouseButtonEvent(
                 itemIconCenterX(cell),
                 listTop - scrollY + cell.y() + MaterialPreviewLayout.CELL_SIZE + 5,
-                new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
+                new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
     }
 
     /**
@@ -1530,7 +1530,7 @@ public class MaterialListScreen extends Screen {
         }
         return mouseClicked(new net.minecraft.client.input.MouseButtonEvent(
                 stationIconCenterX(station), stationIconCenterY(station),
-                new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
+                new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
     }
 
     /**
@@ -1568,7 +1568,7 @@ public class MaterialListScreen extends Screen {
         }
         double pointY = popup.top + 2 + (row - popup.scroll) * POPUP_ROW_HEIGHT + 1;
         return mouseClicked(new net.minecraft.client.input.MouseButtonEvent(
-                popup.left + 4, pointY, new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
+                popup.left + 4, pointY, new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
     }
 
     /**

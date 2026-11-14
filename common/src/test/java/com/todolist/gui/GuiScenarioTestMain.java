@@ -10,10 +10,10 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.CharacterEvent;
-import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * GUI 基础场景离线自测入口：补充真实事件路径的交互场景（坐标级按钮点击、
@@ -92,13 +92,13 @@ public final class GuiScenarioTestMain {
         typeText(screen, "18");
         GuiTestSupport.assertEquals("18", field.getValue(), "键盘输入路径应把字符追加到输入框");
 
-        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_BACKSPACE, 0, 0));
+        screen.keyPressed(new KeyEvent(InputConstants.KEY_BACKSPACE, 8, 0));
         GuiTestSupport.assertEquals("1", field.getValue(), "退格键应删除末尾字符");
 
         typeText(screen, "80");
         GuiTestSupport.assertEquals("180", field.getValue(), "追加输入应保留已有内容");
 
-        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
+        screen.keyPressed(new KeyEvent(InputConstants.KEY_RETURN, 13, 0));
         GuiTestSupport.assertEquals("180", field.getValue(), "回车不应破坏输入框内容");
     }
 

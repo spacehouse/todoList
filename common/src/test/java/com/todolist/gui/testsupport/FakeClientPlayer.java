@@ -29,9 +29,9 @@ public class FakeClientPlayer extends LocalPlayer {
      * 构造方法仅用于满足编译要求，测试运行时通过 Unsafe 绕过。
      */
     protected FakeClientPlayer() {
-        // 26.1：LocalPlayer 构造器新增 ChatAbilities 参数
+        // 26.3：LocalPlayer 构造器末尾新增 ItemActivation 参数
         super(null, (ClientLevel) null, (ClientPacketListener) null, (StatsCounter) null, (ClientRecipeBook) null, (Input) null, false,
-                (net.minecraft.client.multiplayer.chat.ChatAbilities) null);
+                (net.minecraft.client.multiplayer.chat.ChatAbilities) null, (net.minecraft.client.player.ItemActivation) null);
         throw new UnsupportedOperationException("请通过 FakeClientPlayer.create 创建测试玩家");
     }
 

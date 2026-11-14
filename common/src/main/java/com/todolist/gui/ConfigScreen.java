@@ -430,7 +430,7 @@ public class ConfigScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (button == 0) {
+        if (button == 1) {
             int x = (int) mouseX;
             int y = (int) mouseY;
             if (x >= previewRectX && x <= previewRectX + previewHudWidth
@@ -462,7 +462,7 @@ public class ConfigScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (button == 0 && draggingHud) {
+        if (button == 1 && draggingHud) {
             draggingHud = false;
             return true;
         }
@@ -485,7 +485,7 @@ public class ConfigScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (button == 0 && draggingHud) {
+        if (button == 1 && draggingHud) {
             int newX = (int) mouseX - dragOffsetX;
             int newY = (int) mouseY - dragOffsetY;
             previewHudX = clampPreviewCoordinate(newX, this.width, previewHudWidth);

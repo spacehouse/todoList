@@ -3,7 +3,6 @@ package com.todolist.gui;
 import com.todolist.client.ClientBridge;
 import com.todolist.config.ModConfig;
 import com.todolist.project.Project;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -12,6 +11,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * 新建项目界面，负责输入项目名称、切换项目范围并提交创建请求。
@@ -181,8 +181,7 @@ public class AddProjectScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         // 1.21.9：按键事件改为 KeyEvent 记录，解构键码保持原逻辑不变
-        int keyCode = event.key();
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+        if (event.isConfirmation()) {
             if (nameField.isFocused()) {
                 createProject();
                 return true;

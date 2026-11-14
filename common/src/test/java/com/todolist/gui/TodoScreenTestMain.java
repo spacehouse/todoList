@@ -18,12 +18,12 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * TodoScreen GUI 离线自测入口。
@@ -2576,7 +2576,7 @@ public final class TodoScreenTestMain {
         ScreenDriver.init(minecraft, screen);
         Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Empty Child");
 
-        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0));
+        screen.keyPressed(new KeyEvent(InputConstants.KEY_ESCAPE, 41, 0));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "按 Esc 后应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -2599,7 +2599,7 @@ public final class TodoScreenTestMain {
         Task parent = createEmptySubtaskViaDetailButton(screen, "Parent Escape Persisted Empty Child");
         waitForTaskSaveToFinish(screen);
 
-        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0));
+        screen.keyPressed(new KeyEvent(InputConstants.KEY_ESCAPE, 41, 0));
 
         GuiTestSupport.assertEquals(parentScreen, minecraft.getLastScreen(), "自动保存窗口结束后按 Esc 也应关闭当前待办界面");
         access(screen).switchProjectForTest(access(screen).getCurrentProjectForTest());
@@ -4351,7 +4351,7 @@ public final class TodoScreenTestMain {
         int centerX = bounds[0] + Math.max(1, bounds[2] / 2);
         int centerY = bounds[1] + Math.max(1, bounds[3] / 2);
 
-        screen.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(centerX, centerY, new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
+        screen.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(centerX, centerY, new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
 
         GuiTestSupport.assertEquals(task.getId(), access(screen).getSelectedTaskForTest().getId(),
                 "点击材料反推按钮不应清空当前选中任务");

@@ -20,7 +20,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Client-side initialization for Todo List Mod
@@ -83,23 +82,23 @@ public class TodoClient implements ClientModInitializer {
         // Key: K key to open todo list
         openTodoKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.open",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_K,
                 KEY_CATEGORY
         ));
 
         // Key: H key to toggle HUD expanded state
         toggleHudKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.togglehud",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_H,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_H,
                 KEY_CATEGORY
         ));
 
         toggleHudVisibilityKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.todolist.togglehudvisibility",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_J,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.KEY_J,
                 KEY_CATEGORY
         ));
 

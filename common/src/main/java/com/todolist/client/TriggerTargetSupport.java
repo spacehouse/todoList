@@ -192,7 +192,7 @@ public final class TriggerTargetSupport {
                 if (advancements != null && advancements.get(location) != null) {
                     net.minecraft.advancements.AdvancementHolder holder = advancements.get(location);
                     if (holder != null && holder.value() != null && holder.value().display().isPresent()) {
-                        return holder.value().display().get().getTitle().getString();
+                        return holder.value().display().get().title().getString();
                     }
                 }
             }

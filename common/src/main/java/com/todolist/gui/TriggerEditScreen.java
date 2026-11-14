@@ -7,11 +7,11 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
 import java.util.function.Consumer;
 import net.minecraft.client.input.KeyEvent;
+import com.mojang.blaze3d.platform.InputConstants;
 /**
  * 任务触发器编辑界面。
  * 提供触发类型切换、目标资源输入（可打开物品选择器）、目标数量输入，
@@ -253,8 +253,7 @@ public class TriggerEditScreen extends Screen {
      */
     @Override
     public boolean keyPressed(KeyEvent event) {
-        int keyCode = event.key();
-        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+        if ((event.isConfirmation())
                 && targetField != null && targetField.isFocused()) {
             if (saveButton != null && saveButton.active) {
                 save();

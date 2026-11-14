@@ -1164,8 +1164,8 @@ public final class CommandBootstrapIntegrationTestMain {
          * @param player 绑定的玩家实体
          */
         private CapturingCommandSourceStack(int permissionLevel, ServerPlayer player) {
-            // v1_21_11 覆盖：CommandSourceStack 构造第 5 参由 int 改为 PermissionSet
-            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), "command-test", Component.literal("command-test"), null, player);
+            // 26.3：构造器收敛为 7 参 (source, pos, rot, level, permission, server, entity)，name/display 移入 NamesProvider 兜底
+            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), null, player);
         }
 
         /**
@@ -1176,7 +1176,7 @@ public final class CommandBootstrapIntegrationTestMain {
          * @param server 最小服务端桩对象
          */
         private CapturingCommandSourceStack(int permissionLevel, ServerPlayer player, MinecraftServer server) {
-            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), "command-test", Component.literal("command-test"), server, player);
+            super(CommandSource.NULL, Vec3.ZERO, Vec2.ZERO, null, LevelBasedPermissionSet.forLevel(PermissionLevel.byId(permissionLevel)), server, player);
         }
 
         /**

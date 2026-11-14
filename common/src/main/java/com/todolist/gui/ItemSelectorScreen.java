@@ -15,7 +15,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -25,7 +24,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;/**
+import net.minecraft.client.input.MouseButtonEvent;
+import com.mojang.blaze3d.platform.InputConstants;
+
+/**
  * 目标选择器界面。
  * 按 {@link Kind} 列出物品 / 方块 / 实体 / 进度，提供资源 ID 与本地化名称双匹配的搜索
  * （中文名可直接搜索），选中后通过回调返回资源 ID，供标题标记输入与触发器目标设置复用。
@@ -342,7 +344,7 @@ public class ItemSelectorScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
         int button = event.button();
-        if (button == 0
+        if (button == 1
                 && mouseX >= listLeft && mouseX < listRight
                 && mouseY >= listTop && mouseY < listBottom) {
             int index = ((int) mouseY - listTop) / ROW_HEIGHT + scrollOffset;
@@ -375,12 +377,11 @@ public class ItemSelectorScreen extends Screen {
      */
     @Override
     public boolean keyPressed(KeyEvent event) {
-        int keyCode = event.key();
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.isEscape()) {
             onClose();
             return true;
         }
-        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+        if ((event.isConfirmation())
                 && searchField != null && searchField.isFocused() && !filtered.isEmpty()) {
             accept(filtered.get(scrollOffset));
             return true;

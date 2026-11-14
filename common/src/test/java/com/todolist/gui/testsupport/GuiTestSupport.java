@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * GUI 测试公共工具类，负责环境初始化、断言辅助和测试对象构造。
@@ -187,8 +188,8 @@ public final class GuiTestSupport {
         setObjectField(Minecraft.class, minecraft, "window", window);
         // 26.1：EditBox.setFocused 会经 Minecraft.onTextInputFocusChange 委托给
         // textInputManager；fake 客户端没有构造流程，需显式注入实例。
-        setObjectField(Minecraft.class, minecraft, "textInputManager",
-                new com.mojang.blaze3d.platform.TextInputManager(window));
+        // 26.3：TextInputManager 全部走 SDL 原生层（无 natives），换替身纯内存语义。
+        setObjectField(Minecraft.class, minecraft, "textInputManager", new FakeTextInputManager());
         // 26.1：焦点切换会触发 keyboardHandler.resubmitLastPreeditEvent；
         // fake 客户端无真实 IME 状态，注入空实现避免 NPE。
         setObjectField(Minecraft.class, minecraft, "keyboardHandler", new NoopKeyboardHandler(minecraft));
@@ -386,6 +387,26 @@ public final class GuiTestSupport {
      * @param fieldName 字段名称
      * @param value 字段值
      */
+
+    /**
+     * Unsafe 写 boolean 字段（Unsafe.putInt 对 boolean 字段同样生效）。
+     *
+     * @param owner     字段所属类
+     * @param target    目标实例
+     * @param fieldName 字段名
+     * @param value     值
+     */
+    public static void setBooleanField(Class<?> owner, Object target, String fieldName, boolean value) {
+        try {
+            java.lang.reflect.Field field = owner.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            long offset = UNSAFE.objectFieldOffset(field);
+            UNSAFE.putInt(target, offset, value ? 1 : 0);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("无法写入 boolean 字段: " + fieldName, e);
+        }
+    }
+
     public static void setIntField(Class<?> owner, Object target, String fieldName, int value) {
         try {
             Field field = owner.getDeclaredField(fieldName);
@@ -540,7 +561,9 @@ public final class GuiTestSupport {
      * @return 鼠标左键事件实例
      */
     public static MouseButtonEvent mouseEvent(double x, double y) {
-        return new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0));
+        // 26.3：输入层 GLFW→SDL 后鼠标按键编号从 0 基变 1 基（SDL_BUTTON_LEFT=1，
+        // AbstractWidget.isValidClickButton 亦改为判定 button==1）。
+        return new MouseButtonEvent(x, y, new MouseButtonInfo(1, 0));
     }
 
     /**

@@ -8,10 +8,10 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * GUI 测试驱动器：统一封装 Screen 初始化、按钮点击、输入和拖拽等常用测试操作。
@@ -89,7 +89,7 @@ public final class ScreenDriver {
      * @param screen 目标界面
      */
     public static void pressEnter(Screen screen) {
-        screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
+        screen.keyPressed(new KeyEvent(InputConstants.KEY_RETURN, 13, 0));
     }
 
     /**

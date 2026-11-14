@@ -964,7 +964,7 @@ public class TaskListWidget implements Renderable {
         clearPendingTaskDrag();
         if (mouseX >= x && mouseX < x + width &&
             mouseY >= y && mouseY < y + height) {
-            boolean clickOnScrollBar = button == 0
+            boolean clickOnScrollBar = button == 1
                     && scrollBar.getMaxValue() > 0
                     && mouseX >= scrollBar.getBarX() && mouseX < scrollBar.getBarX() + scrollBar.getBarWidth()
                     && mouseY >= scrollBar.getBarY() && mouseY < scrollBar.getBarY() + scrollBar.getBarHeight();
@@ -984,7 +984,7 @@ public class TaskListWidget implements Renderable {
                 int rowHeight = getRowHeight(index);
                 int disclosureX = getDisclosureLeft(row);
                 // 命中展开箭头：精确切换展开状态并吃掉事件，避免触发选中。
-                if (button == 0 && row.taskExpandable
+                if (button == 1 && row.taskExpandable
                         && mouseX >= disclosureX && mouseX < disclosureX + TASK_DISCLOSURE_WIDTH
                         && mouseY >= taskY && mouseY < taskY + rowHeight) {
                     toggleParentExpanded(row.task);
@@ -1004,10 +1004,10 @@ public class TaskListWidget implements Renderable {
                 }
                 // 父任务行任意非箭头、非复选框区域同样切换展开状态；
                 // 这里不 return true，让外层继续触发 selectTask / pendingDrag。
-                if (button == 0 && row.taskExpandable) {
+                if (button == 1 && row.taskExpandable) {
                     toggleParentExpanded(row.task);
                 }
-                if (button == 0 && canStartRowDrag(row)) {
+                if (button == 1 && canStartRowDrag(row)) {
                     pendingDragTask = row.task;
                     pendingDragSectionId = row.sectionId;
                     pendingDragStartX = mouseX;
@@ -1025,7 +1025,7 @@ public class TaskListWidget implements Renderable {
         if (scrollBar.isDragging()) {
             return true;
         }
-        if (button != 0) {
+        if (button != 1) {
             return false;
         }
         if (draggedTask != null) {
@@ -1049,7 +1049,7 @@ public class TaskListWidget implements Renderable {
 
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         boolean handled = false;
-        if (button == 0) {
+        if (button == 1) {
             if (scrollBar.isDragging()) {
                 scrollBar.setIsDragging(false);
                 handled = true;

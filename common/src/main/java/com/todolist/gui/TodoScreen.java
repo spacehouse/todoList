@@ -37,7 +37,6 @@ import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
 import com.todolist.task.TaskTrigger;
 import com.todolist.trigger.TaskTriggerService;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -64,7 +63,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.server.permissions.Permissions;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * 待办主界面，负责项目侧栏、任务列表、详情面板以及相关弹窗的交互。
@@ -1892,23 +1891,22 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
     @Override
     public boolean keyPressed(KeyEvent event) {
         // 1.21.9：按键事件改为 KeyEvent 记录，解构键码保持原逻辑不变
-        int keyCode = event.key();
         if (inlineTitleField != null) {
-            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+            if (event.isConfirmation()) {
                 commitInlineTitleEditing();
                 return true;
             }
-            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (event.isEscape()) {
                 cancelInlineTitleEditing();
                 return true;
             }
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE
+        if (event.isEscape()
                 && TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             closeTaskContextMenu();
             return true;
         }
-        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)
+        if ((event.isConfirmation())
                 && quickAddField != null
                 && quickAddField.isFocused()) {
             if (!TodoScreenViewModeSupport.isAddTaskAllowedInCurrentView(viewMode.name())) {
@@ -1992,7 +1990,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 false);
         boolean sidebarToggleHovered = sidebarToggleButton != null && sidebarToggleButton.isMouseOver(mouseX, mouseY);
         boolean insideSidebar = layoutMetrics != null && layoutMetrics.sidebarBounds.contains(mouseX, mouseY);
-        if (button == 0
+        if (button == 1
                 && layoutMetrics != null
                 && layoutMetrics.sidebarOverlay
                 && layoutMetrics.sidebarVisible
@@ -2009,7 +2007,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     selectedTask != null);
             applyResponsiveWidgetVisibility();
         }
-        String clickedPrefix = button == 0
+        String clickedPrefix = button == 1
                 ? TodoScreenProjectSearchSupport.resolveClickedProjectSearchPrefix(
                         prefixDropdownVisible,
                         projectSearchField,
@@ -2029,13 +2027,13 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             projectSearchPrefixDropdownOpen = false;
             return true;
         }
-        if ((button == 0 || button == 1)
+        if ((button == 1 || button == 1)
                 && prefixDropdownVisible
                 && !projectSearchFieldHit
                 && !insideProjectSearchPrefixDropdown) {
             projectSearchPrefixDropdownOpen = false;
         }
-        if (button == 0
+        if (button == 1
                 && TodoScreenProjectSearchSupport.canUseProjectSearchPrefixDropdown(
                         currentSpaceMode == SpaceMode.TEAM,
                         isSidebarPanelVisible()
@@ -2044,7 +2042,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             projectSearchPrefixDropdownOpen = true;
         }
         refreshClearCompletedButtonState();
-        if (button == 0
+        if (button == 1
                 && clearCompletedButton != null
                 && clearCompletedButton.visible
                 && clearCompletedButton.active
@@ -2052,7 +2050,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             clearCompletedButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
-        if (button == 0
+        if (button == 1
                 && saveButton != null
                 && saveButton.visible
                 && saveButton.active
@@ -2060,7 +2058,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             saveButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
-        if (button == 0
+        if (button == 1
                 && cancelButton != null
                 && cancelButton.visible
                 && cancelButton.active
@@ -2068,7 +2066,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             cancelButton.onPress(new KeyEvent(0, 0, 0));
             return true;
         }
-        if (button == 0
+        if (button == 1
                 && addSubtaskButton != null
                 && addSubtaskButton.visible
                 && addSubtaskButton.active
@@ -2080,7 +2078,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 && layoutMetrics.detailVisible
                 && selectedTask != null
                 && layoutMetrics.detailBounds.contains(mouseX, mouseY);
-        if (button == 0 && !clickInsideVisibleDetailPanel) {
+        if (button == 1 && !clickInsideVisibleDetailPanel) {
             discardSelectedEmptyPlaceholderSubtask();
         }
         if (!clickInsideVisibleDetailPanel
@@ -2102,7 +2100,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (!clickInsideVisibleDetailPanel && taskListWidget != null) {
             TaskListWidget.TaskSectionHitResult sectionHit = taskListWidget.getSectionAt(mouseX, mouseY);
             Task clickedTask = taskListWidget.getTaskAt((int) mouseX, (int) mouseY);
-            if (button == 0
+            if (button == 1
                     && sectionHit != null
                     && sectionHit.getRowType() == TaskListWidget.RowType.SECTION_HEADER
                     && toggleTaskSection(sectionHit.getSectionId())) {
@@ -2112,12 +2110,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 return true;
             }
             if (clickedTask != null) {
-                if (button == 0
+                if (button == 1
                         && selectedTask != null
                         && !Objects.equals(clickedTask.getId(), selectedTask.getId())) {
                     discardSelectedEmptyPlaceholderSubtask();
                 }
-                boolean rowDoubleClick = button == 0
+                boolean rowDoubleClick = button == 1
                         && clickedTask.getId() != null
                         && clickedTask.getId().equals(lastTaskRowClickTaskId)
                         && (System.currentTimeMillis() - lastTaskRowClickTime) <= TASK_ROW_DOUBLE_CLICK_MS;
@@ -2130,7 +2128,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                     startInlineTitleEditing(clickedTask);
                     return true;
                 }
-                if (button == 0
+                if (button == 1
                         && sectionHit != null
                         && (sectionHit.getRowType() == TaskListWidget.RowType.TASK
                         || sectionHit.getRowType() == TaskListWidget.RowType.SUBTASK)
@@ -2156,7 +2154,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             }
         }
 
-        if (button == 0
+        if (button == 1
                 && titleField != null
                 && titleField.visible
                 && titleField.isMouseOver(mouseX, mouseY)
@@ -2165,7 +2163,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             return true;
         }
 
-        if (button == 0 && mouseOverQuickAddMarker && quickAddField != null) {
+        if (button == 1 && mouseOverQuickAddMarker && quickAddField != null) {
             quickAddField.setFocused(true);
             this.setFocused(quickAddField);
             closeTaskContextMenu();
@@ -2199,23 +2197,23 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 abandonButton,
                 assignOthersButton,
                 contextMenuHit);
-        boolean detailBlankClicked = button == 0
+        boolean detailBlankClicked = button == 1
                 && selectedTask != null
                 && layoutMetrics != null
                 && layoutMetrics.detailVisible
                 && layoutMetrics.detailBounds.contains(mouseX, mouseY)
                 && !clickInEditArea;
-        if ((button == 0 || button == 1) && !mouseOverAnyTextField) {
+        if ((button == 1 || button == 1) && !mouseOverAnyTextField) {
             clearTextFieldFocus();
         }
         resetTaskRowDragState();
         boolean cleared = false;
-        if (button == 0 && selectedTask != null && !detailBlankClicked && !clickInEditArea) {
+        if (button == 1 && selectedTask != null && !detailBlankClicked && !clickInEditArea) {
             triggerAutoSaveIfNeeded("auto_clear_selection", false);
             clearSelectedTask();
             cleared = true;
         }
-        if (button == 0 || button == 1) {
+        if (button == 1 || button == 2) {
             closeTaskContextMenu();
         }
         if (detailBlankClicked) {
@@ -2268,7 +2266,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
             resetTaskRowDragState();
             return true;
         }
-        if (button == 0 && pendingClickSelectionTask != null) {
+        if (button == 1 && pendingClickSelectionTask != null) {
             selectTask(pendingClickSelectionTask);
             resetTaskRowDragState();
             return true;
@@ -4060,7 +4058,7 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         if (!TodoScreenContextMenuSupport.hasContextMenu(contextMenuTask, contextMenuItems)) {
             return false;
         }
-        if (button != 0 && button != 1) {
+        if (button != 1 && button != 2) {
             return false;
         }
         int menuHeight = TodoScreenContextMenuSupport.resolveMenuHeight(contextMenuItems.size(), contextMenuItemHeight);
@@ -4072,12 +4070,12 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
                 contextMenuWidth,
                 menuHeight
         )) {
-            if (button == 0 || button == 1) {
+            if (button == 1 || button == 2) {
                 closeTaskContextMenu();
             }
             return false;
         }
-        if (button != 0) {
+        if (button != 1) {
             return true;
         }
         int index = TodoScreenContextMenuSupport.resolveClickedItemIndex(

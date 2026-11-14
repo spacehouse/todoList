@@ -157,7 +157,7 @@ public class TaskPackets {
             }
             entries.add(new AdvancementCatalog.Entry(
                     holder.id().toString(),
-                    holder.value().display().get().getTitle().getString()));
+                    holder.value().display().get().title().getString()));
         }
         return entries;
     }

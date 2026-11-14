@@ -27,7 +27,7 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * NeoForge 平台客户端主类，负责客户端初始化、HUD 集成与状态同步。
@@ -46,9 +46,9 @@ public final class NeoForgeTodoClient {
     private static Minecraft client;
     private static TodoHudRenderer hudRenderer;
     private static final TaskManager teamTaskManager = new TaskManager();
-    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", GLFW.GLFW_KEY_K, KEY_CATEGORY);
-    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", GLFW.GLFW_KEY_H, KEY_CATEGORY);
-    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", GLFW.GLFW_KEY_J, KEY_CATEGORY);
+    private static final KeyMapping OPEN_TODO_KEY = new KeyMapping("key.todolist.open", InputConstants.KEY_K, KEY_CATEGORY);
+    private static final KeyMapping TOGGLE_HUD_KEY = new KeyMapping("key.todolist.togglehud", InputConstants.KEY_H, KEY_CATEGORY);
+    private static final KeyMapping TOGGLE_HUD_VISIBILITY_KEY = new KeyMapping("key.todolist.togglehudvisibility", InputConstants.KEY_J, KEY_CATEGORY);
     private static String activeProjectId;
     private static boolean hudVisible = true;
     private static String lastAppliedStorageNamespace = DataPathProvider.LOCAL_STORAGE_NAMESPACE;

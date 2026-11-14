@@ -12,12 +12,12 @@ import com.todolist.task.Task;
 import com.todolist.task.TaskTrigger;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.mojang.blaze3d.platform.InputConstants;
 
 /**
  * MaterialListScreen 离线自测：横向配方树布局与功能方块节点、节点展开 / 收起、
@@ -311,16 +311,16 @@ public final class MaterialListScreenTestMain {
         deepScreen.clickItemBodyForTest("test:b");
         deepScreen.clickItemBodyForTest("test:c");
 
-        deepScreen.keyPressed(new net.minecraft.client.input.KeyEvent(GLFW.GLFW_KEY_LEFT_SHIFT, 0, 0));
+        deepScreen.keyPressed(new net.minecraft.client.input.KeyEvent(InputConstants.KEY_LSHIFT, 1073742049, 1));
         GuiTestSupport.assertTrue(deepScreen.mouseScrolled(EMPTY_POINT_X, EMPTY_POINT_Y, 0, -1),
                 "按住 Shift 时滚轮应被界面消费");
         int afterShiftWheel = deepScreen.getScrollXForTest();
         GuiTestSupport.assertTrue(afterShiftWheel > 0, "按住 Shift 时滚轮应改为横向滚动");
-        deepScreen.keyReleased(new net.minecraft.client.input.KeyEvent(GLFW.GLFW_KEY_LEFT_SHIFT, 0, 0));
+        deepScreen.keyReleased(new net.minecraft.client.input.KeyEvent(InputConstants.KEY_LSHIFT, 1073742049, 0));
 
-        deepScreen.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(0, 0)), false);
-        deepScreen.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X - 40, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(0, 0)), -40, 0);
-        deepScreen.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X - 40, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(0, 0)));
+        deepScreen.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(1, 0)), false);
+        deepScreen.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X - 40, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(1, 0)), -40, 0);
+        deepScreen.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(EMPTY_POINT_X - 40, EMPTY_POINT_Y, new net.minecraft.client.input.MouseButtonInfo(1, 0)));
         GuiTestSupport.assertTrue(deepScreen.getScrollXForTest() > afterShiftWheel,
                 "在空白处向左拖拽应继续增加横向偏移");
     }
