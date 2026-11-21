@@ -408,7 +408,6 @@ public final class H2MaintenanceBackupTestMain {
         Path tempGameDir = Files.createTempDirectory(prefix);
         DataPathProvider.setGameDirSupplier(() -> tempGameDir);
         DataPathProvider.resetStorageNamespace();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         H2StorageBootstrap.resetAllForTests();
         return tempGameDir;
     }
@@ -421,7 +420,6 @@ public final class H2MaintenanceBackupTestMain {
     private static void cleanup(Path tempGameDir) {
         try {
             ModConfig.getInstance().setH2BackupOnStart(false);
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
             H2StorageBootstrap.resetAllForTests();
             if (tempGameDir == null || !Files.exists(tempGameDir)) {
                 return;

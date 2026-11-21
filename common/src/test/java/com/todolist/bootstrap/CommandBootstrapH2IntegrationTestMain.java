@@ -35,7 +35,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
             CommandTestSupport.runTestCase("CommandBootstrapH2IntegrationTestMain.shouldExecuteH2HealthCommand", CommandBootstrapH2IntegrationTestMain::shouldExecuteH2HealthCommand);
         } finally {
             H2StorageBootstrap.resetAllForTests();
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
             DataPathProvider.resetStorageNamespace();
         }
     }
@@ -45,7 +44,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
      */
     private static void shouldExecuteH2StatusCommand() throws Exception {
         resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         CommandDispatcher<CommandSourceStack> dispatcher = CommandBootstrapIntegrationTestMain.createDispatcher();
         CommandBootstrapIntegrationTestMain.CapturingCommandSourceStack source = CommandBootstrapIntegrationTestMain.createSource(2, null);
 
@@ -61,7 +59,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
      */
     private static void shouldExecuteH2BackupCommand() throws Exception {
         resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         CommandDispatcher<CommandSourceStack> dispatcher = CommandBootstrapIntegrationTestMain.createDispatcher();
         CommandBootstrapIntegrationTestMain.CapturingCommandSourceStack source = CommandBootstrapIntegrationTestMain.createSource(2, null);
 
@@ -76,7 +73,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
      */
     private static void shouldExecuteH2ReloadDbCommand() throws Exception {
         resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         Project persisted = new Project("Persisted", Project.Scope.PERSONAL, null);
         persisted.setId("persisted-project");
         TodoListCommon.getProjectStorage().saveProjects(java.util.List.of(persisted));
@@ -99,7 +95,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
      */
     private static void shouldExecuteRootReloadDbAlias() throws Exception {
         resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         CommandDispatcher<CommandSourceStack> dispatcher = CommandBootstrapIntegrationTestMain.createDispatcher();
         CommandBootstrapIntegrationTestMain.CapturingCommandSourceStack source = CommandBootstrapIntegrationTestMain.createSource(2, null);
 
@@ -114,7 +109,6 @@ public final class CommandBootstrapH2IntegrationTestMain {
      */
     private static void shouldExecuteH2HealthCommand() throws Exception {
         resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         CommandDispatcher<CommandSourceStack> dispatcher = CommandBootstrapIntegrationTestMain.createDispatcher();
         CommandBootstrapIntegrationTestMain.CapturingCommandSourceStack source = CommandBootstrapIntegrationTestMain.createSource(2, null);
 

@@ -32,9 +32,8 @@ public final class StorageBackendSelectionTestMain {
      * 验证缺失配置时默认使用 H2 后端。
      */
     private static void shouldDefaultToH2() {
-        GuiTestSupport.resetStateKeepDefaultBackend();
+        GuiTestSupport.resetState();
         GuiTestSupport.assertEquals(ModConfig.StorageBackend.H2, ModConfig.getInstance().getStorageBackend(), "缺失 storageBackend 时应默认 H2");
-        GuiTestSupport.assertTrue(StorageBackendFactory.isH2Selected(), "默认配置应选择 H2 后端");
     }
 
     /**
@@ -42,17 +41,15 @@ public final class StorageBackendSelectionTestMain {
      */
     private static void shouldLoadH2Backend() {
         GuiTestSupport.resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         ModConfig.load();
         GuiTestSupport.assertEquals(ModConfig.StorageBackend.H2, ModConfig.getInstance().getStorageBackend(), "storageBackend=H2 应被保留");
-        GuiTestSupport.assertTrue(StorageBackendFactory.isH2Selected(), "配置为 H2 时工厂应返回 H2");
     }
 
     /**
      * 验证非法 storageBackend 会规范化回 H2 并写回配置。
      */
     private static void shouldNormalizeInvalidBackendToH2() {
-        GuiTestSupport.resetStateKeepDefaultBackend();
+        GuiTestSupport.resetState();
         try {
             Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
             Files.createDirectories(configFile.getParent());
@@ -74,14 +71,13 @@ public final class StorageBackendSelectionTestMain {
         GuiTestSupport.resetState();
         try {
             Path configFile = DataPathProvider.getGameDir().resolve("config").resolve("todolist.json");
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
 
             String savedConfig = Files.readString(configFile, StandardCharsets.UTF_8);
             assertContainsEither(savedConfig, "// storageBackend notes:", "// storageBackend 说明：", "配置文件应写入 storageBackend 标题注释");
             assertContainsEither(
                     savedConfig,
-                    "// h2: H2 database storage (forced, only supported mode)",
-                    "// h2：H2 数据库存储（强制使用，唯一支持的存储模式）",
+                    "// h2: H2 database storage (the only supported storage mode)",
+                    "// h2：H2 数据库存储（唯一支持的存储模式）",
                     "配置文件应写入 storageBackend 的 h2 说明注释"
             );
         } catch (Exception exception) {

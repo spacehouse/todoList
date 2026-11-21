@@ -48,12 +48,10 @@ public final class ClientTaskStorageHelper {
             return new ArrayList<>();
         }
         UUID playerUuid = getClientPlayerUuid(client);
-        boolean publishedLocal = playerUuid != null && shouldUsePublishedLocalPlayerStorage(client);
-        boolean localIntegrated = playerUuid != null && isLocalIntegratedServer(client);
-        if (publishedLocal) {
+        if (playerUuid != null && shouldUsePublishedLocalPlayerStorage(client)) {
             return storage.loadPlayerTasks(playerUuid);
         }
-        if (localIntegrated) {
+        if (playerUuid != null && isLocalIntegratedServer(client)) {
             restorePlayerTasksToLocalStorage(storage, playerUuid);
         }
         return storage.loadTasks();
@@ -90,7 +88,7 @@ public final class ClientTaskStorageHelper {
         }
         UUID playerUuid = getClientPlayerUuid(client);
         if (playerUuid != null && isLocalIntegratedServer(client)) {
-            storage.saveLocalIntegratedPersonalTasks(playerUuid, tasks);
+            storage.saveLocalAndPlayerTasks(playerUuid, tasks);
             return;
         }
         storage.saveTasks(tasks);
@@ -277,5 +275,4 @@ public final class ClientTaskStorageHelper {
         storage.saveTasks(playerTasks);
         return true;
     }
-
 }
