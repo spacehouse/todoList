@@ -2,13 +2,22 @@
 
 本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成`、`已废弃` 五类维护，便于后续排期、分支同步与回归验证。
 
-更新日期：`2026-11-05`
+更新日期：`2026-11-21`
 
 ## 进行中
 
 - (暂无)
 
 ## 待同步
+
+> 2026-11-21：【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路——已在特性分支
+> `refactor/1.20.1-nbt-storage-removal`（基于 1.20.1）完成实现与回归（`:common:check` 全绿 +
+> 全平台构建成功），待同步其余维护分支；设计记录见 `docs/nbt-storage-removal.md`。
+> 实机验证已完成（2026-11-21）：① 无头层 dev-fabric 服务端启动冒烟 PASS（`Done (6.153s)` +
+> 存储初始化正常）；② 视觉层真实实例（1.20.1-Fabric 0.19.5 + 特性分支 jar）进世界任务同步
+> 16 条 / H2 写入正常、待办 GUI 完整渲染（项目列表 + 未完成 6/已完成 8 分组）、
+> `/todo selftest run all` 12 场景全 PASS（`SELFTEST SUMMARY pass=12 fail=0 mode=player`）。
+> 成功链路已存记忆（todolist-smoke-test-chain），可复用。
 
 > 2026-11-08：本批功能（触发器全链路、材料反推、物品标题、selftest、H2 TCP 整体移除、多版本 HUD/Toast 修复）已全部同步至五条维护分支并实机验证通过；
 > H2 TCP 移除不再等待 CurseForge 对 1.4.2 的审核结果，随 1.4.3 发布直接取代；
@@ -23,7 +32,6 @@
 - 【feat】支持任务批量导入格式（JSON）：作为所有外部任务生成来源（JEI/EMI 附属、AI 生成、清单导入）的统一入口（背景见 `docs/feat-material-task-generation.md` §0.4）
 - 【feat】支持团队项目任务设置为重复领取 / 重复完成
 - 【feat】支持个人项目跨存档同步
-- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（准入三问：用户故事 = 维护者只需读懂一条存储链路，消除"配置强制 H2 后永不执行"的死分支；范围 = `TaskStorage` / `ProjectStorage` / `ProjectPlayerStateStorage` 的非 H2 分支 + `ModConfig` 的 NBT 配置注释与 lang key，**明确不含** H2 不可用时的应急 NBT 写入（数据安全兜底，`shouldKeepNbtWritableWhenH2Unavailable` 固化）、NBT→H2 老数据迁移链（老玩家升档生命线）、`Task` NBT 序列化格式（网络包与 H2 行映射基建）；验证方案 = `:common:check` 全绿且上述保留用例仍通过；投入上限 = 1 个工作日，超限冻结）
 
 ### 附属 / 外部集成（独立模组或外部工具承载，主模组保持轻量与零第三方依赖）
 

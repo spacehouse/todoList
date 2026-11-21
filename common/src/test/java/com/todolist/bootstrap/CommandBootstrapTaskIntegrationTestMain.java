@@ -412,34 +412,6 @@ public final class CommandBootstrapTaskIntegrationTestMain {
     }
 
     /**
-     * 获取个人任务持久化文件路径。
-     *
-     * @param player 目标玩家
-     * @return 个人任务文件路径
-     */
-    private static Path getPersonalTaskFilePath(TestServerPlayer player) {
-        return CommandBootstrapIntegrationTestMain.getPersonalTaskFilePath(player);
-    }
-
-    /**
-     * 获取团队任务持久化文件路径。
-     *
-     * @return 团队任务文件路径
-     */
-    private static Path getTeamTaskFilePath() {
-        return CommandBootstrapIntegrationTestMain.getTeamTaskFilePath();
-    }
-
-    /**
-     * 获取团队项目持久化文件路径。
-     *
-     * @return 团队项目文件路径
-     */
-    private static Path getTeamProjectsFilePath() {
-        return CommandBootstrapIntegrationTestMain.getTeamProjectsFilePath();
-    }
-
-    /**
      * 断言消息列表中包含指定翻译键。
      *
      * @param messages 消息列表
@@ -1901,7 +1873,7 @@ public final class CommandBootstrapTaskIntegrationTestMain {
 
         int addResult = dispatcher.execute("todo task add \"Reload Personal Task\" \"Persist me\" persist", createSource(0, player));
         assertEquals(1, addResult, "task add 应返回成功");
-        assertEquals(Boolean.TRUE, Files.exists(getPersonalTaskFilePath(player)), "task add 应写入个人任务文件");
+        assertEquals(Boolean.TRUE, TodoListCommon.getTaskStorage().hasPlayerTasks(player.getUUID()), "task add 应持久化个人任务");
 
         reloadPersistentState();
 
@@ -1926,11 +1898,11 @@ public final class CommandBootstrapTaskIntegrationTestMain {
         Project createdProject = findProjectByName("Reload Team Project");
         assertNotNull(createdProject, "应能找到刚创建的团队项目");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "project create team 应写入团队项目文件");
+        assertEquals(Boolean.TRUE, !TodoListCommon.getProjectStorage().loadTeamProjects().isEmpty(), "project create team 应持久化团队项目");
 
         int addResult = dispatcher.execute("todo task addp " + createdProject.getId() + " \"Reload Team Task\" \"Persist team\" persist", createSource(0, manager, server));
         assertEquals(1, addResult, "task addp 应返回成功");
-        assertEquals(Boolean.TRUE, Files.exists(getTeamTaskFilePath()), "task addp 应写入团队任务文件");
+        assertEquals(Boolean.TRUE, !TodoListCommon.getTaskStorage().loadTeamTasks().isEmpty(), "task addp 应持久化团队任务");
 
         reloadPersistentState();
 

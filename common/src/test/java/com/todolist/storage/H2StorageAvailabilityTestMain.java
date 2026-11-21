@@ -1,6 +1,5 @@
 package com.todolist.storage;
 
-import com.todolist.config.ModConfig;
 import com.todolist.bootstrap.EventBootstrap;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.platform.DataPathProvider;
@@ -13,7 +12,9 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * H2StorageAvailabilityTestMain 覆盖 M1-E 的 H2 不可用状态与 NBT 回退隔离。
+ * H2StorageAvailabilityTestMain 覆盖 M1-E 的 H2 不可用状态管理。
+ * 原 shouldKeepNbtWritableWhenH2Unavailable（NBT 后端兜底写入）已随 NBT 文件存储死分支清理退役：
+ * 生产中 H2 不可用时统一显式抛出 StorageUnavailableException，不存在自动降级写 NBT 的路径。
  */
 public final class H2StorageAvailabilityTestMain {
     private H2StorageAvailabilityTestMain() {
@@ -26,7 +27,6 @@ public final class H2StorageAvailabilityTestMain {
      */
     public static void main(String[] args) {
         GuiTestSupport.runTestCase("H2StorageAvailabilityTestMain.shouldBlockH2WritesWhenUnavailable", H2StorageAvailabilityTestMain::shouldBlockH2WritesWhenUnavailable);
-        GuiTestSupport.runTestCase("H2StorageAvailabilityTestMain.shouldKeepNbtWritableWhenH2Unavailable", H2StorageAvailabilityTestMain::shouldKeepNbtWritableWhenH2Unavailable);
         GuiTestSupport.runTestCase("H2StorageAvailabilityTestMain.shouldFindStorageUnavailableInCauseChain", H2StorageAvailabilityTestMain::shouldFindStorageUnavailableInCauseChain);
         GuiTestSupport.runTestCase("H2StorageAvailabilityTestMain.shouldIsolateAvailabilityByNamespace", H2StorageAvailabilityTestMain::shouldIsolateAvailabilityByNamespace);
         GuiTestSupport.runTestCase("H2StorageAvailabilityTestMain.shouldResetDatabaseStateForNamespace", H2StorageAvailabilityTestMain::shouldResetDatabaseStateForNamespace);
@@ -41,7 +41,6 @@ public final class H2StorageAvailabilityTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-unavailable-");
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
             H2ConnectionProvider provider = new H2ConnectionProvider();
             H2StorageAvailability.markUnavailable(provider.getDatabaseBasePath(), H2StorageAvailability.Reason.WRITE_FAILED, "forced unavailable");
 
@@ -56,31 +55,6 @@ public final class H2StorageAvailabilityTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 不可用阻断写入时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
-            H2StorageAvailability.resetForTests();
-            deleteRecursively(tempGameDir);
-        }
-    }
-
-    /**
-     * 验证 H2 不可用状态不会影响 NBT 后端写入。
-     */
-    private static void shouldKeepNbtWritableWhenH2Unavailable() {
-        Path tempGameDir = null;
-        try {
-            tempGameDir = prepareTempGameDir("todolist-nbt-while-h2-unavailable-");
-            H2ConnectionProvider provider = new H2ConnectionProvider();
-            H2StorageAvailability.markUnavailable(provider.getDatabaseBasePath(), H2StorageAvailability.Reason.WRITE_FAILED, "forced unavailable");
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
-
-            TaskStorage storage = new TaskStorage();
-            storage.saveTasks(List.of(new Task("nbt-ok", "")));
-
-            GuiTestSupport.assertEquals("nbt-ok", storage.loadTasks().get(0).getTitle(), "NBT 后端应不受 H2 不可用状态影响");
-        } catch (Exception exception) {
-            throw new IllegalStateException("验证 NBT 不受 H2 不可用影响时发生异常", exception);
-        } finally {
-            selectNbtBackendQuietly();
             H2StorageAvailability.resetForTests();
             deleteRecursively(tempGameDir);
         }
@@ -115,7 +89,6 @@ public final class H2StorageAvailabilityTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 namespace 可用状态隔离时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             H2StorageBootstrap.resetAllForTests();
             deleteRecursively(tempGameDir);
         }
@@ -138,7 +111,6 @@ public final class H2StorageAvailabilityTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 namespace 状态重建时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             H2StorageBootstrap.resetAllForTests();
             deleteRecursively(tempGameDir);
         }
@@ -168,7 +140,6 @@ public final class H2StorageAvailabilityTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-server-stop-");
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
             Path database = new H2ConnectionProvider().getDatabaseBasePath();
             H2StorageAvailability.markUnavailable(database, H2StorageAvailability.Reason.WRITE_FAILED, "server stop reset");
 
@@ -179,7 +150,6 @@ public final class H2StorageAvailabilityTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证服务端停止清理 H2 状态时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             H2StorageBootstrap.resetAllForTests();
             deleteRecursively(tempGameDir);
         }
@@ -197,19 +167,7 @@ public final class H2StorageAvailabilityTestMain {
         Path tempGameDir = Files.createTempDirectory(prefix);
         DataPathProvider.setGameDirSupplier(() -> tempGameDir);
         DataPathProvider.resetStorageNamespace();
-        selectNbtBackendQuietly();
         return tempGameDir;
-    }
-
-    /**
-     * 安静切换回 NBT 后端。
-     */
-    private static void selectNbtBackendQuietly() {
-        try {
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
-        } catch (Exception ignored) {
-            // 测试清理阶段只做最佳努力恢复。
-        }
     }
 
     /**

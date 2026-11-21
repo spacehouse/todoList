@@ -178,15 +178,21 @@ public final class H2ProjectPlayerStateStore {
                 """)) {
             deleteStatement.setString(1, playerUuid.toString());
             deleteStatement.executeUpdate();
-            for (int index = 0; index < state.getHudStarredProjectIds().size(); index++) {
-                String projectId = state.getHudStarredProjectIds().get(index);
+            // 写入侧做格式级规范化（trim + 保序去重），与 player_hud_starred_projects 唯一索引对齐，
+            // 避免 UI 层或迁移数据带入重复项时触发唯一约束冲突；项目有效性校验留给进服 sanitize。
+            java.util.Set<String> normalizedProjectIds = new java.util.LinkedHashSet<>();
+            for (String projectId : state.getHudStarredProjectIds()) {
                 if (projectId == null || projectId.isBlank()) {
                     continue;
                 }
+                normalizedProjectIds.add(projectId.trim());
+            }
+            int sortOrder = 0;
+            for (String projectId : normalizedProjectIds) {
                 insertStatement.setString(1, playerUuid.toString());
                 insertStatement.setString(2, projectId);
                 insertStatement.setString(3, H2ProjectStore.PERSONAL_PROJECTS_BUCKET);
-                insertStatement.setLong(4, index);
+                insertStatement.setLong(4, sortOrder++);
                 insertStatement.executeUpdate();
             }
         }
