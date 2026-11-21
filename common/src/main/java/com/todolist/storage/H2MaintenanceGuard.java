@@ -8,14 +8,11 @@ public final class H2MaintenanceGuard {
     }
 
     /**
-     * 当前选择 H2 后端时确认维护锁允许写入。
+     * 确认 H2 维护锁允许写入（存储链路已收敛为 H2 单后端）。
      *
      * @throws StorageUnavailableException H2 维护中时抛出
      */
     public static void ensureWritableIfH2() throws StorageUnavailableException {
-        if (!StorageBackendFactory.isH2Selected()) {
-            return;
-        }
         H2MaintenanceLock.ensureWritable();
     }
 

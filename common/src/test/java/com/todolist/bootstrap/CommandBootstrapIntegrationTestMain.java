@@ -877,47 +877,6 @@ public final class CommandBootstrapIntegrationTestMain {
     }
 
     /**
-     * 获取当前测试命名空间下的个人项目持久化文件路径。
-     */
-    static Path getPersonalProjectsFilePath() {
-        return DataPathProvider.getProjectsDir().resolve("projects.dat");
-    }
-
-    /**
-     * 获取指定玩家的项目状态持久化文件路径。
-     *
-     * @param player 测试玩家
-     * @return 玩家项目状态文件路径
-     */
-    static Path getProjectPlayerStateFilePath(TestServerPlayer player) {
-        return DataPathProvider.getProjectPlayersDir().resolve(player.getUUID().toString() + ".dat");
-    }
-
-    /**
-     * 获取当前测试命名空间下的团队项目持久化文件路径。
-     */
-    static Path getTeamProjectsFilePath() {
-        return DataPathProvider.getProjectsDir().resolve("team_projects.dat");
-    }
-
-    /**
-     * 获取指定玩家的个人任务持久化文件路径。
-     *
-     * @param player 测试玩家
-     * @return 玩家个人任务文件路径
-     */
-    static Path getPersonalTaskFilePath(TestServerPlayer player) {
-        return DataPathProvider.getTaskPlayersDir().resolve(player.getUUID().toString() + ".dat");
-    }
-
-    /**
-     * 获取当前测试命名空间下的团队任务持久化文件路径。
-     */
-    static Path getTeamTaskFilePath() {
-        return TodoListCommon.getTaskStorage().getDataDirectoryPath().resolve("team_tasks.dat");
-    }
-
-    /**
      * 校验启动后手动修改 commandAccessMode 配置，不会被其他配置保存写回默认值。
      */
     private static void shouldPreserveCommandAccessModeAfterExternalConfigEdit() throws Exception {

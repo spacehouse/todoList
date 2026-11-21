@@ -98,6 +98,25 @@ final class TodoScreenTestAccess {
     }
 
     /**
+     * 等待 H2 个人任务异步加载线程排空既有加载任务。
+     * 迟到的旧屏加载任务会在完成后更新静态缓存快照，必须先排空再重置静态状态，
+     * 否则上一用例数据会泄入下一用例的缓存快照。
+     */
+    static void awaitGuiStorageLoaderIdleForTest() {
+        ExecutorService loader = readStaticScreenField("GUI_STORAGE_LOADER", ExecutorService.class);
+        CountDownLatch idle = new CountDownLatch(1);
+        loader.execute(idle::countDown);
+        try {
+            if (!idle.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("等待 H2 个人任务加载线程空闲超时");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("等待 H2 个人任务加载线程时被中断", exception);
+        }
+    }
+
+    /**
      * 返回当前选中的项目。
      *
      * @return 当前项目
