@@ -1,6 +1,5 @@
 package com.todolist.storage;
 
-import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
@@ -53,7 +52,6 @@ public final class H2StorageBackendIntegrationTestMain {
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-task-store-");
             writeLegacyLocalTask("legacy-local");
-            selectH2Backend();
 
             TaskStorage storage = new TaskStorage();
             GuiTestSupport.assertEquals("legacy-local", storage.loadTasks().get(0).getTitle(), "首次 H2 读取应迁移旧本地任务");
@@ -80,7 +78,6 @@ public final class H2StorageBackendIntegrationTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 任务门面时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -92,7 +89,6 @@ public final class H2StorageBackendIntegrationTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-subtask-fields-");
-            selectH2Backend();
 
             Task parent = createTask("h2-parent");
             parent.setId("h2-parent-id");
@@ -114,7 +110,6 @@ public final class H2StorageBackendIntegrationTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 子任务字段读写时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -127,7 +122,6 @@ public final class H2StorageBackendIntegrationTestMain {
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-project-store-");
             writeLegacyPersonalProject("legacy-project");
-            selectH2Backend();
 
             ProjectStorage storage = new ProjectStorage();
             GuiTestSupport.assertEquals("legacy-project", storage.loadProjects().get(0).getName(), "首次 H2 读取应迁移旧个人项目");
@@ -150,7 +144,6 @@ public final class H2StorageBackendIntegrationTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 项目门面时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -163,7 +156,6 @@ public final class H2StorageBackendIntegrationTestMain {
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-player-state-store-");
             writeLegacyPlayerState("legacy-project-id");
-            selectH2Backend();
 
             ProjectPlayerStateStorage storage = new ProjectPlayerStateStorage();
             GuiTestSupport.assertTrue(storage.hasPlayerState(TEST_PLAYER), "首次 H2 查询应迁移旧玩家项目状态");
@@ -183,7 +175,6 @@ public final class H2StorageBackendIntegrationTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 玩家项目状态门面时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -197,7 +188,6 @@ public final class H2StorageBackendIntegrationTestMain {
         Path tempGameDir = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-trigger-update-");
-            selectH2Backend();
             TaskStorage storage = new TaskStorage();
 
             com.todolist.task.TaskTrigger advancedTrigger = new com.todolist.task.TaskTrigger(
@@ -241,7 +231,6 @@ public final class H2StorageBackendIntegrationTestMain {
         } catch (Exception exception) {
             throw new IllegalStateException("验证 H2 触发器增量更新时发生异常", exception);
         } finally {
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -254,7 +243,6 @@ public final class H2StorageBackendIntegrationTestMain {
         ExecutorService executor = null;
         try {
             tempGameDir = prepareTempGameDir("todolist-h2-concurrent-task-tags-");
-            selectH2Backend();
             TaskStorage storage = new TaskStorage();
             CountDownLatch startSignal = new CountDownLatch(1);
             executor = Executors.newFixedThreadPool(2);
@@ -275,7 +263,6 @@ public final class H2StorageBackendIntegrationTestMain {
             if (executor != null) {
                 executor.shutdownNow();
             }
-            selectNbtBackendQuietly();
             deleteRecursively(tempGameDir);
         }
     }
@@ -311,12 +298,11 @@ public final class H2StorageBackendIntegrationTestMain {
         Path tempGameDir = Files.createTempDirectory(prefix);
         DataPathProvider.setGameDirSupplier(() -> tempGameDir);
         DataPathProvider.resetStorageNamespace();
-        selectNbtBackendQuietly();
         return tempGameDir;
     }
 
     /**
-     * 写入旧 NBT 本地任务。
+     * 直写旧 NBT 本地任务文件，构造迁移前数据。
      *
      * @param title 任务标题
      * @throws Exception 写入失败时抛出
@@ -324,11 +310,11 @@ public final class H2StorageBackendIntegrationTestMain {
     private static void writeLegacyLocalTask(String title) throws Exception {
         Task task = createTask(title);
         task.setId("legacy-local-id");
-        new TaskStorage().saveTasks(List.of(task));
+        LegacyNbtFixtureWriter.writeTaskBucket(DataPathProvider.getTodoDataDir().resolve("moddata.dat"), List.of(task));
     }
 
     /**
-     * 写入旧 NBT 个人项目。
+     * 直写旧 NBT 个人项目文件，构造迁移前数据。
      *
      * @param name 项目名称
      * @throws Exception 写入失败时抛出
@@ -336,11 +322,11 @@ public final class H2StorageBackendIntegrationTestMain {
     private static void writeLegacyPersonalProject(String name) throws Exception {
         Project project = createProject(name, Project.Scope.PERSONAL);
         project.setId("legacy-project-id");
-        new ProjectStorage().saveProjects(List.of(project));
+        LegacyNbtFixtureWriter.writeProjectBucket(DataPathProvider.getProjectsDir().resolve("projects.dat"), List.of(project));
     }
 
     /**
-     * 写入旧 NBT 玩家项目状态。
+     * 直写旧 NBT 玩家项目状态文件，构造迁移前数据。
      *
      * @param activeProjectId 当前项目 ID
      * @throws Exception 写入失败时抛出
@@ -351,25 +337,10 @@ public final class H2StorageBackendIntegrationTestMain {
                 List.of(activeProjectId),
                 true
         );
-        new ProjectPlayerStateStorage().savePlayerState(TEST_PLAYER, state);
-    }
-
-    /**
-     * 切换为 H2 后端。
-     */
-    private static void selectH2Backend() {
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
-    }
-
-    /**
-     * 安静切换回 NBT 后端，避免影响后续测试。
-     */
-    private static void selectNbtBackendQuietly() {
-        try {
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
-        } catch (Exception ignored) {
-            // 测试清理阶段仅做最佳努力恢复配置。
-        }
+        LegacyNbtFixtureWriter.writePlayerState(
+                DataPathProvider.getProjectPlayersDir().resolve(TEST_PLAYER.toString() + ".dat"),
+                state
+        );
     }
 
     /**

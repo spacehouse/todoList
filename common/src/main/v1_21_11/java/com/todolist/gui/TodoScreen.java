@@ -23,7 +23,6 @@ import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
 import com.todolist.storage.H2MaintenanceGuard;
 import com.todolist.storage.StorageFailureNotifier;
-import com.todolist.storage.StorageBackendFactory;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
@@ -291,19 +290,8 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
         // 初始化任务管理器并从存储加载任务
         if (personalTaskManager == null) {
             personalTaskManager = new TaskManager();
-            if (StorageBackendFactory.isH2Selected()) {
-                loadCachedPersonalTasksIntoManager();
-                schedulePersonalTasksLoadFromStorage();
-            } else {
-                try {
-                    List<Task> loadedTasks = ClientTaskStorageHelper.loadPersonalTasks(TodoListCommon.getTaskStorage(), this.minecraft);
-                    replacePersonalTasks(loadedTasks);
-                    updateCachedPersonalTasksSnapshot(openedStorageNamespace, loadedTasks);
-                    TodoConstants.LOGGER.info("Loaded {} tasks from storage", loadedTasks.size());
-                } catch (Exception e) {
-                    TodoConstants.LOGGER.error("Failed to load tasks from storage", e);
-                }
-            }
+            loadCachedPersonalTasksIntoManager();
+            schedulePersonalTasksLoadFromStorage();
         }
 
         teamTaskManager = ClientBridge.ops().getTeamTaskManager();
@@ -4815,7 +4803,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private List<Task> queryH2GuiTasks(boolean completed, String rawSearchQuery) {
         if (!shouldUseSynchronousH2GuiQueries()
-                || !StorageBackendFactory.isH2Selected()
                 || taskManager == null
                 || currentProject == null
                 || currentProject.getId() == null) {
@@ -4849,7 +4836,6 @@ public class TodoScreen extends Screen implements ProjectManager.ProjectChangeLi
      */
     private Integer queryH2GuiTaskCount(boolean completed, String rawSearchQuery) {
         if (!shouldUseSynchronousH2GuiQueries()
-                || !StorageBackendFactory.isH2Selected()
                 || taskManager == null
                 || currentProject == null
                 || currentProject.getId() == null) {

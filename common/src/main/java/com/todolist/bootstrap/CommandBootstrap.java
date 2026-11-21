@@ -865,7 +865,7 @@ public final class CommandBootstrap {
         }
         H2ConnectionProvider provider = new H2ConnectionProvider();
         H2StorageAvailability.StatusSnapshot storageStatus = H2StorageAvailability.getStatusSnapshot(provider.getDatabaseBasePath());
-        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.backend", ModConfig.getInstance().getStorageBackend().name().toLowerCase(Locale.ROOT));
+        sendFeedbackByTranslationKey(source, "command.todolist.h2.status.backend", "h2");
         sendFeedbackByTranslationKey(source, "command.todolist.h2.status.storage", storageStatus.isAvailable() ? "available" : "unavailable");
         sendFeedbackByTranslationKey(source, "command.todolist.h2.status.mode", "embedded");
         if (!storageStatus.isAvailable()) {
@@ -939,9 +939,6 @@ public final class CommandBootstrap {
         if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return sendCommandFailure(source, "command.todolist.h2.backup.requires_h2");
-        }
         try {
             H2BackupService.BackupResult result = new H2BackupService().backup(requestedName);
             return sendCommandSuccess(
@@ -972,9 +969,6 @@ public final class CommandBootstrap {
     private static int listH2Backups(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
-        }
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return sendCommandFailure(source, "command.todolist.h2.backups.requires_h2");
         }
         try {
             List<H2BackupService.BackupEntry> entries = new H2BackupService().listBackups();
@@ -1010,9 +1004,6 @@ public final class CommandBootstrap {
     private static int stageH2Restore(CommandSourceStack source, String target) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
-        }
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return sendCommandFailure(source, "command.todolist.h2.restore.requires_h2");
         }
         if (H2PendingRestore.hasPending()) {
             return sendCommandFailure(source, "command.todolist.h2.restore.pending_exists",
@@ -1075,9 +1066,6 @@ public final class CommandBootstrap {
         if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
         }
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return sendCommandFailure(source, "command.todolist.h2.reload_db.requires_h2");
-        }
         try (H2MaintenanceLock.MaintenanceToken ignored = H2MaintenanceLock.enter("reload-db")) {
             TodoListCommon.reloadH2StorageContextFromDatabase();
             refreshAvailableCommands(source.getServer());
@@ -1102,9 +1090,6 @@ public final class CommandBootstrap {
     private static int checkH2Health(CommandSourceStack source) {
         if (ensureCommandPermission(source, CommandPermissionSemantic.ADMIN) == COMMAND_FAILURE) {
             return COMMAND_FAILURE;
-        }
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return sendCommandFailure(source, "command.todolist.h2.health.requires_h2");
         }
         try {
             H2HealthCheckService.HealthSnapshot snapshot = new H2HealthCheckService().check();
@@ -4288,9 +4273,6 @@ public final class CommandBootstrap {
      * 在命令修改内存状态前检查当前存储后端是否可写。
      */
     private static int ensureStorageAvailableForCommand(CommandSourceStack source) {
-        if (ModConfig.getInstance().getStorageBackend() != ModConfig.StorageBackend.H2) {
-            return COMMAND_SUCCESS;
-        }
         try {
             H2StorageAvailability.ensureAvailable(new H2ConnectionProvider().getDatabaseBasePath());
             H2MaintenanceLock.ensureWritable();

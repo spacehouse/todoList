@@ -7,7 +7,6 @@ import com.todolist.project.ProjectManager;
 import com.todolist.project.ProjectNameFormatter;
 import com.todolist.storage.H2TaskQueryService;
 import com.todolist.storage.H2TaskStore;
-import com.todolist.storage.StorageBackendFactory;
 import com.todolist.task.Task;
 import com.todolist.task.TaskAssignmentSupport;
 import com.todolist.task.TaskManager;
@@ -45,7 +44,6 @@ public class TodoHudRenderer {
     private boolean expanded;
     private long lastPersonalReloadMs;
     private long lastTeamReloadMs;
-    private long cachedPersonalLastSavedMs = -1L;
     private long lastHudModelRefreshMs;
     private boolean hudModelCacheInitialized;
     private int cachedLayoutHudWidth = -1;
@@ -764,22 +762,9 @@ public class TodoHudRenderer {
             if (cachedPersonalTasksFromGui) {
                 return new ArrayList<>(cachedPersonalTasks);
             }
-            if (StorageBackendFactory.isH2Selected()) {
-                if (!cachedPersonalTasksInitialized) {
-                    cachedPersonalTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), client);
-                    cachedPersonalTasksInitialized = true;
-                    lastPersonalReloadMs = now;
-                }
-                return new ArrayList<>(cachedPersonalTasks);
-            }
-            long localLastSaved = ClientTaskStorageHelper.getPersonalTasksLastSaved(TodoListCommon.getTaskStorage(), client);
-            boolean shouldReload = cachedPersonalTasks.isEmpty()
-                    || localLastSaved != cachedPersonalLastSavedMs
-                    || (now - lastPersonalReloadMs >= reloadIntervalMs && localLastSaved == 0L && cachedPersonalLastSavedMs == 0L);
-            if (shouldReload) {
+            if (!cachedPersonalTasksInitialized) {
                 cachedPersonalTasks = ClientTaskStorageHelper.loadPersonalTasksSafe(TodoListCommon.getTaskStorage(), client);
                 cachedPersonalTasksInitialized = true;
-                cachedPersonalLastSavedMs = localLastSaved;
                 lastPersonalReloadMs = now;
             }
             return new ArrayList<>(cachedPersonalTasks);
@@ -1654,7 +1639,6 @@ public class TodoHudRenderer {
     public void forceRefreshTasks() {
         lastPersonalReloadMs = 0L;
         lastTeamReloadMs = 0L;
-        cachedPersonalLastSavedMs = -1L;
         lastHudModelRefreshMs = 0L;
         hudModelCacheInitialized = false;
         cachedPersonalTasksInitialized = false;
