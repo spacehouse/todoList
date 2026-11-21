@@ -2,7 +2,7 @@
 
 本文用于记录当前项目的整体改动状态，按 `进行中`、`待同步`、`计划中`、`已完成`、`已废弃` 五类维护，便于后续排期、分支同步与回归验证。
 
-更新日期：`2026-11-21`
+更新日期：`2026-11-22`
 
 ## 进行中
 
@@ -10,14 +10,7 @@
 
 ## 待同步
 
-> 2026-11-21：【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路——已在特性分支
-> `refactor/1.20.1-nbt-storage-removal`（基于 1.20.1）完成实现与回归（`:common:check` 全绿 +
-> 全平台构建成功），待同步其余维护分支；设计记录见 `docs/nbt-storage-removal.md`。
-> 实机验证已完成（2026-11-21）：① 无头层 dev-fabric 服务端启动冒烟 PASS（`Done (6.153s)` +
-> 存储初始化正常）；② 视觉层真实实例（1.20.1-Fabric 0.19.5 + 特性分支 jar）进世界任务同步
-> 16 条 / H2 写入正常、待办 GUI 完整渲染（项目列表 + 未完成 6/已完成 8 分组）、
-> `/todo selftest run all` 12 场景全 PASS（`SELFTEST SUMMARY pass=12 fail=0 mode=player`）。
-> 成功链路已存记忆（todolist-smoke-test-chain），可复用。
+> (暂无)
 
 > 2026-11-08：本批功能（触发器全链路、材料反推、物品标题、selftest、H2 TCP 整体移除、多版本 HUD/Toast 修复）已全部同步至五条维护分支并实机验证通过；
 > H2 TCP 移除不再等待 CurseForge 对 1.4.2 的审核结果，随 1.4.3 发布直接取代；
@@ -88,6 +81,8 @@
 - 【fix】幽灵任务源头级联完成（Phase Y1）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度，见 `docs/feat-trigger-completion.md` Phase Y1
 - 【feat】材料反推（**experimental**，后续开发已冻结，合入后只修缺陷、不扩配方能力），见 `docs/feat-material-task-generation.md`
 - 【feat】selftest 服务端自检基建：`/todo selftest` 12 场景两档 + verify-all 无头判定 + 测试面板按钮，手测人工项 21→16；顺带修复 H2 查询缺触发器列、Task 拷贝构造漏拷触发器、NeoForge 缺触发器接收与 Toast 渲染三个存量 bug
+
+- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（本分支 `2fe298b` cherry-pick 自 1.20.1 `90e6f39`，2026-11-22 同步完成）：Java 25 编译绿（清理误带入的 v1_21_11 副本）。设计记录见 `docs/nbt-storage-removal.md`。
 
 ## 已废弃
 
