@@ -34,6 +34,7 @@ import java.util.UUID;
 public final class GuiTestSupport {
     private static final Unsafe UNSAFE = loadUnsafe();
     private static final Path TEST_GAME_DIR = createTestGameDir();
+    private static final java.util.concurrent.atomic.AtomicLong TEST_CASE_NAMESPACE_COUNTER = new java.util.concurrent.atomic.AtomicLong();
     private static boolean bootstrapped;
 
     /**
@@ -76,32 +77,23 @@ public final class GuiTestSupport {
 
     /**
      * 重置 GUI 测试状态并返回新的客户端操作记录器。
-     * 默认将存储后端强制设为 NBT，因为绝大多数 GUI 测试验证的是界面交互行为而非 H2 持久化；
-     * 如需测试默认存储后端选择，请使用 {@link #resetStateKeepDefaultBackend()}。
+     * 存储后端保持 ModConfig 默认值（H2，生产唯一支持的存储模式），测试直接走 H2 嵌入式链路；
+     * 每个用例开始前全量重置 H2 状态并失效历史连接缓存，避免上一用例数据泄入当前用例。
      *
      * @return 新的操作记录器
      */
     public static RecordingClientOps resetState() {
-        RecordingClientOps ops = resetStateKeepDefaultBackend();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
-        // GUI 交互用例默认关闭“新增即自动保存”，避免异步保存回调覆盖用例内存态；
-        // 自动保存行为由显式 setAutoSave(true) 的专门用例覆盖
-        ModConfig.getInstance().setAutoSave(false);
-        return ops;
-    }
-
-    /**
-     * 重置 GUI 测试状态但不覆盖存储后端配置，保留 ModConfig 的默认后端（H2）。
-     * 仅供存储后端选择相关测试使用。
-     *
-     * @return 新的操作记录器
-     */
-    public static RecordingClientOps resetStateKeepDefaultBackend() {
         bootstrapEnvironment();
         invokeTodoScreenAwaitSaveIdle();
+        invokeGuiStorageLoaderIdle();
+        com.todolist.storage.H2StorageBootstrap.resetAllForTests();
+        com.todolist.storage.H2ConnectionProvider.invalidateReusableConnections();
         cleanTestGameDir();
         DataPathProvider.setGameDirSupplier(() -> TEST_GAME_DIR);
-        DataPathProvider.resetStorageNamespace();
+        // 每个用例使用独立存储命名空间：H2 同 URL 连接共享同一 MVStore 实例，
+        // 已删除数据库文件的旧句柄仍可读出旧数据（Windows FILE_SHARE_DELETE 语义），
+        // 按用例隔离命名空间可彻底避免上一用例数据泄入当前用例，迟到加载任务也会被 namespace 守卫拦下。
+        DataPathProvider.setStorageNamespace("gui-case-" + TEST_CASE_NAMESPACE_COUNTER.incrementAndGet());
         setStaticObjectField(ModConfig.class, "instance", null);
         invokeTodoScreenReset();
         TodoListCommon.init();
@@ -109,7 +101,25 @@ public final class GuiTestSupport {
         ClientPlatformAdapter.setHudRendererSupplier(() -> null);
         RecordingClientOps ops = new RecordingClientOps();
         ClientBridge.setOps(ops);
+        // GUI 交互用例默认关闭“新增即自动保存”，避免异步保存回调覆盖用例内存态；
+        // 自动保存行为由显式 setAutoSave(true) 的专门用例覆盖
+        ModConfig.getInstance().setAutoSave(false);
         return ops;
+    }
+
+    /**
+     * 反射调用 TodoScreenTestAccess 的加载线程排空方法，
+     * 确保上一用例的 H2 异步加载任务（含静态缓存快照更新）全部完成后再重置静态状态。
+     */
+    private static void invokeGuiStorageLoaderIdle() {
+        try {
+            Class<?> accessClass = Class.forName("com.todolist.gui.TodoScreenTestAccess");
+            java.lang.reflect.Method method = accessClass.getDeclaredMethod("awaitGuiStorageLoaderIdleForTest");
+            method.setAccessible(true);
+            method.invoke(null);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("等待 H2 个人任务加载线程空闲失败", e);
+        }
     }
 
     /**
@@ -163,6 +173,9 @@ public final class GuiTestSupport {
 
     /**
      * 初始化指定测试界面。
+     * TodoScreen 在 H2 后端下会异步加载个人任务：先对齐真实 Minecraft.setScreen 语义设置 minecraft.screen，
+     * 再执行 init，保证 init 期间提交的异步加载回调在守卫（minecraft.screen == this）下正确应用；
+     * 最后等待加载标志翻回 false 后再继续断言。
      *
      * @param minecraft 假客户端
      * @param screen 目标界面
@@ -175,7 +188,36 @@ public final class GuiTestSupport {
         if (minecraft.getLastInputType() == null) {
             minecraft.setTestLastInputType(InputType.KEYBOARD_TAB);
         }
+        if (screen instanceof com.todolist.gui.TodoScreen) {
+            setObjectField(Minecraft.class, minecraft, "screen", screen);
+        }
         screen.init(minecraft, width, height);
+        awaitTodoScreenAsyncPersonalTasksLoad(screen);
+    }
+
+    /**
+     * 等待 TodoScreen 的 H2 异步个人任务加载完成。
+     * 假客户端的 execute 为同步执行，异步加载的完成标志即 personalTasksLoading 翻回 false。
+     *
+     * @param screen 初始化后的界面
+     */
+    private static void awaitTodoScreenAsyncPersonalTasksLoad(Screen screen) {
+        if (!(screen instanceof com.todolist.gui.TodoScreen)) {
+            return;
+        }
+        long deadline = System.currentTimeMillis() + 5_000L;
+        while (System.currentTimeMillis() < deadline) {
+            if (!Boolean.TRUE.equals(readField(com.todolist.gui.TodoScreen.class, screen, "personalTasksLoading"))) {
+                return;
+            }
+            try {
+                Thread.sleep(10L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        throw new IllegalStateException("TodoScreen H2 异步个人任务加载在 5 秒内未完成");
     }
 
     /**
