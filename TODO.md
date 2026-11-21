@@ -83,7 +83,7 @@
 - 【feat】selftest 服务端自检基建：`/todo selftest` 12 场景两档 + verify-all 无头判定 + 测试面板按钮，手测人工项 21→16；顺带修复 H2 查询缺触发器列、Task 拷贝构造漏拷触发器、NeoForge 缺触发器接收与 Toast 渲染三个存量 bug
 
 - 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（2026-11-21 完成全分支同步）：1.20.1 基线 `90e6f39` 合入，其余分支 cherry-pick 同步——1.20.x `d791196`（NbtIoCompat 适配，1.20.4 check 绿 + 1.20.6 构建绿）、1.21.1 `787b33e`（check 绿 + InputType 合并）、1.21.x `6e21e1b`（1.21.4 check 绿）、1.21.9-11 `7389f7a`（1.21.11 构建绿 + v1_21_11 覆盖副本清理）、26.1.x `4c5a2c6`（26 Screen API 合并，Java 25 编译+测试绿）、26.2 `2fe298b`、26.3 `2ba8ea8`（Java 25 编译绿）；26.x `91a3f1a` 已应用（该分支处于 26 适配 WIP、编译基线未通，验证随 26 适配线进行）。实机两层验证 PASS（服务端冒烟 + 真实实例 GUI/selftest 12 场景）。
-  分支级实机冒烟状态（2026-11-22 更新）：**1.20.x（1.20.4）/1.21.1/1.21.x 三分支 selftest 12/12 PASS**（单人 Quick Play + PostMessage 跨桌面驱动 + F2 判定，含 allowCommands/pause 禁用/SETFOCUS 门控解锁三项修复）；1.21.9-11 定向抽查 PASS（覆盖副本清理后 GUI/HUD/selftest 全正常）；**26.1.x/26.2/26.3 因 26 线 Screen 事件激活判定升级（SETFOCUS 伪造失效）延后**，随 26 适配线统一验证；26 线构建脚本需修正 Java 版本（26.1.2 要求 toolchain 25，脚本硬编码 21）。设计记录见 `docs/nbt-storage-removal.md`。
+  分支级实机冒烟状态（2026-11-22 更新）：**1.20.x（1.20.4）/1.21.1/1.21.x 三分支 selftest 12/12 PASS**（统一实机流程定型 v3：单人 Quick Play + mc-focus 前台 + PostMessage 驱动 + F2 判定，含 allowCommands/pause 禁用/SETFOCUS 门控解锁三项修复）；1.21.9-11 定向抽查 PASS（覆盖副本清理后 GUI/HUD/selftest 全正常）；**26.1.x/26.2/26.3 冒烟延后**（26 适配线 Screen 激活判定调查随适配线进行）；26 线构建脚本需修正 Java 版本（26.1.2 要求 toolchain 25，脚本硬编码 21）。设计记录见 `docs/nbt-storage-removal.md`。
 
 ## 已废弃
 
