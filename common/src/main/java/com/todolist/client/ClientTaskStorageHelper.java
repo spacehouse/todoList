@@ -88,12 +88,7 @@ public final class ClientTaskStorageHelper {
         }
         UUID playerUuid = getClientPlayerUuid(client);
         if (playerUuid != null && isLocalIntegratedServer(client)) {
-            if (storage.isH2StorageSelected()) {
-                storage.saveLocalAndPlayerTasks(playerUuid, tasks);
-            } else {
-                storage.savePlayerTasks(playerUuid, tasks);
-                storage.saveTasks(tasks);
-            }
+            storage.saveLocalAndPlayerTasks(playerUuid, tasks);
             return;
         }
         storage.saveTasks(tasks);

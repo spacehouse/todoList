@@ -53,13 +53,11 @@ public class ModConfig {
     };
     private static final String[] STORAGE_BACKEND_COMMENT_KEYS = new String[] {
             "config.todolist.storage_backend.comment.title",
-            "config.todolist.storage_backend.comment.nbt",
             "config.todolist.storage_backend.comment.h2"
     };
     private static final String[] STORAGE_BACKEND_COMMENT_FALLBACK_EN = new String[] {
             "storageBackend notes:",
-            "h2: H2 database storage (forced, only supported mode)",
-            "nbt: deprecated legacy file storage, will be ignored and forced to h2"
+            "h2: H2 database storage (the only supported storage mode)"
     };
     private static final String[] H2_BACKUP_ON_START_COMMENT_KEYS = new String[] {
             "config.todolist.h2_backup_on_start.comment.title",
@@ -121,11 +119,9 @@ public class ModConfig {
 
     /**
      * 存储后端类型。
-     * H2 是当前默认数据库存储，NBT 仅作为旧版兼容保留。
+     * H2 是唯一支持的存储模式；旧配置中的 nbt 值会在加载时回退为 H2。
      */
     public enum StorageBackend {
-        @SerializedName("nbt")
-        NBT,
         @SerializedName("h2")
         H2
     }
@@ -310,9 +306,9 @@ public class ModConfig {
 
     private boolean normalize() {
         boolean changed = false;
-        // 强制使用 H2 存储后端，NBT 模式已废弃，不再支持通过配置切换回 NBT
+        // 存储链路已收敛为 H2 单后端，缺失或非法值（含旧配置的 nbt）统一回退 H2
         if (storageBackend != StorageBackend.H2) {
-            TodoConstants.LOGGER.info("Storage backend forced to H2 (configured: {}); NBT mode is no longer supported.", storageBackend);
+            TodoConstants.LOGGER.info("Storage backend forced to H2 (configured: {}).", storageBackend);
             storageBackend = StorageBackend.H2;
             changed = true;
         }
@@ -703,20 +699,6 @@ public class ModConfig {
      */
     public StorageBackend getStorageBackend() {
         return storageBackend == null ? StorageBackend.H2 : storageBackend;
-    }
-
-    /**
-     * 设置存储后端并立即写盘。
-     *
-     * @param storageBackend 新的存储后端；传入 null 时回退 H2
-     */
-    public void setStorageBackend(StorageBackend storageBackend) {
-        StorageBackend normalizedStorageBackend = storageBackend == null ? StorageBackend.H2 : storageBackend;
-        if (getStorageBackend() == normalizedStorageBackend) {
-            return;
-        }
-        this.storageBackend = normalizedStorageBackend;
-        save();
     }
 
     /**

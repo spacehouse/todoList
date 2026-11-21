@@ -1,19 +1,15 @@
 package com.todolist.task;
 
 import com.todolist.gui.testsupport.GuiTestSupport;
-import com.todolist.platform.DataPathProvider;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtIo;
 
-import java.nio.file.Path;
 import java.util.List;
 
 /**
  * TaskCompatibilityTestMain 覆盖子任务 Phase 1 的 Task/NBT 兼容与展平回归。
+ * 原 shouldFlattenLegacySubtasksWhenLoadingTaskStorage（TaskStorage 读旧 NBT 文件展平）已随
+ * NBT 文件存储死分支清理退役，旧数据展平语义由迁移链测试（H2LegacyMigrationTestMain）承接。
  */
 public final class TaskCompatibilityTestMain {
-    private static final int NBT_COMPOUND_TYPE = 10;
 
     /**
      * 工具类不需要实例化。
@@ -38,10 +34,6 @@ public final class TaskCompatibilityTestMain {
         GuiTestSupport.runTestCase(
                 "TaskCompatibilityTestMain.shouldRejectNestedLegacySubtasksBeyondOneLevel",
                 TaskCompatibilityTestMain::shouldRejectNestedLegacySubtasksBeyondOneLevel
-        );
-        GuiTestSupport.runTestCase(
-                "TaskCompatibilityTestMain.shouldFlattenLegacySubtasksWhenLoadingTaskStorage",
-                TaskCompatibilityTestMain::shouldFlattenLegacySubtasksWhenLoadingTaskStorage
         );
     }
 
@@ -114,73 +106,5 @@ public final class TaskCompatibilityTestMain {
             failed = exception.getMessage() != null && exception.getMessage().contains("两层");
         }
         GuiTestSupport.assertTrue(failed, "两层旧 subtasks 应被明确阻断");
-    }
-
-    /**
-     * 验证 TaskStorage 读取旧 NBT 文件时会先展平为平铺结构。
-     */
-    private static void shouldFlattenLegacySubtasksWhenLoadingTaskStorage() {
-        GuiTestSupport.resetState();
-        try {
-            TaskStorage storage = new TaskStorage();
-            Path taskFile = storage.getDataDirectoryPath().resolve("moddata.dat");
-            writeLegacyTaskFile(taskFile);
-
-            List<Task> loaded = storage.loadTasks();
-
-            GuiTestSupport.assertEquals(2, loaded.size(), "读取旧 NBT 后应展平成父任务与一个子任务");
-            GuiTestSupport.assertTrue(loaded.get(0).isTopLevelTask(), "首条任务应为顶层父任务");
-            GuiTestSupport.assertEquals("legacy-parent", loaded.get(1).getParentTaskId(), "子任务应在读取后绑定父任务");
-            GuiTestSupport.assertEquals(0L, loaded.get(1).getSubtaskSortOrder(), "单个子任务顺序应为 0");
-        } catch (Exception exception) {
-            throw new IllegalStateException("验证旧 NBT 展平读取时发生异常", exception);
-        }
-    }
-
-    /**
-     * 写入一份旧 subtasks 嵌套格式的任务文件。
-     *
-     * @param taskFile 目标任务文件
-     * @throws Exception 写入失败时抛出
-     */
-    private static void writeLegacyTaskFile(Path taskFile) throws Exception {
-        CompoundTag root = new CompoundTag();
-        root.putLong("lastSaved", System.currentTimeMillis());
-        root.putInt("version", 1);
-
-        CompoundTag child = createLegacyTaskNbt("legacy-child", "child", "project-a");
-        CompoundTag parent = createLegacyTaskNbt("legacy-parent", "parent", "project-a");
-        ListTag subtasks = new ListTag();
-        subtasks.add(child);
-        parent.put("subtasks", subtasks);
-
-        ListTag tasks = new ListTag();
-        tasks.add(parent);
-        root.put("tasks", tasks);
-        NbtIo.write(root, taskFile.toFile());
-    }
-
-    /**
-     * 创建旧格式任务 NBT。
-     *
-     * @param id 任务 ID
-     * @param title 标题
-     * @param projectId 项目 ID
-     * @return 旧格式任务 NBT
-     */
-    private static CompoundTag createLegacyTaskNbt(String id, String title, String projectId) {
-        CompoundTag task = new CompoundTag();
-        task.putString("id", id);
-        task.putString("title", title);
-        task.putString("description", "");
-        task.putBoolean("completed", false);
-        task.putString("priority", Task.Priority.MEDIUM.name());
-        task.putLong("createdAt", 1L);
-        task.putString("scope", Task.Scope.PERSONAL.name());
-        task.putString("projectId", projectId);
-        task.putLong("subtaskSortOrder", 0L);
-        task.put("tags", new ListTag());
-        task.put("subtasks", new ListTag());
-        return task;
     }
 }
