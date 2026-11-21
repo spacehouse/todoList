@@ -10,14 +10,7 @@
 
 ## 待同步
 
-> 2026-11-21：【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路——已在特性分支
-> `refactor/1.20.1-nbt-storage-removal`（基于 1.20.1）完成实现与回归（`:common:check` 全绿 +
-> 全平台构建成功），待同步其余维护分支；设计记录见 `docs/nbt-storage-removal.md`。
-> 实机验证已完成（2026-11-21）：① 无头层 dev-fabric 服务端启动冒烟 PASS（`Done (6.153s)` +
-> 存储初始化正常）；② 视觉层真实实例（1.20.1-Fabric 0.19.5 + 特性分支 jar）进世界任务同步
-> 16 条 / H2 写入正常、待办 GUI 完整渲染（项目列表 + 未完成 6/已完成 8 分组）、
-> `/todo selftest run all` 12 场景全 PASS（`SELFTEST SUMMARY pass=12 fail=0 mode=player`）。
-> 成功链路已存记忆（todolist-smoke-test-chain），可复用。
+> (暂无)
 
 > 2026-11-08：本批功能（触发器全链路、材料反推、物品标题、selftest、H2 TCP 整体移除、多版本 HUD/Toast 修复）已全部同步至五条维护分支并实机验证通过；
 > H2 TCP 移除不再等待 CurseForge 对 1.4.2 的审核结果，随 1.4.3 发布直接取代；
@@ -88,6 +81,8 @@
 - 【fix】幽灵任务源头级联完成（Phase Y1）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度，见 `docs/feat-trigger-completion.md` Phase Y1
 - 【feat】材料反推（**experimental**，后续开发已冻结，合入后只修缺陷、不扩配方能力），见 `docs/feat-material-task-generation.md`
 - 【feat】selftest 服务端自检基建：`/todo selftest` 12 场景两档 + verify-all 无头判定 + 测试面板按钮，手测人工项 21→16；顺带修复 H2 查询缺触发器列、Task 拷贝构造漏拷触发器、NeoForge 缺触发器接收与 Toast 渲染三个存量 bug
+
+- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（2026-11-21 完成全分支同步）：1.20.1 基线 `90e6f39` 合入，其余分支 cherry-pick 同步——1.20.x `d791196`（NbtIoCompat 适配，1.20.4 check 绿 + 1.20.6 构建绿）、1.21.1 `787b33e`（check 绿 + InputType 合并）、1.21.x `6e21e1b`（1.21.4 check 绿）、1.21.9-11 `7389f7a`（1.21.11 构建绿 + v1_21_11 覆盖副本清理）、26.1.x `4c5a2c6`（26 Screen API 合并，Java 25 编译+测试绿）、26.2 `2fe298b`、26.3 `2ba8ea8`（Java 25 编译绿）；26.x `91a3f1a` 已应用（该分支处于 26 适配 WIP、编译基线未通，验证随 26 适配线进行）。实机两层验证 PASS（服务端冒烟 + 真实实例 GUI/selftest 12 场景）；设计记录见 `docs/nbt-storage-removal.md`。
 
 ## 已废弃
 
