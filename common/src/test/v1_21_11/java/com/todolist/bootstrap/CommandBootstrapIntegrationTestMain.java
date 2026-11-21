@@ -893,7 +893,7 @@ public final class CommandBootstrapIntegrationTestMain {
      * 获取当前测试命名空间下的团队任务持久化文件路径。
      */
     static Path getTeamTaskFilePath() {
-        return TodoListCommon.getTaskStorage().getDataDirectoryPath().resolve("team_tasks.dat");
+        return DataPathProvider.getTodoDataDir().resolve("team_tasks.dat");
     }
 
     /**

@@ -1,14 +1,11 @@
 package com.todolist.storage;
 
-import com.todolist.config.ModConfig;
 import com.todolist.gui.testsupport.GuiTestSupport;
 import com.todolist.persistence.SafePersistenceHelper;
 import com.todolist.platform.DataPathProvider;
 import com.todolist.project.Project;
 import com.todolist.project.ProjectPlayerStateStorage;
-import com.todolist.project.ProjectStorage;
 import com.todolist.task.Task;
-import com.todolist.task.TaskStorage;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,12 +48,10 @@ public final class H2LegacyMigrationTestMain {
             Path finalTempGameDir = tempGameDir;
             DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
             DataPathProvider.resetStorageNamespace();
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
-            TaskStorage taskStorage = new TaskStorage();
-            taskStorage.saveTasks(List.of(createTask("backup-old")));
-            taskStorage.saveTasks(List.of(createTask("backup-new")));
-            Path taskFile = taskStorage.getDataDirectoryPath().resolve("moddata.dat");
+            Path taskFile = DataPathProvider.getTodoDataDir().resolve("moddata.dat");
+            LegacyNbtFixtureWriter.writeTaskBucket(taskFile, List.of(createTask("backup-old")));
             Path backupFile = SafePersistenceHelper.resolveBackupPath(taskFile);
+            Files.copy(taskFile, backupFile);
             Files.delete(taskFile);
 
             LegacyMigrationData data = new H2LegacyMigrationReader().readAll();
@@ -128,7 +123,6 @@ public final class H2LegacyMigrationTestMain {
             Path finalTempGameDir = tempGameDir;
             DataPathProvider.setGameDirSupplier(() -> finalTempGameDir);
             DataPathProvider.resetStorageNamespace();
-            ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.NBT);
             writeLegacyData();
 
             LegacyMigrationData data = new H2LegacyMigrationReader().readAll();
@@ -186,19 +180,22 @@ public final class H2LegacyMigrationTestMain {
         Task task = createTask("legacy task");
         task.setId("legacy-task-1");
         task.addTag("中文标签");
-        new TaskStorage().saveTasks(List.of(task));
+        LegacyNbtFixtureWriter.writeTaskBucket(DataPathProvider.getTodoDataDir().resolve("moddata.dat"), List.of(task));
 
         Project project = new Project("legacy project", Project.Scope.PERSONAL, TEST_PLAYER.toString());
         project.setId("legacy-project-1");
         project.setMemberName(TEST_PLAYER.toString(), "Owner");
-        new ProjectStorage().saveProjects(List.of(project));
+        LegacyNbtFixtureWriter.writeProjectBucket(DataPathProvider.getProjectsDir().resolve("projects.dat"), List.of(project));
 
         ProjectPlayerStateStorage.ProjectPlayerState state = new ProjectPlayerStateStorage.ProjectPlayerState(
                 project.getId(),
                 List.of(project.getId()),
                 true
         );
-        new ProjectPlayerStateStorage().savePlayerState(TEST_PLAYER, state);
+        LegacyNbtFixtureWriter.writePlayerState(
+                DataPathProvider.getProjectPlayersDir().resolve(TEST_PLAYER.toString() + ".dat"),
+                state
+        );
     }
 
     /**
