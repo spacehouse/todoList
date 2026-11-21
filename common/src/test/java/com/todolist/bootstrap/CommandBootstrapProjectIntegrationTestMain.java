@@ -409,34 +409,6 @@ public final class CommandBootstrapProjectIntegrationTestMain {
     }
 
     /**
-     * 读取个人项目持久化文件路径。
-     *
-     * @return 个人项目文件路径
-     */
-    private static Path getPersonalProjectsFilePath() {
-        return CommandBootstrapIntegrationTestMain.getPersonalProjectsFilePath();
-    }
-
-    /**
-     * 读取玩家项目状态文件路径。
-     *
-     * @param player 目标玩家
-     * @return 玩家项目状态文件路径
-     */
-    private static Path getProjectPlayerStateFilePath(TestServerPlayer player) {
-        return CommandBootstrapIntegrationTestMain.getProjectPlayerStateFilePath(player);
-    }
-
-    /**
-     * 读取团队项目持久化文件路径。
-     *
-     * @return 团队项目文件路径
-     */
-    private static Path getTeamProjectsFilePath() {
-        return CommandBootstrapIntegrationTestMain.getTeamProjectsFilePath();
-    }
-
-    /**
      * 按任务 ID 读取团队任务。
      *
      * @param taskId 任务 ID
@@ -2283,7 +2255,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         int createResult = dispatcher.execute("todo project create personal Reload Personal Project", createSource(0, owner, server));
         assertEquals(1, createResult, "project create personal 应返回成功");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getPersonalProjectsFilePath()), "project create personal 应写入个人项目文件");
+        assertEquals(Boolean.TRUE, TodoListCommon.getProjectStorage().hasPersonalProjectsFile(), "project create personal 应持久化个人项目");
 
         reloadPersistentState();
 
@@ -2330,7 +2302,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         );
 
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getProjectPlayerStateFilePath(owner)), "project state 应写入玩家状态文件");
+        assertEquals(Boolean.TRUE, new ProjectPlayerStateStorage().hasPlayerState(owner.getUUID()), "project state 应持久化玩家状态");
 
         reloadPersistentState();
 
@@ -2390,7 +2362,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         );
 
         flushProjectSaves(dedicatedServer);
-        assertEquals(Boolean.TRUE, Files.exists(getProjectPlayerStateFilePath(owner)), "团队项目状态应写入玩家状态文件");
+        assertEquals(Boolean.TRUE, new ProjectPlayerStateStorage().hasPlayerState(owner.getUUID()), "团队项目状态应持久化玩家状态");
 
         reloadPersistentState();
 
@@ -2506,7 +2478,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         TestMinecraftServer server = createServer(owner);
         addOwnedPersonalProject(owner, "sync-seed-active", "Sync Seed Active");
         addOwnedPersonalProject(owner, "sync-seed-star", "Sync Seed Star");
-        assertEquals(Boolean.FALSE, Files.exists(getProjectPlayerStateFilePath(owner)), "测试前不应已有玩家项目状态文件");
+        assertEquals(Boolean.FALSE, new ProjectPlayerStateStorage().hasPlayerState(owner.getUUID()), "测试前不应已有玩家项目状态");
 
         net.minecraft.network.FriendlyByteBuf packet = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         packet.writeBoolean(true);
@@ -2541,7 +2513,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         assertEquals(1, dispatcher.execute("todo project member-create " + createdProject.getId() + " on", createSource(0, manager, server)), "开启 member-create 应返回成功");
         assertEquals(Boolean.TRUE, createdProject.isAllowMemberCreate(), "开启 member-create 后项目状态应立即更新");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "member-create 应写入团队项目文件");
+        assertEquals(Boolean.TRUE, !TodoListCommon.getProjectStorage().loadTeamProjects().isEmpty(), "member-create 应持久化团队项目");
 
         reloadPersistentState();
 
@@ -2566,7 +2538,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         assertEquals(1, dispatcher.execute("todo project all-player-claim-complete " + createdProject.getId() + " on", createSource(0, manager, server)), "开启 all-player-claim-complete 应返回成功");
         assertEquals(Boolean.TRUE, createdProject.isAllowAllPlayersClaimComplete(), "开启 all-player-claim-complete 后项目状态应立即更新");
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "all-player-claim-complete 应写入团队项目文件");
+        assertEquals(Boolean.TRUE, !TodoListCommon.getProjectStorage().loadTeamProjects().isEmpty(), "all-player-claim-complete 应持久化团队项目");
 
         reloadPersistentState();
 
@@ -2598,7 +2570,7 @@ public final class CommandBootstrapProjectIntegrationTestMain {
         Task memberTask = createTeamTask(createdProject.getId(), "Reload Member Permission Task");
         saveTeamTasks(leadTask, memberTask);
         flushProjectSaves(server);
-        assertEquals(Boolean.TRUE, Files.exists(getTeamProjectsFilePath()), "成员角色变化应写入团队项目文件");
+        assertEquals(Boolean.TRUE, !TodoListCommon.getProjectStorage().loadTeamProjects().isEmpty(), "成员角色变化应持久化团队项目");
 
         reloadPersistentState();
 

@@ -2731,7 +2731,6 @@ public final class TodoScreenTestMain {
      */
     private static void shouldUseH2CompletedCountWhenCompletedSectionCollapsed() {
         GuiTestSupport.resetState();
-        ModConfig.getInstance().setStorageBackend(ModConfig.StorageBackend.H2);
         H2StorageBootstrap.resetAllForTests();
         FakeMinecraftClient minecraft = GuiTestSupport.createMinecraft(OWNER_ID, "owner", false);
         createDefaultPersonalProject();
@@ -3707,7 +3706,7 @@ public final class TodoScreenTestMain {
         waitForTaskSaveToFinish(publishedScreen);
 
         GuiTestSupport.assertEquals(List.of("Published Personal Task"),
-                TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
+                loadLocalTaskTitlesQuietly(),
                 "LAN 主机保存个人任务后应同步写入本地文件");
 
         TodoScreenTestAccess.resetGuiStateForTest();
@@ -3748,7 +3747,7 @@ public final class TodoScreenTestMain {
 
         GuiTestSupport.assertNotNull(lanHostMinecraft.getLastScreen(), "保存个人任务后应关闭当前界面并返回父界面");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
-                TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
+                loadLocalTaskTitlesQuietly(),
                 "LAN 主机保存个人任务后应同步写入本地文件");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
                 loadPlayerTaskTitles(OWNER_ID),
@@ -3766,8 +3765,22 @@ public final class TodoScreenTestMain {
                 access(singleplayerScreen).getCurrentManagerTasksForTest().stream().map(Task::getTitle).toList(),
                 "退出局域网主机后重新进入单人世界仍应看到刚才保存的个人任务");
         GuiTestSupport.assertEquals(List.of("LAN Host Journey Task"),
-                TodoListCommon.getTaskStorage().loadTasksSafe().stream().map(Task::getTitle).toList(),
+                loadLocalTaskTitlesQuietly(),
                 "重新进入单人世界后本地个人任务文件应保持最新内容");
+    }
+
+    /**
+     * 安全读取本地个人任务标题列表，读取失败时返回空列表。
+     * 替代已移除的 TaskStorage.loadTasksSafe，仅供 LAN 场景断言使用。
+     *
+     * @return 本地个人任务标题列表
+     */
+    private static List<String> loadLocalTaskTitlesQuietly() {
+        try {
+            return TodoListCommon.getTaskStorage().loadTasks().stream().map(Task::getTitle).toList();
+        } catch (Exception exception) {
+            return List.of();
+        }
     }
 
     /**
