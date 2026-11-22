@@ -200,6 +200,14 @@ tasks.register<JavaExec>("taskTriggerTest") {
     dependsOn(tasks.named(testSourceSet.classesTaskName))
 }
 
+tasks.register<JavaExec>("taskImporterTest") {
+    group = "verification"
+    description = "Run the task JSON import format parsing and validation self-tests."
+    classpath = files(mainSourceSet.output, testSourceSet.output, mainSourceSet.compileClasspath, testSourceSet.compileClasspath)
+    mainClass.set("com.todolist.importer.TaskImporterTestMain")
+    dependsOn(tasks.named(testSourceSet.classesTaskName))
+}
+
 tasks.register<JavaExec>("taskTriggerServiceTest") {
     group = "verification"
     description = "Run the five event-driven trigger engine semantics self-tests."
@@ -291,6 +299,7 @@ tasks.register<JavaExec>("permissionCenterTest") {
 tasks.named("check").configure {
     dependsOn("titleMarkupParserTest")
     dependsOn("taskTriggerTest")
+    dependsOn("taskImporterTest")
     dependsOn("taskTriggerServiceTest")
     dependsOn("advancementCatalogTest")
     dependsOn("materialRecipeTest")
