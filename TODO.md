@@ -6,7 +6,7 @@
 
 ## 进行中
 
-- 【feat】支持任务批量导入格式（JSON）v1（experimental，2026-11-22 立项）：命令 `/todo import <file> [项目]`（项目参数可选，ID/名称精确匹配，团队项目与缺失项目拒绝；仅个人任务、仅导入）；在验证分支 `verify/1.20.1-feat-task-import` 实施完成——离线 26 测试组全绿（含 38 解析 + 11 命令集成用例）+ 构建绿 + 1.20.1 实机四轮冒烟 PASS（数据链路 / markup 渲染 / 边界文件 / 指定项目），设计见 `docs/feat-task-import-format.md`；待合回 1.20.1 主线后跨分支同步
+- (暂无)
 
 ## 待同步
 
@@ -48,6 +48,8 @@
 
 ## 已完成
 
+- 【feat】支持任务批量导入格式（JSON）v1（experimental）：命令 `/todo import <file> [项目]`（项目参数可选，ID/名称精确匹配，团队项目与缺失项目拒绝；仅个人任务、仅导入），离线 38 解析 + 11 命令集成用例，1.20.1 实机四轮冒烟 PASS。
+  本分支 cherry-pick 干净落位；1.20.4 check 绿 + 1.20.6 构建绿（build-local-120x）（feature 提交 01dd31c，2026-11-22），设计见 `docs/feat-task-import-format.md`
 - 【refactor】移除 H2 TCP 服务端与外部访问账号体系（CurseForge 审查硬约束）：外部排查改走备份副本路线；已随各分支 1.4.2+ 代码发布，CF 对 fabric-1.20.1-1.4.2 的审核不再等待，设计见 `docs/h2-tcp-server-removal.md`
 - 【feat】支持子任务
 - 【fix】修复团队任务中父任务未按直属子任务聚合指派状态参与待领 / 我的视图与领取操作
