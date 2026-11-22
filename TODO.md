@@ -10,7 +10,7 @@
 
 ## 待同步
 
-- 【feat】任务批量导入格式（JSON）v1（experimental）：命令 `/todo import <file> [项目]`（项目参数可选，ID/名称精确匹配，团队项目与缺失项目拒绝；仅个人任务、仅导入）；已合入 1.20.1 主线（验证分支 `verify/1.20.1-feat-task-import` → merge `a0ff8b2`，2026-11-22）——离线 26 测试组全绿（含 38 解析 + 11 命令集成用例）+ 构建绿 + 1.20.1 实机四轮冒烟 PASS（数据链路 / markup 渲染 / 边界文件 / 指定项目），设计见 `docs/feat-task-import-format.md`；待同步至其余 8 条版本分支
+> (暂无)
 
 > 2026-11-08：本批功能（触发器全链路、材料反推、物品标题、selftest、H2 TCP 整体移除、多版本 HUD/Toast 修复）已全部同步至五条维护分支并实机验证通过；
 > H2 TCP 移除不再等待 CurseForge 对 1.4.2 的审核结果，随 1.4.3 发布直接取代；
@@ -49,6 +49,7 @@
 
 ## 已完成
 
+- 【feat】任务批量导入格式（JSON）v1（experimental）：命令 `/todo import <file> [项目]`（项目参数可选，ID/名称精确匹配，团队项目与缺失项目拒绝；仅个人任务、仅导入），离线 38 解析 + 11 命令集成用例，1.20.1 实机四轮冒烟 PASS（数据链路 / `[item:...]` markup 渲染 / 边界文件 / 指定项目）。验证分支 `verify/1.20.1-feat-task-import` 合入主线（merge `a0ff8b2`，2026-11-22），八分支同步全落位——1.20.x `01dd31c`（1.20.4 check 绿 + 1.20.6 构建绿）、1.21.1 `1d60aea`（check 绿）、1.21.x `ddf92c0`（1.21.4 check 绿）、1.21.9-11 `edadb6f`+`9b7a169`（**v1_21_11 覆盖源集 CommandBootstrap 独立副本需单独移植导入命令**，1.21.11 构建绿 + 导入测试组 PASS）、26.1.x `aea19bf` / 26.2 `87207fa` / 26.3 `30d2f42`（JDK25 编译 + 测试绿）、26.x `23ff3bb`（已应用，验证随 26 适配线），设计见 `docs/feat-task-import-format.md`
 - 【refactor】移除 H2 TCP 服务端与外部访问账号体系（CurseForge 审查硬约束）：外部排查改走备份副本路线；已随各分支 1.4.2+ 代码发布，CF 对 fabric-1.20.1-1.4.2 的审核不再等待，设计见 `docs/h2-tcp-server-removal.md`
 - 【feat】支持子任务
 - 【fix】修复团队任务中父任务未按直属子任务聚合指派状态参与待领 / 我的视图与领取操作
