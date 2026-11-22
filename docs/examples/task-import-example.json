@@ -1,0 +1,67 @@
+{
+  "formatVersion": 1,
+  "tasks": [
+    {
+      "id": "gear",
+      "title": "准备下界装备",
+      "description": "出发前把基础装备备齐",
+      "priority": "HIGH",
+      "tags": ["探险", "下界"],
+      "trigger": {
+        "type": "ITEM_COLLECT",
+        "target": "minecraft:iron_ingot",
+        "targetCount": 20
+      }
+    },
+    {
+      "title": "收集 [item:minecraft:obsidian] ×14",
+      "description": "搭传送门用",
+      "priority": "MEDIUM",
+      "parentId": "gear",
+      "trigger": {
+        "type": "ITEM_COLLECT",
+        "target": "minecraft:obsidian",
+        "targetCount": 14
+      }
+    },
+    {
+      "title": "收集打火石",
+      "parentId": "gear",
+      "trigger": {
+        "type": "ITEM_COLLECT",
+        "target": "minecraft:flint_and_steel",
+        "targetCount": 1
+      }
+    },
+    {
+      "id": "food",
+      "title": "储备食物",
+      "priority": "MEDIUM",
+      "tags": ["补给"],
+      "trigger": {
+        "type": "ITEM_COLLECT",
+        "target": "minecraft:cooked_beef",
+        "targetCount": 32
+      }
+    },
+    {
+      "title": "击杀 5 只恶魂",
+      "description": "拿眼泪做再生药水",
+      "parentId": "food",
+      "trigger": {
+        "type": "KILL_ENTITY",
+        "target": "minecraft:ghast",
+        "targetCount": 5
+      }
+    },
+    {
+      "title": "获得「勇往直前」进度",
+      "priority": "LOW",
+      "trigger": {
+        "type": "ADVANCEMENT",
+        "target": "minecraft:story/lava_bucket",
+        "targetCount": 1
+      }
+    }
+  ]
+}
