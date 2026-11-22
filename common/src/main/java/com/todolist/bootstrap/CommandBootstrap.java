@@ -11,6 +11,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.todolist.TodoConstants;
 import com.todolist.TodoListCommon;
 import com.todolist.config.ModConfig;
+import com.todolist.importer.TaskImporter;
 import com.todolist.network.ProjectPackets;
 import com.todolist.network.TaskPackets;
 import com.todolist.permission.PermissionCenter;
@@ -47,6 +48,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -615,6 +617,20 @@ public final class CommandBootstrap {
                                         .executes(ctx -> setCommandAccessMode(
                                                 ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "mode")
+                                        )))))
+                .then(Commands.literal("import")
+                        .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.EDIT, null))
+                        .then(Commands.argument("file", StringArgumentType.string())
+                                .executes(ctx -> executeTaskImport(
+                                        ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "file"),
+                                        null
+                                ))
+                                .then(Commands.argument("project", StringArgumentType.greedyString())
+                                        .executes(ctx -> executeTaskImport(
+                                                ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "file"),
+                                                StringArgumentType.getString(ctx, "project")
                                         )))))
                 .then(Commands.literal("selftest")
                         .requires(source -> hasCommandPermission(source, CommandPermissionSemantic.ADMIN, null))
@@ -1533,6 +1549,173 @@ public final class CommandBootstrap {
             TodoConstants.LOGGER.error("Failed to add task for command", e);
             return sendStorageAwareCommandFailure(source, "command.todolist.task.add.failed", e);
         }
+    }
+
+    /**
+     * 执行 /todo import：把外部工具生成的 JSON 任务清单批量导入为当前玩家的个人任务。
+     *
+     * <p>导入任务统一为个人作用域并落到当前激活项目（与 /todo task add 的归属规则一致）；
+     * 提供可选的 {@code project} 参数时可指定目标个人项目（项目 ID 或名称精确匹配），
+     * 项目不存在报 {@code project_not_found}，团队项目报 {@code project_not_personal}；
+     * 文件先按游戏目录相对/绝对路径查找，找不到再尝试 {@code config/todolist/imports/} 目录；
+     * 解析与校验全部通过才写库（原子性，见 {@link TaskImporter}）。
+     *
+     * @param source 命令源
+     * @param file   导入文件名或路径
+     * @return 命令执行结果
+     */
+    private static int executeTaskImport(CommandSourceStack source, String file) {
+        return executeTaskImport(source, file, null);
+    }
+
+    /**
+     * 执行 /todo import 的完整实现，支持可选目标项目。
+     *
+     * @param source          命令源
+     * @param file            导入文件名或路径
+     * @param projectSelector 目标项目选择器（项目 ID 或名称），可为 null（落当前激活项目）
+     * @return 命令执行结果
+     */
+    private static int executeTaskImport(CommandSourceStack source, String file, String projectSelector) {
+        if (ensureCommandPermission(source, CommandPermissionSemantic.EDIT) == COMMAND_FAILURE) {
+            return COMMAND_FAILURE;
+        }
+        ServerPlayer player = getPlayerIfPresent(source);
+        if (player == null) {
+            return COMMAND_FAILURE;
+        }
+        String normalizedFile = file == null ? "" : file.trim();
+        if (normalizedFile.isEmpty()) {
+            return sendCommandFailure(source, "command.todolist.import.file_not_found", file);
+        }
+        Path resolvedPath = resolveImportFilePath(normalizedFile);
+        if (resolvedPath == null) {
+            return sendCommandFailure(source, "command.todolist.import.file_not_found", normalizedFile);
+        }
+        String normalizedSelector = projectSelector == null ? "" : projectSelector.trim();
+        String targetProjectId;
+        if (normalizedSelector.isEmpty()) {
+            targetProjectId = resolveProjectIdForCommandTaskAdd(source, player);
+        } else {
+            Project targetProject = resolveImportProject(normalizedSelector);
+            if (targetProject == null) {
+                return sendCommandFailure(source, "command.todolist.import.project_not_found", normalizedSelector);
+            }
+            if (targetProject.getScope() != Project.Scope.PERSONAL) {
+                return sendCommandFailure(source, "command.todolist.import.project_not_personal",
+                        targetProject.getName());
+            }
+            targetProjectId = targetProject.getId();
+        }
+        UUID playerUuid = player.getUUID();
+        TaskImporter.ImportContext context = new TaskImporter.ImportContext(
+                playerUuid.toString(),
+                targetProjectId
+        );
+        TaskImporter.Result result;
+        try {
+            result = TaskImporter.parse(resolvedPath, context);
+        } catch (RuntimeException e) {
+            // 解析器已覆盖已知异常输入，这里是最后防线：任何未预见的运行时异常按通用失败反馈，不让异常直穿命令线程
+            TodoConstants.LOGGER.error("Unexpected failure while parsing import file {}", normalizedFile, e);
+            return sendCommandFailure(source, "command.todolist.import.failed");
+        }
+        if (!result.isSuccess()) {
+            return sendImportRejection(source, result);
+        }
+        TaskStorage storage = TodoListCommon.getTaskStorage();
+        try {
+            List<Task> tasks = loadPersonalTasksForCommand(source.getServer(), storage, playerUuid);
+            tasks.addAll(result.tasks());
+            savePersonalTasksForCommand(source.getServer(), storage, playerUuid, tasks);
+            syncTasksToPlayer(source.getServer(), player);
+            long subtaskCount = result.tasks().stream().filter(Task::isSubtask).count();
+            return sendCommandSuccess(
+                    source,
+                    COMMAND_SUCCESS,
+                    SIDE_EFFECT_PERSIST_DATA_AND_REFRESH_HUD,
+                    "command.todolist.import.success",
+                    result.tasks().size(),
+                    result.tasks().size() - subtaskCount,
+                    subtaskCount
+            );
+        } catch (IOException e) {
+            TodoConstants.LOGGER.error("Failed to import tasks for command", e);
+            return sendStorageAwareCommandFailure(source, "command.todolist.import.failed", e);
+        }
+    }
+
+    /**
+     * 解析导入文件路径：先按游戏目录下的相对/绝对路径查找，找不到再尝试
+     * {@code config/todolist/imports/} 目录。
+     *
+     * @param file 命令传入的文件名或路径
+     * @return 可读文件路径；两处都不存在时返回 null
+     */
+    private static Path resolveImportFilePath(String file) {
+        Path gameDir = com.todolist.platform.DataPathProvider.getGameDir();
+        Path directPath = gameDir.resolve(file).toAbsolutePath().normalize();
+        if (Files.isRegularFile(directPath)) {
+            return directPath;
+        }
+        Path importsPath = gameDir.resolve("config").resolve("todolist").resolve("imports")
+                .resolve(file).toAbsolutePath().normalize();
+        if (Files.isRegularFile(importsPath)) {
+            return importsPath;
+        }
+        return null;
+    }
+
+    /**
+     * 解析导入命令的项目选择器：先按项目 ID 精确查找，再按名称在全部项目中精确匹配。
+     *
+     * <p>团队项目也会被返回（由调用方做个人作用域校验并给出更准确的拒绝提示）；
+     * 名称匹配取第一个精确命中的项目。
+     *
+     * @param selector 项目 ID 或名称
+     * @return 匹配的项目；都不存在时返回 null
+     */
+    private static Project resolveImportProject(String selector) {
+        ProjectManager projectManager = TodoListCommon.getProjectManager();
+        Project byId = projectManager.getProject(selector);
+        if (byId != null) {
+            return byId;
+        }
+        for (Project project : projectManager.getAllProjects()) {
+            if (selector.equals(project.getName())) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 按错误类别反馈导入被拒绝的原因：文档级错误（读取/语法/版本/空/超限）单条说明，
+     * 字段校验错误则回报条数与前若干条明细（明细为面向 JSON 生产者的技术格式）。
+     *
+     * @param source 命令源
+     * @param result 导入失败结果
+     * @return 命令失败状态码
+     */
+    private static int sendImportRejection(CommandSourceStack source, TaskImporter.Result result) {
+        String code = result.documentErrorCode();
+        if (code != null) {
+            switch (code) {
+                case TaskImporter.Result.ERROR_EMPTY:
+                    return sendCommandFailure(source, "command.todolist.import.empty");
+                case TaskImporter.Result.ERROR_TOO_MANY:
+                    return sendCommandFailure(source, "command.todolist.import.too_many",
+                            TaskImporter.MAX_TASKS);
+                case TaskImporter.Result.ERROR_TOO_LARGE:
+                    return sendCommandFailure(source, "command.todolist.import.too_large");
+                default:
+                    return sendCommandFailure(source, "command.todolist.import.invalid_format",
+                            String.join("; ", result.errors()));
+            }
+        }
+        return sendCommandFailure(source, "command.todolist.import.validation_failed",
+                result.errors().size(),
+                String.join(" | ", result.errors()));
     }
 
     /**
