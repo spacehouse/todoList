@@ -11,7 +11,7 @@
 - **存储链路收敛为 H2 单后端**：移除 NBT 文件存储的全部残余代码（任务/项目/玩家状态存储类中的 NBT 文件读写死分支、`StorageBackendFactory`、配置注释与命令拦截分支），维护者只需读懂一条存储链路；`storageBackend` 配置只支持 `h2`，旧配置中的 `nbt` 值加载时自动回退；旧版 NBT 数据（`.dat`）首次访问时自动迁移进 H2 的能力保持不变，任务标题物品标记与网络同步所依赖的 Task NBT 序列化格式不受影响。
 - **H2 星标写入加固**：玩家 HUD 星标项目写入时自动去重与清理空白项，与数据库唯一索引对齐，避免异常数据触发唯一约束冲突。
 - **测试基建适配 H2 单链路**：GUI 离线测试从 NBT 路径整体切换到 H2 嵌入式路径，并按用例隔离存储命名空间、等待异步加载完成，避免跨用例数据泄入；退役依赖 NBT 文件语义的用例（NBT 兜底写入、`.dat` 备份恢复），数据安全兜底语义由 H2 可用性管理（显式报错不静默丢数据）与 `/todo h2 backup` / `restore` 恢复链路承接。
-- **文档更新**：`docs/storage-backend-h2-guide.md` 重写为 H2 单链路使用说明（移除 NBT 切换与已废弃的 TCP 章节），新增 `docs/nbt-storage-removal.md` 记录清理范围与裁定。
+- **文档更新**：`docs/guides/storage-backend-h2-guide.md` 重写为 H2 单链路使用说明（移除 NBT 切换与已废弃的 TCP 章节），新增 `docs/completed/nbt-storage-removal.md` 记录清理范围与裁定。
 
 ## [1.4.3] - 2026-11-08
 

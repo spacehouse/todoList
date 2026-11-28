@@ -12,7 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
  * Fabric 平台游戏事件桥。
  * 订阅 Fabric API 事件，将击杀、破坏方块与库存变化转发给通用触发引擎。
  *
- * 平台局限与补齐（详见 docs/feat-trigger-completion.md）：
+ * 平台局限与补齐（详见 docs/completed/feat-trigger-completion.md）：
  * - 合成事件：Fabric API 无公开回调，由 {@code ResultSlotMixin} 注入 {@code ResultSlot#onTake} 补齐；
  * - 进度事件：Fabric API 无公开回调，由 {@code PlayerAdvancementsMixin} 注入 {@code PlayerAdvancements#award} 补齐。
  */
