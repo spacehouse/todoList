@@ -55,7 +55,7 @@ H2 不可用时显式报错不静默丢数据（`shouldBlockH2WritesWhenUnavaila
 | `closeStorageContext` 的后端判断、`H2MaintenanceGuard` 非 H2 空转、`ClientTaskStorageHelper` 双写分支 | 简化 | `TodoListCommon.java`、`storage/H2MaintenanceGuard.java`、`client/ClientTaskStorageHelper.java` |
 | lang 的 `config.todolist.storage_backend.comment.nbt` 与 5 个 `command.todolist.h2.*.requires_h2` | 删除（en_us / zh_cn 同步） | `assets/todolist/lang/` |
 | NBT 后端依赖型测试（详见 §5） | 退役或改造 | `common/src/test` |
-| `docs/storage-backend-h2-guide.md` 的 NBT 切换 / TCP 章节 | 重写为 H2 单链路使用说明 | `docs/` |
+| `docs/guides/storage-backend-h2-guide.md` 的 NBT 切换 / TCP 章节 | 重写为 H2 单链路使用说明 | `docs/guides/` |
 
 ## 4. 保留物（生命线，不得删除）
 

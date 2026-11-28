@@ -71,7 +71,7 @@ public class ForgeGameEventBridge {
      * {@link AdvancementEvent}：Forge 在 {@code PlayerAdvancements#award} 中会先为本次条件
      * 投递 {@code AdvancementProgressEvent}（criteria 递增），再在进度真正完成时投递
      * {@code AdvancementEarnEvent}。监听基类会同时收到两者，导致同一条进度推进两次、
-     * 播放两个完成提示（见 docs/feat-trigger-completion.md 回归 R20）。
+     * 播放两个完成提示（见 docs/completed/feat-trigger-completion.md 回归 R20）。
      *
      * @param event 进度达成事件
      */
