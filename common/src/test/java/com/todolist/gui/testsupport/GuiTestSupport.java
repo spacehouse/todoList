@@ -234,7 +234,9 @@ public final class GuiTestSupport {
             minecraft.setTestLastInputType(InputType.KEYBOARD_TAB);
         }
         if (screen instanceof com.todolist.gui.TodoScreen) {
-            setObjectField(Minecraft.class, minecraft, "screen", screen);
+            // 26.2 起 Minecraft 不再持有 screen 字段，当前屏已迁至 Gui.screen（FakeMinecraftClient.setScreen
+            // 经 FakeGui 同步到该字段），与主代码守卫（minecraft.gui.screen() == this）读取位置一致
+            minecraft.setScreen(screen);
         }
         // v1_26 覆盖：Screen 改为构造器内捕获 Minecraft.getInstance()（假客户端已注入 instance），
         // init 仅收宽高；此处不再传入 minecraft
