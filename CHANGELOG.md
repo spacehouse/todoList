@@ -11,7 +11,7 @@
 - **存储链路收敛为 H2 单后端**：移除 NBT 文件存储的全部残余代码（任务/项目/玩家状态存储类中的 NBT 文件读写死分支、`StorageBackendFactory`、配置注释与命令拦截分支），维护者只需读懂一条存储链路；`storageBackend` 配置只支持 `h2`，旧配置中的 `nbt` 值加载时自动回退；旧版 NBT 数据（`.dat`）首次访问时自动迁移进 H2 的能力保持不变，任务标题物品标记与网络同步所依赖的 Task NBT 序列化格式不受影响。
 - **H2 星标写入加固**：玩家 HUD 星标项目写入时自动去重与清理空白项，与数据库唯一索引对齐，避免异常数据触发唯一约束冲突。
 - **测试基建适配 H2 单链路**：GUI 离线测试从 NBT 路径整体切换到 H2 嵌入式路径，并按用例隔离存储命名空间、等待异步加载完成，避免跨用例数据泄入；退役依赖 NBT 文件语义的用例（NBT 兜底写入、`.dat` 备份恢复），数据安全兜底语义由 H2 可用性管理（显式报错不静默丢数据）与 `/todo h2 backup` / `restore` 恢复链路承接。
-- **文档更新**：`docs/storage-backend-h2-guide.md` 重写为 H2 单链路使用说明（移除 NBT 切换与已废弃的 TCP 章节），新增 `docs/nbt-storage-removal.md` 记录清理范围与裁定。
+- **文档更新**：`docs/guides/storage-backend-h2-guide.md` 重写为 H2 单链路使用说明（移除 NBT 切换与已废弃的 TCP 章节），新增 `docs/completed/nbt-storage-removal.md` 记录清理范围与裁定。
 
 ## [1.4.3] - 2026-11-08
 
@@ -33,7 +33,7 @@
 ### 优化与修复
 
 - **移除进入世界的系统提示**：不再在进入世界后向管理员推送 H2 存储模式与管理命令提示；相关命令仍可通过 `/todolist h2 status`、`/todolist h2 backup`、`/todolist h2 reload-db`、`/todolist h2 health` 使用。
-- **移除 H2 TCP 外部访问能力**：为满足 CurseForge 安全审核要求，H2 TCP 服务端与外部访问账号体系已整体移除，`/todo h2 restart-tcp` 与 `/todo h2 reset-password` 命令随之删除；`config/todolist-h2.json` 中的 `tcpEnabled`、`port`、`accounts` 等字段废弃并被静默忽略（数据库路径覆盖 `databasePathOverride` 保留）。外部工具排查数据请改用备份副本路线：`/todo h2 backup` 生成备份后，用 DBeaver 等工具以 H2 嵌入式只读方式打开副本，详见仓库文档 `docs/h2-external-client-guide.md`。
+- **移除 H2 TCP 外部访问能力**：为满足 CurseForge 安全审核要求，H2 TCP 服务端与外部访问账号体系已整体移除，`/todo h2 restart-tcp` 与 `/todo h2 reset-password` 命令随之删除；`config/todolist-h2.json` 中的 `tcpEnabled`、`port`、`accounts` 等字段废弃并被静默忽略（数据库路径覆盖 `databasePathOverride` 保留）。外部工具排查数据请改用备份副本路线：`/todo h2 backup` 生成备份后，用 DBeaver 等工具以 H2 嵌入式只读方式打开副本，详见仓库文档 `docs/guides/h2-external-client-guide.md`。
 - **GUI 编辑自动保存默认开启**：GUI 编辑自动保存开关默认改为开启，无需手动配置即可在编辑后自动保存。
 
 ## [1.4.1] - 2026-08-16

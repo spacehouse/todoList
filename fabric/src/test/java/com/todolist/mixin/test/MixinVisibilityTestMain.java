@@ -8,7 +8,7 @@ import java.lang.reflect.Modifier;
  * Mixin 可见性离线自测入口。
  * SpongePowered Mixin 要求被注入类中所有非编译器生成的成员必须为 private：
  * 非 private 静态方法会在应用阶段抛 {@code InvalidMixinException} 并导致目标类加载失败，
- * 曾引发「进档提示无效的玩家数据 / 存档列表异常」（见 docs/feat-trigger-completion.md 难点 11）。
+ * 曾引发「进档提示无效的玩家数据 / 存档列表异常」（见 docs/completed/feat-trigger-completion.md 难点 11）。
  * 该错误编译期与常规单元测试均无法发现，只有真正进档才暴露，
  * 这里用反射把可见性约束固化为构建期检查，防止回归。
  */
