@@ -1,7 +1,7 @@
 # H2 数据排查指南（备份副本路线）
 
 > **重要变更（2026-10-28）**：模组已移除 H2 TCP 服务端与外部访问账号体系（CurseForge 审查要求，
-> 背景见 `docs/h2-tcp-server-removal.md`）。`config/todolist-h2.json` 中的 `tcpEnabled`、`port`、
+> 背景见 `docs/completed/h2-tcp-server-removal.md`）。`config/todolist-h2.json` 中的 `tcpEnabled`、`port`、
 > `accounts` 等字段已全部废弃，读取时被静默忽略；`/todo h2 restart-tcp` 与 `/todo h2 reset-password`
 > 命令已删除。外部工具排查数据请按本指南的**备份副本**路线操作。
 

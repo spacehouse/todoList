@@ -35,7 +35,7 @@ import java.util.Set;
  * 错误明细使用「#任务序号 字段: 原因」的技术格式（面向 JSON 生产者排错），
  * 多语言提示由命令层包装。
  *
- * <p>格式规范见 {@code docs/feat-task-import-format.md}。
+ * <p>格式规范见 {@code docs/completed/feat-task-import-format.md}。
  */
 public final class TaskImporter {
 

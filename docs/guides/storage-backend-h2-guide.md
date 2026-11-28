@@ -3,7 +3,7 @@
 > 2026-11-21 起，模组存储链路已收敛为 **H2 单后端**：旧版 NBT 文件存储模式整体移除，
 > `storageBackend` 配置只支持 `h2`（旧配置中的 `nbt` 值会在加载时回退为 `h2`）。
 > 原「NBT ↔ H2 切换指南」与「H2 TCP 外部访问」章节随移除失效，
-> 设计记录见 `docs/nbt-storage-removal.md` 与 `docs/h2-tcp-server-removal.md`。
+> 设计记录见 `docs/completed/nbt-storage-removal.md` 与 `docs/completed/h2-tcp-server-removal.md`。
 
 ## 这份文档解决什么问题
 
