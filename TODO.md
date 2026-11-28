@@ -18,7 +18,7 @@
 
 ## 计划中
 
-> 2026-10-25 起新需求进入本区前需先通过「需求准入三问」（见文末维护约定），填写模板 `docs/requirement-review-template.md`。
+> 2026-10-25 起新需求进入本区前需先通过「需求准入三问」（见文末维护约定），填写模板 `docs/planned/requirement-review-template.md`。
 
 ### 主模组
 
@@ -37,7 +37,7 @@
 
 以下条目来自对成熟 RPG 任务系统（WoW / 巫师3 / 天际 / BG3）的方向评估；
 原"Phase Z 落地后再评估"的前提已随 Phase Z 废弃失效，改为**建立需求评审流程后逐项评估**
-（Stage / Optional 会改变完成统计范围，属于"必须另立设计"的功能，边界见 `docs/feat-trigger-credit-allocation.md` §9）。
+（Stage / Optional 会改变完成统计范围，属于"必须另立设计"的功能，边界见 `docs/deprecated/feat-trigger-credit-allocation.md` §9）。
 
 - 【feat】HUD 任务级追踪与关注（Track / Focus；现状仅支持项目级星标）
 - 【feat】任务阶段 Stage 与顺序推进（与"父子 = 展示层级"解耦）
@@ -50,8 +50,8 @@
 ## 已完成
 
 - 【feat】支持任务批量导入格式（JSON）v1（experimental）：命令 `/todo import <file> [项目]`（项目参数可选，ID/名称精确匹配，团队项目与缺失项目拒绝；仅个人任务、仅导入），离线 38 解析 + 11 命令集成用例，1.20.1 实机四轮冒烟 PASS。
-  本分支 cherry-pick 聚合入口同上处理后 1.21.4 check 绿（build-local-121x）（feature 提交 ddf92c0，2026-11-22），设计见 `docs/feat-task-import-format.md`
-- 【refactor】移除 H2 TCP 服务端与外部访问账号体系（CurseForge 审查硬约束）：外部排查改走备份副本路线；已随各分支 1.4.2+ 代码发布，CF 对 fabric-1.20.1-1.4.2 的审核不再等待，设计见 `docs/h2-tcp-server-removal.md`
+  本分支 cherry-pick 聚合入口同上处理后 1.21.4 check 绿（build-local-121x）（feature 提交 ddf92c0，2026-11-22），设计见 `docs/completed/feat-task-import-format.md`
+- 【refactor】移除 H2 TCP 服务端与外部访问账号体系（CurseForge 审查硬约束）：外部排查改走备份副本路线；已随各分支 1.4.2+ 代码发布，CF 对 fabric-1.20.1-1.4.2 的审核不再等待，设计见 `docs/completed/h2-tcp-server-removal.md`
 - 【feat】支持子任务
 - 【fix】修复团队任务中父任务未按直属子任务聚合指派状态参与待领 / 我的视图与领取操作
 - 【fix】优化 HUD 子任务展示，补充子任务显示开关并修正底部统计不计入子任务
@@ -77,19 +77,19 @@
 - 【fix】修复团队我的视图下批量操作范围与已完成子任务展示
 - 【refactor】强制使用 H2 存储后端，废弃并禁用 NBT 存储模式，减少双模式维护成本
 - 【chore】移除进入世界后向管理员发送的 H2 存储模式与命令提示
-- 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称），设计见 `docs/feat-item-title-markup.md`
-- 【feat】游戏内事件触发式完成任务，设计见 `docs/feat-trigger-completion.md`
-- 【fix】幽灵任务源头级联完成（Phase Y1）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度，见 `docs/feat-trigger-completion.md` Phase Y1
-- 【feat】材料反推（**experimental**，后续开发已冻结，合入后只修缺陷、不扩配方能力），见 `docs/feat-material-task-generation.md`
+- 【feat】支持任务名称中包含游戏内物品（物品图片以及物品名称），设计见 `docs/completed/feat-item-title-markup.md`
+- 【feat】游戏内事件触发式完成任务，设计见 `docs/completed/feat-trigger-completion.md`
+- 【fix】幽灵任务源头级联完成（Phase Y1）：父任务完成时（手动勾选 + 触发器达标两条路径）级联完成全部未完成后代，只切换完成态、不改写触发器进度，见 `docs/completed/feat-trigger-completion.md` Phase Y1
+- 【feat】材料反推（**experimental**，后续开发已冻结，合入后只修缺陷、不扩配方能力），见 `docs/completed/feat-material-task-generation.md`
 - 【feat】selftest 服务端自检基建：`/todo selftest` 12 场景两档 + verify-all 无头判定 + 测试面板按钮，手测人工项 21→16；顺带修复 H2 查询缺触发器列、Task 拷贝构造漏拷触发器、NeoForge 缺触发器接收与 Toast 渲染三个存量 bug
 
-- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（本分支 `6e21e1b` cherry-pick 自 1.20.1 `90e6f39`，2026-11-22 同步完成）：`:common:check` 绿（1.21.4 版本化源集验证，同 1.21 系适配）。设计记录见 `docs/nbt-storage-removal.md`。
+- 【refactor】清理 NBT 文件存储残余，收敛为 H2 单链路（本分支 `6e21e1b` cherry-pick 自 1.20.1 `90e6f39`，2026-11-22 同步完成）：`:common:check` 绿（1.21.4 版本化源集验证，同 1.21 系适配）。设计记录见 `docs/completed/nbt-storage-removal.md`。
 
 ## 已废弃
 
 验证证伪、实现回退的需求条目在此归档，只保留一行结论与设计文档链接，防止同类需求重复立项。
 
-- 【feat】同物品任务的额度配额（Phase Z）——2026-09-28 实机验证证伪："已完成任务永久占用额度"的跨时间台账机制不成立（会让新建同物品任务进度不涨），实现已从工作区全部回退；保留"排他性"结论与教训记录，见 `docs/feat-trigger-credit-allocation.md` §0
+- 【feat】同物品任务的额度配额（Phase Z）——2026-09-28 实机验证证伪："已完成任务永久占用额度"的跨时间台账机制不成立（会让新建同物品任务进度不涨），实现已从工作区全部回退；保留"排他性"结论与教训记录，见 `docs/deprecated/feat-trigger-credit-allocation.md` §0
 
 ## 维护约定
 
@@ -102,11 +102,11 @@
 
 ### 需求准入三问（2026-10-25 起，进入 `计划中` 前必答）
 
-1. **用户故事**：谁在什么场景下需要它？能写清楚才算想清楚——自造需求是本项目已付出过实机验证代价的风险（Phase Z 教训，见 `docs/feat-trigger-credit-allocation.md` §0）。
+1. **用户故事**：谁在什么场景下需要它？能写清楚才算想清楚——自造需求是本项目已付出过实机验证代价的风险（Phase Z 教训，见 `docs/deprecated/feat-trigger-credit-allocation.md` §0）。
 2. **验证方案**：实机怎么验、验收标准是什么？先定标准再动手，避免"实现完才发现证伪"。
 3. **投入上限**：最多投入多少时间 / token？超出即冻结，止损优先。
 
 补充规则：
 
 - **experimental 转正条件**：拿到社区反馈（Issue / 评论 / 实际使用报告）后方可转正——移入对应正式分区并去掉 experimental 标注；长期无反馈的实验性功能到期冻结或移除。
-- 评审模板与示例：`docs/requirement-review-template.md`。
+- 评审模板与示例：`docs/planned/requirement-review-template.md`。

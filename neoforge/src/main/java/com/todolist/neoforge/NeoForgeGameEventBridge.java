@@ -68,7 +68,7 @@ public class NeoForgeGameEventBridge {
      *
      * NeoForge 21.1 与 Forge 相同，进度事件拆为 {@link AdvancementEvent.AdvancementEarnEvent}
      * （进度真正完成）与 {@code AdvancementEvent.AdvancementProgressEvent}（criteria 递增）两类，
-     * 这里只监听前者：监听后者会导致同一条进度按条件数重复推进（见 docs/feat-trigger-completion.md 回归 R20）。
+     * 这里只监听前者：监听后者会导致同一条进度按条件数重复推进（见 docs/completed/feat-trigger-completion.md 回归 R20）。
      *
      * @param event 进度达成事件
      */
