@@ -23,8 +23,8 @@ More details / 更多说明：
 - [FEATURES.md](FEATURES.md) / [FEATURES_EN.md](FEATURES_EN.md)
 - [ROADMAP.md](ROADMAP.md) / [ROADMAP_EN.md](ROADMAP_EN.md)
 - [CHANGELOG.md](CHANGELOG.md) / [CHANGELOG_EN.md](CHANGELOG_EN.md)
-- [docs/storage-backend-h2-guide.md](docs/storage-backend-h2-guide.md)
-- [docs/h2-external-client-guide.md](docs/h2-external-client-guide.md)
+- [docs/guides/storage-backend-h2-guide.md](docs/guides/storage-backend-h2-guide.md)
+- [docs/guides/h2-external-client-guide.md](docs/guides/h2-external-client-guide.md)
 
 ## 📸 Screenshots / 截图
 

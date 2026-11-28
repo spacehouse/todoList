@@ -1,8 +1,8 @@
 # 任务批量导入格式（JSON）v1
 
 > 状态：**experimental**（2026-11-22 立项，在验证分支 `verify/1.20.1-feat-task-import` 实施）
-> 关联：`docs/feat-material-task-generation.md` §0.4（外部承接路线第 2 条）、
-> `docs/feat-trigger-completion.md`（触发器语义底座）、`docs/feat-item-title-markup.md`（标题物品 markup）
+> 关联：`docs/completed/feat-material-task-generation.md` §0.4（外部承接路线第 2 条）、
+> `docs/completed/feat-trigger-completion.md`（触发器语义底座）、`docs/completed/feat-item-title-markup.md`（标题物品 markup）
 
 ## 0. 需求准入三问（评审记录，2026-11-22）
 
