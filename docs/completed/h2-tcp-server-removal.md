@@ -68,7 +68,7 @@ Task NBT 序列化格式。
 
 ## 5. 连带动作
 
-- `docs/h2-external-client-guide.md` 按第 4 节改写；
+- `docs/guides/h2-external-client-guide.md` 按第 4 节改写；
 - **AGENTS.md 第 15 / 16 条同步修订**：两条规定围绕"已发布 / TCP 激活路径"与
   `isTcpActive()` 展开，TCP 移除后改为只覆盖嵌入式路径的口径（或合并为一条）；
 - CHANGELOG 记录行为变更：`tcpEnabled` 不再生效（老配置静默忽略）；

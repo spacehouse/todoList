@@ -10,7 +10,7 @@ import java.util.List;
  * （与运行期 {@code TaskTrigger.Type.parse} 的容错语义不同，见设计文档）。
  * 未知字段由 Gson 默认忽略，为格式前向兼容保留空间。
  *
- * <p>格式规范与设计决策见 {@code docs/feat-task-import-format.md}。
+ * <p>格式规范与设计决策见 {@code docs/completed/feat-task-import-format.md}。
  */
 public final class TaskImportModels {
 
