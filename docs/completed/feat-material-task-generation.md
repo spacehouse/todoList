@@ -15,7 +15,7 @@
 >
 > 以下 §1~§10 保留为原始设计过程记录（含当时的修订理由）；其中 §4（点 2）、§5（点 3）已随冻结失效，仅作历史参考。
 >
-> 关联：`docs/feat-trigger-completion.md`（触发器语义底座）、`docs/feat-trigger-credit-allocation.md`（Phase Z 废弃记录，其 §0.4 引用了本方案 E11 的去重结论）
+> 关联：`docs/completed/feat-trigger-completion.md`（触发器语义底座）、`docs/deprecated/feat-trigger-credit-allocation.md`（Phase Z 废弃记录，其 §0.4 引用了本方案 E11 的去重结论）
 
 ## 0. 冻结结论、保留范围与后续方向（2026-10-25）
 
@@ -70,7 +70,7 @@ Phase Z 的废弃是实机验证**证伪**了机制；本次不同——点 1 �
 
 ### 1.1 背景
 
-触发器底座已完成（见 `docs/feat-trigger-completion.md`），`TaskTrigger` 已支持 `ITEM_COLLECT`（绝对持有量语义）与 `CRAFT_ITEM`（累加语义），玩家可以获得「材料收集到量后自动完成」的能力。
+触发器底座已完成（见 `docs/completed/feat-trigger-completion.md`），`TaskTrigger` 已支持 `ITEM_COLLECT`（绝对持有量语义）与 `CRAFT_ITEM`（累加语义），玩家可以获得「材料收集到量后自动完成」的能力。
 
 当前缺口：**玩家仍需手工把目标拆成一条条收集任务**。本方案要解决的正是"从目标或清单自动展开出收集任务"。
 
@@ -401,7 +401,7 @@ for (RecipeType<?> type : 全部配方类型) {
 | Phase E15 | **实机反馈修订二**：① **浮层不再被树上的物品图标压住**——物品图标走独立渲染批次，绘制顺序压不住，因此把「浮层板面」（可选材料列表 / 悬浮提示，二者同帧只会出现一个）先算出来，树渲染时**只跳过真正落在浮层下的图标**（文字、连线、方块格走普通批次，能被面板正常盖住）。第一版曾整格跳过，实测会把**被点的那颗图标也连带隐藏**（列表在其右侧、仅 3px 擦边），故收紧为按图标矩形判定；② **首列不再裁掉长名称**——节点名称居中画在格子下方，`MaterialPreviewLayout` 为首尾列各预留半个标签宽（`LABEL_SIDE_MARGIN`），内容宽度同步加上这一份边距 | ✅ 完成，`:common:check` 全量通过 |
 | Phase F | 点 2：`MaterialListTextParser` + `ItemNameIndex` 抽取 + `ImportMaterialScreen` | ❌ 已取消（2026-10-25 方向评审，见 §0.2） |
 | Phase G | 点 3：`GenericTypeRecipeResolver` + 过滤规则 | ❌ 已取消（2026-10-25 方向评审，见 §0.2） |
-| Phase H | 实机验证：离线回归已全部挂 `:common:check`（各 Phase 行内标注）；完整实机清单于 2026-10-25 收敛为**一页轻量冒烟清单**（约 8-10 项核心交互，与幽灵任务 Y1 验证合并执行，见 TODO.md 与 `docs/verify-automation-plan.md` 的 L3 分工） | ✅ 已完成（2026-10-26 冒烟全部通过，fabric + forge 双加载器，见 `docs/smoke-checklist-2026-10-25.md` 结果记录） |
+| Phase H | 实机验证：离线回归已全部挂 `:common:check`（各 Phase 行内标注）；完整实机清单于 2026-10-25 收敛为**一页轻量冒烟清单**（约 8-10 项核心交互，与幽灵任务 Y1 验证合并执行，见 TODO.md 与 `docs/in-progress/verify-automation-plan.md` 的 L3 分工） | ✅ 已完成（2026-10-26 冒烟全部通过，fabric + forge 双加载器，见 `docs/completed/smoke-checklist-2026-10-25.md` 结果记录） |
 
 ## 9. 工作量与代码量估算（基于本仓库同类特性实测行数）
 
